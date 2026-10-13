@@ -149,6 +149,30 @@ dotnet publish -c Release -o dist
 ```
 (Előtte `dist\Orbit.exe --exit`, mert a futó exe zárolja a fájlt.)
 
+## 1.3.0 – GitHub, frissítés, ellenőrző kör (2026-10-13)
+
+- Repó: https://github.com/Erik1028/Orbit (nyilvános, MIT). A felhasználói README angol, ez a fájl a
+  magyar fejlesztői jegyzet. A `docs/vr-test-*.png` (az asztal tükrözött képe) nincs a repóban.
+- **Frissítés az appon belül** (General → Version sor gombja, `Sys\Updater.cs`): GitHub API
+  `releases/latest` → ha újabb, a gomb „Update to x.y.z”: letölti az `OrbitSetup.exe`-t a
+  `%LOCALAPPDATA%\Orbit\updates` mappába, ellenőrzi (méret, GitHub SHA-256 `digest`, ProductName = Orbit,
+  ProductVersion), és `--update --install-dir <a futó példány mappája>` kapcsolóval elindítja. A telepítő
+  leállítja az Orbitot, kicseréli a fájlokat (beállítás, parancsikonok, Alkalmazások-bejegyzés marad –
+  utóbbiban csak a verzió frissül, ha ez a telepített példány), majd újraindítja (`--steamvr`, ha a SteamVR
+  fut). Fejlesztői `dist` mappában is működik: az egyfájlos exe a régi DLL-ek mellett is rendben fut
+  (kipróbálva). `--updatetest`: lekérdezés + letöltés + ellenőrzés telepítés nélkül; a telepítő
+  `--no-start` kapcsolója tesztekhez.
+- **Ellenőrző kör** (5 szempont, mindegyik találatot külön ellenőr próbálta cáfolni): 30 találatból 27
+  megerősítve (25 különböző), mind javítva. A fontosabbak: a fókusz-hook újrabelépése (régebbi esemény
+  felülírta az újabbat – most sorszám, `--focustest`-ben látszik a „superseded”), profilváltás két
+  menetben (a sor nem szakad szét), a profil által nem ismert panelek eléd kerülnek, első használat
+  headset nélkül később pótolva, foglalt 42069-es port: 10 mp-enként próbálja újra (nem képkockánként,
+  socket-szivárgás nélkül), elesett monitor-capture újraépül (30 mp-es visszatartással), a médiafigyelő
+  később érkező borítót is betölti, a kattintás utáni képkocka mindig újrarajzol, kép-rögzítés
+  gyorsulásnál azonnal frissít, 256 px-es kurzor, kiosztás-variánsok (0xFxxx) a registryből, ablakcím-
+  változás nem ír lemezre (MarkSoftDirty), sikertelen mentés újrapróbálva, duplikált ablak-azonosító
+  kiszűrve, egy hibás overlay nem állítja meg az indulást.
+
 ## Fejlesztői kapcsolók
 
 - `--snapshot <mappa>` – VR nélkül PNG-be rajzol minden panelt + egy-egy képet minden monitorról (saját,

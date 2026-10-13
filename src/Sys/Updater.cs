@@ -10,10 +10,10 @@ using System.Threading.Tasks;
 
 namespace Orbit;
 
-// "Check for updates": asks GitHub for the latest release of Erik1028/Orbit. An installed copy
-// updates itself: OrbitSetup.exe is downloaded, checked (SHA-256 from GitHub, file version) and
-// started with --update, which closes Orbit, installs over it (settings kept) and starts it again.
-// A copy that is not installed (a development folder) only opens the release page.
+// "Check for updates": asks GitHub for the latest release of Erik1028/Orbit, and the same button then
+// updates in place: OrbitSetup.exe is downloaded, checked (size and SHA-256 as GitHub lists them, file
+// version) and started with --update for the folder Orbit runs from, which closes Orbit, replaces its
+// files (settings, shortcuts and the Apps entry stay as they are) and starts it again.
 public sealed class Updater
 {
     public const string Repo = "Erik1028/Orbit";
@@ -93,7 +93,7 @@ public sealed class Updater
         });
     }
 
-    // the "Update" button: installed copy -> download, verify, install; otherwise -> the release page
+    // the "Update" button: download, verify, install over the running copy (the page only if the release has no installer)
     public void Apply()
     {
         if (Busy) return;
@@ -102,11 +102,11 @@ public sealed class Updater
         long size;
         lock (_lock) { url = _assetUrl; sha = _sha256; page = _pageUrl; v = _latest; size = _assetSize; }
         if (v == null) return;
-        string dir = Installer.InstalledCopyDir();
-        if (dir == null || url == null)
+        string dir = Installer.InstalledCopyDir() ?? Path.GetFullPath(AppContext.BaseDirectory).TrimEnd('\\');
+        if (url == null)
         {
             OpenPage(page ?? $"https://github.com/{Repo}/releases/latest");
-            Set(State.Available, dir == null ? "opened the download page (this copy is not installed)" : "opened the download page");
+            Set(State.Available, "this release has no installer - opened its page");
             return;
         }
         Set(State.Downloading, "downloading...", 0);

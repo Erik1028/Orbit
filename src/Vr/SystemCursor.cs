@@ -9,7 +9,7 @@ namespace Orbit;
 // the desktop capture (that round trip is ~30-60 ms).
 public sealed class SystemCursor : IDisposable
 {
-    public const int Size = 64;
+    public const int Size = 256;      // the largest Windows pointer at 100 % (pointer size 15); 64 clipped big ones
     public readonly Surface Surf;
     public Vector2 Hotspot { get; private set; } = new(0, 0);
     public int Version { get; private set; }

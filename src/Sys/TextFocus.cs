@@ -49,7 +49,10 @@ public sealed class TextFocusWatcher : IDisposable
     uint _tid;
     WinEventProc _proc;         // kept referenced: the hook calls into it
     TimerProc _timerProc;
-    (IntPtr hwnd, int obj, int child) _recheck;
+    (IntPtr hwnd, int obj, int child, int ticket) _recheck;
+    // Classify's cross-process calls pump messages, so a newer focus event can run inside an older
+    // one (re-entrant hook). Every event takes a ticket; only the newest one may report.
+    int _ticket;
 
     readonly bool _skipOwn;
     public TextFocusWatcher(bool skipOwnProcess = true) { _skipOwn = skipOwnProcess; }
@@ -101,14 +104,17 @@ public sealed class TextFocusWatcher : IDisposable
 
     void OnFocus(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
     {
+        int me = ++_ticket;
+        _recheck = default;                       // focus moved on: an older pending recheck is void
         int st = Classify(hwnd, idObject, idChild, Inspecting, out bool vague);
-        Trace?.Invoke($"focus event: {ClassOf(hwnd)} obj={idObject} child={idChild} -> {st}{(vague ? " (vague)" : "")}");
+        Trace?.Invoke($"focus event: {ClassOf(hwnd)} obj={idObject} child={idChild} -> {st}{(vague ? " (vague)" : "")}{(me != _ticket ? " (superseded)" : "")}");
+        if (me != _ticket) return;                // a newer event arrived meanwhile and reported for itself
         Report(st);
         // a browser often reports focus on its whole page first, and builds its accessibility tree
         // only once asked: look again shortly
         if (vague && Inspecting)
         {
-            _recheck = (hwnd, idObject, idChild);
+            _recheck = (hwnd, idObject, idChild, me);
             SetTimer(IntPtr.Zero, IntPtr.Zero, 350, _timerProc);
         }
     }
@@ -116,11 +122,11 @@ public sealed class TextFocusWatcher : IDisposable
     void OnRecheck(IntPtr hwnd, uint msg, IntPtr id, uint time)
     {
         KillTimer(IntPtr.Zero, id);
-        var (h, o, c) = _recheck;
+        var (h, o, c, t) = _recheck;
         _recheck = default;
-        if (h == IntPtr.Zero) return;
+        if (h == IntPtr.Zero || t != _ticket) return;
         int st = Classify(h, o, c, true, out _);
-        if (st == 1) Report(1);
+        if (st == 1 && t == _ticket) Report(1);
     }
 
     static string ClassOf(IntPtr h)

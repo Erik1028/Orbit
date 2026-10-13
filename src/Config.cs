@@ -202,7 +202,8 @@ public sealed class ConfigStore
                     cfg.Wrist ??= new(); cfg.Keyboard ??= new(); cfg.General ??= new(); cfg.Appearance ??= new(); cfg.SettingsPanel ??= new(); cfg.SettingsPanel.Place ??= new();
                     cfg.Desktops = (cfg.Desktops ?? new()).Where(d => d != null && !string.IsNullOrEmpty(d.Id)).ToList();
                     foreach (var d in cfg.Desktops) d.Place ??= new();
-                    cfg.Windows = (cfg.Windows ?? new()).Where(w => w != null && !string.IsNullOrEmpty(w.Id)).ToList();
+                    cfg.Windows = (cfg.Windows ?? new()).Where(w => w != null && !string.IsNullOrEmpty(w.Id))
+                        .GroupBy(w => w.Id).Select(g => g.First()).ToList();     // one overlay key per window
                     foreach (var w in cfg.Windows) { w.Place ??= new(); w.Title ??= ""; w.Process ??= ""; w.Class ??= ""; }
                     cfg.Layouts = (cfg.Layouts ?? new()).Where(l => l != null && !string.IsNullOrWhiteSpace(l.Name))
                         .GroupBy(l => l.Name).Select(g => g.First()).ToList();
@@ -227,6 +228,12 @@ public sealed class ConfigStore
 
     double _lastChange;
 
+    bool _soft, _failWarned;
+
+    // a change worth keeping but not worth a disk write of its own (a mirrored window's title changes
+    // all the time): saved together with the next real change, or when Orbit closes
+    public void MarkSoftDirty() => _soft = true;
+
     public void MarkDirty()
     {
         if (!_dirty) _dirtySince = Now;
@@ -238,18 +245,31 @@ public sealed class ConfigStore
     public void SaveIfDue(bool force = false)
     {
         // grabbing a panel marks dirty every frame: wait for a quiet second, but never longer than 10 s
-        if (!_dirty || (!force && Now - _lastChange < 1.0 && Now - _dirtySince < 10.0)) return;
-        if (_readOnly) { _dirty = false; Log.Warn("config not saved: it could not be read at start"); return; }
-        _dirty = false;
-        try
+        if (!(_dirty || (force && _soft)) || (!force && Now - _lastChange < 1.0 && Now - _dirtySince < 10.0)) return;
+        if (_readOnly) { _dirty = _soft = false; Log.Warn("config not saved: it could not be read at start"); return; }
+        _dirty = _soft = false;
+        for (int attempt = 0; ; attempt++)
         {
-            string tmp = Path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(Data, Json), new System.Text.UTF8Encoding(false));
-            if (File.Exists(Path))
-                File.Replace(tmp, Path, Path + ".bak");
-            else
-                File.Move(tmp, Path);
+            try
+            {
+                string tmp = Path + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(Data, Json), new System.Text.UTF8Encoding(false));
+                if (File.Exists(Path))
+                    File.Replace(tmp, Path, Path + ".bak");
+                else
+                    File.Move(tmp, Path);
+                _failWarned = false;
+                return;
+            }
+            catch (IOException) when (force && attempt < 5) { System.Threading.Thread.Sleep(100); }   // closing: try a little longer
+            catch (Exception e)
+            {
+                // someone has the file open (another Orbit starting, a backup tool): try again in a second
+                _dirty = true;
+                _dirtySince = _lastChange = Now;
+                if (!_failWarned) { _failWarned = true; Log.Warn("config save failed (will retry): " + e.Message); }
+                return;
+            }
         }
-        catch (Exception e) { Log.Warn("config save failed: " + e.Message); }
     }
 }

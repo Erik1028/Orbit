@@ -116,7 +116,36 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
     static int LayoutLang(IntPtr hkl)
     {
         int hi = (int)(((long)hkl >> 16) & 0xFFFF), lo = (int)((long)hkl & 0xFFFF);
-        return (hi & 0xF000) == 0xF000 || hi == 0 ? lo : hi;
+        if (hi == 0 || (hi & 0xF000) == 0xE000) return lo;              // none / legacy IME
+        if ((hi & 0xF000) == 0xF000) return VariantLang(hi & 0x0FFF) ?? lo;   // e.g. "US-International", "Hungarian 101-key"
+        return hi;
+    }
+
+    static readonly System.Collections.Generic.Dictionary<int, int?> _variants = new();
+
+    // a variant layout's HKL holds its "Layout Id"; the KLID with that id names the layout's language
+    static int? VariantLang(int layoutId)
+    {
+        if (_variants.TryGetValue(layoutId, out var cached)) return cached;
+        int? found = null;
+        try
+        {
+            using var root = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Keyboard Layouts");
+            if (root != null)
+                foreach (var klid in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(klid);
+                    if (k?.GetValue("Layout Id") is string id && int.TryParse(id, System.Globalization.NumberStyles.HexNumber, null, out int v) && v == layoutId
+                        && int.TryParse(klid, System.Globalization.NumberStyles.HexNumber, null, out int kl))
+                    {
+                        found = kl & 0xFFFF;
+                        break;
+                    }
+                }
+        }
+        catch { }
+        _variants[layoutId] = found;
+        return found;
     }
 
     static string LayoutCode(IntPtr hkl)

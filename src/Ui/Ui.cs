@@ -112,6 +112,11 @@ public sealed class Ui
     public void End()
     {
         if (!Down && !Pressed) _active = null;
+        // what the pointer is over in the frame just drawn (pointer leave, panel reopen, list refresh)
+        _lastHot = -1;
+        if (Inside)
+            for (int i = _hot.Count - 1; i >= 0; i--)
+                if (_hot[i].Contains(Mouse.X, Mouse.Y)) { _lastHot = i; break; }
     }
 
     // Eases a value towards 'target' (exponential, ~1/speed seconds). The first call snaps.

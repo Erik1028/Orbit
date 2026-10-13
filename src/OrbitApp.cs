@@ -40,7 +40,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     double _kbHideAt = -1;
     int _focusSeq;
     float _dimNow = 1;
-    double _nextWindowScan;
+    double _nextWindowScan, _nextDeadRebuild;
     List<MonitorInfo> _monitors = new();
     string _monitorKey = "";
     readonly MouseOwner _mouse = new();
@@ -350,6 +350,14 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         {
             _nextMonitorCheck = now + 5;
             SyncMonitors(force: false);
+            // a monitor that dropped out for a moment (link retrain, power cycle) keeps the same layout,
+            // so the check above sees nothing - but its capture has ended: rebuild (at most every 30 s)
+            if (now >= _nextDeadRebuild && _desktops.Any(d => d.CaptureDead))
+            {
+                _nextDeadRebuild = now + 30;
+                Log.Info("a monitor capture ended - rebuilding the monitor panels");
+                SyncMonitors(force: true);
+            }
         }
 
         if (_vr.Connected)
@@ -374,6 +382,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _allocMark = GC.GetAllocatedBytesForCurrentThread();
             _vr.Update();
             _data.Vr.Update(_vr, now);
+            FirstUseIfPending();
             if (C.Wrist.PerfGraph && C.Wrist.ShowPerformance) _data.Vr.SampleFrame(_vr);
             PlaceMissing();
             bool dash = _vr.Ov.IsDashboardVisible();
@@ -491,9 +500,12 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         try { _winrtDev ??= MonitorCapture.CreateWinRtDevice(_gpu); }
         catch (Exception e) { Log.Error("WinRT device: " + e); }
         for (int i = 0; i < _desktops.Count; i++)
-            if (_desktops[i].Cfg.Enabled && _winrtDev != null) _desktops[i].CreateOverlay(_vr, _winrtDev, i);
+        {
+            int di = i;
+            if (_desktops[di].Cfg.Enabled && _winrtDev != null) SafeCreate(() => _desktops[di].CreateOverlay(_vr, _winrtDev, di), _desktops[di].Cfg.Name);
+        }
         foreach (var w in _windowPanels)
-            if (w.Cfg.Enabled && _winrtDev != null) w.CreateOverlay(_vr, _winrtDev);
+            if (w.Cfg.Enabled && _winrtDev != null) SafeCreate(() => w.CreateOverlay(_vr, _winrtDev), w.Cfg.Title);
         _nextWindowScan = 0;
         CreateDashboard();
         ApplyAutoStart();
@@ -639,7 +651,10 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         }
         if (_vr.Connected && _winrtDev != null)
             for (int i = 0; i < _desktops.Count; i++)
-                if (_desktops[i].Cfg.Enabled) _desktops[i].CreateOverlay(_vr, _winrtDev, i);
+            {
+                int di = i;
+                if (_desktops[di].Cfg.Enabled) SafeCreate(() => _desktops[di].CreateOverlay(_vr, _winrtDev, di), _desktops[di].Cfg.Name);
+            }
         if (_win != null) _win.Dirty = true;
     }
 
@@ -668,13 +683,22 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     }
 
     // a new window goes in front of you, a little closer than the monitors; several step aside
-    void PlaceWindow(WindowPanel w)
+    // forceWorld: a new window / Reset position. Otherwise a hand or head attachment the user chose is
+    // kept; a hand that isn't tracked yet just leaves it for the next frame.
+    void PlaceWindow(WindowPanel w, bool forceWorld = false)
     {
         if (!_vr.HmdValid) return;
         int k = Math.Max(0, _windowPanels.IndexOf(w)) % 4;
         var local = Matrix4x4.CreateTranslation(0.1f * k, -0.05f - 0.04f * k, -0.8f + 0.03f * k);
-        w.Cfg.Place.Attach = "world";
-        Placement.SetWorld(w.Cfg.Place, _vr, local * MathUtil.GazeFrame(_vr.Hmd));
+        var world = local * MathUtil.GazeFrame(_vr.Hmd);
+        if (forceWorld || w.Cfg.Place.Attach is null) w.Cfg.Place.Attach = "world";
+        Placement.SetWorld(w.Cfg.Place, _vr, world);
+        if (w.Cfg.Place.M == null)
+        {
+            if (w.Cfg.Place.Attach is "left" or "right") return;
+            w.Cfg.Place.Attach = "world";
+            Placement.SetWorld(w.Cfg.Place, _vr, world);
+        }
         _cfg.MarkDirty();
     }
 
@@ -841,8 +865,15 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         p.Saved = DateTime.Now;
     }
 
+    // Two passes: first every saved value goes back (rows were saved consistent, so no reflow is
+    // needed - reflowing half-restored rows tore them apart), then overlays are created / removed.
     void ApplyLayout(LayoutProfile p)
     {
+        var deskIds = new HashSet<string>();
+        var winIds = new HashSet<string>();
+        var groups = new HashSet<string>();
+        var deskChanged = new List<DesktopConfig>();
+        var winChanged = new List<WindowConfig>();
         foreach (var s in p.Panels)
         {
             switch (s.Kind)
@@ -851,18 +882,21 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 {
                     var d = C.Desktops.FirstOrDefault(x => x.Id == s.Id);
                     if (d == null) break;
+                    deskIds.Add(d.Id);
+                    if (s.Group != null) groups.Add(s.Group);
                     d.Width = s.Width; d.Curvature = s.Curvature; d.Opacity = s.Opacity;
                     d.Place = CopyPlace(s.Place); d.Group = s.Group; d.GroupIndex = s.GroupIndex;
-                    if (d.Enabled != s.Enabled) SetDesktopEnabled(d, s.Enabled);
+                    if (d.Enabled != s.Enabled) { d.Enabled = s.Enabled; deskChanged.Add(d); }
                     break;
                 }
                 case "window":
                 {
                     var w = C.Windows.FirstOrDefault(x => x.Id == s.Id);
                     if (w == null) break;
+                    winIds.Add(w.Id);
                     w.Width = s.Width; w.Curvature = s.Curvature; w.Opacity = s.Opacity;
                     w.Place = CopyPlace(s.Place);
-                    if (w.Enabled != s.Enabled) SetWindowEnabled(w, s.Enabled);
+                    if (w.Enabled != s.Enabled) { w.Enabled = s.Enabled; winChanged.Add(w); }
                     break;
                 }
                 case "keyboard":
@@ -871,6 +905,19 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                     break;
             }
         }
+        // added while another profile was in use: this profile never saw them - out of that other
+        // profile's rows, and placed in front of you again (world ones; hand / head ones stay attached)
+        foreach (var d in C.Desktops)
+        {
+            if (deskIds.Contains(d.Id)) continue;
+            if (d.Group != null && groups.Contains(d.Group)) d.Group = null;
+            if (Placement.IsWorld(d.Place)) d.Place.M = null;
+        }
+        foreach (var w in C.Windows)
+            if (!winIds.Contains(w.Id) && Placement.IsWorld(w.Place)) w.Place.M = null;
+
+        foreach (var d in deskChanged) SetDesktopOverlay(d);
+        foreach (var w in winChanged) SetWindowEnabled(w, w.Enabled);
         C.Appearance.NightMode = p.NightMode;
     }
 
@@ -884,16 +931,36 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         if (_lasers != null) foreach (var l in _lasers) l.StopGrab();
         CaptureLayout(cur);
         C.ActiveLayout = target.Name;
+        _firstUsePending = null;
         if (target.Saved == null)
         {
-            Recenter();
-            CaptureLayout(target);
+            if (_vr.Connected && _vr.HmdValid)
+            {
+                Recenter();
+                CaptureLayout(target);
+            }
+            else
+                _firstUsePending = target.Name;     // brought in front as soon as SteamVR has the headset
         }
         else
             ApplyLayout(target);
         Log.Info($"layout: {cur.Name} -> {target.Name}");
         _cfg.MarkDirty();
         _win.Dirty = true;
+    }
+
+    string _firstUsePending;
+
+    void FirstUseIfPending()
+    {
+        if (_firstUsePending == null || !_vr.HmdValid) return;
+        if (_firstUsePending == C.ActiveLayout)
+        {
+            Recenter();
+            CaptureLayout(ActiveLayout);
+            Log.Info($"layout {C.ActiveLayout}: first use, brought in front");
+        }
+        _firstUsePending = null;
     }
 
     // the watch's layout button: next profile that is on the watch
@@ -933,7 +1000,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             if (_windowPanels.Any(p => p.Cfg == wc)) continue;
             var p = new WindowPanel(_gpu, _cfg, _mouse, wc);
             _windowPanels.Add(p);
-            if (_vr.Connected && _winrtDev != null && wc.Enabled) p.CreateOverlay(_vr, _winrtDev);
+            if (_vr.Connected && _winrtDev != null && wc.Enabled) SafeCreate(() => p.CreateOverlay(_vr, _winrtDev), wc.Title);
         }
         _targets = null;
         _nextWindowScan = 0;
@@ -993,7 +1060,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         SyncWindowPanels();
         var panel = _windowPanels.First(p => p.Cfg == wc);
         panel.Attach(w);
-        if (_vr.Connected) PlaceWindow(panel);
+        if (_vr.Connected) PlaceWindow(panel, forceWorld: true);
         C.General.DesktopsVisible = true;      // you want to see what you just added
         Log.Info($"mirroring window {w}");
         _cfg.MarkDirty();
@@ -1021,7 +1088,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     {
         var p = _windowPanels.FirstOrDefault(x => x.Cfg == wc);
         if (p == null || !_vr.Connected) return;
-        PlaceWindow(p);
+        PlaceWindow(p, forceWorld: true);
     }
 
     public void SetWindowAttach(WindowConfig wc, string attach)
@@ -1037,7 +1104,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         var p = _windowPanels.FirstOrDefault(x => x.Cfg == wc);
         if (p != null && _vr.Connected && _winrtDev != null)
         {
-            if (on && p.Ov == null) p.CreateOverlay(_vr, _winrtDev);
+            if (on && p.Ov == null) SafeCreate(() => p.CreateOverlay(_vr, _winrtDev), wc.Title);
             if (!on) p.DestroyOverlay();
         }
         _cfg.MarkDirty();
@@ -1069,13 +1136,23 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             var row = _layout.Members(d.Group);       // enabled members, in row order
             if (row.Count > 0) _layout.Reflow(row[0]);
         }
-        int i = _desktops.FindIndex(x => x.Cfg == d);
-        if (i >= 0 && _vr.Connected && _winrtDev != null)
-        {
-            if (on && _desktops[i].Ov == null) _desktops[i].CreateOverlay(_vr, _winrtDev, i);
-            if (!on) _desktops[i].DestroyOverlay();
-        }
+        SetDesktopOverlay(d);
         _cfg.MarkDirty();
+    }
+
+    void SetDesktopOverlay(DesktopConfig d)
+    {
+        int i = _desktops.FindIndex(x => x.Cfg == d);
+        if (i < 0 || !_vr.Connected || _winrtDev == null) return;
+        if (d.Enabled && _desktops[i].Ov == null) SafeCreate(() => _desktops[i].CreateOverlay(_vr, _winrtDev, i), d.Name);
+        if (!d.Enabled) _desktops[i].DestroyOverlay();
+    }
+
+    // one panel that can't get its overlay (a duplicate key, SteamVR refusing) must not stop the rest
+    static void SafeCreate(Action create, string what)
+    {
+        try { create(); }
+        catch (Exception e) { Log.Warn($"overlay for {what}: {e.Message}"); }
     }
 
     // The setting is the wanted state; it is pushed to SteamVR now if it runs, else on the next connect.

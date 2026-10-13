@@ -92,6 +92,9 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
 
     public bool SmartCapture = true;
 
+    // the capture ended (monitor dropped out for a moment, or a capture error): the app rebuilds it
+    public bool CaptureDead => _cap != null && _cap.Closed;
+
     float EffectiveFps(VrSession vr, int fps) =>
         SmartCapture ? SmartFps(vr, Cfg.Place, Cfg.Width, _hovering[0] || _hovering[1], fps) : fps;
 
@@ -100,8 +103,9 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     // 80-90 Hz loop came out at ~40). The next slot is kept on the grid instead (2 ms early is fine).
     public static bool CaptureDue(ref double next, double now, float fps)
     {
-        if (now + 0.002 < next) return false;
         double period = 1.0 / Math.Clamp(fps, 1, 240);
+        if (next > now + period) next = now + period;      // the rate just went up (you turned to it)
+        if (now + 0.002 < next) return false;
         next = Math.Max(next + period, now - period * 0.5);
         return true;
     }

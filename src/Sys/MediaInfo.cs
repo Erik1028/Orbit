@@ -78,6 +78,9 @@ public sealed class MediaInfo : IDisposable
         catch (Exception e) { Log.Warn("media session: " + e.Message); return; }
         try { _mgr.CurrentSessionChanged += OnSessionEvent; } catch (Exception e) { Log.Warn("media events: " + e.Message); }
         string lastKey = null;
+        double keyAt = 0;
+        bool artOk = false;
+        int artTries = 0;
         while (!_stop)
         {
             try
@@ -85,20 +88,29 @@ public sealed class MediaInfo : IDisposable
                 Reads++;
                 var s = _mgr.GetCurrentSession();
                 Watch(s);
-                if (s == null) Set(false, null, null, false, null, null);
+                if (s == null)
+                {
+                    lastKey = null;            // the same track coming back must load its cover again
+                    Set(false, null, null, false, null, null);
+                }
                 else
                 {
                     var props = s.TryGetMediaPropertiesAsync().AsTask().GetAwaiter().GetResult();
                     bool playing = s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
                     string key = props?.Title + "\u0001" + props?.Artist;
                     uint[] art = null;
-                    bool newArt = key != lastKey;
-                    if (newArt && props?.Thumbnail != null)
+                    bool newKey = key != lastKey;
+                    if (newKey) { keyAt = Clock.Now; artOk = false; artTries = 0; }
+                    // players often send the title first and the cover a moment later: keep looking at the
+                    // thumbnail for the first seconds of a track, and retry a failed load a few times
+                    bool loadArt = props?.Thumbnail != null && (newKey || Clock.Now - keyAt < 8 || (!artOk && artTries < 3));
+                    if (loadArt)
                     {
-                        try { art = LoadArt(props.Thumbnail); } catch { art = null; }
+                        artTries++;
+                        try { art = LoadArt(props.Thumbnail); artOk = true; } catch { art = null; }
                     }
                     lastKey = key;
-                    Set(!string.IsNullOrEmpty(props?.Title), props?.Title, props?.Artist, playing, art, newArt ? "new" : null);
+                    Set(!string.IsNullOrEmpty(props?.Title), props?.Title, props?.Artist, playing, art, newKey || (loadArt && art != null) ? "new" : null);
                 }
             }
             catch (Exception e) { Log.Warn("media: " + e.Message); }

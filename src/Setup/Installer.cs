@@ -57,6 +57,7 @@ public sealed class InstallOptions
     public bool RunAsAdmin = true;
     public bool WriteConfig = true;
     public bool StopRunning = true;      // dev: --no-stop keeps a running Orbit alive while testing
+    public bool Update;                  // in-app update: replace the files only, leave shortcuts and settings alone
 }
 
 // Per-user install (no admin needed): %LOCALAPPDATA%\Programs\Orbit, Start menu + desktop
@@ -92,13 +93,14 @@ static class Installer
         opt.RunAsAdmin = cfg.Data.General.RunAsAdmin;
         if (args.Contains("--update"))
         {
-            // started by "Check for updates" in Orbit: install over the copy in --install-dir without
-            // asking, keep settings and shortcuts as they are, then start Orbit again
+            // started by "Check for updates" in Orbit: replace the copy in --install-dir without asking
+            // (settings, shortcuts and the Apps entry stay as they are), then start Orbit again
             opt.WriteConfig = false;
-            opt.DesktopShortcut = LinkTarget(DesktopLink)?.StartsWith(opt.Dir, StringComparison.OrdinalIgnoreCase) == true;
+            opt.Update = true;
             try
             {
                 Install(opt);
+                if (args.Contains("--no-start")) { Log.Info("update installed (--no-start)"); return 0; }   // tests
                 Log.Info("update installed, starting Orbit");
                 Process.Start(new ProcessStartInfo(Path.Combine(opt.Dir, "Orbit.exe"), VrSession.RuntimeRunning() ? "--steamvr" : "")
                     { UseShellExecute = false, WorkingDirectory = opt.Dir });
@@ -154,6 +156,20 @@ static class Installer
             catch (IOException) when (attempt < 20) { Thread.Sleep(250); }
         }
         AppFiles.WriteAll(o.Dir);
+
+        if (o.Update)
+        {
+            // shortcuts stay exactly as the user has them; the Apps entry is refreshed only if it is this copy's
+            using var uk = Registry.CurrentUser.OpenSubKey(UninstallKey, writable: true);
+            if (uk?.GetValue("InstallLocation") is string loc &&
+                string.Equals(Path.GetFullPath(loc).TrimEnd('\\'), Path.GetFullPath(o.Dir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            {
+                uk.SetValue("DisplayVersion", Version);
+                uk.SetValue("EstimatedSize", (int)(new FileInfo(exe).Length / 1024), RegistryValueKind.DWord);
+            }
+            Log.Info($"updated {o.Dir} to {Version}");
+            return;
+        }
 
         MakeShortcut(StartMenuLink, exe, o.Dir);
         if (o.DesktopShortcut) MakeShortcut(DesktopLink, exe, o.Dir);

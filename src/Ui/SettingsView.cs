@@ -257,17 +257,20 @@ public sealed class SettingsView
     {
         int mons, wins;
         bool night;
+        // only monitors that are connected and windows still mirrored count
+        bool Monitor(string id) => _h.MonitorList.Any(m => m.Id == id);
+        bool Window(string id) => C.Windows.Any(w => w.Id == id);
         if (l.Name == C.ActiveLayout)           // the one in use = what is around you right now
         {
-            mons = C.Desktops.Count(d => d.Enabled);
+            mons = C.Desktops.Count(d => d.Enabled && Monitor(d.Id));
             wins = C.Windows.Count(w => w.Enabled);
             night = C.Appearance.NightMode;
         }
         else if (l.Saved == null) return "not used yet";
         else
         {
-            mons = l.Panels.Count(s => s.Kind == "desktop" && s.Enabled);
-            wins = l.Panels.Count(s => s.Kind == "window" && s.Enabled);
+            mons = l.Panels.Count(s => s.Kind == "desktop" && s.Enabled && Monitor(s.Id));
+            wins = l.Panels.Count(s => s.Kind == "window" && s.Enabled && Window(s.Id));
             night = l.NightMode;
         }
         var parts = new List<string> { mons == 1 ? "1 monitor" : $"{mons} monitors" };
@@ -331,6 +334,7 @@ public sealed class SettingsView
     const int MaxWindows = 6;
     string _selWin;          // WindowConfig id
     public bool Picking;     // right side lists the open windows
+    IReadOnlyList<WindowInfo> _pickOpen;
     int _pickPage;
 
     void DrawWindows(Ui ui)
@@ -372,7 +376,9 @@ public sealed class SettingsView
     {
         var p = ui.P;
         float rx = 612, rw = 372;
-        var open = _h.OpenWindows();
+        // while pressing / releasing, the list that was drawn is used (it refreshes every second, and a
+        // shifted list must not turn a click into a different window)
+        var open = _pickOpen != null && (ui.Pressed || ui.Down || ui.Released || ui.Interacting) ? _pickOpen : (_pickOpen = _h.OpenWindows());
         const int per = 8;
         int pages = Math.Max(1, (open.Count + per - 1) / per);
         _pickPage = Math.Clamp(_pickPage, 0, pages - 1);
@@ -386,7 +392,7 @@ public sealed class SettingsView
             var w = open[idx];
             var r = new RectangleF(rx, 106 + i * 54, rw, 48);
             bool mirrored = _h.IsMirrored(w.Hwnd);
-            if (ui.Card(Ui.Id("pick.", i), r, false, out _) && !mirrored && C.Windows.Count < MaxWindows)
+            if (ui.Card(Ui.Id("pick.", (int)(long)w.Hwnd), r, false, out _) && !mirrored && C.Windows.Count < MaxWindows)
             {
                 _selWin = _h.AddWindow(w).Id;
                 Picking = false;
@@ -458,6 +464,7 @@ public sealed class SettingsView
                 int mid = (lo + hi + 1) / 2;
                 if (p.MeasureWidth(s[..mid].TrimEnd() + "…", size, w) <= maxW) lo = mid; else hi = mid - 1;
             }
+            if (lo > 0 && char.IsHighSurrogate(s[lo - 1])) lo--;           // don't split an emoji
             r = s[..lo].TrimEnd() + "…";
         }
         if (_fit.Count > 400) _fit.Clear();
@@ -549,7 +556,7 @@ public sealed class SettingsView
         if (ui.Toggle("k.auto", new RectangleF(rx, 266, cw, 54), "Pop up for text fields", ref b, "when a click in VR lands in one; hides again after"))
             k.AutoShow = b;
 
-        float pw = 640, ph = pw * KeyboardPanel.TH / KeyboardPanel.TW;
+        float pw = 540, ph = pw * KeyboardPanel.TH / KeyboardPanel.TW;      // leaves room for the line below
         var prev = new RectangleF(232 + (752 - pw) / 2, 336, pw, ph);
         p.Fill(RectangleF.Inflate(prev, 8, 8), Theme.Panel, 16);
         p.Image(_h.Keyboard.Surf.Bitmap, prev);

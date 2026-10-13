@@ -90,7 +90,7 @@ public sealed class WindowPanel : IPointerTarget, IDisposable
     {
         if (Hwnd == IntPtr.Zero) return;
         string t = WindowList.TitleOf(Hwnd);
-        if (!string.IsNullOrEmpty(t) && t != Cfg.Title) { Cfg.Title = t; _cfg.MarkDirty(); }
+        if (!string.IsNullOrEmpty(t) && t != Cfg.Title) { Cfg.Title = t; _cfg.MarkSoftDirty(); }
     }
 
     void StartCapture()

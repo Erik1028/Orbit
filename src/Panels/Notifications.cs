@@ -37,13 +37,23 @@ public sealed class NotificationListener : IDisposable
     UdpClient _udp;
     Thread _t;
 
+    double _retryAt;
+    bool _warned;
+
+    // called every frame: a busy port (XSOverlay owns it) is retried every 10 s, not every frame
     public void SetEnabled(bool on)
     {
         if (on == (_udp != null)) return;
-        if (!on) { Stop(); Status = "off"; return; }
+        if (!on) { Stop(); Status = "off"; _retryAt = 0; _warned = false; return; }
+        double now = Clock.Now;
+        if (now < _retryAt) return;
+        UdpClient u = null;
         try
         {
-            _udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, Port));
+            u = new UdpClient(AddressFamily.InterNetwork);
+            u.Client.Bind(new IPEndPoint(IPAddress.Loopback, Port));
+            _udp = u;
+            _warned = false;
             _t = new Thread(Run) { IsBackground = true, Name = "notifications" };
             _t.Start();
             Status = $"listening on UDP {Port}";
@@ -51,9 +61,11 @@ public sealed class NotificationListener : IDisposable
         }
         catch (SocketException e)
         {
+            u?.Dispose();
             _udp = null;
+            _retryAt = now + 10;
             Status = $"UDP {Port} is busy (XSOverlay running?)";
-            Log.Warn("notifications: " + e.Message);
+            if (!_warned) { _warned = true; Log.Warn("notifications: " + e.Message); }
         }
     }
 

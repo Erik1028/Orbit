@@ -61,17 +61,26 @@ public static class WindowList
         return sb.ToString();
     }
 
-    static readonly Dictionary<uint, string> _procNames = new();
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref int size);
+    const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 
+    // program name of a window's process, asked fresh every time: a cache by pid gave the wrong name
+    // once Windows reused the pid of a closed program (a cheap call, only made while listing windows)
     static string ProcessOf(IntPtr h)
     {
         Native.GetWindowThreadProcessId(h, out uint pid);
-        if (_procNames.TryGetValue(pid, out var name)) return name;
-        try { using var p = Process.GetProcessById((int)pid); name = p.ProcessName; }
-        catch { name = "?"; }
-        if (_procNames.Count > 500) _procNames.Clear();
-        _procNames[pid] = name;
-        return name;
+        IntPtr ph = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (ph == IntPtr.Zero) return "?";
+        try
+        {
+            var sb = new StringBuilder(1024);
+            int n = sb.Capacity;
+            return QueryFullProcessImageName(ph, 0, sb, ref n) ? System.IO.Path.GetFileNameWithoutExtension(sb.ToString()) : "?";
+        }
+        finally { CloseHandle(ph); }
     }
 
     public static bool Cloaked(IntPtr h) =>

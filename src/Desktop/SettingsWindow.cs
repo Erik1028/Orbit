@@ -87,8 +87,30 @@ public sealed class SettingsWindow : Form
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        if (_ptr.Down && (e.Button & MouseButtons.Left) == 0) CancelDrag();     // the up was never delivered
         _ptr.Move(e.X, e.Y);
         if (_ui.NeedsRedrawForMove(_ptr, DpiScale)) Dirty = true;
+    }
+
+    // Alt+Tab / another window taking the mouse mid-drag: no MouseUp comes, so the slider would stay
+    // grabbed. Drop the press without a click.
+    void CancelDrag()
+    {
+        _ptr.Down = false;
+        _ptr.PressedLatch = false;
+        Dirty = true;
+    }
+
+    protected override void OnMouseCaptureChanged(EventArgs e)
+    {
+        base.OnMouseCaptureChanged(e);
+        if (_ptr.Down && !Capture) CancelDrag();
+    }
+
+    protected override void OnDeactivate(EventArgs e)
+    {
+        base.OnDeactivate(e);
+        if (_ptr.Down) CancelDrag();
     }
     protected override void OnMouseLeave(EventArgs e) { if (!_ptr.Down) _ptr.Inside = false; Dirty = true; }
     protected override void OnMouseDown(MouseEventArgs e)
@@ -137,7 +159,7 @@ public sealed class SettingsWindow : Form
         _p.End();
         _ui.End();
         _swap.Present(0, PresentFlags.None);
-        if (_ui.Interacting || _ui.Changed || _ui.Animating) Dirty = true;
+        if (_ui.Interacting || _ui.Changed || _ui.Animating || _ui.Pressed || _ui.Released) Dirty = true;
     }
 
     protected override void Dispose(bool disposing)

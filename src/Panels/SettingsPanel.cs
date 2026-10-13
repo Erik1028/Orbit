@@ -98,7 +98,9 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
             _beforeDraw?.Invoke(_view);
             DrawFrame(_ptr);
             Ov.SetTexture(Surf.Tex);
-            _dirty = _ui.Interacting || _ui.Changed;
+            // a press / release frame always gets one more frame: what the click changed (picker closed,
+            // new theme, other card selected) was drawn before the click was handled
+            _dirty = _ui.Interacting || _ui.Changed || _ui.Pressed || _ui.Released;
             _nextDraw = now + 0.5;
         }
         Ov.Show();

@@ -59,13 +59,21 @@ public sealed unsafe class MonitorCapture : IDisposable
         _size = _item.Size;
         // a minimised window can report 0 x 0; the first real frame resizes everything
         if (_size.Width < 1 || _size.Height < 1) _size = new Windows.Graphics.SizeInt32 { Width = 16, Height = 16 };
-        Target = new Surface(g, _size.Width, _size.Height);
-        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _size);
-        _session = _pool.CreateCaptureSession(_item);
-        _poolAbi = QueryAbi(_pool, IID_IDirect3D11CaptureFramePool);
-        _session.IsCursorCaptureEnabled = true;
-        try { _session.IsBorderRequired = false; } catch (Exception e) { Log.Warn("capture border can't be disabled: " + e.Message); }
-        _session.StartCapture();
+        try
+        {
+            Target = new Surface(g, _size.Width, _size.Height);
+            _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _size);
+            _session = _pool.CreateCaptureSession(_item);
+            _poolAbi = QueryAbi(_pool, IID_IDirect3D11CaptureFramePool);
+            try { _session.IsCursorCaptureEnabled = true; } catch (Exception e) { Log.Warn("cursor capture: " + e.Message); }
+            try { _session.IsBorderRequired = false; } catch (Exception e) { Log.Warn("capture border can't be disabled: " + e.Message); }
+            _session.StartCapture();
+        }
+        catch
+        {
+            Dispose();        // the pool holds a raw reference and the target is VRAM: nothing may stay behind
+            throw;
+        }
     }
 
     static IntPtr QueryAbi(object o, Guid iid)
