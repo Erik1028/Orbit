@@ -246,6 +246,8 @@ public sealed class Laser : IDisposable
                 _hover.PointerButton(_hand, PtrButton.Secondary, true, px);
                 if (haptics) vr.Haptic(_hand, 0.35f);
             }
+            if (hs.GrabPressed && !_hover.Grabbable && haptics)
+                vr.Haptic(_hand, 0.2f, 0.008f);          // locked: a short tick, it stays where it is
             if (hs.GrabPressed && _hover.Grabbable)
             {
                 if (Other != null && Other._grab == _hover && Other._partner == null)

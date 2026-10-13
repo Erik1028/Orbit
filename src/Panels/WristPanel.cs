@@ -369,7 +369,7 @@ public sealed class WristPanel : IPointerTarget, IDisposable
         _dirty = true;
     }
     public void PointerScroll(Hand h, float n, Vector2 px) { }
-    public bool Grabbable => true;
+    public bool Grabbable => !C.Locked;
 
     public Matrix4x4 WorldTransform =>
         _vr != null && _vr.TryDeviceWorld(HandIndex(_vr), out var dev) ? Offset * dev : Matrix4x4.Identity;

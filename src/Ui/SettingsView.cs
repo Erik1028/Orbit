@@ -496,7 +496,10 @@ public sealed class SettingsView
         if (ui.Toggle("w.bat", new RectangleF(lx, 374, cw, 46), "Batteries", ref b, null, w.Enabled)) w.ShowBatteries = b;
         b = w.ShowMedia;
         if (ui.Toggle("w.media", new RectangleF(lx, 422, cw, 46), "Now playing", ref b, null, w.Enabled)) w.ShowMedia = b;
-        if (ui.Button("w.reset", new RectangleF(lx + 10, 480, 170, 38), "Reset position", Theme.IcoRecenter, false, w.Enabled, 14))
+        b = w.Locked;
+        if (ui.Toggle("w.lock", new RectangleF(lx, 470, cw, 54), "Lock position", ref b, "the grip won't move or resize the watch", w.Enabled))
+            w.Locked = b;
+        if (ui.Button("w.reset", new RectangleF(lx + 10, 534, 170, 38), "Reset position", Theme.IcoRecenter, false, w.Enabled, 14))
             _h.ResetWrist();
 
         var prev = WristPreview(p, 92);

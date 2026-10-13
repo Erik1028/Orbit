@@ -35,6 +35,7 @@ CONTROLS
 - Point at the watch with the other hand: keyboard, monitors on/off, recenter,
   layout profile (shows its name - press to switch), night mode (moon), settings
 - Grab the watch with the other hand to move it on your wrist
+  (Wrist > Lock position stops that, so it can't be nudged by accident)
 
 
 SETTINGS

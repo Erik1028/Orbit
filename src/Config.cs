@@ -27,6 +27,7 @@ public sealed class WristConfig
     public string Face { get; set; } = "full";          // full | analog | minimal | time
     public bool PerfGraph { get; set; } = false;        // frame-time graph instead of the numbers
     public float[] Offset { get; set; }   // relative to the hand; null = default watch spot
+    public bool Locked { get; set; }      // the grip can't move or resize the watch (no accidental nudges)
 }
 
 public sealed class DesktopConfig

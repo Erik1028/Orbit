@@ -180,6 +180,12 @@ dotnet publish -c Release -o dist
   olvassa ki a felülírt `Orbit.exe`-ből, és `--updated-from` kapcsolóval adja tovább (az admin-feladaton
   át is); tartalékként a konfig `General.LastVersion` mezője.
 
+## 1.3.2 – zárható óra (2026-10-13)
+
+- Wrist → *Lock position* (`Wrist.Locked`): a grip nem mozdítja és nem méretezi át az órát
+  (`WristPanel.Grabbable` = !Locked); zárt panelre griplésnél egy rövid haptikus tick jelzi, hogy zárva van.
+  A *Reset position* zárva is működik. Az 1.3.1-es frissítést Erik élesben kipróbálta (19:09, dist-ben): rendben.
+
 ## Fejlesztői kapcsolók
 
 - `--snapshot <mappa>` – VR nélkül PNG-be rajzol minden panelt + egy-egy képet minden monitorról (saját,
