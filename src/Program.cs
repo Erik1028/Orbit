@@ -28,9 +28,14 @@ static class Program
     //   --setup [--install-dir <dir>] [--no-config] [--quiet]   installer (also when the exe name contains "setup")
     //   (setup) --update --install-dir <dir>   started by "Check for updates": silent install over that copy, restart
     //   --uninstall [--quiet]   remove the installed copy (used by Settings > Apps)
+    // set by the installer's --update when it starts the new version (shown as "updated from ...")
+    public static string UpdatedFrom;
+
     [STAThread]
     static int Main(string[] args)
     {
+        int uf = Array.IndexOf(args, "--updated-from");
+        if (uf >= 0 && uf + 1 < args.Length) UpdatedFrom = args[uf + 1];
         bool has(string a) => args.Contains(a);
         bool tool = has("--snapshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest");
         if (tool) return RunTool(args);
@@ -70,7 +75,8 @@ static class Program
         if (wantAdmin && !Elevation.IsElevated && !has("--from-task") && !has("--no-elevate"))
         {
             Log.Init("orbit-launch.log");
-            string pass = (hidden ? "--steamvr" : "--show") + (restart ? " --restart" : "");
+            string pass = (hidden ? "--steamvr" : "--show") + (restart ? " --restart" : "") +
+                          (UpdatedFrom != null ? " --updated-from " + UpdatedFrom : "");
             if (Elevation.RunTask(pass)) return 0;
             // no task yet (first run, or the exe moved): one UAC prompt, the elevated copy installs it.
             // Not from SteamVR though - a prompt on the desktop while in VR helps nobody.

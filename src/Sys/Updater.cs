@@ -43,6 +43,9 @@ public sealed class Updater
 
     public bool Busy { get { lock (_lock) return _state is State.Checking or State.Downloading or State.Starting; } }
 
+    // first start after an update: the Version row says so
+    public void NoteUpdated(string from) => Set(State.UpToDate, $"updated from {from}");
+
     static HttpClient Client()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };

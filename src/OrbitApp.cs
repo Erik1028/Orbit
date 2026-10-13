@@ -96,6 +96,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _kb.OnChatTyping = on => _osc.SendMessage(C.General.OscPort, "/chatbox/typing", on);
         SyncMonitors(force: true);
         SyncWindowPanels();
+        NoteVersion();
         try
         {
             _focus = new TextFocusWatcher();
@@ -1236,6 +1237,25 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     public bool IsElevated { get; } = Elevation.IsElevated;
 
     public string NotificationStatus => _notifyIn.Status;
+
+    // the first start of a new version: a card in VR and a line under the version in the settings
+    void NoteVersion()
+    {
+        string now = Updater.Current.ToString(3), last = Program.UpdatedFrom ?? C.General.LastVersion;
+        if (last == now) return;
+        if (last != null)
+        {
+            Log.Info($"updated: {last} -> {now}");
+            Updates.NoteUpdated(last);
+            _notifyIn.Incoming.Enqueue(new Notification
+            {
+                Source = "Orbit", Title = "Orbit updated",
+                Content = $"Now running {now} (was {last}).", Timeout = 8,
+            });
+        }
+        C.General.LastVersion = now;
+        _cfg.MarkDirty();
+    }
 
     public void TestNotification() => _notifyIn.Incoming.Enqueue(new Notification
     {

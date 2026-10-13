@@ -173,6 +173,13 @@ dotnet publish -c Release -o dist
   változás nem ír lemezre (MarkSoftDirty), sikertelen mentés újrapróbálva, duplikált ablak-azonosító
   kiszűrve, egy hibás overlay nem állítja meg az indulást.
 
+## 1.3.1 – teszt-frissítés (2026-10-13)
+
+- Frissítés után az Orbit első indításkor VR-értesítést mutat („Orbit updated – Now running 1.3.1
+  (was 1.3.0)”), és a General fül Version sora alatt „updated from 1.3.0” áll. A régi verziót a telepítő
+  olvassa ki a felülírt `Orbit.exe`-ből, és `--updated-from` kapcsolóval adja tovább (az admin-feladaton
+  át is); tartalékként a konfig `General.LastVersion` mezője.
+
 ## Fejlesztői kapcsolók
 
 - `--snapshot <mappa>` – VR nélkül PNG-be rajzol minden panelt + egy-egy képet minden monitorról (saját,

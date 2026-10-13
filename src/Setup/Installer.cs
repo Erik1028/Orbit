@@ -97,13 +97,24 @@ static class Installer
             // (settings, shortcuts and the Apps entry stay as they are), then start Orbit again
             opt.WriteConfig = false;
             opt.Update = true;
+            // the version being replaced, read before it is overwritten - the new Orbit announces the update
+            string from = null;
+            try
+            {
+                var old = FileVersionInfo.GetVersionInfo(Path.Combine(opt.Dir, "Orbit.exe")).ProductVersion;
+                if (!string.IsNullOrEmpty(old)) from = old.Split('+')[0];
+            }
+            catch { }
+            Log.Info($"update {from ?? "?"} -> {Version} in {opt.Dir}");
             try
             {
                 Install(opt);
                 if (args.Contains("--no-start")) { Log.Info("update installed (--no-start)"); return 0; }   // tests
                 Log.Info("update installed, starting Orbit");
-                Process.Start(new ProcessStartInfo(Path.Combine(opt.Dir, "Orbit.exe"), VrSession.RuntimeRunning() ? "--steamvr" : "")
-                    { UseShellExecute = false, WorkingDirectory = opt.Dir });
+                var psi = new ProcessStartInfo(Path.Combine(opt.Dir, "Orbit.exe")) { UseShellExecute = false, WorkingDirectory = opt.Dir };
+                if (VrSession.RuntimeRunning()) psi.ArgumentList.Add("--steamvr");
+                if (from != null && from != Version) { psi.ArgumentList.Add("--updated-from"); psi.ArgumentList.Add(from); }
+                Process.Start(psi);
                 return 0;
             }
             catch (Exception e)
