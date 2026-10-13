@@ -1,0 +1,440 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using Valve.VR;
+
+namespace Orbit;
+
+public enum PtrButton { Primary, Secondary }
+
+// Something our own laser can point at, click and grab.
+public interface IPointerTarget
+{
+    VrOverlay Overlay { get; }
+    bool Interactive { get; }
+    bool AcceptsFrom(Hand h);
+    Vector2 TextureSize { get; }
+    void PointerMove(Hand h, Vector2 px);
+    void PointerLeave(Hand h);
+    void PointerButton(Hand h, PtrButton b, bool down, Vector2 px);
+    void PointerScroll(Hand h, float notches, Vector2 px);
+
+    bool Grabbable { get; }
+    Matrix4x4 WorldTransform { get; }
+    void GrabBegin(bool detach);              // detach = B/Y held: take a monitor out of its row
+    void GrabMove(Matrix4x4 world);
+    void GrabStickX(float v, float dt);       // monitors: bend, others: resize
+    void GrabTwoHandBegin();
+    void GrabTwoHandScale(float ratio);       // hand distance / distance when the 2nd hand grabbed
+    bool GrabSnapPreview { get; }             // releasing now would snap to a neighbour
+    void GrabEnd();
+
+    // > 0: this hand drives the Windows cursor here, draw it at this many metres per screen pixel
+    float LaserCursorScale(Hand h) => 0;
+}
+
+// One hand's pointer: ray test against our overlays, hover/click/scroll forwarding,
+// grip = grab and move (stick up/down = distance, left/right = bend or size),
+// grip with the other hand on the same panel = two-handed resize.
+public sealed class Laser : IDisposable
+{
+    const int BeamW = 256, BeamH = 16;
+    public float Thickness = 0.0035f;     // metres, from Look > Laser
+    public bool AlwaysOn;                 // show a short beam even when not pointing at a panel
+
+    readonly Hand _hand;
+    readonly VrOverlay _beam, _dot, _cursor;
+    readonly Surface _beamTex, _dotTex;
+    public SystemCursor Cursor;           // shared, set by the app
+    int _cursorVersion = -1;
+    const float DotSize = 0.016f;
+    readonly Painter _p;
+    public Laser Other;
+    IPointerTarget _hover, _press, _pressSecondary, _grab;
+    Matrix4x4 _grabRel;
+    Laser _partner;          // on the primary hand: the hand helping with a two-handed grab
+    Laser _primary;          // on the helping hand: whose grab it joined
+    float _twoStartDist;
+    bool _snapShown;
+    Vector2 _lastPx;
+    int _themeVersion = -1;
+
+    // smoothing + click stabilisation (pulling the trigger tilts the controller a little)
+    readonly RayFilter _filter = new();
+    public int Smoothing = 2;
+    double _clock;
+    IPointerTarget _freezeTarget;
+    Vector2 _freezePx;
+    Vector3 _freezeDir, _freezePoint;
+    double _freezeUntil;
+    const float FreezeAngle = 0.9f * MathF.PI / 180;      // move further than this to break out early
+
+    public bool Active => _hover != null || _grab != null || _primary != null;
+    public IPointerTarget Hovered => _hover;
+
+    public Laser(Gpu gpu, Painter p, Hand hand)
+    {
+        _hand = hand;
+        _p = p;
+        _beamTex = new Surface(gpu, BeamW, BeamH);
+        _beam = new VrOverlay($"erik.orbit.laser.{hand.ToString().ToLowerInvariant()}", $"Orbit laser {hand}");
+        _beam.SetFlag(VROverlayFlags.IsPremultiplied, true);
+        _beam.SetSortOrder(200);
+        _dotTex = new Surface(gpu, 64, 64);
+        _dot = new VrOverlay($"erik.orbit.laserdot.{hand.ToString().ToLowerInvariant()}", $"Orbit laser dot {hand}");
+        _dot.SetFlag(VROverlayFlags.IsPremultiplied, true);
+        _dot.SetSortOrder(201);
+        _dot.SetWidth(DotSize);
+        _cursor = new VrOverlay($"erik.orbit.cursor.{hand.ToString().ToLowerInvariant()}", $"Orbit cursor {hand}");
+        _cursor.SetFlag(VROverlayFlags.IsPremultiplied, true);
+        _cursor.SetSortOrder(202);
+        Redraw();
+    }
+
+    // soft beam in the laser colour, fading in from the controller
+    void Redraw()
+    {
+        _themeVersion = Theme.Version;
+        _p.Begin(_beamTex.Bitmap, 0x00000000);
+        for (int x = 0; x < BeamW; x += 4)
+        {
+            float t = x / (float)BeamW;
+            float a = Math.Min(1, t * 6) * 0.9f;
+            _p.Fill(new System.Drawing.RectangleF(x, 3, 4, BeamH - 6), Theme.WithAlpha(Theme.Laser, a * 0.45f));
+            _p.Fill(new System.Drawing.RectangleF(x, 6, 4, BeamH - 12), Theme.WithAlpha(Theme.Mix(Theme.Laser, 0xFFFFFFFF, 0.75f), a));
+        }
+        _p.End();
+        _beam.SetTexture(_beamTex.Tex);
+        // hit dot: bright core, soft halo
+        _p.Begin(_dotTex.Bitmap, 0x00000000);
+        _p.Circle(32, 32, 30, Theme.WithAlpha(Theme.Laser, 0.25f));
+        _p.Circle(32, 32, 20, Theme.WithAlpha(Theme.Laser, 0.6f));
+        _p.Circle(32, 32, 12, Theme.Mix(Theme.Laser, 0xFFFFFFFF, 0.7f));
+        _p.End();
+        _dot.SetTexture(_dotTex.Tex);
+    }
+
+    public void Update(VrSession vr, IReadOnlyList<IPointerTarget> targets, bool enabled, float dt, bool haptics)
+    {
+        if (_themeVersion != Theme.Version) Redraw();
+        ref var hs = ref vr.Hands[(int)_hand];
+        _clock += dt;
+        if (!enabled || !hs.PoseValid)
+        {
+            Reset();
+            _filter.Reset();
+            return;
+        }
+        _rawO = hs.Aim.Translation;
+        _rawD = Vector3.Normalize(MathUtil.Forward(hs.Aim));
+        var (o, d) = _filter.Filter(_rawO, _rawD, dt, Smoothing);
+
+        // Releases are handled before anything else: the grab / two-hand branches below return
+        // early, and a lost release would leave a mouse button or a key held down in Windows.
+        if (hs.ClickReleased && _press != null)
+        {
+            var pr = _press;
+            _press = null;
+            if (_freezeTarget == pr) { _freezeUntil = _clock + 0.12; _freezePx = _lastPx; _freezePoint = _lastPoint; _freezeDir = d; }
+            pr.PointerButton(_hand, PtrButton.Primary, false, _lastPx);
+        }
+        if (hs.SecondaryReleased && _pressSecondary != null)
+        {
+            var pr = _pressSecondary;
+            _pressSecondary = null;
+            pr.PointerButton(_hand, PtrButton.Secondary, false, _lastPx);
+        }
+
+        // helping with the other hand's grab: only the beam, the primary does the work
+        if (_primary != null)
+        {
+            if (!hs.Grab || _primary._grab == null || _primary._partner != this)
+            {
+                if (_primary._partner == this) _primary._partner = null;
+                _primary = null;
+            }
+            else
+            {
+                ShowBeam(vr, o, d, Math.Max(0.05f, Vector3.Distance(o, _primary._grab.WorldTransform.Translation)));
+                _cursor.Hide();
+                return;
+            }
+        }
+
+        if (_grab != null)
+        {
+            if (!hs.Grab || !_grab.Interactive)
+            {
+                var g = _grab;
+                _grab = null;
+                _partner = null;
+                EndGrab(g);
+                if (haptics && _snapShown) vr.Haptic(_hand, 0.6f, 0.03f);
+                _snapShown = false;
+            }
+            else
+            {
+                if (_partner != null)
+                {
+                    float dist = Vector3.Distance(hs.Aim.Translation, vr.Hands[(int)_partner._hand].Aim.Translation);
+                    if (_twoStartDist > 0.02f) _grab.GrabTwoHandScale(dist / _twoStartDist);
+                }
+                if (Math.Abs(hs.Stick.Y) > 0.2f)
+                {
+                    // push/pull along the hand's pointing axis (rel is expressed in hand space)
+                    float z = _grabRel.M43 - hs.Stick.Y * 1.6f * dt;
+                    _grabRel.M43 = Math.Clamp(z, -6f, 0.05f);
+                }
+                if (Math.Abs(hs.Stick.X) > 0.3f)
+                    _grab.GrabStickX(hs.Stick.X, dt);
+                var world = _grabRel * hs.Aim;
+                _grab.GrabMove(world);
+                bool snap = _grab.GrabSnapPreview;
+                if (snap && !_snapShown && haptics) vr.Haptic(_hand, 0.25f);
+                _snapShown = snap;
+                if (snap) _grab.Overlay?.SetColor(0.78f, 1f, 0.84f);
+                else _grab.Overlay?.SetColor(0.84f, 0.92f, 1f);
+                ShowBeam(vr, o, d, Math.Max(0.05f, Vector3.Distance(o, world.Translation)));
+                _cursor.Hide();
+                return;
+            }
+        }
+
+        IPointerTarget best = null;
+        float bestDist = float.MaxValue;
+        Vector2 bestUv = default;
+        Vector3 bestPoint = default, bestNormal = default;
+        for (int ti = 0; ti < targets.Count; ti++)
+        {
+            var t = targets[ti];
+            if (t == null || !t.Interactive || !t.AcceptsFrom(_hand)) continue;
+            if (Hit(vr, t.Overlay, o, d, out float dist, out Vector2 uv, out var pt, out var nrm) && dist < bestDist && dist < 8f)
+            {
+                best = t; bestDist = dist; bestUv = uv; bestPoint = pt; bestNormal = nrm;
+            }
+        }
+
+        if (best != _hover)
+        {
+            _hover?.PointerLeave(_hand);
+            _hover = best;
+            if (best != null && haptics) vr.Haptic(_hand, 0.12f);
+        }
+
+        if (_hover != null)
+        {
+            var px = bestUv * _hover.TextureSize;
+            if (_freezeTarget == _hover && _clock < _freezeUntil)
+            {
+                if (MathF.Acos(Math.Clamp(Vector3.Dot(d, _freezeDir), -1f, 1f)) < FreezeAngle) { px = _freezePx; bestPoint = _freezePoint; }
+                else _freezeUntil = 0;
+            }
+            _lastPx = px;
+            _lastPoint = bestPoint;
+            _hover.PointerMove(_hand, px);
+            if (hs.ClickPressed)
+            {
+                // hold the cursor still for a moment so the click lands where it was aimed
+                _freezeTarget = _hover; _freezePx = px; _freezePoint = bestPoint; _freezeDir = d; _freezeUntil = _clock + 0.3;
+                _press = _hover;
+                _hover.PointerButton(_hand, PtrButton.Primary, true, px);
+                if (haptics) vr.Haptic(_hand, 0.35f);
+            }
+            if (hs.SecondaryPressed)
+            {
+                _pressSecondary = _hover;
+                _hover.PointerButton(_hand, PtrButton.Secondary, true, px);
+                if (haptics) vr.Haptic(_hand, 0.35f);
+            }
+            if (hs.GrabPressed && _hover.Grabbable)
+            {
+                if (Other != null && Other._grab == _hover && Other._partner == null)
+                {
+                    // second hand on the same panel: two-handed resize
+                    _primary = Other;
+                    Other._partner = this;
+                    Other._twoStartDist = Vector3.Distance(hs.Aim.Translation, vr.Hands[(int)Other._hand].Aim.Translation);
+                    _hover.GrabTwoHandBegin();
+                    _hover.PointerLeave(_hand);
+                    _hover = null;
+                    if (haptics) vr.Haptic(_hand, 0.5f, 0.02f);
+                    return;
+                }
+                if (Other == null || Other._grab != _hover)
+                {
+                    _grab = _hover;
+                    _hover.PointerLeave(_hand);        // a grabbed monitor gives the mouse back
+                    _hover = null;
+                    _grab.GrabBegin(detach: hs.Secondary);
+                    _grabRel = _grab.WorldTransform * MathUtil.Invert(hs.Aim);
+                    if (haptics) vr.Haptic(_hand, 0.5f, 0.02f);
+                    ShowBeam(vr, o, d, bestDist);
+                    _cursor.Hide();
+                    return;
+                }
+            }
+            else if (Math.Abs(hs.Stick.Y) > 0.25f)
+            {
+                // speed grows with deflection, ~12 notches/s at full tilt
+                float s = Math.Sign(hs.Stick.Y) * (Math.Abs(hs.Stick.Y) - 0.25f) / 0.75f;
+                _hover.PointerScroll(_hand, s * 12f * dt, px);
+            }
+            ShowBeam(vr, o, d, bestDist);
+            float mpp = _hover?.LaserCursorScale(_hand) ?? 0;
+            if (mpp > 0 && Cursor != null)
+            {
+                ShowCursor(bestPoint, bestNormal, d, _hover.WorldTransform, mpp);
+                _dot.Hide();      // the cursor marks the spot
+            }
+            else _cursor.Hide();
+        }
+        else if (AlwaysOn)
+        {
+            ShowBeam(vr, o, d, 1.0f);
+            _dot.Hide();
+            _cursor.Hide();
+        }
+        else
+            HideBeam();
+    }
+
+    Vector3 _lastPoint;
+
+    static void EndGrab(IPointerTarget g)
+    {
+        try
+        {
+            g.Overlay?.SetColor(1, 1, 1);
+            g.GrabEnd();
+        }
+        catch (Exception e) { Log.Warn("grab end: " + e.Message); }
+    }
+
+    Vector3 _rawO, _rawD;
+
+    // The beam and the dot are parented to the controller (device-relative overlays), so the
+    // compositor moves them with the newest controller pose - no lag behind the hand. Only the
+    // cursor on the panel is smoothed; the beam follows the raw ray. o/d are ignored on purpose.
+    void ShowBeam(VrSession vr, Vector3 o, Vector3 d, float len)
+    {
+        o = _rawO; d = _rawD;
+        Vector3 mid = o + d * (len / 2);
+        Vector3 toEye = vr.HmdValid ? vr.Hmd.Translation - mid : Vector3.UnitY;
+        Vector3 z = toEye - Vector3.Dot(toEye, d) * d;
+        if (z.LengthSquared() < 1e-8f) z = Vector3.UnitY - Vector3.Dot(Vector3.UnitY, d) * d;
+        z = Vector3.Normalize(z);
+        Vector3 y = Vector3.Cross(z, d);
+        var beamWorld = MathUtil.Basis(d, y, z, mid);
+
+        // the dot sits at the end, facing the eyes
+        Vector3 tip = o + d * len;
+        Vector3 dz = vr.HmdValid ? Vector3.Normalize(vr.Hmd.Translation - tip) : -d;
+        Vector3 dx = Vector3.Cross(Vector3.UnitY, dz);
+        dx = dx.LengthSquared() < 1e-6f ? Vector3.UnitX : Vector3.Normalize(dx);
+        var dotWorld = MathUtil.Basis(dx, Vector3.Cross(dz, dx), dz, tip - d * 0.002f);
+
+        uint dev = vr.HandIndex(_hand);
+        if (vr.TryDeviceWorld(dev, out var devWorld))
+        {
+            var inv = MathUtil.Invert(devWorld);
+            _beam.SetRelative(dev, beamWorld * inv);
+            _dot.SetRelative(dev, dotWorld * inv);
+        }
+        else
+        {
+            _beam.SetAbsolute(beamWorld);
+            _dot.SetAbsolute(dotWorld);
+        }
+        _beam.SetWidth(len);
+        _beam.SetTexelAspect(len * BeamH / (BeamW * Thickness));
+        _beam.Show();
+        _dot.Show();
+    }
+
+    void HideBeam() { _beam.Hide(); _dot.Hide(); _cursor.Hide(); }
+
+    // The Windows cursor drawn on the panel at the (smoothed) laser point, lying on the surface.
+    void ShowCursor(Vector3 point, Vector3 normal, Vector3 rayDir, Matrix4x4 panel, float metersPerPixel)
+    {
+        if (_cursorVersion != Cursor.Version)
+        {
+            _cursorVersion = Cursor.Version;
+            _cursor.SetTexture(Cursor.Surf.Tex);
+        }
+        if (normal.LengthSquared() < 1e-6f) normal = Vector3.Normalize(MathUtil.Back(panel));
+        normal = Vector3.Normalize(normal);
+        if (Vector3.Dot(normal, rayDir) > 0) normal = -normal;              // towards the viewer
+        Vector3 up = MathUtil.Up(panel);
+        up = Vector3.Normalize(up - Vector3.Dot(up, normal) * normal);
+        Vector3 right = Vector3.Cross(up, normal);
+        float w = SystemCursor.Size * metersPerPixel;
+        float s = w / SystemCursor.Size;
+        var hot = Cursor.Hotspot;
+        // texture centre relative to the hotspot: +x right, +y down (= -up)
+        Vector3 centre = point + right * ((SystemCursor.Size / 2f - hot.X) * s) - up * ((SystemCursor.Size / 2f - hot.Y) * s)
+                         + normal * 0.0015f;
+        _cursor.SetAbsolute(MathUtil.Basis(right, up, normal, centre));
+        _cursor.SetWidth(w);
+        _cursor.Show();
+    }
+
+    // Lets go of everything (pose lost, laser disabled, dashboard opened).
+    // "steamvr": ask SteamVR (IPC per panel per hand per frame) | "local": LocalRaycast only |
+    // "shadow": use SteamVR's answer, compute ours too and keep statistics of the difference
+    public static string RaycastMode = "shadow";
+
+    static bool Hit(VrSession vr, VrOverlay ov, Vector3 o, Vector3 d, out float dist, out Vector2 uv, out Vector3 pt, out Vector3 nrm)
+    {
+        if (RaycastMode == "local")
+        {
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            bool h = ov.RaycastLocal(vr, o, d, out dist, out uv, out pt, out nrm);
+            RayStats.Local(System.Diagnostics.Stopwatch.GetTimestamp() - t0);
+            return h;
+        }
+        long s0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool hs = ov.Raycast(o, d, out dist, out uv, out pt, out nrm);
+        long s1 = System.Diagnostics.Stopwatch.GetTimestamp();
+        RayStats.Steam(s1 - s0);
+        if (RaycastMode == "shadow")
+        {
+            bool hl = ov.RaycastLocal(vr, o, d, out float dl, out Vector2 uvl, out Vector3 pl, out Vector3 nl);
+            RayStats.Local(System.Diagnostics.Stopwatch.GetTimestamp() - s1);
+            RayStats.Add(ov.IsRelative, hs, hl, dist, uv, pt, nrm, dl, uvl, pl, nl);
+        }
+        return hs;
+    }
+
+    public void StopGrab()
+    {
+        if (_grab != null) Reset();
+    }
+
+    // a panel is going away: let go of it if this hand points at, presses or holds it
+    public void Forget(IPointerTarget t)
+    {
+        if (t != null && (_hover == t || _press == t || _pressSecondary == t || _grab == t)) Reset();
+    }
+
+    public void Reset()
+    {
+        _hover?.PointerLeave(_hand);
+        _press?.PointerButton(_hand, PtrButton.Primary, false, _lastPx);
+        _pressSecondary?.PointerButton(_hand, PtrButton.Secondary, false, _lastPx);
+        if (_grab != null) { var g = _grab; _grab = null; EndGrab(g); }
+        if (_primary != null && _primary._partner == this) _primary._partner = null;
+        _hover = _press = _pressSecondary = _grab = null;
+        _partner = _primary = null;
+        _snapShown = false;
+        HideBeam();
+    }
+
+    public void Dispose()
+    {
+        _beam.Dispose();
+        _beamTex.Dispose();
+        _dot.Dispose();
+        _dotTex.Dispose();
+        _cursor.Dispose();
+    }
+}

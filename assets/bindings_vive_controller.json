@@ -1,0 +1,105 @@
+{
+  "controller_type": "vive_controller",
+  "action_manifest_version": 0,
+  "category": "steamvr_input",
+  "name": "Orbit defaults for Vive wand",
+  "description": "Orbit overlay default bindings",
+  "bindings": {
+    "/actions/orbit": {
+      "poses": [
+        {
+          "output": "/actions/orbit/in/pointer_left",
+          "path": "/user/hand/left/pose/tip"
+        },
+        {
+          "output": "/actions/orbit/in/pointer_right",
+          "path": "/user/hand/right/pose/tip"
+        }
+      ],
+      "haptics": [
+        {
+          "output": "/actions/orbit/out/haptic_left",
+          "path": "/user/hand/left/output/haptic"
+        },
+        {
+          "output": "/actions/orbit/out/haptic_right",
+          "path": "/user/hand/right/output/haptic"
+        }
+      ],
+      "sources": [
+        {
+          "path": "/user/hand/left/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/orbit/in/click_left"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/grip",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/orbit/in/grab_left"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/trackpad",
+          "mode": "trackpad",
+          "inputs": {
+            "position": {
+              "output": "/actions/orbit/in/scroll_left"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/orbit/in/click_right"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/grip",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/orbit/in/grab_right"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/trackpad",
+          "mode": "trackpad",
+          "inputs": {
+            "position": {
+              "output": "/actions/orbit/in/scroll_right"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/application_menu",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/orbit/in/secondary_left"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/application_menu",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/orbit/in/secondary_right"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,135 @@
+ORBIT - QUICK START
+===================
+
+Orbit is a SteamVR overlay: a watch on your wrist, your desktop monitors floating
+in VR (with a laser mouse), a full VR keyboard and its own settings panel.
+
+
+REQUIREMENTS
+- Windows 10 (2004 or newer) or Windows 11, a DirectX 11 graphics card
+- SteamVR. Overlays only show while the game runs through SteamVR.
+  Virtual Desktop users: pick SteamVR as the runtime (not VDXR / OpenXR).
+
+
+FIRST START
+1. Start SteamVR. Orbit starts with it (tray icon), unless you switched that off
+   in the installer.
+2. The first time, Windows asks once for administrator rights. With them, the VR
+   mouse and keyboard also work in admin windows (Task Manager, installers...).
+   You can say No - everything else still works.
+3. Your monitors appear in front of you as one curved screen.
+   Turn your LEFT wrist towards your face to see the watch.
+
+
+CONTROLS
+- Point at a panel ................ laser; on a monitor it moves the real cursor
+- Trigger ......................... click
+- B / Y ........................... right click
+- Stick up / down ................. scroll
+- Grip on a panel ................. grab and move it
+    while holding: stick up/down = distance, left/right = bend (monitors) or size
+    other hand's grip on it too = resize with both hands
+    hold B / Y when grabbing a monitor = take it out of its row
+- Drop a monitor next to another .. it snaps into the row
+- Both grips, twice quickly ....... hide / show monitors and keyboard
+- Point at the watch with the other hand: keyboard, monitors on/off, recenter,
+  layout profile (shows its name - press to switch), night mode (moon), settings
+- Grab the watch with the other hand to move it on your wrist
+
+
+SETTINGS
+- In VR: the gear button on the watch opens the settings panel (grab it, close with X).
+- On the desktop: click the tray icon (or start Orbit again from the Start menu).
+- Tabs: Desktops (which monitors, size, curve, join/separate, smart frame rate),
+  Windows (mirror single app windows), Layouts (Desk / Bed / Couch profiles),
+  Wrist (watch face, 24-hour clock, frame-time graph), Keyboard (sounds, size,
+  pop-up for text fields), Look (themes, any accent colour, panel colour, laser
+  colour / thickness / always visible, night mode), General (laser smoothing,
+  haptics, SteamVR start, admin, VRChat OSC, pause when the headset is off).
+
+
+LAYOUT PROFILES (DESK / BED)
+Each profile remembers where your monitors, windows and keyboard are, their size and
+curve, and night mode. Switch with the layout button on the watch (it shows the name)
+or under Layouts. The first time you switch to a profile, everything comes to where
+you are looking - lying in bed, that is above you. Whatever you change afterwards is
+kept in that profile when you switch away.
+
+
+NIGHT MODE
+The moon button on the watch (or Look > Night mode) dims every Orbit panel in VR;
+Look > Night brightness sets how much.
+
+
+SINGLE WINDOWS
+Windows tab > Add a window > pick it from the list. The window floats in VR on its own,
+follows it when it moves or resizes on the PC, and comes back by itself the next time
+the program is open. Clicking it in VR brings it to the front on the PC first, so the
+click lands in it (a minimised window is restored by the first click). Grip moves it,
+the stick bends it, both hands resize it. Up to 6 windows.
+
+
+WATCH FACES
+Wrist > Watch face: Full (time, batteries, performance, music, buttons), Analog,
+Minimal (big time + buttons) or Time (just the time). Performance: Numbers, or a Graph
+of the last 5 seconds of frame times (yellow = reprojected, red = dropped).
+
+
+SAVING POWER
+- Smart frame rate (Desktops): monitors and windows you are not looking or pointing at
+  update less often (15 fps at the edge of view, 4 fps behind you).
+- Pause when the headset is off (General): taking the headset off stops all capturing
+  until you put it back on.
+
+
+KEYBOARD EXTRAS
+- Pops up by itself when a click in VR lands in a text field (browser, Discord, search
+  box...), and goes away when you click somewhere that is not text. Keyboard > Pop up
+  for text fields switches this off.
+- Top bar: Select all / Copy / Paste / Cut / Undo / Redo (Ctrl shortcuts).
+- Globe key (next to space): switches the keyboard language. It cycles through the
+  layouts installed in Windows, plus a built-in English (US) layout when English isn't
+  installed (it types the characters directly, so it works with any Windows layout).
+- "Chatbox" switches the keyboard to VRChat chatbox mode: type the line, Enter (or Send)
+  posts it to the VRChat chatbox, Esc clears it. Needs OSC on in VRChat.
+
+
+NOW PLAYING
+The watch shows what is playing in Windows (Spotify, browser, ...) with previous /
+play-pause / next buttons. Can be hidden under Wrist.
+
+
+NOTIFICATIONS
+Orbit shows notifications sent in XSOverlay's format (UDP port 42069 on this PC) as
+cards in the lower part of your view - e.g. VRCX: Settings > Notifications > enable the
+XSOverlay notifications. General > Notifications > Test shows a sample.
+If XSOverlay itself is running it owns that port, then Orbit can't receive them.
+
+
+VRCHAT AVATAR PARAMETERS (OSC)
+Orbit sends the same avatar parameters as XSOverlay (isOverlayOpen, isKeyboardOpen,
+isWristVisible, openOverlayCount, controller/tracker batteries) to VRChat on
+127.0.0.1:9000, so avatar add-ons such as DXOverlay react to it.
+Turn OSC on in VRChat's action menu. Can be switched off under General.
+
+
+TROUBLESHOOTING
+- Nothing in VR: is SteamVR running, and does the game use SteamVR?
+- The cursor shakes: General > Smoothing > High.
+- Clicks don't reach a window: turn on "Run as administrator" (General).
+- Panels in a strange place: watch button "Recenter", or Desktops > Join into one
+  curved screen.
+- Lying down / reclined: look where you want the screens and press Recenter - when you
+  look clearly up or down, everything is placed along your gaze (above you in bed).
+- Settings and log: %LOCALAPPDATA%\Orbit (config.json, orbit.log)
+
+
+UPDATES
+Settings > General > Check for updates. If a newer Orbit is out, the button turns into
+"Update to ..." - Orbit downloads the new installer from GitHub, checks it, installs it over
+itself (your settings are kept) and starts again.
+
+
+UNINSTALL
+Windows Settings > Apps > Installed apps > Orbit > Uninstall.
+Your settings in %LOCALAPPDATA%\Orbit are kept unless you delete that folder.

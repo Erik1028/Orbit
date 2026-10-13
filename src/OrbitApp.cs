@@ -1,0 +1,1344 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows.Forms;
+using Valve.VR;
+using Windows.Graphics.DirectX.Direct3D11;
+
+namespace Orbit;
+
+public sealed class OrbitApp : IOrbitHost, IDisposable
+{
+    public const string AppKey = "erik.orbit";
+    public const string ExitEventName = @"Local\OrbitOverlayExit", ShowEventName = @"Local\OrbitOverlayShow";
+    // created with a permissive security descriptor so a normal-rights --exit / second start can reach an elevated Orbit
+    readonly EventWaitHandle _exitEvent = NamedObjects.CreateEvent(ExitEventName);
+    readonly EventWaitHandle _showEvent = NamedObjects.CreateEvent(ShowEventName);
+    const int DashW = 1500, DashH = 960;
+
+    readonly ConfigStore _cfg = new();
+    readonly bool _startHidden;
+    Gpu _gpu;
+    Painter _painter;
+    readonly PanelData _data = new();
+    readonly GpuStats _gpuStats = new();
+    readonly MediaInfo _media = new();
+    readonly NotificationListener _notifyIn = new();
+    NotificationPanel _notifyPanel;
+    WristPanel _wrist;
+    KeyboardPanel _kb;
+    SettingsPanel _settingsPanel;
+    readonly List<DesktopPanel> _desktops = new();
+    readonly List<WindowPanel> _windowPanels = new();
+    TextFocusWatcher _focus;
+    bool _kbAuto;            // the keyboard is up because a text field got focus (hides itself again)
+    double _kbHideAt = -1;
+    int _focusSeq;
+    float _dimNow = 1;
+    double _nextWindowScan;
+    List<MonitorInfo> _monitors = new();
+    string _monitorKey = "";
+    readonly MouseOwner _mouse = new();
+    readonly DesktopLayout _layout;
+    readonly OscSender _osc = new();
+    readonly double[] _gripDownAt = { -10, -10 };
+    double _lastChord = -10;
+    bool _restoreDesktops = true, _restoreKeyboard;
+    readonly VrSession _vr = new();
+    Laser[] _lasers;
+    SystemCursor _sysCursor;
+    IDirect3DDevice _winrtDev;
+    SettingsWindow _win;
+    Tray _tray;
+
+    // SteamVR dashboard tab
+    VrOverlay _dash, _dashThumb;
+    Surface _dashSurf, _thumbSurf;
+    SettingsView _dashView;
+    Ui _dashUi;
+    readonly PointerState _dashPtr = new();
+    bool _dashDirty = true;
+    double _dashNext;
+
+    bool _quit;
+    double _nextConnect, _nextMonitorCheck, _nextRuntimeCheck, _last;
+    string _vrStatus = "Waiting for SteamVR";
+
+    static double Now => Clock.Now;
+    Config C => _cfg.Data;
+
+    public OrbitApp(bool startHidden)
+    {
+        _startHidden = startHidden;
+        int adapter = -1;
+        // If SteamVR already runs, connect first so the GPU device is created on its adapter.
+        if (VrSession.RuntimeRunning() && _vr.TryConnect(ActionManifest, out _, AppKey))
+            adapter = _vr.AdapterIndex;
+        _gpu = new Gpu(adapter);
+        _painter = new Painter(_gpu);
+        Theme.Apply(C.Appearance);
+        _layout = new DesktopLayout(_desktops, _cfg);
+        _data.Gpu = _gpuStats;
+        _data.Media = _media;
+        _data.VramTotalGB = _gpu.DedicatedVram / (1024f * 1024 * 1024);
+
+        _wrist = new WristPanel(_gpu, _painter, _cfg) { OnAction = WristAction };
+        _kb = new KeyboardPanel(_gpu, _painter, _cfg);
+        _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
+        _notifyPanel = new NotificationPanel(_gpu, _painter, _cfg);
+        // VRChat chatbox: /chatbox/input <text> <send now> <notification sound>, /chatbox/typing <bool>
+        _kb.OnChatSend = text => { _osc.SendMessage(C.General.OscPort, "/chatbox/input", text, true, true); Log.Info($"chatbox: {text.Length} chars"); };
+        _kb.OnChatTyping = on => _osc.SendMessage(C.General.OscPort, "/chatbox/typing", on);
+        SyncMonitors(force: true);
+        SyncWindowPanels();
+        try
+        {
+            _focus = new TextFocusWatcher();
+            _focus.Start();
+            _mouse.Clicked = () => { if (C.Keyboard.AutoShow) _focus.InspectFor(1.5); };
+        }
+        catch (Exception e) { Log.Warn("focus watch: " + e.Message); _focus = null; }
+
+        _tray = new Tray(ShowSettings, Recenter, ToggleDesktops, ToggleKeyboard, () => _quit = true);
+        var view = new SettingsView(this);
+        _win = new SettingsWindow(_gpu, _painter, view, () => PreparePreviews(view), _tray.AppIcon);
+        if (!_startHidden) _win.Show();
+
+        if (_vr.Connected) OnVrConnected();
+    }
+
+    static string ActionManifest => Path.Combine(AppContext.BaseDirectory, "assets", "actions.json");
+    static string VrManifest => Path.Combine(AppContext.BaseDirectory, "orbit.vrmanifest");
+
+    public void Run()
+    {
+        Native.timeBeginPeriod(1);
+        NoPowerThrottling();
+        ApplyGpuPriority();
+        // the loop needs ~0.2 ms a frame but should get it on time even when VRChat keeps every core busy
+        try { Thread.CurrentThread.Priority = ThreadPriority.AboveNormal; } catch (Exception e) { Log.Warn("priority: " + e.Message); }
+        _last = Now;
+        try
+        {
+            while (!_quit)
+            {
+                Application.DoEvents();
+                if (_exitEvent.WaitOne(0)) _quit = true;
+                if (_showEvent.WaitOne(0)) ShowSettings();
+                if (_quit) break;
+                SafeTick();
+                if (_vr.Connected)
+                {
+                    // paces the loop to the compositor (72/90/120 Hz); falls back to a short sleep
+                    double w0 = Clock.Now;
+                    var we = OpenVR.Overlay.WaitFrameSync(30);
+                    if (we != EVROverlayError.None)
+                    {
+                        if (!_waitWarned) { _waitWarned = true; Log.Warn("WaitFrameSync: " + we); }
+                        Thread.Sleep(5);
+                    }
+                    _perfWaitSum += (Clock.Now - w0) * 1000;
+                }
+                else
+                    Native.MsgWaitForMultipleObjectsEx(0, IntPtr.Zero, 20, Native.QS_ALLINPUT, Native.MWMO_INPUTAVAILABLE);
+            }
+        }
+        finally { Native.timeEndPeriod(1); }
+    }
+
+    // ---- timing, logged every 10 s while in VR (to find what makes the loop slow) ----
+    static readonly string[] PerfNames = { "vr", "lasers", "wrist", "kbd", "settings", "desktops", "dash+osc" };
+    readonly double[] _perfSum = new double[7], _perfMax = new double[7];
+    int _perfFrames;
+    double _perfStart = -1, _perfWaitSum;
+
+    void Perf(int i, ref double t)
+    {
+        double n = Clock.Now, ms = (n - t) * 1000;
+        _perfSum[i] += ms;
+        if (ms > _perfMax[i]) _perfMax[i] = ms;
+        t = n;
+        long b = GC.GetAllocatedBytesForCurrentThread();
+        _allocSum[i] += b - _allocMark;
+        _allocMark = b;
+    }
+
+    // garbage made per section (main thread), and what the GC did, logged next to the timings
+    readonly long[] _allocSum = new long[7];
+    long _allocMark, _allocThreadMark, _allocAllMark;
+    readonly int[] _gcMark = new int[3];
+    TimeSpan _gcPauseMark;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetGuiResources(IntPtr process, uint flags);
+
+    // private bytes, kernel handles, GDI / USER objects: a native leak shows up here first
+    static string ProcessCounters()
+    {
+        try
+        {
+            using var p = Process.GetCurrentProcess();
+            return $"private {p.PrivateMemorySize64 / 1048576} MB, handles {p.HandleCount}, gdi {GetGuiResources(p.Handle, 0)}, user {GetGuiResources(p.Handle, 1)}";
+        }
+        catch { return "counters n/a"; }
+    }
+
+    // ---- scheduling: CPU power throttling off, GPU priority up, GPU queue probe ----
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_POWER_THROTTLING_STATE { public uint Version, ControlMask, StateMask; }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetProcessInformation(IntPtr process, int infoClass, ref PROCESS_POWER_THROTTLING_STATE info, int size);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+
+    // Windows 11 runs window-less background processes (Orbit lives in the tray) with "efficiency"
+    // scheduling and may ignore their timer resolution. Opt out of both.
+    static void NoPowerThrottling()
+    {
+        const int ProcessPowerThrottling = 4;
+        const uint EXECUTION_SPEED = 0x1, IGNORE_TIMER_RESOLUTION = 0x4;
+        var st = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = EXECUTION_SPEED | IGNORE_TIMER_RESOLUTION, StateMask = 0 };
+        bool ok = SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref st, Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>());
+        Log.Info(ok ? "power throttling: off (full speed, timer resolution kept)" : $"power throttling: could not opt out ({Marshal.GetLastWin32Error()})");
+    }
+
+    // SetGPUThreadPriority needs the "increase scheduling priority" right (admin); without it the call fails harmlessly.
+    void ApplyGpuPriority()
+    {
+        int want = C.General.HighGpuPriority ? 7 : 0;
+        try
+        {
+            using var dxgi = _gpu.Device.QueryInterface<Vortice.DXGI.IDXGIDevice>();
+            var hr = dxgi.SetGPUThreadPriority(want);
+            Log.Info($"GPU priority {want}: {(hr.Success ? "ok" : hr.ToString())}");
+        }
+        catch (Exception e) { Log.Warn("GPU priority: " + e.Message); }
+    }
+
+    // An event query after each frame's work: if it is still pending one loop later, Orbit's GPU work
+    // (panel drawing, capture copies, texture hand-over) had to wait behind the game.
+    Vortice.Direct3D11.ID3D11Query _gpuProbe;
+    bool _gpuProbePending;
+    int _gpuLate, _gpuProbes;
+
+    void GpuProbeCheck()
+    {
+        if (_gpuProbe == null || !_gpuProbePending) return;
+        _gpuProbes++;
+        if (_gpu.Ctx.GetData(_gpuProbe, IntPtr.Zero, 0, Vortice.Direct3D11.AsyncGetDataFlags.DoNotFlush).Code != 0) _gpuLate++;
+        _gpuProbePending = false;
+    }
+
+    void GpuProbeIssue()
+    {
+        try
+        {
+            _gpuProbe ??= _gpu.Device.CreateQuery(new Vortice.Direct3D11.QueryDescription(Vortice.Direct3D11.QueryType.Event));
+            _gpu.Ctx.End(_gpuProbe);
+            _gpu.Ctx.Flush();          // hand this frame's work to the GPU now, not at some later implicit flush
+            _gpuProbePending = true;
+        }
+        catch (Exception e) { Log.Warn("gpu probe: " + e.Message); _gpuProbe = null; }
+    }
+
+    long _lastGcLogged;
+
+    void MemMarks()
+    {
+        _allocThreadMark = GC.GetAllocatedBytesForCurrentThread();
+        _allocAllMark = GC.GetTotalAllocatedBytes();
+        for (int g = 0; g < 3; g++) _gcMark[g] = GC.CollectionCount(g);
+        _gcPauseMark = GC.GetTotalPauseDuration();
+    }
+
+    void PerfFrame(double now)
+    {
+        _perfFrames++;
+        if (_perfStart < 0) { _perfStart = now; MemMarks(); return; }
+        if (now - _perfStart < 10) return;
+        double secs = now - _perfStart;
+        var sa = new System.Text.StringBuilder();
+        for (int i = 0; i < PerfNames.Length; i++) sa.Append($" {PerfNames[i]} {_allocSum[i] / _perfFrames}");
+        Log.Info($"mem: main thread {(GC.GetAllocatedBytesForCurrentThread() - _allocThreadMark) / secs / 1024:0.0} KB/s, " +
+                 $"all threads {(GC.GetTotalAllocatedBytes() - _allocAllMark) / secs / 1024:0.0} KB/s, " +
+                 $"GC {GC.CollectionCount(0) - _gcMark[0]}/{GC.CollectionCount(1) - _gcMark[1]}/{GC.CollectionCount(2) - _gcMark[2]} " +
+                 $"({(GC.GetTotalPauseDuration() - _gcPauseMark).TotalMilliseconds:0.0} ms pause), heap {GC.GetGCMemoryInfo().HeapSizeBytes / 1048576.0:0.0} MB, " +
+                 $"working set {Environment.WorkingSet / 1048576} MB, {ProcessCounters()} | bytes/loop:{sa}");
+        var gi = GC.GetGCMemoryInfo(GCKind.Any);
+        if (gi.Index > 0 && gi.Index != _lastGcLogged)
+            Log.Info($"gc: last #{gi.Index} gen{gi.Generation}{(gi.Concurrent ? " background" : "")}{(gi.Compacted ? " compacting" : "")}, " +
+                     $"pause {gi.PauseDurations[0].TotalMilliseconds:0.0} ms, promoted {gi.PromotedBytes / 1024} KB, " +
+                     $"load {gi.MemoryLoadBytes * 100 / Math.Max(1, gi.TotalAvailableMemoryBytes)} %, finalization pending {gi.FinalizationPendingCount}");
+        _lastGcLogged = gi.Index;
+        Array.Clear(_allocSum);
+        MemMarks();
+        var sb = new System.Text.StringBuilder();
+        double total = 0;
+        for (int i = 0; i < PerfNames.Length; i++)
+        {
+            total += _perfSum[i];
+            sb.Append($" {PerfNames[i]} {_perfSum[i] / _perfFrames:0.00}/{_perfMax[i]:0.0}");
+        }
+        string rays = RayStats.TakeLine();
+        if (rays != null) Log.Info(rays);
+        string gpuq = _gpuProbes > 0 ? $", gpu late {100.0 * _gpuLate / _gpuProbes:0.0}%" : "";
+        _gpuLate = _gpuProbes = 0;
+        Log.Info($"perf: {_perfFrames / (now - _perfStart):0} loops/s, work {total / _perfFrames:0.00} ms, wait {_perfWaitSum / _perfFrames:0.0} ms{gpuq} | avg/max ms:{sb}");
+        Array.Clear(_perfSum); Array.Clear(_perfMax);
+        _perfFrames = 0; _perfWaitSum = 0; _perfStart = now;
+    }
+
+    bool _waitWarned;
+
+    int _tickErrors;
+    double _nextErrorLog, _nextOsc;
+
+    // A frame that throws is logged and skipped instead of ending the app in the middle of VR.
+    // A lost GPU device (driver reset / update) can't recover in place, so Orbit restarts itself.
+    void SafeTick()
+    {
+        try
+        {
+            Tick();
+            _tickErrors = 0;
+        }
+        catch (Exception e)
+        {
+            _tickErrors++;
+            if (Now >= _nextErrorLog)
+            {
+                _nextErrorLog = Now + 10;
+                Log.Error($"frame failed ({_tickErrors}x in a row): {e}");
+            }
+            bool removed = false;
+            try { removed = _gpu.Device.DeviceRemovedReason.Failure; } catch { removed = true; }
+            if (removed || _tickErrors > 900)
+            {
+                Log.Error(removed ? "GPU device lost - restarting Orbit" : "frames keep failing - restarting Orbit");
+                RestartSelf();
+            }
+        }
+    }
+
+    void RestartSelf()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath, (_startHidden ? "--steamvr " : "") + "--restart --from-task")
+            { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory });
+        }
+        catch (Exception e) { Log.Error("restart: " + e.Message); }
+        _quit = true;
+    }
+
+    void Tick()
+    {
+        double now = Now;
+        float dt = (float)Math.Clamp(now - _last, 0, 0.1);
+        _last = now;
+
+        if (!_vr.Connected && now >= _nextConnect)
+        {
+            _nextConnect = now + 3;
+            TryConnectVr();
+        }
+        if (now >= _nextMonitorCheck)
+        {
+            _nextMonitorCheck = now + 5;
+            SyncMonitors(force: false);
+        }
+
+        if (_vr.Connected)
+        {
+            var ev = new VREvent_t();
+            while (_vr.Connected && _vr.PollEvent(ref ev)) HandleEvent(ev);
+            if (_vr.Connected && now >= _nextRuntimeCheck)
+            {
+                _nextRuntimeCheck = now + 2;
+                if (!VrSession.RuntimeRunning())
+                {
+                    DisconnectVr(false);
+                    if (_startHidden) _quit = true;   // started by SteamVR and SteamVR is gone (crash / killed)
+                }
+            }
+        }
+
+        if (_vr.Connected)
+        {
+            GpuProbeCheck();
+            double t = Clock.Now;
+            _allocMark = GC.GetAllocatedBytesForCurrentThread();
+            _vr.Update();
+            _data.Vr.Update(_vr, now);
+            if (C.Wrist.PerfGraph && C.Wrist.ShowPerformance) _data.Vr.SampleFrame(_vr);
+            PlaceMissing();
+            bool dash = _vr.Ov.IsDashboardVisible();
+            if (C.General.QuickToggle) CheckQuickToggle(now);
+            Perf(0, ref t);
+            _sysCursor?.Update(now);
+            var targets = Targets();
+            string lh = C.General.LaserHand;
+            _lasers[0].Smoothing = _lasers[1].Smoothing = C.General.LaserSmoothing;
+            Laser.RaycastMode = C.General.Raycast is "steamvr" or "local" ? C.General.Raycast : "shadow";
+            foreach (var la in _lasers)
+            {
+                la.Thickness = Math.Clamp(C.Appearance.LaserThickness, 1f, 10f) / 1000f;
+                la.AlwaysOn = C.Appearance.LaserAlways;
+            }
+            bool awake = _vr.HeadsetWorn || !C.General.PauseWhenOff;
+            _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
+            _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
+            Perf(1, ref t);
+            _wrist.Update(_vr, now, dt, _data);
+            Perf(2, ref t);
+            _kb.Update(_vr, now);
+            Perf(3, ref t);
+            _settingsPanel.Update(_vr, now, dt);
+            Perf(4, ref t);
+            // headset off: no capturing (the overlays keep their last picture)
+            if (awake)
+            {
+                foreach (var d in _desktops) { d.SmartCapture = C.General.SmartCapture; d.Update(_vr, now, C.General.DesktopsVisible, C.General.CaptureFps); }
+                foreach (var w in _windowPanels) w.Update(_vr, now, C.General.DesktopsVisible, C.General.CaptureFps, C.General.SmartCapture);
+                if (now >= _nextWindowScan) { _nextWindowScan = now + 2; ScanWindows(); }
+            }
+            Perf(5, ref t);
+            UpdateDashboard(now);
+            _notifyPanel.Update(_notifyIn, now, dt);
+            AutoKeyboard(now);
+            // night mode fades in / out over a moment
+            float dimWant = C.Appearance.NightMode ? Math.Clamp(C.Appearance.NightBrightness, 0.1f, 1f) : 1f;
+            _dimNow += (dimWant - _dimNow) * Math.Min(1f, dt * 8);
+            if (MathF.Abs(dimWant - _dimNow) < 0.004f) _dimNow = dimWant;
+            VrOverlay.SetDim(_dimNow);
+            if (C.General.Osc && now >= _nextOsc)       // 10 Hz is plenty for avatar parameters
+            {
+                _nextOsc = now + 0.1;
+                SendOsc(now);
+            }
+            Perf(6, ref t);
+            GpuProbeIssue();
+            PerfFrame(now);
+        }
+
+        _notifyIn.SetEnabled(C.General.Notifications && _vr.Connected);
+        _media.Active = _vr.Connected;
+        _data.VrConnected = _vr.Connected;
+        _data.DesktopsVisible = C.General.DesktopsVisible;
+        _data.NightMode = C.Appearance.NightMode;
+        _data.LayoutName = C.ActiveLayout;
+        _data.KeyboardVisible = C.Keyboard.Visible;
+        _win.Tick(now);
+        _cfg.SaveIfDue();
+    }
+
+    List<IPointerTarget> _targets;
+
+    // rebuilt only when the monitor panels change (SyncMonitors clears it)
+    List<IPointerTarget> Targets()
+    {
+        if (_targets != null) return _targets;
+        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 3) { _settingsPanel, _wrist, _kb };
+        _targets.AddRange(_windowPanels);
+        _targets.AddRange(_desktops);
+        return _targets;
+    }
+
+    // ---------------- SteamVR connection ----------------
+
+    void TryConnectVr()
+    {
+        if (!VrSession.RuntimeRunning()) { _vrStatus = "Waiting for SteamVR"; return; }
+        if (!_vr.TryConnect(ActionManifest, out string err, AppKey))
+        {
+            _vrStatus = "SteamVR: " + err;
+            Log.Warn("VR init failed: " + err);
+            return;
+        }
+        OnVrConnected();
+    }
+
+    void OnVrConnected()
+    {
+        // the overlay textures must live on the adapter SteamVR renders with
+        try
+        {
+            using var f = Vortice.DXGI.DXGI.CreateDXGIFactory1<Vortice.DXGI.IDXGIFactory1>();
+            if (_vr.AdapterIndex >= 0 && f.EnumAdapters1((uint)_vr.AdapterIndex, out var a).Success)
+            {
+                if (a.Description1.Luid != _gpu.AdapterLuid)
+                    Log.Warn($"SteamVR uses adapter '{a.Description1.Description}', Orbit renders on '{_gpu.AdapterName}' - restart Orbit after SteamVR");
+                a.Dispose();
+            }
+        }
+        catch (Exception e) { Log.Warn("adapter check: " + e.Message); }
+
+        _lasers = new[] { new Laser(_gpu, _painter, Hand.Left), new Laser(_gpu, _painter, Hand.Right) };
+        _lasers[0].Other = _lasers[1];
+        _lasers[1].Other = _lasers[0];
+        _sysCursor ??= new SystemCursor(_gpu);
+        _lasers[0].Cursor = _lasers[1].Cursor = _sysCursor;
+        _wrist.CreateOverlay(_vr);
+        _kb.CreateOverlay(_vr);
+        // first draws load fonts (~25 ms each): do it now, not when you first look at the watch / keyboard
+        try { _wrist.Draw(_data); _kb.Draw(); _settingsPanel.Warm(); } catch (Exception e) { Log.Warn("warm-up draw: " + e.Message); }
+        _settingsPanel.CreateOverlay(_vr);
+        _notifyPanel.CreateOverlay();
+        try { _winrtDev ??= MonitorCapture.CreateWinRtDevice(_gpu); }
+        catch (Exception e) { Log.Error("WinRT device: " + e); }
+        for (int i = 0; i < _desktops.Count; i++)
+            if (_desktops[i].Cfg.Enabled && _winrtDev != null) _desktops[i].CreateOverlay(_vr, _winrtDev, i);
+        foreach (var w in _windowPanels)
+            if (w.Cfg.Enabled && _winrtDev != null) w.CreateOverlay(_vr, _winrtDev);
+        _nextWindowScan = 0;
+        CreateDashboard();
+        ApplyAutoStart();
+        _vrStatus = $"SteamVR · {_vr.DisplayHz:0} Hz";
+        _win.Dirty = true;
+    }
+
+    void CreateDashboard()
+    {
+        try
+        {
+            (_dash, _dashThumb) = VrOverlay.CreateDashboard(AppKey + ".settings", "Orbit");
+            _dash.SetWidth(2.5f);
+            _vr.Ov.SetOverlayInputMethod(_dash.Handle, VROverlayInputMethod.Mouse);
+            var scale = new HmdVector2_t { v0 = DashW, v1 = DashH };
+            _vr.Ov.SetOverlayMouseScale(_dash.Handle, ref scale);
+            _dashSurf ??= new Surface(_gpu, DashW, DashH);
+            _dashView ??= new SettingsView(this);
+            _dashUi ??= new Ui(_painter);
+            if (_thumbSurf == null)
+            {
+                _thumbSurf = new Surface(_gpu, 256, 256, rgba: true);
+                _painter.Begin(_thumbSurf.Bitmap, 0x00000000);
+                _painter.Fill(new System.Drawing.RectangleF(8, 8, 240, 240), Theme.Panel2, 56);
+                _painter.Ring(128, 128, 64, Theme.Accent, 16);
+                _painter.Circle(176, 80, 22, Theme.Accent2);
+                _painter.End();
+            }
+            _dashThumb.SetFlag(VROverlayFlags.IsPremultiplied, true);
+            _dashThumb.SetTexture(_thumbSurf.Tex);
+            _dashDirty = true;
+        }
+        catch (Exception e) { Log.Error("dashboard: " + e.Message); }
+    }
+
+    void UpdateDashboard(double now)
+    {
+        if (_dash == null) return;
+        var ev = new VREvent_t();
+        uint size = (uint)Marshal.SizeOf<VREvent_t>();
+        while (_vr.Ov.PollNextOverlayEvent(_dash.Handle, ref ev, size))
+        {
+            switch ((EVREventType)ev.eventType)
+            {
+                case EVREventType.VREvent_MouseMove:
+                    _dashPtr.Move(ev.data.mouse.x, VrOverlay.UvFlipV ? DashH - ev.data.mouse.y : ev.data.mouse.y);
+                    _dashDirty = true;
+                    break;
+                case EVREventType.VREvent_MouseButtonDown:
+                    if (ev.data.mouse.button == (uint)EVRMouseButton.Left) { _dashPtr.Press(); _dashDirty = true; }
+                    break;
+                case EVREventType.VREvent_MouseButtonUp:
+                    if (ev.data.mouse.button == (uint)EVRMouseButton.Left) { _dashPtr.Release(); _dashDirty = true; }
+                    break;
+                case EVREventType.VREvent_ScrollDiscrete:
+                case EVREventType.VREvent_ScrollSmooth:
+                    _dashPtr.Wheel += ev.data.scroll.ydelta;
+                    _dashDirty = true;
+                    break;
+                case EVREventType.VREvent_FocusLeave:
+                    _dashPtr.Leave();
+                    _dashDirty = true;
+                    break;
+            }
+        }
+        if (!_vr.Ov.IsOverlayVisible(_dash.Handle)) return;
+        if (!_dashDirty && now < _dashNext) return;
+        _dashDirty = false;
+        _dashNext = now + 0.5;
+        PreparePreviews(_dashView);
+        float s = DashW / SettingsView.W;
+        _dashUi.Begin(_dashPtr, s);
+        _painter.Begin(_dashSurf.Bitmap, Theme.Bg, s);
+        _dashView.Draw(_dashUi);
+        _painter.End();
+        _dashUi.End();
+        if (_dashUi.Interacting || _dashUi.Changed || _dashUi.Animating) _dashDirty = true;
+        _dash.SetTexture(_dashSurf.Tex);
+    }
+
+    void HandleEvent(in VREvent_t ev)
+    {
+        if ((EVREventType)ev.eventType == EVREventType.VREvent_Quit)
+        {
+            Log.Info("SteamVR is quitting");
+            DisconnectVr(true);
+            if (_startHidden) _quit = true;   // started by SteamVR -> leave with it
+        }
+    }
+
+    void DisconnectVr(bool acknowledgeQuit)
+    {
+        if (_lasers != null) foreach (var l in _lasers) { l.Reset(); l.Dispose(); }
+        _lasers = null;
+        _mouse.Hand = null;
+        _mouse.Panel = null;
+        _wrist.DestroyOverlay();
+        _kb.DestroyOverlay();
+        _settingsPanel.DestroyOverlay();
+        _notifyPanel.DestroyOverlay();
+        foreach (var d in _desktops) d.DestroyOverlay();
+        foreach (var w in _windowPanels) w.DestroyOverlay();
+        _dash?.Dispose(); _dashThumb?.Dispose();
+        _dash = _dashThumb = null;
+        if (C.General.Osc) SendOsc(Now, allOff: true);
+        _vr.Disconnect(acknowledgeQuit);
+        _data.Vr = new VrStats();
+        _vrStatus = "Waiting for SteamVR";
+        _nextConnect = Now + 5;
+        _win.Dirty = true;
+    }
+
+    // ---------------- monitors ----------------
+
+    void SyncMonitors(bool force)
+    {
+        List<MonitorInfo> mons;
+        try { mons = Monitors.Enumerate(); }
+        catch (Exception e) { Log.Warn("monitor enum: " + e.Message); return; }
+        string key = string.Join("|", mons.Select(m => $"{m.Id}@{m.X},{m.Y},{m.W},{m.H}"));
+        if (!force && key == _monitorKey) return;
+        _monitorKey = key;
+        Log.Info("monitors: " + string.Join("; ", mons));
+
+        if (_lasers != null) foreach (var l in _lasers) l.Reset();
+        _mouse.Hand = null;
+        _mouse.Panel = null;
+        foreach (var d in _desktops) d.Dispose();
+        _desktops.Clear();
+        _targets = null;
+        _monitors = mons;
+        foreach (var m in mons)
+        {
+            var dc = C.Desktops.FirstOrDefault(d => d.Id == m.Id);
+            if (dc == null)
+            {
+                dc = new DesktopConfig { Id = m.Id, Name = m.Name, Enabled = !m.Virtual };
+                C.Desktops.Add(dc);
+                _cfg.MarkDirty();
+            }
+            dc.Name = m.Name;
+            _desktops.Add(new DesktopPanel(_gpu, _cfg, _mouse, m, dc) { Layout = _layout });
+        }
+        if (_vr.Connected && _winrtDev != null)
+            for (int i = 0; i < _desktops.Count; i++)
+                if (_desktops[i].Cfg.Enabled) _desktops[i].CreateOverlay(_vr, _winrtDev, i);
+        if (_win != null) _win.Dirty = true;
+    }
+
+    // ---------------- placement ----------------
+
+    void PlaceMissing()
+    {
+        if (!_vr.HmdValid) return;
+        // runs every frame: look first without building lists (they were garbage 80 times a second)
+        bool anyMissing = false;
+        foreach (var d in _desktops) if (d.Cfg.Enabled && d.Cfg.Place.M == null) { anyMissing = true; break; }
+        if (anyMissing) PlaceMissingDesktops();
+        if (C.Keyboard.Visible && C.Keyboard.Place.M == null) PlaceKeyboard();
+        foreach (var w in _windowPanels)
+            if (w.Cfg.Enabled && w.Cfg.Place.M == null) PlaceWindow(w);
+    }
+
+    void PlaceMissingDesktops()
+    {
+        var enabled = _desktops.Where(d => d.Cfg.Enabled).ToList();
+        var missing = enabled.Where(d => d.Cfg.Place.M == null).ToList();
+        if (missing.Count > 0 && missing.Count == enabled.Count)
+            _layout.JoinAll(MathUtil.GazeFrame(_vr.Hmd), RowRadius, -0.12f);     // first run: one curved screen
+        else if (missing.Count > 0)
+            PlaceDesktops(missing);
+    }
+
+    // a new window goes in front of you, a little closer than the monitors; several step aside
+    void PlaceWindow(WindowPanel w)
+    {
+        if (!_vr.HmdValid) return;
+        int k = Math.Max(0, _windowPanels.IndexOf(w)) % 4;
+        var local = Matrix4x4.CreateTranslation(0.1f * k, -0.05f - 0.04f * k, -0.8f + 0.03f * k);
+        w.Cfg.Place.Attach = "world";
+        Placement.SetWorld(w.Cfg.Place, _vr, local * MathUtil.GazeFrame(_vr.Hmd));
+        _cfg.MarkDirty();
+    }
+
+    const float RowRadius = 1.2f;
+
+    // The monitors on an arc around the head, laid out like the real desk (left / middle / right).
+    void PlaceDesktops(IEnumerable<DesktopPanel> which)
+    {
+        if (!_vr.HmdValid) return;
+        var yaw = MathUtil.GazeFrame(_vr.Hmd);
+        var enabled = _desktops.Where(d => d.Cfg.Enabled).ToList();
+        if (enabled.Count == 0) return;
+        var anchor = enabled.FirstOrDefault(d => d.Mon.Primary) ?? enabled[enabled.Count / 2];
+        float cx0 = anchor.Mon.X + anchor.Mon.W / 2f, cy0 = anchor.Mon.Y + anchor.Mon.H / 2f;
+        const float R = 1.2f;
+        foreach (var d in which)
+        {
+            float s = d.Cfg.Width / d.Mon.W;
+            float xm = (d.Mon.X + d.Mon.W / 2f - cx0) * s * 1.03f;
+            float ym = -(d.Mon.Y + d.Mon.H / 2f - cy0) * s;
+            float ang = xm / R;
+            var local = Matrix4x4.CreateRotationY(-ang) *
+                        Matrix4x4.CreateTranslation(R * MathF.Sin(ang), ym - 0.12f, -R * MathF.Cos(ang));
+            Placement.SetWorld(d.Cfg.Place, _vr, local * yaw);
+            if (d.Cfg.Place.M == null) { d.Cfg.Place.Attach = "world"; Placement.SetWorld(d.Cfg.Place, _vr, local * yaw); }
+        }
+        _cfg.MarkDirty();
+    }
+
+    void PlaceKeyboard()
+    {
+        if (!_vr.HmdValid) return;
+        var yaw = MathUtil.GazeFrame(_vr.Hmd);
+        var local = Matrix4x4.CreateRotationX(-50 * MathF.PI / 180) * Matrix4x4.CreateTranslation(0, -0.5f, -0.45f);
+        if (C.Keyboard.Place.Attach is "head") C.Keyboard.Place.Attach = "world";
+        Placement.SetWorld(C.Keyboard.Place, _vr, local * yaw);
+        if (C.Keyboard.Place.M == null) { C.Keyboard.Place.Attach = "world"; Placement.SetWorld(C.Keyboard.Place, _vr, local * yaw); }
+        _cfg.MarkDirty();
+    }
+
+    // ---------------- IOrbitHost ----------------
+
+    public ConfigStore Cfg => _cfg;
+    public bool VrConnected => _vr.Connected;
+    public string VrStatus => _vrStatus;
+    public string InputStatus => _vr.Connected ? _vr.InputStatus : "–";
+    public string GpuName => _gpu.AdapterName;
+    public IReadOnlyList<MonitorInfo> MonitorList => _monitors;
+    public PanelData Data => _data;
+    public WristPanel Wrist => _wrist;
+    public KeyboardPanel Keyboard => _kb;
+
+    // Brings the whole arrangement (rows, custom spots) in front of the user, keeping its shape:
+    // the primary/middle monitor goes straight ahead, everything else moves rigidly with it.
+    public void Recenter()
+    {
+        if (!_vr.Connected || !_vr.HmdValid) return;
+        var placed = _desktops.Where(d => d.Cfg.Enabled && Placement.IsWorld(d.Cfg.Place) && d.Cfg.Place.M != null).ToList();
+        if (placed.Count > 0)
+        {
+            var anchor = placed.FirstOrDefault(d => d.Mon.Primary) ?? placed.OrderBy(d => d.Mon.X).ElementAt(placed.Count / 2);
+            if (anchor.Cfg.Group != null)
+            {
+                // middle of the row, not one end of it
+                var row = _layout.Members(anchor.Cfg.Group);
+                if (row.Count > 0) anchor = row[row.Count / 2];
+            }
+            float r = DesktopLayout.Radius(anchor.Cfg);
+            float dist = float.IsInfinity(r) || r > 4 ? RowRadius : r;
+            var desired = Matrix4x4.CreateTranslation(0, -0.12f, -dist) * MathUtil.GazeFrame(_vr.Hmd);
+            var delta = MathUtil.Invert(MathUtil.FromArray(anchor.Cfg.Place.M)) * desired;
+            foreach (var d in placed)
+                d.Cfg.Place.M = MathUtil.ToArray(MathUtil.FromArray(d.Cfg.Place.M) * delta);
+            foreach (var w in _windowPanels)
+                if (Placement.IsWorld(w.Cfg.Place) && w.Cfg.Place.M != null)
+                    w.Cfg.Place.M = MathUtil.ToArray(MathUtil.FromArray(w.Cfg.Place.M) * delta);
+        }
+        else
+            foreach (var w in _windowPanels)
+                if (Placement.IsWorld(w.Cfg.Place)) PlaceWindow(w);
+        var missing = _desktops.Where(d => d.Cfg.Enabled && d.Cfg.Place.M == null).ToList();
+        if (missing.Count > 0) PlaceDesktops(missing);
+        if (C.Keyboard.Visible) PlaceKeyboard();
+        _cfg.MarkDirty();
+    }
+
+    public void ResetDesktop(DesktopConfig d)
+    {
+        var p = _desktops.FirstOrDefault(x => x.Cfg == d);
+        if (p == null || !_vr.Connected) return;
+        _layout.Detach(p);
+        d.Place.Attach = "world";
+        PlaceDesktops(new[] { p });
+    }
+
+    public void ResetWrist() { C.Wrist.Offset = null; _cfg.MarkDirty(); }
+
+    public Updater Updates { get; } = new();
+
+    // ---------------- keyboard pops up for text fields ----------------
+
+    // A click from VR that puts the focus into a text field shows the keyboard; when the focus
+    // moves on to something that is not text, the keyboard goes away again (only if it came by itself).
+    void AutoKeyboard(double now)
+    {
+        if (_kbAuto && !C.Keyboard.Visible) _kbAuto = false;      // hidden some other way
+        if (_focus == null || !C.Keyboard.AutoShow) { _kbAuto = false; return; }
+        if (_kbAuto) _focus.InspectFor(1.0);                       // keep watching while it is up
+        var (seq, state, at) = _focus.Snapshot();
+        if (seq != _focusSeq)
+        {
+            _focusSeq = seq;
+            if (state == 1)
+            {
+                _kbHideAt = -1;
+                bool fromVr = at - _mouse.LastClick is > -0.05 and < 1.5;
+                if (!C.Keyboard.Visible && fromVr)
+                {
+                    ToggleKeyboard();
+                    _kbAuto = true;
+                    Log.Info("text field got focus from a VR click: keyboard up");
+                }
+            }
+            else if (state == 0 && _kbAuto)
+                _kbHideAt = now + 0.8;
+        }
+        if (_kbHideAt > 0 && now >= _kbHideAt)
+        {
+            _kbHideAt = -1;
+            // not while typing into the VRChat chatbox or right after a key
+            if (_kbAuto && C.Keyboard.Visible && !_kb.ChatMode && now - _kb.LastKeyAt > 0.8)
+            {
+                ToggleKeyboard();
+                Log.Info("focus left the text field: keyboard down");
+            }
+        }
+    }
+
+    // ---------------- layout profiles ----------------
+
+    LayoutProfile ActiveLayout => C.Layouts.FirstOrDefault(l => l.Name == C.ActiveLayout) ?? C.Layouts[0];
+
+    static PlacementConfig CopyPlace(PlacementConfig p) =>
+        p == null ? new PlacementConfig() : new PlacementConfig { Attach = p.Attach, M = p.M?.ToArray() };
+
+    void CaptureLayout(LayoutProfile p)
+    {
+        var list = new List<PanelSnapshot>();
+        foreach (var d in C.Desktops)
+            list.Add(new PanelSnapshot
+            {
+                Kind = "desktop", Id = d.Id, Enabled = d.Enabled, Width = d.Width, Curvature = d.Curvature, Opacity = d.Opacity,
+                Place = CopyPlace(d.Place), Group = d.Group, GroupIndex = d.GroupIndex,
+            });
+        foreach (var w in C.Windows)
+            list.Add(new PanelSnapshot
+            {
+                Kind = "window", Id = w.Id, Enabled = w.Enabled, Width = w.Width, Curvature = w.Curvature, Opacity = w.Opacity,
+                Place = CopyPlace(w.Place),
+            });
+        list.Add(new PanelSnapshot { Kind = "keyboard", Id = "keyboard", Width = C.Keyboard.Width, Place = CopyPlace(C.Keyboard.Place) });
+        p.Panels = list;
+        p.NightMode = C.Appearance.NightMode;
+        p.Saved = DateTime.Now;
+    }
+
+    void ApplyLayout(LayoutProfile p)
+    {
+        foreach (var s in p.Panels)
+        {
+            switch (s.Kind)
+            {
+                case "desktop":
+                {
+                    var d = C.Desktops.FirstOrDefault(x => x.Id == s.Id);
+                    if (d == null) break;
+                    d.Width = s.Width; d.Curvature = s.Curvature; d.Opacity = s.Opacity;
+                    d.Place = CopyPlace(s.Place); d.Group = s.Group; d.GroupIndex = s.GroupIndex;
+                    if (d.Enabled != s.Enabled) SetDesktopEnabled(d, s.Enabled);
+                    break;
+                }
+                case "window":
+                {
+                    var w = C.Windows.FirstOrDefault(x => x.Id == s.Id);
+                    if (w == null) break;
+                    w.Width = s.Width; w.Curvature = s.Curvature; w.Opacity = s.Opacity;
+                    w.Place = CopyPlace(s.Place);
+                    if (w.Enabled != s.Enabled) SetWindowEnabled(w, s.Enabled);
+                    break;
+                }
+                case "keyboard":
+                    C.Keyboard.Width = s.Width;
+                    C.Keyboard.Place = CopyPlace(s.Place);
+                    break;
+            }
+        }
+        C.Appearance.NightMode = p.NightMode;
+    }
+
+    // The current arrangement is kept in the profile you leave; the new one is put back as it was.
+    // A profile used for the first time starts from the current arrangement brought to where you look.
+    public void SwitchLayout(string name)
+    {
+        var target = C.Layouts.FirstOrDefault(l => l.Name == name);
+        var cur = ActiveLayout;
+        if (target == null || target == cur) return;
+        if (_lasers != null) foreach (var l in _lasers) l.StopGrab();
+        CaptureLayout(cur);
+        C.ActiveLayout = target.Name;
+        if (target.Saved == null)
+        {
+            Recenter();
+            CaptureLayout(target);
+        }
+        else
+            ApplyLayout(target);
+        Log.Info($"layout: {cur.Name} -> {target.Name}");
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+    }
+
+    // the watch's layout button: next profile that is on the watch
+    void CycleLayout()
+    {
+        var ring = C.Layouts.Where(l => l.OnWrist || l.Name == C.ActiveLayout).ToList();
+        if (ring.Count < 2) return;
+        int i = ring.FindIndex(l => l.Name == C.ActiveLayout);
+        SwitchLayout(ring[(i + 1) % ring.Count].Name);
+    }
+
+    public void ForgetLayout(string name)
+    {
+        var p = C.Layouts.FirstOrDefault(l => l.Name == name);
+        if (p == null || p.Name == C.ActiveLayout) return;
+        p.Panels = new();
+        p.Saved = null;
+        p.NightMode = false;
+        _cfg.MarkDirty();
+    }
+
+    // ---------------- mirrored windows ----------------
+
+    // config list -> panels (after adding / removing one)
+    void SyncWindowPanels()
+    {
+        var gone = _windowPanels.Where(p => !C.Windows.Contains(p.Cfg)).ToList();
+        foreach (var p in gone)
+        {
+            if (_lasers != null) foreach (var l in _lasers) l.Forget(p);
+            if (_mouse.Panel == p) { _mouse.Hand = null; _mouse.Panel = null; }
+            p.Dispose();
+            _windowPanels.Remove(p);
+        }
+        foreach (var wc in C.Windows)
+        {
+            if (_windowPanels.Any(p => p.Cfg == wc)) continue;
+            var p = new WindowPanel(_gpu, _cfg, _mouse, wc);
+            _windowPanels.Add(p);
+            if (_vr.Connected && _winrtDev != null && wc.Enabled) p.CreateOverlay(_vr, _winrtDev);
+        }
+        _targets = null;
+        _nextWindowScan = 0;
+    }
+
+    // closed windows let go of their panel; panels without a window look for theirs
+    void ScanWindows()
+    {
+        if (_windowPanels.Count == 0) return;
+        var taken = new HashSet<IntPtr>();
+        bool searching = false;
+        foreach (var p in _windowPanels)
+        {
+            if (p.Lost) { Log.Info($"window gone: '{p.Cfg.Title}'"); p.Detach(); }
+            if (p.Hwnd != IntPtr.Zero) { taken.Add(p.Hwnd); p.RefreshTitle(); }
+            else searching = true;
+        }
+        if (!searching) return;
+        List<WindowInfo> open;
+        try { open = WindowList.Enumerate(); }
+        catch (Exception e) { Log.Warn("window list: " + e.Message); return; }
+        foreach (var p in _windowPanels)
+        {
+            if (p.Hwnd != IntPtr.Zero) continue;
+            var w = WindowList.Find(p.Cfg, open, taken);
+            if (w == null) continue;
+            taken.Add(w.Hwnd);
+            p.Attach(w);
+            Log.Info($"window panel {p.Cfg.Id} -> {w}");
+        }
+    }
+
+    List<WindowInfo> _openCache;
+    double _openCacheAt = -10;
+
+    public IReadOnlyList<WindowInfo> OpenWindows()
+    {
+        if (_openCache == null || Now - _openCacheAt > 1)
+        {
+            try { _openCache = WindowList.Enumerate(); }
+            catch (Exception e) { Log.Warn("window list: " + e.Message); _openCache ??= new(); }
+            _openCacheAt = Now;
+        }
+        return _openCache;
+    }
+
+    public bool IsMirrored(IntPtr hwnd) => _windowPanels.Any(p => p.Hwnd == hwnd);
+
+    public WindowConfig AddWindow(WindowInfo w)
+    {
+        var existing = _windowPanels.FirstOrDefault(p => p.Hwnd == w.Hwnd);
+        if (existing != null) return existing.Cfg;
+        var wc = new WindowConfig { Title = w.Title, Process = w.Process, Class = w.Class };
+        // about the size the window has on the monitor (a 1920 px monitor is 0.9 m)
+        if (WindowList.Bounds(w.Hwnd, out var r)) wc.Width = Math.Clamp((r.Right - r.Left) * 0.9f / 1920, 0.25f, 1.4f);
+        C.Windows.Add(wc);
+        SyncWindowPanels();
+        var panel = _windowPanels.First(p => p.Cfg == wc);
+        panel.Attach(w);
+        if (_vr.Connected) PlaceWindow(panel);
+        C.General.DesktopsVisible = true;      // you want to see what you just added
+        Log.Info($"mirroring window {w}");
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+        return wc;
+    }
+
+    public void RemoveWindow(WindowConfig wc)
+    {
+        C.Windows.Remove(wc);
+        SyncWindowPanels();
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+    }
+
+    public string WindowStatus(WindowConfig wc)
+    {
+        var p = _windowPanels.FirstOrDefault(x => x.Cfg == wc);
+        if (p == null) return "";
+        if (!wc.Enabled) return "hidden";
+        return p.Status;
+    }
+
+    public void ResetWindow(WindowConfig wc)
+    {
+        var p = _windowPanels.FirstOrDefault(x => x.Cfg == wc);
+        if (p == null || !_vr.Connected) return;
+        PlaceWindow(p);
+    }
+
+    public void SetWindowAttach(WindowConfig wc, string attach)
+    {
+        if (_vr.Connected) Placement.Reattach(wc.Place, _vr, attach);
+        else { wc.Place.Attach = attach; wc.Place.M = null; }
+        _cfg.MarkDirty();
+    }
+
+    public void SetWindowEnabled(WindowConfig wc, bool on)
+    {
+        wc.Enabled = on;
+        var p = _windowPanels.FirstOrDefault(x => x.Cfg == wc);
+        if (p != null && _vr.Connected && _winrtDev != null)
+        {
+            if (on && p.Ov == null) p.CreateOverlay(_vr, _winrtDev);
+            if (!on) p.DestroyOverlay();
+        }
+        _cfg.MarkDirty();
+    }
+
+    public void ResetKeyboard() { if (_vr.Connected) PlaceKeyboard(); }
+
+    public void SetDesktopAttach(DesktopConfig d, string attach)
+    {
+        var panel = _desktops.FirstOrDefault(x => x.Cfg == d);
+        if (panel != null && attach != "world") _layout.Detach(panel);   // rows only live in the world
+        if (_vr.Connected) Placement.Reattach(d.Place, _vr, attach);
+        else { d.Place.Attach = attach; d.Place.M = null; }
+        _cfg.MarkDirty();
+    }
+
+    public void SetKeyboardAttach(string attach)
+    {
+        if (_vr.Connected) Placement.Reattach(C.Keyboard.Place, _vr, attach);
+        else { C.Keyboard.Place.Attach = attach; C.Keyboard.Place.M = null; }
+        _cfg.MarkDirty();
+    }
+
+    public void SetDesktopEnabled(DesktopConfig d, bool on)
+    {
+        d.Enabled = on;
+        if (d.Group != null)
+        {
+            var row = _layout.Members(d.Group);       // enabled members, in row order
+            if (row.Count > 0) _layout.Reflow(row[0]);
+        }
+        int i = _desktops.FindIndex(x => x.Cfg == d);
+        if (i >= 0 && _vr.Connected && _winrtDev != null)
+        {
+            if (on && _desktops[i].Ov == null) _desktops[i].CreateOverlay(_vr, _winrtDev, i);
+            if (!on) _desktops[i].DestroyOverlay();
+        }
+        _cfg.MarkDirty();
+    }
+
+    // The setting is the wanted state; it is pushed to SteamVR now if it runs, else on the next connect.
+    public void SetAutoStart(bool on)
+    {
+        C.General.AutoStart = on;
+        _cfg.MarkDirty();
+        if (_vr.Connected) ApplyAutoStart();
+    }
+
+    public string AutoStartStatus { get; private set; } = "applied when SteamVR runs";
+
+    // Registers orbit.vrmanifest (SteamVR then starts "Orbit.exe --steamvr", which hops to the admin task)
+    // and switches its auto-launch on/off. Re-registers if the exe moved since the last registration.
+    void ApplyAutoStart()
+    {
+        try
+        {
+            var apps = OpenVR.Applications;
+            bool installed = apps.IsApplicationInstalled(AppKey);
+            string path = "";
+            if (installed)
+            {
+                var sb = new System.Text.StringBuilder(1024);
+                var pe = EVRApplicationError.None;
+                apps.GetApplicationPropertyString(AppKey, EVRApplicationProperty.BinaryPath_String, sb, (uint)sb.Capacity, ref pe);
+                path = sb.ToString();
+            }
+            string exe = Environment.ProcessPath ?? "";
+            bool samePath = installed && string.Equals(Path.GetFullPath(path), Path.GetFullPath(exe), StringComparison.OrdinalIgnoreCase);
+            EVRApplicationError e = EVRApplicationError.None;
+            if (C.General.AutoStart)
+            {
+                if (!samePath)
+                {
+                    // registered from another folder before: drop that manifest, then add this one
+                    if (installed && path.Length > 0)
+                        apps.RemoveApplicationManifest(Path.Combine(Path.GetDirectoryName(path) ?? "", "orbit.vrmanifest"));
+                    e = apps.AddApplicationManifest(VrManifest, false);
+                }
+                if (e == EVRApplicationError.None && !apps.GetApplicationAutoLaunch(AppKey))
+                    e = apps.SetApplicationAutoLaunch(AppKey, true);
+                AutoStartStatus = e == EVRApplicationError.None ? "on: SteamVR starts Orbit and closes it on exit" : "SteamVR refused: " + e;
+            }
+            else if (installed)
+            {
+                apps.SetApplicationAutoLaunch(AppKey, false);
+                e = apps.RemoveApplicationManifest(VrManifest);
+                AutoStartStatus = "off";
+            }
+            else AutoStartStatus = "off";
+            Log.Info($"auto-start wanted={C.General.AutoStart} installed={installed} path='{path}' -> {e}, autolaunch={apps.GetApplicationAutoLaunch(AppKey)}");
+        }
+        catch (Exception ex) { Log.Warn("auto-start: " + ex.Message); }
+        _win.Dirty = true;
+    }
+
+    public void ToggleKeyboard()
+    {
+        _kbAuto = false;
+        _kbHideAt = -1;
+        C.Keyboard.Visible = !C.Keyboard.Visible;
+        // shown again far away (walked off, recentered)? bring it back in front
+        if (C.Keyboard.Visible && _vr.Connected && _vr.HmdValid && C.Keyboard.Place.M != null
+            && Placement.TryWorld(C.Keyboard.Place, _vr, out var w)
+            && Vector3.Distance(w.Translation, _vr.Hmd.Translation) > 1.5f)
+            PlaceKeyboard();
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+    }
+
+    public void ToggleDesktops()
+    {
+        C.General.DesktopsVisible = !C.General.DesktopsVisible;
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+    }
+
+    public int GroupSize(DesktopConfig d) => _layout.GroupSize(d);
+
+    public bool IsElevated { get; } = Elevation.IsElevated;
+
+    public string NotificationStatus => _notifyIn.Status;
+
+    public void TestNotification() => _notifyIn.Incoming.Enqueue(new Notification
+    {
+        Source = "Orbit", Title = "Test notification",
+        Content = "Notifications from VRCX and other tools appear here.", Timeout = 4,
+    });
+
+    public void SetRunAsAdmin(bool on)
+    {
+        C.General.RunAsAdmin = on;
+        if (!on && IsElevated) Elevation.RemoveTask();
+        _cfg.MarkDirty();
+        _cfg.SaveIfDue(force: true);
+    }
+
+    // Starts an elevated Orbit (task, or one UAC prompt) and quits this one; the new one waits for us.
+    public void RestartElevated()
+    {
+        _cfg.SaveIfDue(force: true);
+        string pass = "--show --restart";
+        if (Elevation.RunTask(pass) || Elevation.RelaunchWithPrompt("--install-task " + pass))
+            _quit = true;
+    }
+
+    public void JoinAllDesktops()
+    {
+        if (!_vr.Connected || !_vr.HmdValid) return;
+        _layout.JoinAll(MathUtil.GazeFrame(_vr.Hmd), RowRadius, -0.12f);
+    }
+
+    public void SeparateDesktops() => _layout.SeparateAll();
+
+    public void FitCurve(DesktopConfig d)
+    {
+        var p = _desktops.FirstOrDefault(x => x.Cfg == d);
+        if (p != null && _vr.Connected && _vr.HmdValid) _layout.FitCurve(p, _vr.Hmd.Translation);
+    }
+
+    // size / curvature changed in the settings: keep its row seamless around it
+    public void DesktopEdited(DesktopConfig d)
+    {
+        var p = _desktops.FirstOrDefault(x => x.Cfg == d);
+        if (p != null && d.Group != null) _layout.Reflow(p);
+    }
+
+    public void AppearanceChanged()
+    {
+        Theme.Apply(C.Appearance);
+        _dashDirty = true;
+        _win.Dirty = true;
+        _cfg.MarkDirty();
+    }
+
+    // Hides monitors + keyboard together; the next call brings back what was showing (OVR Toolkit style).
+    public void QuickToggle()
+    {
+        bool anyShown = C.General.DesktopsVisible || C.Keyboard.Visible;
+        if (_settingsPanel.IsOpen) _settingsPanel.Toggle();      // the gesture clears the view
+        if (anyShown)
+        {
+            _restoreDesktops = C.General.DesktopsVisible;
+            _restoreKeyboard = C.Keyboard.Visible;
+            C.General.DesktopsVisible = false;
+            C.Keyboard.Visible = false;
+        }
+        else
+        {
+            C.General.DesktopsVisible = _restoreDesktops || !_restoreKeyboard;
+            if (_restoreKeyboard) ToggleKeyboard();
+        }
+        if (_vr.Connected && C.General.Haptics)
+        {
+            _vr.Haptic(Hand.Left, 0.6f, 0.04f);
+            _vr.Haptic(Hand.Right, 0.6f, 0.04f);
+        }
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+    }
+
+    // Both grips pressed together (within 0.3 s), twice within 0.6 s.
+    void CheckQuickToggle(double now)
+    {
+        ref var l = ref _vr.Hands[0];
+        ref var r = ref _vr.Hands[1];
+        if (l.GrabPressed) _gripDownAt[0] = now;
+        if (r.GrabPressed) _gripDownAt[1] = now;
+        bool chord = l.Grab && r.Grab && (l.GrabPressed || r.GrabPressed) && Math.Abs(_gripDownAt[0] - _gripDownAt[1]) < 0.3;
+        if (!chord) return;
+        if (now - _lastChord < 0.6)
+        {
+            _lastChord = -10;
+            foreach (var la in _lasers) la.Reset();
+            QuickToggle();
+        }
+        else
+            _lastChord = now;
+    }
+
+    // XSOverlay-compatible avatar parameters for DXOverlay and similar avatar add-ons.
+    void SendOsc(double now, bool allOff = false)
+    {
+        bool kb = !allOff && _kb.Ov?.Visible == true;
+        int desks = allOff ? 0 : _desktops.Count(d => d.Ov?.Visible == true) + _windowPanels.Count(w => w.Ov?.Visible == true)
+                                 + (_settingsPanel.Ov?.Visible == true ? 1 : 0);
+        bool wrist = !allOff && _wrist.Ov?.Visible == true && _wrist.Alpha > 0.5f;
+        var v = _data.Vr;
+        var list = new List<(string, object)>
+        {
+            ("isOverlayOpen", desks > 0 || kb),
+            ("isKeyboardOpen", kb),
+            ("isWristVisible", wrist),
+            ("openOverlayCount", desks + (kb ? 1 : 0)),
+        };
+        if (!allOff)
+        {
+            if (v.LeftBattery >= 0) list.Add(("leftControllerBattery", v.LeftBattery));
+            if (v.RightBattery >= 0) list.Add(("rightControllerBattery", v.RightBattery));
+            var hands = new[] { v.LeftBattery, v.RightBattery }.Where(b => b >= 0).ToArray();
+            if (hands.Length > 0) list.Add(("averageControllerBattery", hands.Average()));
+            if (v.TrackerAverage >= 0) list.Add(("averageTrackerBattery", v.TrackerAverage));
+        }
+        _osc.Send(now, C.General.OscPort, list, force: allOff);
+    }
+
+    public void OpenConfigFolder()
+    {
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Log.Dir}\"") { UseShellExecute = true }); }
+        catch (Exception e) { Log.Warn("open folder: " + e.Message); }
+    }
+
+    void ShowSettings() => _win.ShowAndFocus();
+
+    void WristAction(string id)
+    {
+        switch (id)
+        {
+            case "keyboard": ToggleKeyboard(); break;
+            case "desktops": ToggleDesktops(); break;
+            case "recenter": Recenter(); break;
+            case "layout": CycleLayout(); break;
+            case "night":
+                C.Appearance.NightMode = !C.Appearance.NightMode;
+                _cfg.MarkDirty();
+                _win.Dirty = true;
+                break;
+            case "media.prev": _media.Command("prev"); break;
+            case "media.play": _media.Command("play"); break;
+            case "media.next": _media.Command("next"); break;
+            case "settings":
+                _settingsPanel.Toggle();        // floating panel; the dashboard tab still exists too
+                break;
+        }
+    }
+
+    // previews in the settings screen are separate draws; they must not nest inside its BeginDraw
+    void PreparePreviews(SettingsView v)
+    {
+        if (v.ShowsWristPreview) _wrist.Draw(_data);
+        if (v.ShowsKeyboardPreview) _kb.Draw();
+    }
+
+    public void Dispose()
+    {
+        try { if (_vr.Connected) DisconnectVr(false); } catch (Exception e) { Log.Warn("shutdown: " + e.Message); }
+        _cfg.SaveIfDue(force: true);
+        foreach (var d in _desktops) d.Dispose();
+        foreach (var w in _windowPanels) w.Dispose();
+        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose();
+        _dashSurf?.Dispose(); _thumbSurf?.Dispose();
+        _gpuStats.Dispose();
+        _notifyIn.Dispose();
+        _focus?.Dispose();
+        _notifyPanel?.Dispose();
+        _media.Dispose();
+        _sysCursor?.Dispose();
+        _osc.Dispose();
+        _win?.Dispose();
+        _tray?.Dispose();
+        _painter?.Dispose();
+        _gpu?.Dispose();
+        Log.Info("bye");
+    }
+}

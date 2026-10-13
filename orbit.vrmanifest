@@ -1,0 +1,19 @@
+{
+  "source": "builtin",
+  "applications": [
+    {
+      "app_key": "erik.orbit",
+      "launch_type": "binary",
+      "binary_path_windows": "Orbit.exe",
+      "arguments": "--steamvr",
+      "is_dashboard_overlay": true,
+      "action_manifest_path": "assets/actions.json",
+      "strings": {
+        "en_us": {
+          "name": "Orbit",
+          "description": "Wrist watch, desktop mirrors and a keyboard for SteamVR"
+        }
+      }
+    }
+  ]
+}

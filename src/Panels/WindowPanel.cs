@@ -1,0 +1,289 @@
+using System;
+using System.Numerics;
+using Valve.VR;
+using Windows.Graphics.DirectX.Direct3D11;
+
+namespace Orbit;
+
+// One application window mirrored into VR. Works like a monitor panel (pointing moves the real
+// cursor, trigger = click, B/Y = right click, stick = wheel, grip = move), and before a click the
+// window is brought to the front so the click can't land in whatever covers it on the real desktop.
+// The app's window scan binds it to a live window (WindowList.Find) and re-binds after a restart.
+public sealed class WindowPanel : IPointerTarget, IDisposable
+{
+    readonly Gpu _g;
+    readonly ConfigStore _cfg;
+    readonly MouseOwner _mouse;
+    public readonly WindowConfig Cfg;
+    public IntPtr Hwnd { get; private set; }
+    MonitorCapture _cap;
+    public VrOverlay Ov { get; private set; }
+    VrSession _vr;
+    IDirect3DDevice _dev;
+    double _nextFrame, _lastNow;
+    float _wheelAcc, _vis;
+    bool _hasTexture;
+    readonly bool[] _hovering = new bool[2];
+    Vector2 _lastPx;
+    public string Error;
+
+    public WindowPanel(Gpu g, ConfigStore cfg, MouseOwner mouse, WindowConfig wc)
+    {
+        _g = g; _cfg = cfg; _mouse = mouse; Cfg = wc;
+    }
+
+    // the window is gone (closed) or its capture ended: the scan looks for it again
+    public bool Lost => Hwnd != IntPtr.Zero && (!WindowList.IsWindow(Hwnd) || _cap is { Closed: true });
+
+    public string Status
+    {
+        get
+        {
+            if (Hwnd == IntPtr.Zero) return "waiting for the window to open";
+            if (Error != null) return "can't capture it: " + Error;
+            if (WindowList.IsIconic(Hwnd)) return _hasTexture ? "minimised - click it in VR to restore" : "minimised - restore it to see it";
+            if (_cap == null) return "starts when SteamVR runs";
+            return _hasTexture ? $"live · {_cap.Target.W}×{_cap.Target.H}" : "waiting for the first frame";
+        }
+    }
+
+    public void CreateOverlay(VrSession vr, IDirect3DDevice dev)
+    {
+        _vr = vr;
+        _dev = dev;
+        Ov = new VrOverlay($"erik.orbit.window.{Cfg.Id}", "Orbit Window");
+        Ov.SetFlag(VROverlayFlags.IgnoreTextureAlpha, true);
+        Ov.SetSortOrder(105);       // in front of monitors where they overlap
+        if (Hwnd != IntPtr.Zero) StartCapture();
+    }
+
+    public void DestroyOverlay()
+    {
+        ReleaseButtons();
+        StopCapture();
+        _vis = 0;
+        Ov?.Dispose(); Ov = null;
+        _vr = null;
+    }
+
+    public void Attach(WindowInfo w)
+    {
+        if (w.Hwnd == Hwnd && (_cap != null || Error != null)) return;    // same window: no retry loop on errors
+        ReleaseButtons();
+        StopCapture();
+        Hwnd = w.Hwnd;
+        Error = null;
+        if (!string.IsNullOrEmpty(w.Title) && w.Title != Cfg.Title) { Cfg.Title = w.Title; _cfg.MarkDirty(); }
+        if (Ov != null) StartCapture();
+    }
+
+    public void Detach()
+    {
+        ReleaseButtons();
+        StopCapture();
+        Hwnd = IntPtr.Zero;
+        Error = null;
+    }
+
+    // keeps the stored title current (it is the tie-break when finding the window after a restart)
+    public void RefreshTitle()
+    {
+        if (Hwnd == IntPtr.Zero) return;
+        string t = WindowList.TitleOf(Hwnd);
+        if (!string.IsNullOrEmpty(t) && t != Cfg.Title) { Cfg.Title = t; _cfg.MarkDirty(); }
+    }
+
+    void StartCapture()
+    {
+        if (_dev == null) return;
+        try { _cap = MonitorCapture.ForWindow(_g, _dev, Hwnd); }
+        catch (Exception e) { Error = e.Message; _cap = null; Log.Warn($"window capture '{Cfg.Title}': {e.Message}"); }
+        _hasTexture = false;
+        _nextFrame = 0;
+    }
+
+    void StopCapture()
+    {
+        _cap?.Dispose();
+        _cap = null;
+        _hasTexture = false;
+    }
+
+    public void Update(VrSession vr, double now, bool globallyVisible, int fps, bool smart)
+    {
+        if (Ov == null) return;
+        float dt = (float)Math.Clamp(now - _lastNow, 0, 0.1);
+        _lastNow = now;
+        bool want = globallyVisible && Cfg.Enabled && Cfg.Place.M != null && _cap != null && !_cap.Closed;
+        if (want && !Placement.Apply(Cfg.Place, vr, Ov)) want = false;
+        _vis = Math.Clamp(_vis + (want && _hasTexture ? dt : -dt) / 0.2f, 0, 1);
+        if (!want && Ov.Visible) ReleaseButtons();
+        if (_vis <= 0) Ov.Hide();
+        else
+        {
+            Ov.SetWidth(Cfg.Width);
+            Ov.SetCurvature(Cfg.Curvature);
+            Ov.SetAlpha(Cfg.Opacity * (1 - MathF.Pow(1 - _vis, 3)));
+            Ov.Show();
+        }
+        if (_pending is { } pb && now >= _pendingAt) { _pending = null; Press(pb, true); }
+        _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
+        if (!want) return;
+        bool hovered = _hovering[0] || _hovering[1];
+        if (!DesktopPanel.CaptureDue(ref _nextFrame, now, smart ? DesktopPanel.SmartFps(vr, Cfg.Place, Cfg.Width, hovered, fps) : fps)) return;
+        if (_cap.Poll())
+        {
+            Ov.SetMouseScale(_cap.Target.W, _cap.Target.H);
+            Ov.SetTexture(_cap.Target.Tex);
+            _hasTexture = true;
+        }
+    }
+
+    // ---- IPointerTarget ----
+    public VrOverlay Overlay => Ov;
+    public bool Interactive => Ov != null && Ov.Visible && _vis > 0.8f && Hwnd != IntPtr.Zero;
+    public bool AcceptsFrom(Hand h) => true;
+    public Vector2 TextureSize => new(_cap?.Target?.W ?? 1, _cap?.Target?.H ?? 1);
+
+    bool OwnsMouse(Hand h)
+    {
+        double now = Clock.Now;
+        if (_mouse.Hand == null || _mouse.Hand == h || _mouse.Panel == null || now - _mouse.LastMove > 0.4)
+        {
+            _mouse.Hand = h; _mouse.Panel = this; _mouse.LastMove = now;
+            return true;
+        }
+        return false;
+    }
+
+    // texture pixel -> screen pixel: the capture is the window's visible frame, wherever it is now
+    bool ScreenPoint(Vector2 px, out int x, out int y)
+    {
+        x = y = 0;
+        if (!WindowList.Bounds(Hwnd, out var r)) return false;
+        var size = TextureSize;
+        int w = r.Right - r.Left, h = r.Bottom - r.Top;
+        x = r.Left + (int)Math.Clamp(px.X * w / size.X, 0, w - 1);
+        y = r.Top + (int)Math.Clamp(px.Y * h / size.Y, 0, h - 1);
+        return true;
+    }
+
+    public void PointerMove(Hand h, Vector2 px)
+    {
+        _hovering[(int)h] = true;
+        if (!Cfg.Mouse || Hwnd == IntPtr.Zero || !OwnsMouse(h)) return;
+        if (Vector2.DistanceSquared(px, _lastPx) < 0.25f) return;
+        _lastPx = px;
+        if (ScreenPoint(px, out int x, out int y)) Native.SetCursorPos(x, y);
+    }
+
+    public void PointerLeave(Hand h)
+    {
+        _hovering[(int)h] = false;
+        if (_mouse.Hand == h && _mouse.Panel == this) { _mouse.Hand = null; _mouse.Panel = null; }
+    }
+
+    bool _leftDown, _rightDown;
+    PtrButton? _pending;      // press held back until the window has come to the front
+    double _pendingAt;
+
+    public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
+    {
+        if (!Cfg.Mouse && down) return;      // ups still go out, or a button would stay held
+        if (Hwnd == IntPtr.Zero) { ReleaseButtons(); return; }
+        if (down)
+        {
+            _mouse.Hand = h; _mouse.Panel = this; _mouse.LastMove = Clock.Now;
+            _mouse.NoteClick();
+            if (WindowList.IsIconic(Hwnd)) { WindowList.BringToFront(Hwnd); return; }   // this click only restores it
+            if (ScreenPoint(px, out int x, out int y)) Native.SetCursorPos(x, y);
+            if (!WindowList.IsForeground(Hwnd))
+            {
+                WindowList.BringToFront(Hwnd);
+                _pending = b;
+                _pendingAt = Clock.Now + 0.06;
+                return;
+            }
+        }
+        else if (_pending == b)
+        {
+            // released before the held-back press went out: still a click
+            _pending = null;
+            Press(b, true);
+        }
+        Press(b, down);
+    }
+
+    void Press(PtrButton b, bool down)
+    {
+        if (b == PtrButton.Primary && down != _leftDown)
+        {
+            _leftDown = down;
+            Native.SendMouse(down ? Native.MOUSEEVENTF_LEFTDOWN : Native.MOUSEEVENTF_LEFTUP);
+        }
+        else if (b == PtrButton.Secondary && down != _rightDown)
+        {
+            _rightDown = down;
+            Native.SendMouse(down ? Native.MOUSEEVENTF_RIGHTDOWN : Native.MOUSEEVENTF_RIGHTUP);
+        }
+    }
+
+    void ReleaseButtons()
+    {
+        _pending = null;
+        if (_leftDown) { _leftDown = false; Native.SendMouse(Native.MOUSEEVENTF_LEFTUP); }
+        if (_rightDown) { _rightDown = false; Native.SendMouse(Native.MOUSEEVENTF_RIGHTUP); }
+    }
+
+    public void PointerScroll(Hand h, float notches, Vector2 px)
+    {
+        if (!Cfg.Mouse || Hwnd == IntPtr.Zero || !OwnsMouse(h)) return;
+        _wheelAcc += notches * 120;
+        int delta = (int)_wheelAcc;
+        if (delta == 0) return;
+        _wheelAcc -= delta;
+        // the wheel goes to the window under the cursor: make sure that is this one
+        if (!WindowList.IsForeground(Hwnd)) WindowList.BringToFront(Hwnd);
+        Native.SendMouse(Native.MOUSEEVENTF_WHEEL, delta);
+    }
+
+    bool DrivesCursor(Hand h) => Cfg.Mouse && _mouse.Hand == h && _mouse.Panel == this;
+    public float LaserCursorScale(Hand h) => DrivesCursor(h) ? Cfg.Width / Math.Max(1, TextureSize.X) : 0;
+
+    // ---- grab: move, stick = bend, two hands = size ----
+    public bool Grabbable => true;
+
+    public Matrix4x4 WorldTransform =>
+        _vr != null && Placement.TryWorld(Cfg.Place, _vr, out var w) ? w : MathUtil.FromArray(Cfg.Place.M);
+
+    float _twoStartWidth;
+
+    public void GrabBegin(bool detach) { }
+
+    public void GrabMove(Matrix4x4 world)
+    {
+        if (_vr == null) return;
+        Placement.SetWorld(Cfg.Place, _vr, world);
+        _cfg.MarkDirty();
+    }
+
+    public void GrabStickX(float v, float dt)
+    {
+        Cfg.Curvature = DesktopLayout.Flat(Math.Clamp(Cfg.Curvature + v * dt * 0.25f, 0f, 0.5f));
+        _cfg.MarkDirty();
+    }
+
+    public void GrabTwoHandBegin() => _twoStartWidth = Cfg.Width;
+
+    public void GrabTwoHandScale(float ratio)
+    {
+        Cfg.Width = Math.Clamp(_twoStartWidth * ratio, 0.15f, 3f);
+        _cfg.MarkDirty();
+    }
+
+    public bool GrabSnapPreview => false;
+
+    public void GrabEnd() => _cfg.MarkDirty();
+
+    public void Dispose() => DestroyOverlay();
+}

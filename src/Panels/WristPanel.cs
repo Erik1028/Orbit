@@ -1,0 +1,397 @@
+using System;
+using System.Drawing;
+using System.Globalization;
+using System.Numerics;
+using Valve.VR;
+using Vortice.DirectWrite;
+
+namespace Orbit;
+
+// What the panels show; filled by OrbitApp (or with fake numbers by --snapshot).
+public sealed class PanelData
+{
+    public VrStats Vr = new();
+    public GpuStats Gpu;
+    public float VramTotalGB;
+    public bool VrConnected;
+    public bool DesktopsVisible = true, KeyboardVisible, NightMode;
+    public string LayoutName = "Desk";
+    public float FakeGpuLoad = -1, FakeVram = -1;
+    public MediaInfo Media;
+    public (bool has, string title, string artist, bool playing)? FakeMedia;
+    public float GpuLoad => FakeGpuLoad >= 0 ? FakeGpuLoad : Gpu?.Load3D ?? -1;
+    public float VramUsed => FakeVram >= 0 ? FakeVram : Gpu?.VramUsedGB ?? -1;
+}
+
+// Watch on the wrist: clock, frame timing, GPU, batteries and four quick buttons.
+// Fades in when the wrist is turned towards the face; the other hand's laser can click it or grab it.
+public sealed class WristPanel : IPointerTarget, IDisposable
+{
+    public const int TW = 640, TH = 440;
+    readonly Painter _p;
+    readonly Ui _ui;
+    readonly ConfigStore _cfg;
+    readonly PointerState _ptr = new();
+    public readonly Surface Surf;
+    public VrOverlay Ov { get; private set; }
+    public Action<string> OnAction;
+    public float Alpha;
+    bool _dirty = true, _grabbing;
+    int _themeVersion = -1;
+    double _nextDraw;
+    VrSession _vr;
+
+    WristConfig C => _cfg.Data.Wrist;
+
+    public WristPanel(Gpu g, Painter p, ConfigStore cfg)
+    {
+        _p = p; _cfg = cfg;
+        _ui = new Ui(p);
+        Surf = new Surface(g, TW, TH);
+    }
+
+    public void CreateOverlay(VrSession vr)
+    {
+        _vr = vr;
+        Ov = new VrOverlay("erik.orbit.wrist", "Orbit Wrist");
+        Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);
+        Ov.SetSortOrder(150);
+        Ov.SetMouseScale(TW, TH);
+        Alpha = 0;
+        _dirty = true;
+    }
+
+    public void DestroyOverlay() { Ov?.Dispose(); Ov = null; _vr = null; }
+
+    // Default spot: on the back of the forearm just behind the controller, text along the arm.
+    // Rows are the overlay's X/Y/Z axes in controller space (see MathUtil for the convention).
+    public static Matrix4x4 DefaultOffset(string hand) => hand == "right"
+        ? MathUtil.Basis(new(0, 0, 1), new(0, -1, 0), new(1, 0, 0), new(0.04f, -0.01f, 0.13f))
+        : MathUtil.Basis(new(0, 0, -1), new(0, -1, 0), new(-1, 0, 0), new(-0.04f, -0.01f, 0.13f));
+
+    Matrix4x4 Offset => C.Offset != null ? MathUtil.FromArray(C.Offset) : DefaultOffset(C.Hand);
+    uint HandIndex(VrSession vr) => C.Hand == "right" ? vr.RightIndex : vr.LeftIndex;
+
+    public void Update(VrSession vr, double now, float dt, PanelData d)
+    {
+        if (Ov == null) return;
+        uint idx = HandIndex(vr);
+        if (!C.Enabled || idx == VrSession.InvalidIndex || !vr.DeviceValid[idx])
+        {
+            Ov.Hide();
+            Alpha = 0;
+            return;
+        }
+        var rel = Offset;
+        Ov.SetRelative(idx, rel);
+        Ov.SetWidth(C.Width);
+
+        float target = 1;
+        if (!C.AlwaysVisible && !_grabbing && vr.HmdValid)
+        {
+            var world = rel * vr.Device[idx];
+            Vector3 n = Vector3.Normalize(MathUtil.Back(world));
+            Vector3 toEye = Vector3.Normalize(vr.Hmd.Translation - world.Translation);
+            float facing = Vector3.Dot(n, toEye);
+            float look = Vector3.Dot(Vector3.Normalize(MathUtil.Forward(vr.Hmd)), -toEye);
+            target = MathUtil.Smoothstep(0.45f, 0.75f, facing) * MathUtil.Smoothstep(0.55f, 0.8f, look);
+        }
+        Alpha += (target - Alpha) * Math.Min(1, dt * 10);
+        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); return; }
+        Ov.SetAlpha(Math.Min(1, Alpha));
+        if (!Ov.Visible) _dirty = true;
+        Ov.Show();
+        if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
+        if (_dirty || now >= _nextDraw || _ui.Animating)
+        {
+            Draw(d);
+            Ov.SetTexture(Surf.Tex);
+            _dirty = false;
+            _nextDraw = now + (C.ShowPerformance && C.PerfGraph && C.Face is "full" or "analog" ? 0.1 : 0.5);
+        }
+    }
+
+    // Watch faces: "full" (everything), "analog" (dial instead of digits), "minimal" (big time +
+    // buttons), "time" (only the time on a small card, nothing to press).
+    public void Draw(PanelData d)
+    {
+        _ui.Begin(_ptr, 1);
+        _p.Begin(Surf.Bitmap, 0x00000000);
+        string face = C.Face ?? "full";
+        var now = DateTime.Now;
+        if (face == "time") { DrawTimeOnly(now); _p.End(); _ui.End(); return; }
+
+        var all = new RectangleF(0, 0, TW, TH);
+        _p.Fill(all, Theme.OverlayBg, 30);
+        _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+
+        if (face == "minimal")
+        {
+            BigTime(now, new RectangleF(0, 34, TW, 170), 150, TextAlignment.Center);
+            _p.Text(DateText(now), new RectangleF(0, 206, TW, 40), Theme.Dim, 26, FontWeight.Normal, TextAlignment.Center);
+            Buttons(d);
+            _p.End(); _ui.End();
+            return;
+        }
+
+        if (face == "analog")
+        {
+            Dial(now, 104, 92, 76);
+            BigTime(now, new RectangleF(204, 30, 200, 70), 52, TextAlignment.Leading);
+            _p.Text(DateText(now), new RectangleF(206, 98, 190, 60), Theme.Dim, 19, FontWeight.Normal,
+                TextAlignment.Leading, ParagraphAlignment.Near, null, true);
+        }
+        else
+        {
+            BigTime(now, new RectangleF(30, 6, 340, 126), 108, TextAlignment.Leading);
+            _p.Text(DateText(now), new RectangleF(34, 124, 340, 34), Theme.Dim, 22);
+        }
+
+        // batteries, top right
+        if (C.ShowBatteries)
+        {
+            float y = 22;
+            int shown = 0;
+            foreach (var b in d.Vr.Batteries)
+            {
+                if (shown++ >= 4) break;
+                DrawBattery(new RectangleF(400, y, 214, 30), b.label, b.pct, b.charging);
+                y += 36;
+            }
+            if (shown == 0)
+                _p.Text(d.VrConnected ? "no battery info" : "SteamVR offline", new RectangleF(400, 22, 214, 30), Theme.Faint, 16,
+                    FontWeight.Normal, TextAlignment.Trailing);
+        }
+
+        // performance strip: numbers or the frame-time graph
+        _p.Line(28, 172, TW - 28, 172, 0x26FFFFFF, 1.5f);
+        if (C.ShowPerformance)
+        {
+            if (C.PerfGraph) Graph(d.Vr, new RectangleF(28, 180, TW - 56, 76));
+            else Numbers(d);
+        }
+
+        if (C.ShowMedia) DrawMedia(d);
+        Buttons(d);
+        _p.End();
+        _ui.End();
+    }
+
+    string DateText(DateTime now)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        return now.ToString(culture.DateTimeFormat.MonthDayPattern, culture) + ", " + now.ToString("dddd", culture);
+    }
+
+    void BigTime(DateTime now, RectangleF r, float size, TextAlignment align)
+    {
+        bool h24 = _cfg.Data.Appearance.Clock24h;
+        string time = now.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture);
+        _p.Text(time, r, Theme.Text, size, FontWeight.SemiBold, align, ParagraphAlignment.Center, Theme.DisplayFont);
+        if (!h24)
+        {
+            float tw = _p.MeasureWidth(time, size, FontWeight.SemiBold, Theme.DisplayFont);
+            float x = align == TextAlignment.Center ? r.X + (r.Width + tw) / 2 + 6 : r.X + tw + 6;
+            _p.Text(now.Hour < 12 ? "AM" : "PM", new RectangleF(x, r.Y + r.Height * 0.55f, 70, size * 0.3f), Theme.Dim, size * 0.2f, FontWeight.SemiBold);
+        }
+    }
+
+    // analog dial: ticks, hour and minute hands, accent centre
+    void Dial(DateTime now, float cx, float cy, float r)
+    {
+        _p.Circle(cx, cy, r, Theme.Mix(Theme.Panel2, 0xFF000000, 0.15f));
+        _p.Ring(cx, cy, r, Theme.WithAlpha(Theme.Accent, 0.55f), 3);
+        for (int i = 0; i < 60; i++)
+        {
+            bool hour = i % 5 == 0;
+            float a = i / 60f * MathF.Tau - MathF.PI / 2;
+            float r0 = r - (hour ? 14 : 7), r1 = r - 4;
+            _p.Line(cx + r0 * MathF.Cos(a), cy + r0 * MathF.Sin(a), cx + r1 * MathF.Cos(a), cy + r1 * MathF.Sin(a),
+                hour ? Theme.Text : Theme.Faint, hour ? 3 : 1.5f);
+        }
+        float m = now.Minute + now.Second / 60f;
+        float h = now.Hour % 12 + m / 60f;
+        void Hand(float frac, float len, float width, uint col)
+        {
+            float a = frac * MathF.Tau - MathF.PI / 2;
+            _p.Line(cx, cy, cx + len * MathF.Cos(a), cy + len * MathF.Sin(a), col, width);
+        }
+        Hand(h / 12f, r * 0.5f, 7, Theme.Text);
+        Hand(m / 60f, r * 0.78f, 4.5f, Theme.Text);
+        _p.Circle(cx, cy, 6, Theme.Accent);
+    }
+
+    void DrawTimeOnly(DateTime now)
+    {
+        var card = new RectangleF(70, 130, TW - 140, 190);
+        _p.Fill(card, Theme.OverlayBg, 34);
+        _p.Stroke(RectangleF.Inflate(card, -1, -1), 0x40FFFFFF, 2, 33);
+        BigTime(now, new RectangleF(card.X, card.Y + 6, card.Width, 128), 112, TextAlignment.Center);
+        _p.Text(DateText(now), new RectangleF(card.X, card.Y + 132, card.Width, 40), Theme.Dim, 24, FontWeight.Normal, TextAlignment.Center);
+    }
+
+    void Numbers(PanelData d)
+    {
+        var v = d.Vr;
+        float cw = (TW - 56) / 4f;
+        uint fpsCol = v.AppFps < 0 ? Theme.Text : v.AppFps < v.DisplayHz * 0.85f ? Theme.Warn : Theme.Text;
+        Stat(0, cw, v.AppFps < 0 ? "–" : $"{v.AppFps:0}", $"fps / {v.DisplayHz:0}", fpsCol);
+        uint rpCol = v.ReprojPct < 0 ? Theme.Text : v.ReprojPct > 25 ? Theme.Bad : v.ReprojPct > 8 ? Theme.Warn : Theme.Text;
+        Stat(1, cw, v.ReprojPct < 0 ? "–" : $"{v.ReprojPct:0}%", "reprojected", rpCol);
+        float budget = 1000f / Math.Max(1, v.DisplayHz);
+        uint msCol = v.GpuMs < 0 ? Theme.Text : v.GpuMs > budget ? Theme.Bad : v.GpuMs > budget * 0.85f ? Theme.Warn : Theme.Text;
+        Stat(2, cw, v.GpuMs < 0 ? "–" : $"{v.GpuMs:0.0}", "GPU ms", msCol);
+        float vram = d.VramUsed;
+        // no GPU %: the WDDM engine counters badly under-read AMD cards (2 % at a real 99 %)
+        string vramCap = d.VramTotalGB > 0 ? $"GB VRAM / {d.VramTotalGB:0}" : "GB VRAM";
+        uint vrCol = vram > 0 && d.VramTotalGB > 0 && vram > d.VramTotalGB * 0.92f ? Theme.Warn : Theme.Text;
+        Stat(3, cw, vram < 0 ? "–" : $"{vram:0.0}", vramCap, vrCol);
+    }
+
+    // last ~5 s of frames: GPU time per frame against the frame budget line;
+    // amber = over budget / reprojected, red = dropped
+    void Graph(VrStats v, RectangleF r)
+    {
+        _p.Fill(r, Theme.WithAlpha(0xFF000000, 0.25f), 10);
+        float budget = 1000f / Math.Max(1, v.DisplayHz);
+        float top = budget * 2;
+        int n = v.FrameCount;
+        float step = r.Width / VrStats.FrameHistory;
+        float by = r.Bottom - 4 - (r.Height - 8) * (budget / top);
+        for (int i = 0; i < n; i++)
+        {
+            int idx = (v.FrameHead - n + i + VrStats.FrameHistory) % VrStats.FrameHistory;
+            float ms = v.FrameMs[idx];
+            byte flag = v.FrameFlag[idx];
+            float h = Math.Clamp(ms / top, 0.02f, 1) * (r.Height - 8);
+            uint col = flag == 2 ? Theme.Bad : flag == 1 || ms > budget ? Theme.Warn : Theme.WithAlpha(Theme.Accent, 0.85f);
+            float x = r.Right - (n - i) * step;
+            _p.Fill(new RectangleF(x, r.Bottom - 4 - h, Math.Max(1, step - 0.3f), h), col);
+        }
+        _p.Line(r.X + 6, by, r.Right - 6, by, 0x80FFFFFF, 1.5f);
+        string label = v.AppFps < 0 ? "waiting for frames" :
+            $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms GPU · {Math.Max(0, v.ReprojPct):0}% reprojected";
+        _p.Text(label, new RectangleF(r.X + 10, r.Y + 4, r.Width - 20, 24), Theme.Text, 16, FontWeight.SemiBold);
+        _p.Text($"{budget:0.0} ms", new RectangleF(r.Right - 80, by - 22, 72, 20), Theme.Dim, 13, FontWeight.Normal, TextAlignment.Trailing);
+    }
+
+    // keyboard, monitors, recenter, layout profile (shows its name), night mode, settings
+    void Buttons(PanelData d)
+    {
+        string[] ids = { "keyboard", "desktops", "recenter", "layout", "night", "settings" };
+        string[] icons = { Theme.IcoKeyboard, d.DesktopsVisible ? Theme.IcoMonitor : Theme.IcoHide, Theme.IcoRecenter, null, Theme.IcoNight, Theme.IcoSettings };
+        const int n = 6;
+        float bw = (TW - 56 - (n - 1) * 10) / (float)n;
+        for (int i = 0; i < n; i++)
+        {
+            var r = new RectangleF(28 + i * (bw + 10), 354, bw, 62);
+            bool on = (i == 0 && d.KeyboardVisible) || (i == 1 && d.DesktopsVisible) || (i == 4 && d.NightMode);
+            bool click = icons[i] == null
+                ? _ui.Button(Ui.Id("w", i), r, d.LayoutName, null, false, true, d.LayoutName.Length > 5 ? 14 : 17)
+                : _ui.Button(Ui.Id("w", i), r, null, icons[i], on, true, 24);
+            if (click) OnAction?.Invoke(ids[i]);
+        }
+    }
+
+    Vortice.Direct2D1.ID2D1Bitmap _art;
+    int _artVersion = -1;
+
+    // now playing: cover, title / artist, previous - play/pause - next
+    void DrawMedia(PanelData d)
+    {
+        bool has; string title, artist; bool playing; uint[] art = null; int ver = -2;
+        if (d.FakeMedia is { } f) (has, title, artist, playing) = f;
+        else if (d.Media != null) (has, title, artist, playing, art, ver) = d.Media.Snapshot();
+        else { has = false; title = artist = null; playing = false; }
+
+        if (ver != _artVersion)
+        {
+            _artVersion = ver;
+            _art?.Dispose();
+            _art = art != null ? _p.CreateBitmap(art, MediaInfo.ArtSize, MediaInfo.ArtSize) : null;
+        }
+        var cover = new RectangleF(28, 270, 64, 64);
+        if (_art != null) _p.Image(_art, cover);
+        else
+        {
+            _p.Fill(cover, Theme.Panel3, 10);
+            _p.Icon("\uE8D6", cover, Theme.Dim, 26);
+        }
+        float bx = TW - 28 - 3 * 58 + 4;
+        var text = new RectangleF(104, 268, bx - 104 - 10, 68);
+        if (has)
+        {
+            _p.Text(title, new RectangleF(text.X, text.Y + 4, text.Width, 34), Theme.Text, 22, FontWeight.SemiBold);
+            _p.Text(artist ?? "", new RectangleF(text.X, text.Y + 36, text.Width, 28), Theme.Dim, 17);
+        }
+        else
+            _p.Text("Nothing playing", text, Theme.Faint, 19);
+        string[] ids = { "media.prev", "media.play", "media.next" };
+        string[] icons = { "\uE892", playing ? "\uE769" : "\uE768", "\uE893" };
+        for (int i = 0; i < 3; i++)
+        {
+            if (_ui.Button("m" + i, new RectangleF(bx + i * 58, 276, 52, 52), null, icons[i], false, has, 20))
+                OnAction?.Invoke(ids[i]);
+        }
+    }
+
+    void Stat(int i, float cw, string value, string caption, uint color)
+    {
+        float x = 28 + i * cw;
+        _p.Text(value, new RectangleF(x, 180, cw - 6, 52), color, 40, FontWeight.SemiBold, TextAlignment.Leading,
+            ParagraphAlignment.Center, Theme.DisplayFont);
+        _p.Text(caption, new RectangleF(x + 2, 230, cw, 26), Theme.Dim, 16);
+    }
+
+    void DrawBattery(RectangleF r, string label, float pct, bool charging)
+    {
+        uint col = pct > 0.5f ? Theme.Good : pct > 0.2f ? Theme.Warn : Theme.Bad;
+        _p.Text(label, new RectangleF(r.X, r.Y, 74, r.Height), Theme.Dim, 18, FontWeight.SemiBold, TextAlignment.Trailing);
+        var bar = new RectangleF(r.X + 84, r.Y + 8, 70, r.Height - 16);
+        _p.Fill(bar, 0x30FFFFFF, 4);
+        _p.Fill(new RectangleF(bar.X, bar.Y, bar.Width * Math.Clamp(pct, 0, 1), bar.Height), col, 4);
+        _p.Text((charging ? "⚡" : "") + $"{pct * 100:0}%", new RectangleF(bar.Right + 4, r.Y, r.Right - bar.Right - 4, r.Height),
+            Theme.Text, 18, FontWeight.SemiBold, TextAlignment.Trailing);
+    }
+
+    // ---- IPointerTarget ----
+    public VrOverlay Overlay => Ov;
+    public bool Interactive => Ov != null && Ov.Visible && Alpha > 0.6f;
+    public bool AcceptsFrom(Hand h) => (C.Hand == "right") != (h == Hand.Right);
+    public Vector2 TextureSize => new(TW, TH);
+    public void PointerMove(Hand h, Vector2 px) { _ptr.Move(px.X, px.Y); _dirty = true; }
+    public void PointerLeave(Hand h) { _ptr.Leave(); _dirty = true; }
+    public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
+    {
+        if (b != PtrButton.Primary) return;
+        _ptr.Move(px.X, px.Y);
+        if (down) _ptr.Press(); else _ptr.Release();
+        _dirty = true;
+    }
+    public void PointerScroll(Hand h, float n, Vector2 px) { }
+    public bool Grabbable => true;
+
+    public Matrix4x4 WorldTransform =>
+        _vr != null && _vr.TryDeviceWorld(HandIndex(_vr), out var dev) ? Offset * dev : Matrix4x4.Identity;
+
+    public void GrabMove(Matrix4x4 world)
+    {
+        _grabbing = true;
+        if (_vr != null && _vr.TryDeviceWorld(HandIndex(_vr), out var dev))
+        {
+            C.Offset = MathUtil.ToArray(world * MathUtil.Invert(dev));
+            _cfg.MarkDirty();
+        }
+    }
+
+    float _twoStartWidth;
+    public void GrabBegin(bool detach) { }
+    public void GrabStickX(float v, float dt) { C.Width = Math.Clamp(C.Width * (1 + v * 0.9f * dt), 0.06f, 0.3f); _cfg.MarkDirty(); }
+    public void GrabTwoHandBegin() => _twoStartWidth = C.Width;
+    public void GrabTwoHandScale(float r) { C.Width = Math.Clamp(_twoStartWidth * r, 0.06f, 0.3f); _cfg.MarkDirty(); }
+    public bool GrabSnapPreview => false;
+
+    public void GrabEnd() { _grabbing = false; }
+
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); }
+}

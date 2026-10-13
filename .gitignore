@@ -1,0 +1,14 @@
+# build output
+bin/
+obj/
+dist/
+dist_next/
+release/
+*.user
+.vs/
+
+# local test captures of the developer's own desktop - not for the repository
+docs/vr-test-*.png
+# outdated UI renders (the README uses docs/img/)
+docs/look-tab-pink-midnight.png
+docs/wrist.png

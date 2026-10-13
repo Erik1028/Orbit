@@ -1,0 +1,241 @@
+# Orbit – SteamVR overlay (csukló-óra, 3 monitor, billentyűzet)
+
+Saját, XSOverlay-szerű SteamVR overlay app. C# / .NET 8, Direct3D11 + Direct2D (Vortice), OpenVR,
+Windows Graphics Capture. A felülete angol, ez a leírás magyar.
+
+## Mit tud
+
+- **Csukló-óra** (alapból bal kéz): idő + dátum, fps / reprojekció / GPU ms (a SteamVR compositorból),
+  VRAM + GPU-terhelés (WDDM számlálók, mint a Feladatkezelőben), akkuk (HMD, L, R, trackerek közül a legkisebb).
+  Akkor jelenik meg, ha a csuklódat magad felé fordítod és ránézel. 4 gomb: billentyűzet, monitorok
+  ki/be, recenter, beállítások (a SteamVR dashboardon nyitja meg az Orbit fület).
+- **Monitorok VR-ben**: mindegyik monitor külön overlay (nálad a 3 db 1920×1080), alapból ívben eléd
+  rakva úgy, ahogy az asztalon állnak (bal Xiaomi, középen az AOC, jobb Xiaomi). Monitoronként: méret,
+  átlátszóság, görbület, rögzítés (világ / bal kéz / jobb kéz / fej), egérvezérlés.
+- **Billentyűzet**: teljes billentyűzet, a feliratokat a Windows aktív kiosztásából veszi (magyar QWERTZ,
+  AltGr-jelek kék színnel). Shift/Ctrl/Alt/AltGr/Win: 1 kattintás = csak a következő billentyűre,
+  2 = rögzítve, 3 = ki. Nyomva tartva ismétel (backspace, nyilak).
+- **Beállítások**: ugyanaz a felület asztali ablakban (tálcaikon), VR-ben **lebegő Orbit-panelként** (az óra
+  fogaskerék-gombja nyitja; lézerrel kezelhető, grippel mozgatható, X-szel zárható, mindig a monitorok
+  előtt rajzolódik) és a SteamVR dashboard „Orbit” fülén is.
+- **Lézer-simítás** (General → Smoothing: Off / Low / Med / High, alap Med): adaptív One Euro szűrő a
+  lézer irányán – nyugodt kéznél erősen simít, gyors mozdulatnál alig késik. Mérve (szimulált remegés,
+  1,07 m-es monitor 1,2 m-ről): kikapcsolva ~5 px rezgés, Med ~0,9 px, ~30 ms késés 1 rad/s-nál.
+  Kattintáskor a kurzor 0,3 s-ig áll (amíg 0,9°-nál jobban el nem mozdítod), így a ravasz meghúzása
+  nem csúsztatja el a klikket.
+- **Billentyűhang** (Keyboard fül): egyetlen rövid klikk leütésenként (mint a Virtual Desktop billentyűzetén),
+  Click / Muted, hangerő, „Test sound”. XAudio2-vel szól (kis késés), a hangeszközt háttérszálon nyitja.
+- **Billentyűzet felső sáv**: Select all / Copy / Paste / Cut / Undo / Redo (Ctrl+A/C/V/X/Z/Y, virtuális
+  billentyűkóddal, így QWERTZ-n is a Ctrl+Z a visszavonás). **Chatbox mód**: a gépelés egy saját sorba
+  megy (max. 144 karakter, ékezetekkel), Enter / Send → OSC `/chatbox/input` a VRChatnek, közben
+  `/chatbox/typing`; Esc törli.
+- **Nyelvváltó gomb** (földgömb a szóköz mellett): a Windowsban telepített kiosztások között vált (a
+  Windowst is átváltja), és ha az angol nincs telepítve, egy beépített angol (US) kiosztás is van – ez
+  a betűket közvetlenül karakterként küldi, a Ctrl/Alt/Win + betű gyorsbillentyűket az angol betű
+  virtuális kódjával. A választást megjegyzi (Keyboard.Language).
+- **Zene a csuklón**: a Windows médiavezérlőjéből (SMTC) cím, előadó, borító, és előző / lejátszás-szünet /
+  következő gombok (Wrist → Now playing).
+- **Értesítések**: XSOverlay-formátumú UDP-üzenetek a 42069-es porton (VRCX: Beállítások → Értesítések →
+  XSOverlay), a látótér alsó részén kártyaként, max. 3 egymás alatt, halk csengővel; General →
+  Notifications (Test gomb). Ha az XSOverlay fut, az foglalja a portot.
+- **Animációk**: a panelek be-/kiúsznak (áttűnés + enyhe méretezés), a kapcsolók gombja csúszik, a
+  kijelölések csúsznak, a gombok és billentyűk felvillannak / benyomódnak.
+- **Gyors ki/be (OVR Toolkit-stílus)**: mindkét grip egyszerre, kétszer gyorsan → a monitorok és a
+  billentyűzet eltűnnek; ugyanez újra → visszajön, ami látszott. (General → Double-tap both grips.)
+- **Egybe pattintott monitorok**: első induláskor a monitorok egyetlen íves képernyővé állnak össze
+  előtted (hézag nélkül). Desktops → *Join into one curved screen* újra összerakja, *Separate* szétszedi.
+  Egy monitort egy másik mellé ejtve az automatikusan a sorba pattan; B/Y-t nyomva tartva megfogáskor
+  kiveheted a sorból. A sort bármelyik tagjánál fogva egyben viszed.
+- **Hajlítás**: Curvature csúszka (kiírja a hajlítási sugarat), *Curve around me* = pont a fejed köré
+  hajlít, VR-ben megfogás közben a kar jobbra/balra hajlít. Egy sor mindig közös sugáron marad.
+- **Színezés (Look fül)**: 6 kész téma egy kattintással (Classic, Ocean, Sakura, Forest, Ember, Mono),
+  kiemelőszín a 10 alapszínből vagy **bármilyen árnyalat** (Custom colour csúszka, szivárvány-sáv alatta),
+  panelszín (Charcoal/Midnight/Plum/Forest/Mocha/Black), panel-átlátszóság.
+- **Lézer** (Look fül): szín, **vastagság** (1,5–8 mm), és hogy **mindig látszódjon** (1 m-es sugár akkor
+  is, ha nem mutatsz panelre) vagy csak panelre mutatáskor.
+- **Számlapok** (Wrist fül → Watch face): Full (minden), Analog (mutatós óra + akkuk + teljesítmény),
+  Minimal (nagy idő + gombok), Time (csak idő, kis kártya). 12/24 órás óra is itt.
+  Performance: Numbers (számok) vagy **Graph**: az utolsó 5 mp képkockaideje oszlopokban
+  (sárga = reprojektált, piros = eldobott képkocka, vonal = a frissítési keret), a SteamVR `GetFrameTiming`-ből.
+- **Egyes ablakok tükrözése** (Windows fül): Add a window → az ablaklistából (mint az Alt+Tab) kiválasztod,
+  és külön panelként lebeg VR-ben (max. 6). Követi az ablakot, ha a PC-n mozog vagy átméreteződik,
+  bezárás/újraindítás után program + ablakosztály (és utolsó cím) alapján magától újra rácsatlakozik.
+  Kattintás előtt a PC-n előtérbe hozza az ablakot, hogy a kattintás biztosan bele menjen
+  (a kis-méretre tett ablakot az első kattintás visszaállítja). Méret, átlátszóság, hajlítás, rögzítés
+  (világ/kéz/fej), egér ki/be, *Stop mirroring*. A monitorokkal együtt kapcsol (Desktops gomb, dupla grip).
+- **Okos képfrissítés** (Desktops → Smart frame rate, alapból be): teljes fps csak arra a monitorra /
+  ablakra, amit nézel vagy amire mutatsz; látótér szélén 15 fps, mögötted 4 fps.
+- **Szünet levett headsetnél** (General, alapból be): ha a headset 3 mp-ig nincs a fejeden
+  (közelségérzékelő), nincs capture és nincs lézer, amíg vissza nem veszed.
+- **Lekerekített VR-beállításpanel**: a lebegő beállításpanel sarkai kerekek, vékony világos szegéllyel.
+- **Magától feljövő billentyűzet** (Keyboard → *Pop up for text fields*, alapból be): ha egy VR-ből érkező
+  kattintás szövegmezőbe teszi a fókuszt, a billentyűzet feljön; ha a fókusz nem-szöveges elemre kerül,
+  0,8 mp múlva eltűnik (csak ha magától jött fel, Chatbox módban és gépelés közben nem).
+  Felismerés: WinEvent-hook (EVENT_OBJECT_FOCUS) külön szálon; Win32 Edit/RichEdit ablakosztályból, minden
+  más (böngésző, Discord, Windows-appok) az akadálymentességi szerepből („editable text”, nem csak olvasható).
+  Ez utóbbit csak VR-kattintás után 1,5 mp-ig kérdezi (a Chromium ettől bekapcsolja az a11y-fáját, ami lassít).
+- **Éjszakai mód** (csuklón a hold gomb, vagy Look → *Night mode*): minden Orbit-panelt (monitorok, ablakok,
+  billentyűzet, óra, beállítások, értesítések, lézer) tompít, áttűnéssel; *Night brightness* 15–90 %.
+  A SteamVR overlay-színével (SetOverlayColor) szoroz, a megfogás-színezés megmarad.
+- **Elrendezés-profilok** (új *Layouts* fül + a csuklón a profil nevét mutató gomb): Desk / Bed / Couch.
+  Minden profil megjegyzi a monitorok, ablakok és a billentyűzet helyét, méretét, hajlítását, és az
+  éjszakai módot. Váltáskor a régi profilba elmenti az aktuálisat, az újat visszarakja. Első használatkor
+  minden oda jön, ahova nézel (ágyban fekve fölém). A csuklógomb a „On the watch” profilok között lép
+  (alapból Desk és Bed).
+- **Nyelvgomb javítva**: a billentyűzet nyelvgombja a billentyűzet-*kiosztást* írja ki (HKL felső szó), nem a
+  beviteli nyelvet – nálad az angol nyelv + magyar kiosztás eddig „EN” volt, most „HU”.
+- **DXOverlay / VRChat avatar-paraméterek (OSC)**: az XSOverlay-jel azonos nevű paramétereket küldi a
+  VRChatnek (127.0.0.1:9000): `isOverlayOpen`, `isKeyboardOpen`, `isWristVisible`, `openOverlayCount`,
+  `leftControllerBattery`, `rightControllerBattery`, `averageControllerBattery`, `averageTrackerBattery`.
+  A DXOverlay ezekből dolgozik, így az Orbittal is működnie kell (VRChatben az OSC-t be kell kapcsolni).
+
+## Kezelés VR-ben
+
+| Mozdulat | Hatás |
+|---|---|
+| rámutatsz egy panelre | megjelenik a sugár; monitoron az igazi egérkurzor odamegy |
+| ravasz (trigger) | kattintás (monitoron bal klikk, billentyűzeten gombnyomás) |
+| B / Y | jobb klikk a monitoron |
+| kar (stick) fel-le | görgetés |
+| markolat (grip) rámutatva | megfogod és viszed a panelt |
+| fogás közben kar fel-le | távolabb–közelebb |
+| fogás közben kar jobbra-balra | monitor: hajlítás; óra/billentyűzet: méret |
+| a másik kéz gripje ugyanazon a panelen | kétkezes átméretezés (széthúzás = nagyobb) |
+| B/Y nyomva + grip egy soron lévő monitoron | kiveszed a sorból |
+| mindkét grip kétszer | monitorok + billentyűzet ki/be |
+| a másik kézzel megfogod az órát | áthelyezed a csuklón (elmenti) |
+
+**Recenter fekve is**: ha egyenesen előre nézel (±15°), a monitorok függőlegesek maradnak; ha jól láthatóan
+fel- vagy lefelé nézel (hátradőlve, ágyban), az egész elrendezés a nézésed irányába kerül, feléd fordítva
+(fekve föléd). Ugyanígy nyílik a lebegő beállítás-panel és az első elhelyezés is.
+
+A dashboard nyitva tartása alatt a saját sugár kikapcsol (ott a SteamVR sugara működik).
+
+## Indítás
+
+- `dist\Orbit.exe` – asztali parancsikon: `Desktop\Orbit.lnk`. Ha a SteamVR már fut, azonnal
+  csatlakozik; ha nem, a tálcán vár, és 3 másodpercenként ellenőrzi. **A SteamVR-t magától nem indítja el.**
+- Újraindításkor (második példány) csak előhozza a beállítás-ablakot. Bezárás: tálcaikon → Exit, vagy `Orbit.exe --exit`.
+- General → **Start with SteamVR** (alapból be): az Orbit beregisztrálja magát a SteamVR-be
+  (`orbit.vrmanifest` → `Steam\config\appconfig.json`, az automatikus indítás:
+  `Steam\config\vrappconfig\erik.orbit.vrappconfig`). Ezután a SteamVR indításakor magától elindul
+  (tálcán, ablak nélkül, a feladaton át admin joggal), és a SteamVR leállásakor kilép. SteamVR nélkül is
+  átkapcsolható, ilyenkor a következő SteamVR-induláskor alkalmazza. A SteamVR saját helye:
+  Beállítások → Indítás/Leállítás → Indításkor futó overlay-alkalmazások → Orbit.
+
+## Fájlok
+
+- Beállítások: `%LOCALAPPDATA%\Orbit\config.json` (mentéskor az előző `config.json.bak` lesz;
+  hibás fájlt félretesz `.bad-…` néven, nem törli). Log: `orbit.log` (+ `orbit.prev.log`).
+- Forrás: `src\` – `OrbitApp.cs` (főciklus, SteamVR-kapcsolat, elhelyezés), `Panels\` (óra, billentyűzet,
+  monitor), `Vr\` (overlay, input, lézer), `Ui\` (widgetek, beállítás-képernyő), `Capture\` (monitor- és ablak-capture, ablaklista).
+- Input-akciók: `assets\actions.json` + alap bindingok Quest/Touch, Index és Vive kontrollerekre.
+
+## Telepíthető verzió (barátoknak)
+
+`build_release.ps1` → `release\OrbitSetup.exe` (~75 MB, egyetlen fájl, a .NET is benne van – a másik
+gépen semmit nem kell előre telepíteni). Futtatva angol telepítőt mutat (asztali parancsikon / Start with
+SteamVR / Run as administrator), felhasználói szintre telepít admin jog nélkül:
+`%LOCALAPPDATA%\Programs\Orbit` + Start menü + Gépház > Alkalmazások (onnan eltávolítható, az
+eltávolító leveszi a SteamVR-regisztrációt és az admin feladatot is, a beállításokat megtartja).
+Mellé kerül az angol `Orbit Quick Start.txt`. Nincs digitálisan aláírva, ezért a Windows SmartScreen
+először figyelmeztet („További információ” → „Futtatás mindenképp”).
+Ugyanaz az exe: ha a neve tartalmazza a „setup” szót, telepítő; telepítve `Orbit.exe` néven maga a program.
+
+## Build
+
+```
+dotnet publish -c Release -o dist
+```
+(Előtte `dist\Orbit.exe --exit`, mert a futó exe zárolja a fájlt.)
+
+## Fejlesztői kapcsolók
+
+- `--snapshot <mappa>` – VR nélkül PNG-be rajzol minden panelt + egy-egy képet minden monitorról (saját,
+  külön config-gal, a valódit nem érinti).
+- `--selftest` – futó SteamVR mellett: teszt-overlay, UV-irány ellenőrzés, frame sync, statisztika.
+- `--scene [--dash]` – 12 másodpercig „játéknak” adja ki magát (bezárja a dashboardot); `--dash`: kinyitja az Orbit fület.
+- `--osctest <port>` – egy-egy minta OSC-üzenet a megadott portra (formátum-ellenőrzéshez).
+- `--tasktest` – ideiglenes, NEM admin feladattal kipróbálja a feladatos indítást, majd törli.
+- `--filtertest` – a lézer-simítás remegése / késése szintenként.
+- `--raytest` – a saját lézer-találatszámítás a futó SteamVR-rel szemben (alpha 0 tesztpanel, pár mp).
+- `--leaktest <gpu|media|idle> [mp]` – egy háttér-összetevő privát memóriája egyedül futtatva, a végén GC-vel.
+- `--focustest` – a szövegmező-felismerés egy képernyőn kívüli tesztablakon (szövegmező, csak olvasható mező,
+  gomb, RichEdit), közvetlenül és a fókusz-hookon át.
+
+## Teljesítmény-napló
+
+Az `orbit.log` 10 másodpercenként két sort ír:
+- `perf:` képkocka/s, munka képkockánként, szakaszonként átlag/max ms (vr, lasers, wrist, kbd, settings,
+  desktops, dash+osc);
+- `mem:` a fő szál és az összes szál szemét-termelése (KB/s), GC-k száma gen0/1/2 és a szünetük, heap,
+  working set, private bytes, handle-ök, GDI / USER objektumok, és szakaszonként a képkockánkénti bájtok.
+  Ha volt GC, egy `gc:` sor is jön (generáció, háttér/tömörítő, szünet, előléptetett KB).
+
+Mért és javított (1.2.0, 2026-10-13): a fő szál 300–550 KB/s szemetet termelt, emiatt 10 mp-enként futott
+egy teljes GC 3–5 ms szünettel. A legnagyobb forrás a monitorképek átvétele volt a C#/WinRT-vetületen át
+(1,3–3,9 KB/képkocka) – most nyers COM-hívásokkal megy (`MonitorCapture.Poll`, frame pool vtable [7],
+frame [6]/[8], IClosable), szemét nélkül. Szintén javítva: `PlaceMissing` LINQ-listái minden képkockán
+(264 B), a widget-azonosítók összefűzése (`Ui.K` / `Ui.Id` gyorsítótár), a lézer `foreach`-e az interfészen,
+a kurzorkép 3×16 KB-os tömbjei. A VR-beállításpanel csak akkor rajzol újra, ha a mutató másik widgetre
+ér (654 mozgásból 2–4 újrarajzolás), és induláskor minden fülét egyszer előrajzolja (első megnyitás
+akadás nélkül). A fő ciklus szála AboveNormal prioritású.
+
+Reszponzivitás (1.2.0, 2026-10-13 este):
+- **Saját lézer-találatszámítás** (`Vr\LocalRaycast.cs`): a SteamVR `ComputeOverlayIntersection` IPC-hívása
+  helyett (panelenként, kezenként, képkockánként; ez okozta a mért 5–16 ms-os akadásokat) folyamaton belül.
+  `--raytest` ellenőrzi a futó SteamVR-rel szemben: egy alpha 0 tesztpanel 156 alakban, 62 400 sugár →
+  **0 eltérés** (max uv 0,00015, távolság 0,04 mm). Közben kimérve: SteamVR a görbült panelt csak ott
+  találja el, ahol a sugár KILÉP a hengerből (homorú oldal; hátulról soha), a sík panelt mindkét oldalról;
+  rejtett panelre nem ad találatot; panel-változást csak egy későbbi képkockán alkalmaz; textúra nélkül
+  uv = 0; 0,0005 alatti görbületnél maga is pontatlan (float) – az Orbit ezt síkra kerekíti
+  (`DesktopLayout.MinCurvature`). Mód: `General.Raycast` = `shadow` (SteamVR dönt, a saját is lefut, a
+  naplóba `raycast:` sor jön az eltérésekkel és a hívásonkénti µs-mal) | `local` | `steamvr`.
+- **Képrögzítés ütemezése**: pontos átlag-ütemezés (`DesktopPanel.CaptureDue`) – a régi „most + 1/fps” a
+  ~80–90 Hz-es ciklusban minden második ciklust kihagyta (60 fps-ből ~40 lett). Okos módban a nézett / mutatott
+  monitor és ablak a headset frissítésével megy (90 Hz; a monitor saját frissítése és a ciklus a felső határ).
+- **GPU-prioritás**: `IDXGIDevice.SetGPUThreadPriority(7)` (admin kell; `General.HighGpuPriority`), és minden
+  képkocka után egy esemény-lekérdezés + Flush: a `perf:` sor `gpu late %` értéke mutatja, hány képkockánál
+  nem végzett még az Orbit GPU-munkája a következő ciklusra.
+- **Energiatakarékos ütemezés kikapcsolva**: `SetProcessInformation(ProcessPowerThrottling)` – EXECUTION_SPEED
+  és IGNORE_TIMER_RESOLUTION nélkül (a Windows 11 a háttérben futó, ablak nélküli folyamatokat lassítaná).
+- **Médiafigyelő**: másodpercenkénti lekérdezés helyett a Windows változás-eseményeire olvas (legfeljebb 2 mp-enként,
+  parancs után azonnal), 20 olvasásonként egy gen0 GC. Mérve (`--leaktest media`): a régi 1 mp-es lekérdezés
+  ~14 MB/perc natív memóriát hagyott a WinRT-objektumok mögött (csak GC szabadítja fel), az új stabil.
+  `--leaktest gpu`: a GPU-számlálók nem szivárognak.
+
+## Tesztelve / nem tesztelve (2026-10-13)
+
+Tesztelve SteamVR null headsettel (headset nélkül): overlay-ek létrejönnek, a 3 monitor élőben megy
+és ívben áll, billentyűzet, dashboard-fül, UV-irány (bal alsó sarok → tükrözni kell), színek.
+Szintén null headsettel (2. kör): a görbült overlay geometriája mérve (tengely r-re a panel előtt, a szélesség
+= ívhossz), a 3 monitor hézagmentes íves sorba áll; OSC-üzenetek formátuma UDP-n visszaolvasva.
+**Kontroller nélkül nem tesztelhető**: lézer, kattintás, megfogás, csukló-óra helye és előtűnése,
+dupla-grip kapcsoló, összepattintás ejtéssel, kétkezes átméretezés. DXOverlay élesben nincs kipróbálva.
+Ha az óra nem jó helyen van, a másik kézzel megfogva odébb tehető; a Wrist → Reset position visszaállítja.
+1.1.0 (2026-10-13): ablak-capture élesben mérve (`--snapshot`): a kép mérete pontosan a DWM látható
+ablakkerete (1920×1032 = 1920×1032), erre épül az egér-leképezés. Számlapok, grafikon, Look/Windows fül
+és a lekerekített panel snapshotban ellenőrizve. VR-ben (kontrollerrel) az ablakpanel kattintása,
+az előtérbe hozás és a headset-levétel szünet még nincs kipróbálva.
+
+## Rendszergazdaként (alapból bekapcsolva)
+
+Admin joggal fut, hogy a VR-egér és -billentyűzet a rendszergazdaként futó ablakokba (Feladatkezelő,
+Hexpad stb.) is be tudjon kattintani/gépelni – a Windows (UIPI) egy nem-admin programtól ezt letiltja.
+Az **első** indításkor egyszer feljön a UAC; ekkor az Orbit létrehoz egy ütemezett feladatot
+(**„Orbit (admin)”**, csak kézi indítású, nincs időzítése). Ezután a parancsikonról és a SteamVR-ből is
+kérdés nélkül, ezen a feladaton át indul admin joggal. General → *Run as administrator* kikapcsolva
+nem kér admin jogot (admin példányból kikapcsolva a feladatot is törli); `Orbit.exe --no-elevate`
+egyszer admin nélkül indít. Ha az exe máshova kerül, a következő indításkor újra kér egy UAC-ot,
+és frissíti a feladatot.
+
+## Ismert korlátok
+
+- A UAC-ablakra magára (biztonsági asztal) VR-ből sem lehet kattintani – ez minden overlaynél így van.
+- A csuklón nincs GPU-terhelés %: a Windows GPU-számlálói az AMD kártyán erősen alulmérnek
+  (a Hexpadnél mérve 2 % valódi 99 % mellett). A VRAM és a SteamVR GPU ms pontos.
+- A monitorra kattintás a valódi egérrel kattint, tehát elveszi a fókuszt a VRChat ablakától
+  (a VRChat VR-ben ettől fut tovább).
+- Tükrözött ablak: amíg csak mutatsz rá (nem kattintasz), a valódi kurzor a PC-n az ablak helyére megy;
+  ha azt az ablakot ott egy másik takarja, a hover-effektek a takaró ablakon látszanak. Az első
+  kattintás/görgetés előtérbe hozza. Kis méretre tett ablakról nem jön új kép (az utolsó marad).

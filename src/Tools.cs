@@ -1,0 +1,561 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Numerics;
+using System.Threading;
+using Valve.VR;
+
+namespace Orbit;
+
+// Developer tools: --snapshot renders every panel to PNG without VR; --selftest checks the SteamVR side.
+static class Tools
+{
+    sealed class FakeHost : IOrbitHost
+    {
+        public ConfigStore Cfg { get; init; }
+        public bool VrConnected => true;
+        public string VrStatus => "SteamVR · 90 Hz";
+        public string InputStatus => "ok";
+        public string GpuName { get; init; }
+        public IReadOnlyList<MonitorInfo> MonitorList { get; init; }
+        public PanelData Data { get; init; }
+        public WristPanel Wrist { get; init; }
+        public KeyboardPanel Keyboard { get; init; }
+        public void Recenter() { }
+        public void ResetDesktop(DesktopConfig d) { }
+        public void ResetWrist() { }
+        public void ResetKeyboard() { }
+        public void SetDesktopAttach(DesktopConfig d, string a) => d.Place.Attach = a;
+        public void SetKeyboardAttach(string a) { }
+        public void SetDesktopEnabled(DesktopConfig d, bool on) => d.Enabled = on;
+        public void SetAutoStart(bool on) { }
+        public string AutoStartStatus => "on: SteamVR starts Orbit and closes it on exit";
+        public void ToggleKeyboard() { }
+        public void ToggleDesktops() { }
+        public void OpenConfigFolder() { }
+        public int GroupSize(DesktopConfig d) => d.Group == null ? 1 : Cfg.Data.Desktops.Count(x => x.Group == d.Group);
+        public void JoinAllDesktops() { }
+        public void SeparateDesktops() { }
+        public void FitCurve(DesktopConfig d) { }
+        public void DesktopEdited(DesktopConfig d) { }
+        public void AppearanceChanged() => Theme.Apply(Cfg.Data.Appearance);
+        public bool IsElevated => true;
+        public void SetRunAsAdmin(bool on) { }
+        public void RestartElevated() { }
+        public string NotificationStatus => "listening on UDP 42069";
+        public void TestNotification() { }
+        List<WindowInfo> _open;
+        public IReadOnlyList<WindowInfo> OpenWindows() => _open ??= WindowList.Enumerate();
+        public bool IsMirrored(IntPtr h) => Cfg.Data.Windows.Count > 0 && _open?.Count > 1 && _open[1].Hwnd == h;
+        public WindowConfig AddWindow(WindowInfo w)
+        {
+            var wc = new WindowConfig { Title = w.Title, Process = w.Process, Class = w.Class };
+            Cfg.Data.Windows.Add(wc);
+            return wc;
+        }
+        public void RemoveWindow(WindowConfig w) => Cfg.Data.Windows.Remove(w);
+        public string WindowStatus(WindowConfig w) => w.Enabled ? "live · 1600×900" : "hidden";
+        public void ResetWindow(WindowConfig w) { }
+        public void SetWindowAttach(WindowConfig w, string a) => w.Place.Attach = a;
+        public void SetWindowEnabled(WindowConfig w, bool on) => w.Enabled = on;
+        public void SwitchLayout(string name) => Cfg.Data.ActiveLayout = name;
+        public Updater Updates { get; } = new();
+        public void ForgetLayout(string name) { }
+    }
+
+    public static int Snapshot(string dir)
+    {
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(dir);
+        // separate config: a snapshot never touches the real one
+        var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+
+        var data = new PanelData { VrConnected = true, VramTotalGB = gpu.DedicatedVram / (1024f * 1024 * 1024), FakeGpuLoad = 63, FakeVram = 9.4f };
+        data.Vr.AppFps = 86; data.Vr.ReprojPct = 4; data.Vr.GpuMs = 9.3f; data.Vr.DisplayHz = 90;
+        data.Vr.Batteries.Add(("HMD", 0.71f, false));
+        data.Vr.Batteries.Add(("L", 0.82f, false));
+        data.Vr.Batteries.Add(("R", 0.18f, true));
+        data.Vr.Batteries.Add(("Trk×6", 0.44f, false));
+        data.FakeMedia = (true, "Midnight City", "M83", true);
+        var frng = new Random(3);
+        for (int i = 0; i < VrStats.FrameHistory; i++)
+        {
+            data.Vr.FrameMs[i] = 7.5f + (float)frng.NextDouble() * 2.5f + (i % 97 == 0 ? 6 : 0);
+            data.Vr.FrameFlag[i] = (byte)(i % 97 == 0 ? 1 : i == 300 ? 2 : 0);
+        }
+        data.Vr.FrameHead = 0; data.Vr.FrameCount = VrStats.FrameHistory;
+
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        var sw0 = System.Diagnostics.Stopwatch.StartNew();
+        wrist.Draw(data);
+        gpu.Ctx.Flush();
+        Log.Info($"first wrist draw {sw0.Elapsed.TotalMilliseconds:0.0} ms");
+        sw0.Restart(); wrist.Draw(data); gpu.Ctx.Flush();
+        Log.Info($"second wrist draw {sw0.Elapsed.TotalMilliseconds:0.0} ms");
+        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist.png"));
+        foreach (var face in new[] { "analog", "minimal", "time" })
+        {
+            cfg.Data.Wrist.Face = face;
+            cfg.Data.Wrist.PerfGraph = face == "analog";
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}.png"));
+        }
+        cfg.Data.Wrist.Face = "full";
+        cfg.Data.Wrist.PerfGraph = true;
+        wrist.Draw(data);
+        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_graph.png"));
+        cfg.Data.Wrist.PerfGraph = false;
+
+        using var kb = new KeyboardPanel(gpu, painter, cfg);
+        kb.Draw();
+        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard.png"));
+        cfg.Data.Keyboard.Language = "en-US";
+        kb.ReloadLayout();
+        kb.Draw();
+        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_en.png"));
+        cfg.Data.Keyboard.Language = "windows";
+        kb.ReloadLayout();
+        kb.PreviewChat("Szia! Mindjárt jövök, csak befejezem ezt :)");
+        kb.Draw();
+        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_chat.png"));
+        kb.PreviewChat("");
+        typeof(KeyboardPanel).GetField("_chat", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(kb, false);
+        var parsed = NotificationListener.Parse(System.Text.Encoding.UTF8.GetBytes(
+            "{\"messageType\":1,\"index\":0,\"timeout\":5.0,\"height\":110.0,\"opacity\":1.0,\"volume\":0.7,\"audioPath\":\"\",\"title\":\"<b>Friend online</b>\",\"content\":\"Sam is in The Black Cat\",\"useBase64Icon\":false,\"icon\":\"default\",\"sourceApp\":\"VRCX\"}"));
+        Log.Info($"notification parse: title='{parsed?.Title}' content='{parsed?.Content}' source={parsed?.Source} timeout={parsed?.Timeout}");
+
+        var mons = Monitors.Enumerate();
+        foreach (var m in mons)
+        {
+            Log.Info("monitor " + m);
+            if (cfg.Data.Desktops.All(d => d.Id != m.Id))
+                cfg.Data.Desktops.Add(new DesktopConfig { Id = m.Id, Name = m.Name, Enabled = !m.Virtual });
+        }
+
+        // capture each monitor once
+        var dev = MonitorCapture.CreateWinRtDevice(gpu);
+        int n = 0;
+        foreach (var m in mons)
+        {
+            try
+            {
+                using var cap = new MonitorCapture(gpu, dev, m);
+                bool got = false;
+                for (int i = 0; i < 100 && !got; i++) { got = cap.Poll(); if (!got) Thread.Sleep(20); }
+                Log.Info($"capture {m.Name}: {(got ? "frame ok" : "NO FRAME")} {cap.Target.W}x{cap.Target.H}");
+                if (got) cap.Target.SavePng(gpu, Path.Combine(dir, $"desktop{++n}.png"), premultiplied: false);
+            }
+            catch (Exception e) { Log.Error($"capture {m}: {e}"); }
+        }
+
+        var host = new FakeHost { Cfg = cfg, GpuName = gpu.AdapterName, MonitorList = mons, Data = data, Wrist = wrist, Keyboard = kb };
+        var view = new SettingsView(host);
+        var ui = new Ui(painter);
+        using var surf = new Surface(gpu, 1500, 960);
+        var ptr = new PointerState();
+        // a used "Bed" profile with night mode for the Layouts tab
+        cfg.Data.Layouts[1].Saved = new DateTime(2026, 10, 13, 23, 40, 0);
+        cfg.Data.Layouts[1].NightMode = true;
+        cfg.Data.Layouts[1].Panels = cfg.Data.Desktops.Select(d => new PanelSnapshot { Kind = "desktop", Id = d.Id, Enabled = true }).ToList();
+        data.NightMode = true;
+        data.LayoutName = "Desk";
+        wrist.Draw(data);
+        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_buttons.png"));
+        data.NightMode = false;
+        for (int t = 0; t < SettingsView.TabCount; t++)
+        {
+            view.Tab = t;
+            ui.ResetAnimations();          // every picture fully settled (no half-way nav pill / buttons)
+            if (view.ShowsWristPreview) wrist.Draw(data);
+            if (view.ShowsKeyboardPreview) kb.Draw();
+            ui.Begin(ptr, 1.5f);
+            painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
+            view.Draw(ui);
+            painter.End();
+            ui.End();
+            surf.SavePng(gpu, Path.Combine(dir, $"settings{t}.png"));
+        }
+        // the floating in-VR settings panel (has a close button), General tab
+        // Windows tab with two mirrored windows (one hidden), then the picker on top of them
+        var open = host.OpenWindows();
+        Log.Info($"open windows: {open.Count}" + string.Concat(open.Take(12).Select(w => $"\n   {w}")));
+        if (open.Count > 1)
+        {
+            host.AddWindow(open[1]);
+            var hidden = host.AddWindow(open[0]);
+            hidden.Enabled = false;
+            view.Tab = SettingsView.TabWindows;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                view.Picking = pass == 1;
+                ui.Begin(ptr, 1.5f);
+                painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
+                view.Draw(ui);
+                painter.End();
+                ui.End();
+                surf.SavePng(gpu, Path.Combine(dir, pass == 0 ? "settings_windows.png" : "settings_windows_pick.png"));
+            }
+            view.Picking = false;
+        }
+        // one real window capture: the frame must be the window's visible bounds (mouse mapping relies on it)
+        foreach (var w in open)
+        {
+            if (WindowList.IsIconic(w.Hwnd) || !WindowList.Bounds(w.Hwnd, out var b)) continue;
+            try
+            {
+                using var cap = MonitorCapture.ForWindow(gpu, dev, w.Hwnd);
+                bool got = false;
+                for (int i = 0; i < 100 && !got; i++) { got = cap.Poll(); if (!got) Thread.Sleep(20); }
+                if (!got) for (int i = 0; i < 50 && !got; i++) { got = cap.Poll(); if (!got) Thread.Sleep(20); }   // a resize first
+                Log.Info($"window capture {w}: {(got ? "frame ok" : "NO FRAME")} {cap.Target.W}x{cap.Target.H}, frame bounds {b.Right - b.Left}x{b.Bottom - b.Top}");
+                if (got) cap.Target.SavePng(gpu, Path.Combine(dir, "window1.png"), premultiplied: false);
+            }
+            catch (Exception e) { Log.Error($"window capture {w}: {e.Message}"); }
+            break;
+        }
+        var panelView = new SettingsView(host) { OnClose = () => { }, Tab = SettingsView.TabGeneral };
+        for (int frame = 0; frame < 2; frame++)      // 2nd frame: animations settled
+        {
+            ui.Begin(ptr, 1.5f);
+            painter.Begin(surf.Bitmap, 0x00000000, 1.5f);
+            var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
+            painter.PushRoundedClip(all, 22);
+            panelView.Draw(ui);
+            painter.PopRoundedClip();
+            painter.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), 0x40FFFFFF, 2, 21);
+            painter.End();
+            ui.End();
+        }
+        surf.SavePng(gpu, Path.Combine(dir, "settings_panel.png"));
+        // cost of one in-VR settings frame, with and without the rounded mask (layer)
+        foreach (bool rounded in new[] { true, false, true, false })
+        {
+            var swb = System.Diagnostics.Stopwatch.StartNew();
+            for (int frame = 0; frame < 20; frame++)
+            {
+                ui.Begin(ptr, 1.5f);
+                painter.Begin(surf.Bitmap, 0x00000000, 1.5f);
+                var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
+                if (rounded) painter.PushRoundedClip(all, 22);
+                panelView.Draw(ui);
+                if (rounded) painter.PopRoundedClip();
+                painter.End();
+                ui.End();
+            }
+            gpu.Ctx.Flush();
+            Log.Info($"settings frame ({(rounded ? "rounded" : "plain")}): {swb.Elapsed.TotalMilliseconds / 20:0.00} ms");
+        }
+        // the laser sweeping over the General tab: which moves need a new picture
+        foreach (float sy in new[] { 150f, 330f, 480f })
+        {
+            var sweep = new PointerState();
+            int moves = 0, redraws = 0;
+            for (float x = 10; x < SettingsView.W - 10; x += 1.5f)
+            {
+                sweep.Move(x * 1.5f, sy * 1.5f);
+                moves++;
+                if (ui.NeedsRedrawForMove(sweep, 1.5f)) redraws++;
+            }
+            Log.Info($"pointer sweep at y={sy}: {redraws} redraws for {moves} moves");
+        }
+
+        // the same panels in another look (pink accent, midnight panels, 70 % opacity)
+        cfg.Data.Appearance = new AppearanceConfig { Accent = 0xFFF472B6, PanelColor = 0xFF0F172A, PanelOpacity = 0.7f, Clock24h = false };
+        Theme.Apply(cfg.Data.Appearance);
+        wrist.Draw(data);
+        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_alt.png"));
+        kb.Draw();
+        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_alt.png"));
+        view.Tab = SettingsView.TabLook;
+        wrist.Draw(data);
+        ui.Begin(ptr, 1.5f);
+        painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
+        view.Draw(ui);
+        painter.End();
+        ui.End();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_alt.png"));
+        KeySounds.Export(dir);
+        using (var np = new NotificationPanel(gpu, painter, cfg))
+        {
+            np.AddForPreview(new Notification { Source = "VRCX", Title = "Friend online", Content = "Sam has joined The Black Cat (Friends+)" });
+            np.AddForPreview(new Notification { Source = "Discord", Title = "New message", Content = "Alex: are you in VR? The new watch looks great, the cursor is way smoother now." });
+            np.Draw();
+            np.Surface.SavePng(gpu, Path.Combine(dir, "notifications.png"));
+        }
+        using (var cur = new SystemCursor(gpu))
+        {
+            cur.Update(1);
+            cur.Surf.SavePng(gpu, Path.Combine(dir, "cursor.png"));
+            Log.Info($"cursor hotspot {cur.Hotspot}");
+        }
+        Log.Info("snapshot written to " + dir);
+        return 0;
+    }
+
+    // Registers a temporary NON-elevated copy of the task, runs it with arguments ("--osctest 9018",
+    // which a listener can catch), then deletes it. Proves the COM task path without a UAC prompt.
+    public static int TaskTest()
+    {
+        const string name = "Orbit (test, temporary)";
+        if (!Elevation.InstallTask(highest: false, name: name)) return 2;
+        try
+        {
+            bool ready = Elevation.TaskReady(name);
+            bool ran = Elevation.RunTask("--osctest 9018", name);
+            Log.Info($"task test: ready={ready} ran={ran}");
+            Thread.Sleep(3000);
+            return ready && ran ? 0 : 3;
+        }
+        finally { Elevation.RemoveTask(name); }
+    }
+
+    // Simulated hand tremor + tracking noise at 90 Hz through each smoothing level: jitter left on a
+    // 1920 px monitor 1.07 m wide at 1.2 m while holding still, and how far the cursor trails behind
+    // slow / medium / fast sweeps (ms behind the hand, measured once the sweep is steady).
+    // An off-screen window with a text box, a read-only text box and a button: classifies each
+    // directly (class name / accessibility role) and through the focus hook.
+    public static int FocusTest()
+    {
+        const int OBJID_CLIENT = -4;
+        var form = new System.Windows.Forms.Form
+        {
+            StartPosition = System.Windows.Forms.FormStartPosition.Manual, Location = new System.Drawing.Point(-6000, -6000),
+            Size = new System.Drawing.Size(400, 200), ShowInTaskbar = false, Text = "Orbit focus test",
+        };
+        var text = new System.Windows.Forms.TextBox { Left = 10, Top = 10, Width = 200 };
+        var ro = new System.Windows.Forms.TextBox { Left = 10, Top = 40, Width = 200, ReadOnly = true, Text = "read only" };
+        var button = new System.Windows.Forms.Button { Left = 10, Top = 70, Text = "OK" };
+        var multi = new System.Windows.Forms.RichTextBox { Left = 220, Top = 10, Width = 150, Height = 80 };
+        form.Controls.AddRange(new System.Windows.Forms.Control[] { text, ro, button, multi });
+        form.Show();
+        System.Windows.Forms.Application.DoEvents();
+        foreach (var (name, c) in new (string, System.Windows.Forms.Control)[] { ("text box", text), ("read-only box", ro), ("button", button), ("rich text", multi) })
+        {
+            int quick = TextFocusWatcher.Classify(c.Handle, OBJID_CLIENT, 0, false, out _);
+            int deep = TextFocusWatcher.Classify(c.Handle, OBJID_CLIENT, 0, true, out bool vague);
+            Log.Info($"classify {name,-14} quick={quick,2} deep={deep,2}{(vague ? " (vague)" : "")}");
+        }
+        using var w = new TextFocusWatcher(skipOwnProcess: false) { Trace = s => Log.Info("  " + s) };
+        w.Start();
+        w.InspectFor(30);
+        Thread.Sleep(200);
+        form.Activate();
+        foreach (var (name, c) in new (string, System.Windows.Forms.Control)[] { ("text box", text), ("button", button), ("read-only box", ro), ("rich text", multi) })
+        {
+            c.Focus();
+            for (int i = 0; i < 20; i++) { System.Windows.Forms.Application.DoEvents(); Thread.Sleep(15); }
+            var (seq, state, _) = w.Snapshot();
+            Log.Info($"focus {name,-14} -> event #{seq} state {state}");
+        }
+        form.Close();
+        return 0;
+    }
+
+    // Runs one background component alone and logs the process's private memory every 10 s,
+    // then forces a full GC: growth that a GC gives back = garbage / RCWs, growth that stays = a leak.
+    public static int LeakTest(string what, int seconds)
+    {
+        static long Priv() { using var p = System.Diagnostics.Process.GetCurrentProcess(); return p.PrivateMemorySize64; }
+        IDisposable comp = what switch
+        {
+            "gpu" => new GpuStats(),
+            "media" => new MediaInfo { Active = true },
+            _ => null,
+        };
+        long start = Priv();
+        Log.Info($"leaktest {what}: start private {start / 1024} KB");
+        for (int t = 10; t <= seconds; t += 10)
+        {
+            Thread.Sleep(10000);
+            Log.Info($"leaktest {what}: {t,3} s  private {Priv() / 1024} KB  (+{(Priv() - start) / 1024} KB)  GCs {GC.CollectionCount(0)}");
+        }
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        Thread.Sleep(500);
+        Log.Info($"leaktest {what}: after full GC  private {Priv() / 1024} KB  (+{(Priv() - start) / 1024} KB)");
+        if (comp is MediaInfo mi)
+        {
+            var snap = mi.Snapshot();
+            Log.Info($"leaktest media: {mi.Reads} reads, has={snap.has} playing={snap.playing} title='{snap.title}' art={(snap.art != null ? "yes" : "no")}");
+        }
+        comp?.Dispose();
+        return 0;
+    }
+
+    public static int FilterTest()
+    {
+        const float dt = 1f / 90, pxPerRad = 1920 / 1.07f * 1.2f;
+        for (int level = 0; level <= 3; level++)
+        {
+            var rng = new Random(1);
+            var f = new RayFilter();
+            double sum = 0, sum2 = 0; int n = 0;
+            for (int i = 0; i < 900; i++)
+            {
+                float t = i * dt;
+                // 0.12 deg noise + 0.08 deg 8 Hz tremor around straight ahead
+                float jx = (float)(Gauss(rng) * 0.0021 + 0.0014 * Math.Sin(2 * Math.PI * 8 * t));
+                float jy = (float)(Gauss(rng) * 0.0021 + 0.0014 * Math.Cos(2 * Math.PI * 7 * t));
+                var (_, d) = f.Filter(Vector3.Zero, Vector3.Normalize(new Vector3(jx, jy, -1)), dt, level);
+                if (i < 180) continue;
+                double ax = Math.Atan2(d.X, -d.Z);
+                sum += ax; sum2 += ax * ax; n++;
+            }
+            double sd = Math.Sqrt(sum2 / n - (sum / n) * (sum / n));
+            var lags = new System.Collections.Generic.List<string>();
+            foreach (float speed in new[] { 0.1f, 0.5f, 2.0f })
+            {
+                var f2 = new RayFilter();
+                double lag = 0;
+                int frames = Math.Min(270, (int)(2.5f / speed / dt));    // stay below 2.5 rad of sweep
+                for (int i = 0; i < frames; i++)
+                {
+                    float ang = i * dt * speed;
+                    var (_, d) = f2.Filter(Vector3.Zero, new Vector3(MathF.Sin(ang), 0, -MathF.Cos(ang)), dt, level);
+                    lag = (ang - Math.Atan2(d.X, -d.Z)) / speed;
+                }
+                lags.Add($"{speed:0.0} rad/s {lag * 1000:0} ms");
+            }
+            Log.Info($"smoothing {level}: jitter {sd * 180 / Math.PI:0.000} deg = {sd * pxPerRad:0.0} px | lag {string.Join(", ", lags)}");
+        }
+        return 0;
+    }
+
+    static double Gauss(Random r) => Math.Sqrt(-2 * Math.Log(1 - r.NextDouble())) * Math.Cos(2 * Math.PI * r.NextDouble());
+
+    // Sends one of each OSC message type to 127.0.0.1:<port> (for checking the wire format).
+    public static int OscTest(int port)
+    {
+        using var osc = new OscSender();
+        osc.Send(0, port, new (string, object)[] { ("isOverlayOpen", true), ("isKeyboardOpen", false), ("openOverlayCount", 3), ("leftControllerBattery", 0.75f) });
+        return 0;
+    }
+
+    // Pretends to be a game: submits a dark gradient to both eyes so the dashboard closes and
+    // overlays can be seen (and timed) the way they look over VRChat.
+    public static int FakeScene(bool openDashboardTab)
+    {
+        var e = EVRInitError.None;
+        OpenVR.Init(ref e, EVRApplicationType.VRApplication_Scene);
+        if (e != EVRInitError.None) { Log.Error("scene init: " + e); return 3; }
+        try
+        {
+            int adapter = -1;
+            OpenVR.System.GetDXGIOutputInfo(ref adapter);
+            using var gpu = new Gpu(adapter);
+            using var painter = new Painter(gpu);
+            uint w = 0, h = 0;
+            OpenVR.System.GetRecommendedRenderTargetSize(ref w, ref h);
+            using var eye = new Surface(gpu, (int)w, (int)h);
+            painter.Begin(eye.Bitmap, 0xFF20304A);
+            for (int y = 0; y < h; y += 8)
+                painter.Fill(new System.Drawing.RectangleF(0, y, w, 8), Theme.Mix(0xFF2B4A6E, 0xFF101820, y / (float)h));
+            painter.End();
+            var tex = new Texture_t { handle = eye.Tex.NativePointer, eType = ETextureType.DirectX, eColorSpace = EColorSpace.Gamma };
+            var bounds = new VRTextureBounds_t { uMin = 0, vMin = 0, uMax = 1, vMax = 1 };
+            var render = new TrackedDevicePose_t[OpenVR.k_unMaxTrackedDeviceCount];
+            var game = new TrackedDevicePose_t[OpenVR.k_unMaxTrackedDeviceCount];
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            bool dashDone = false;
+            while (sw.Elapsed.TotalSeconds < 12)
+            {
+                OpenVR.Compositor.WaitGetPoses(render, game);
+                OpenVR.Compositor.Submit(EVREye.Eye_Left, ref tex, ref bounds, EVRSubmitFlags.Submit_Default);
+                OpenVR.Compositor.Submit(EVREye.Eye_Right, ref tex, ref bounds, EVRSubmitFlags.Submit_Default);
+                if (openDashboardTab && !dashDone && sw.Elapsed.TotalSeconds > 4)
+                {
+                    dashDone = true;
+                    OpenVR.Overlay.ShowDashboard(OrbitApp.AppKey + ".settings");
+                    Log.Info("ShowDashboard called");
+                }
+            }
+            Log.Info("scene done");
+            return 0;
+        }
+        finally { OpenVR.Shutdown(); }
+    }
+
+    // Needs SteamVR running (a headset or the null driver). Shows a test overlay and checks
+    // which way ComputeOverlayIntersection reports V, plus frame sync and timing calls.
+    public static int SelfTest()
+    {
+        if (!VrSession.RuntimeRunning()) { Log.Error("SteamVR is not running"); return 2; }
+        using var vr = new VrSession();
+        if (!vr.TryConnect(Path.Combine(AppContext.BaseDirectory, "assets", "actions.json"), out var err)) { Log.Error("init: " + err); return 3; }
+        using var gpu = new Gpu(vr.AdapterIndex);
+        using var painter = new Painter(gpu);
+        using var surf = new Surface(gpu, 512, 256);
+        painter.Begin(surf.Bitmap, Theme.Panel2);
+        painter.Fill(new System.Drawing.RectangleF(0, 0, 512, 64), Theme.Accent);       // top band
+        painter.Text("Orbit self-test (top = cyan)", new System.Drawing.RectangleF(0, 64, 512, 192), Theme.Text, 30,
+            Vortice.DirectWrite.FontWeight.SemiBold, Vortice.DirectWrite.TextAlignment.Center);
+        painter.End();
+
+        using var ov = new VrOverlay("erik.orbit.selftest", "Orbit self-test");
+        ov.SetTexture(surf.Tex);
+        ov.SetMouseScale(512, 256);
+        ov.SetWidth(1.0f);               // -> 0.5 m tall
+        var at = Matrix4x4.CreateTranslation(0, 1.5f, -2f);
+        ov.SetAbsolute(at);
+        ov.Show();
+        Thread.Sleep(300);
+
+        // ray 0.15 m above the centre and 0.25 m right: top-left uv should be (0.75, 0.2)
+        var p = new VROverlayIntersectionParams_t
+        {
+            vSource = new HmdVector3_t { v0 = 0.25f, v1 = 1.65f, v2 = 0 },
+            vDirection = new HmdVector3_t { v0 = 0, v1 = 0, v2 = -1 },
+            eOrigin = ETrackingUniverseOrigin.TrackingUniverseStanding,
+        };
+        var r = new VROverlayIntersectionResults_t();
+        bool hit = OpenVR.Overlay.ComputeOverlayIntersection(ov.Handle, ref p, ref r);
+        Log.Info($"intersection hit={hit} dist={r.fDistance:0.000} uv=({r.vUVs.v0:0.000},{r.vUVs.v1:0.000}) point=({r.vPoint.v0:0.00},{r.vPoint.v1:0.00},{r.vPoint.v2:0.00})");
+        if (hit)
+            Log.Info(Math.Abs(r.vUVs.v1 - 0.8f) < 0.05f ? "UV CONVENTION: bottom-left origin (flip needed) -> UvFlipV=true is right"
+                : Math.Abs(r.vUVs.v1 - 0.2f) < 0.05f ? "UV CONVENTION: top-left origin -> UvFlipV must be false" : "UV CONVENTION: unexpected");
+
+        // curved overlay: does it bend around an axis r in front of its origin (+Z)?
+        using (var cv = new VrOverlay("erik.orbit.selftest.curve", "Orbit self-test curve"))
+        {
+            const float w = 1.0f, c = 0.2f;
+            float rad = w / (2 * MathF.PI * c), alpha = w / (2 * rad);
+            cv.SetTexture(surf.Tex);
+            cv.SetMouseScale(512, 256);
+            cv.SetWidth(w);
+            cv.SetCurvature(c);
+            cv.SetAbsolute(Matrix4x4.CreateTranslation(0, 1.5f, -rad));
+            cv.Show();
+            Thread.Sleep(300);
+            foreach (float k in new[] { 0f, 0.5f, 0.9f, -0.9f })
+            {
+                float phi = k * alpha;
+                var cp = new VROverlayIntersectionParams_t
+                {
+                    vSource = new HmdVector3_t { v0 = 0, v1 = 1.5f, v2 = 0 },
+                    vDirection = new HmdVector3_t { v0 = MathF.Sin(phi), v1 = 0, v2 = -MathF.Cos(phi) },
+                    eOrigin = ETrackingUniverseOrigin.TrackingUniverseStanding,
+                };
+                var cr = new VROverlayIntersectionResults_t();
+                bool ch = OpenVR.Overlay.ComputeOverlayIntersection(cv.Handle, ref cp, ref cr);
+                Log.Info($"curve k={k,5:0.0}: hit={ch} dist={cr.fDistance:0.000} (axis model expects {rad:0.000}) u={cr.vUVs.v0:0.000} (expects {0.5f + k / 2:0.000})");
+            }
+        }
+
+        var sync = OpenVR.Overlay.WaitFrameSync(100);
+        Log.Info($"WaitFrameSync: {sync}");
+        vr.Update();
+        Log.Info($"HMD valid={vr.HmdValid} pos={vr.Hmd.Translation} hz={vr.DisplayHz} input={vr.InputStatus} left={vr.LeftIndex} right={vr.RightIndex}");
+        var stats = new VrStats();
+        stats.Update(vr, 1); Thread.Sleep(1100); stats.Update(vr, 2.2);
+        Log.Info($"stats fps={stats.AppFps} reproj={stats.ReprojPct} gpu={stats.GpuMs}ms batteries={string.Join(",", stats.Batteries)}");
+
+        int holdMs = 4000;
+        Log.Info($"holding the test overlay for {holdMs} ms");
+        Thread.Sleep(holdMs);
+        return 0;
+    }
+}

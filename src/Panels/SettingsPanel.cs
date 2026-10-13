@@ -1,0 +1,200 @@
+using System;
+using System.Numerics;
+using Valve.VR;
+
+namespace Orbit;
+
+// The settings as a floating Orbit panel in VR (instead of the SteamVR dashboard, which
+// collides with the monitors). Opened from the watch, used with our laser, grabbed like any panel.
+public sealed class SettingsPanel : IPointerTarget, IDisposable
+{
+    public const int TW = 1500, TH = 960;
+    const float Scale = TW / SettingsView.W;
+
+    readonly Painter _p;
+    readonly Ui _ui;
+    readonly ConfigStore _cfg;
+    readonly SettingsView _view;
+    readonly Action<SettingsView> _beforeDraw;
+    readonly PointerState _ptr = new();
+    public readonly Surface Surf;
+    public VrOverlay Ov { get; private set; }
+    VrSession _vr;
+    bool _open, _dirty = true;
+    float _vis;                 // 0..1 open animation
+    double _nextDraw;
+    float _twoStartWidth;
+
+    SettingsPanelConfig C => _cfg.Data.SettingsPanel;
+    public bool IsOpen => _open;
+
+    public SettingsPanel(Gpu g, Painter p, ConfigStore cfg, IOrbitHost host, Action<SettingsView> beforeDraw)
+    {
+        _p = p; _cfg = cfg; _beforeDraw = beforeDraw;
+        _ui = new Ui(p);
+        _view = new SettingsView(host) { OnClose = () => _open = false };
+        Surf = new Surface(g, TW, TH);
+    }
+
+    public void CreateOverlay(VrSession vr)
+    {
+        _vr = vr;
+        Ov = new VrOverlay("erik.orbit.settingspanel", "Orbit Settings");
+        Ov.SetSortOrder(140);
+        Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);     // transparent rounded corners
+        Ov.SetMouseScale(TW, TH);
+        _vis = 0;
+        _dirty = true;
+    }
+
+    public void DestroyOverlay() { _ptr.Leave(); Ov?.Dispose(); Ov = null; _vr = null; _open = false; _vis = 0; }
+
+    public void Toggle()
+    {
+        if (_open) { _open = false; return; }
+        Open();
+    }
+
+    // Opens in front of the user unless it is already somewhere close and in view.
+    public void Open()
+    {
+        _open = true;
+        _dirty = true;
+        if (_vr == null || !_vr.HmdValid) return;
+        bool keep = false;
+        if (C.Place.M != null && Placement.TryWorld(C.Place, _vr, out var w))
+        {
+            var toPanel = w.Translation - _vr.Hmd.Translation;
+            keep = toPanel.Length() < 1.6f &&
+                   Vector3.Dot(Vector3.Normalize(toPanel), Vector3.Normalize(MathUtil.Forward(_vr.Hmd))) > 0.6f;
+        }
+        if (!keep)
+        {
+            // 0.7 m ahead, a little below the eyes, tilted back slightly
+            var local = Matrix4x4.CreateRotationX(-12 * MathF.PI / 180) * Matrix4x4.CreateTranslation(0, -0.12f, -0.7f);
+            C.Place.Attach = "world";
+            C.Place.M = MathUtil.ToArray(local * MathUtil.GazeFrame(_vr.Hmd));
+            _cfg.MarkDirty();
+        }
+    }
+
+    public void Update(VrSession vr, double now, float dt)
+    {
+        if (Ov == null) return;
+        float target = _open ? 1 : 0;
+        _vis = Math.Clamp(_vis + Math.Sign(target - _vis) * dt / 0.18f, 0, 1);
+        if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
+        {
+            if (_vis <= 0) _ptr.Leave();
+            Ov.Hide();
+            return;
+        }
+        float e = 1 - MathF.Pow(1 - _vis, 3);                 // ease-out cubic
+        Ov.SetAlpha(e);
+        Ov.SetWidth(C.Width * (0.92f + 0.08f * e));
+        bool redraw = _dirty || now >= _nextDraw || _ui.Animating;
+        if (redraw)
+        {
+            _beforeDraw?.Invoke(_view);
+            DrawFrame(_ptr);
+            Ov.SetTexture(Surf.Tex);
+            _dirty = _ui.Interacting || _ui.Changed;
+            _nextDraw = now + 0.5;
+        }
+        Ov.Show();
+    }
+
+    void DrawFrame(PointerState ptr)
+    {
+        _ui.Begin(ptr, Scale);
+        _p.Begin(Surf.Bitmap, 0x00000000, Scale);
+        var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
+        _p.PushRoundedClip(all, 22);
+        _view.Draw(_ui);
+        _p.PopRoundedClip();
+        _p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), 0x40FFFFFF, 2, 21);
+        _p.End();
+        _ui.End();
+    }
+
+    // Draws every tab once off-screen (fonts, layers, previews), so the first time the panel opens
+    // in VR there is no hitch (it was 25-30 ms).
+    public void Warm()
+    {
+        int keep = _view.Tab;
+        var idle = new PointerState();
+        for (int t = 0; t < SettingsView.TabCount; t++)
+        {
+            _view.Tab = t;
+            _beforeDraw?.Invoke(_view);
+            DrawFrame(idle);
+        }
+        _view.Tab = keep;
+        _ui.ResetAnimations();
+        _dirty = true;
+    }
+
+    // ---- IPointerTarget ----
+    public VrOverlay Overlay => Ov;
+    public bool Interactive => Ov != null && Ov.Visible && _open && _vis > 0.8f;
+    public bool AcceptsFrom(Hand h) => true;
+    public Vector2 TextureSize => new(TW, TH);
+    // One pointer state, so one hand drives it at a time: the hand that pointed first keeps it
+    // until it leaves; the other hand takes over by clicking (unless the owner is mid-click/drag).
+    Hand? _owner;
+
+    public void PointerMove(Hand h, Vector2 px)
+    {
+        _owner ??= h;
+        if (_owner != h) return;
+        _ptr.Move(px.X, px.Y);
+        if (_ui.NeedsRedrawForMove(_ptr, Scale)) _dirty = true;
+    }
+
+    public void PointerLeave(Hand h)
+    {
+        if (_owner != h) return;
+        _owner = null;
+        _ptr.Leave();
+        _dirty = true;
+    }
+
+    public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
+    {
+        if (b != PtrButton.Primary) return;
+        if (down)
+        {
+            if (_owner != h && _ptr.Down) return;
+            _owner = h;
+            _ptr.Move(px.X, px.Y);
+            _ptr.Press();
+        }
+        else
+        {
+            if (_owner != h) return;
+            _ptr.Move(px.X, px.Y);
+            _ptr.Release();
+        }
+        _dirty = true;
+    }
+
+    public void PointerScroll(Hand h, float notches, Vector2 px)
+    {
+        if (_owner != h) return;
+        _ptr.Wheel += notches;
+        _dirty = true;
+    }
+
+    public bool Grabbable => true;
+    public Matrix4x4 WorldTransform =>
+        _vr != null && Placement.TryWorld(C.Place, _vr, out var w) ? w : MathUtil.FromArray(C.Place.M);
+    public void GrabBegin(bool detach) { }
+    public void GrabMove(Matrix4x4 world) { if (_vr != null) { Placement.SetWorld(C.Place, _vr, world); _cfg.MarkDirty(); } }
+    public void GrabStickX(float v, float dt) { C.Width = Math.Clamp(C.Width * (1 + v * 0.9f * dt), 0.4f, 2f); _cfg.MarkDirty(); }
+    public void GrabTwoHandBegin() => _twoStartWidth = C.Width;
+    public void GrabTwoHandScale(float r) { C.Width = Math.Clamp(_twoStartWidth * r, 0.4f, 2f); _cfg.MarkDirty(); }
+    public bool GrabSnapPreview => false;
+    public void GrabEnd() { }
+
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); }
+}

@@ -1,0 +1,105 @@
+# Orbit
+
+**A wrist watch, your desktop and a keyboard - floating in SteamVR.**
+
+Orbit is a lightweight SteamVR overlay for Windows, in the spirit of XSOverlay and OVR Toolkit:
+a watch on your wrist, your monitors (or single app windows) as curved screens around you with a
+laser mouse, a full VR keyboard, and its own settings panel you can grab and move in VR.
+
+![Orbit settings - Look tab](docs/img/settings-look.png)
+
+> 🤖 **Made with AI.** Orbit was written primarily by an AI assistant (Anthropic's Claude, via Claude Code)
+> working from a human's requests and testing in VR. It's shared in good faith - please use it with the
+> same care you'd give any community software.
+
+## Features
+
+**Wrist watch** - turn your wrist towards you to see it.
+- Watch faces: full, analog, minimal, time only; 12 / 24-hour clock
+- Frame rate, reprojection, GPU frame time and VRAM - as numbers or a live frame-time graph
+- Batteries of the headset, controllers and trackers
+- Now playing (Spotify, browsers, any Windows media session) with previous / play-pause / next
+- Buttons: keyboard, monitors on/off, recenter, layout profile, night mode, settings
+
+![Watch faces](docs/img/watch-faces.png)
+
+**Desktop in VR**
+- Every monitor as its own panel; first start joins them into one curved screen
+- Mirror **single app windows** instead of whole monitors (browser, Discord, video player...) -
+  they follow the window on your PC, and a click brings it to the front first
+- Laser mouse: trigger = click, B / Y = right click, stick = scroll; smooth, low-latency cursor
+- Grip = grab and move; stick = distance / bend; both hands = resize; panels snap into rows
+- Adjustable size, opacity and curvature; attach to the world, a hand or your head
+- Smart frame rate: what you look at runs at the headset's refresh rate, the rest is throttled
+
+**VR keyboard**
+- Follows your Windows keyboard layout, with a built-in English (US) layout on the globe key
+- Shortcut bar (select all, copy, paste, cut, undo, redo), sticky modifiers, key repeat, click sounds
+- Pops up by itself when a click in VR lands in a text field, and goes away afterwards
+- **VRChat chatbox mode**: type a line and send it to the in-game chatbox over OSC
+
+![Keyboard](docs/img/keyboard.png)
+
+**And also**
+- **Layout profiles** (Desk / Bed / Couch): each remembers where everything was - switch from the watch;
+  lying in bed, the screens come above you
+- **Night mode**: dims every panel, one tap on the watch
+- Themes and any accent colour, panel colour and opacity, laser colour / thickness
+- **Notifications** in XSOverlay's format (UDP 42069) - e.g. from VRCX
+- **VRChat avatar parameters** compatible with XSOverlay (works with DXOverlay and similar avatar add-ons)
+- Double-tap both grips to hide / show everything (OVR Toolkit style)
+- Starts and stops with SteamVR; runs as administrator so the laser mouse also works in admin windows
+- Settings as a floating panel in VR (open it from the watch) and as a desktop window (tray icon)
+- **Check for updates** button (Settings > General): an installed copy updates itself from GitHub releases
+
+## Download
+
+Get **`OrbitSetup.exe`** from the [latest release](https://github.com/Erik1028/Orbit/releases/latest) and run it.
+It installs for your user only (no admin needed), adds a Start menu entry, and can start Orbit together
+with SteamVR. Uninstall from Windows Settings > Apps.
+
+- The installer is not code-signed, so Windows SmartScreen may warn: *More info > Run anyway*.
+- The first start asks once for administrator rights (so the VR mouse can click into admin windows);
+  you can say No - everything else still works.
+- `Orbit Quick Start.txt` next to the installed app explains the controls.
+
+**Requirements:** Windows 10 (2004+) or 11, a DirectX 11 GPU, SteamVR. Overlays show while the game runs
+through SteamVR (Virtual Desktop users: pick SteamVR as the runtime, not VDXR / OpenXR).
+
+## Controls
+
+| In VR | Does |
+|---|---|
+| Point at a panel | laser; on a monitor or window it moves the real cursor |
+| Trigger | click |
+| B / Y | right click |
+| Stick up / down | scroll |
+| Grip on a panel | grab and move (stick: distance / bend, other hand's grip: resize) |
+| Both grips, twice quickly | hide / show monitors and keyboard |
+| Look at your left wrist | the watch (point at it with the other hand) |
+
+## Privacy
+
+No account, no telemetry. Orbit talks to SteamVR, to VRChat over OSC on `127.0.0.1`, and listens for
+notifications on `127.0.0.1:42069`. The only internet request is the GitHub release check when you press
+*Check for updates*. Settings and logs stay in `%LOCALAPPDATA%\Orbit`.
+
+## Building
+
+.NET 8 SDK on Windows:
+
+```
+dotnet build -c Release
+powershell -File build_release.ps1      # -> release\OrbitSetup.exe (self-contained single file)
+```
+
+Developer switches (`--snapshot`, `--selftest`, `--raytest`, `--leaktest`, `--focustest`, ...) and the
+design notes are documented (in Hungarian) in [docs/NOTES.hu.md](docs/NOTES.hu.md).
+
+Built with [Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows) (Direct3D 11, Direct2D,
+DirectWrite, XAudio2), Valve's [OpenVR](https://github.com/ValveSoftware/openvr) and Windows.Graphics.Capture.
+
+## License
+
+MIT - see [LICENSE](LICENSE). The OpenVR API files in `third_party/openvr` are Valve's, under their
+BSD 3-clause license.
