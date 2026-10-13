@@ -186,6 +186,12 @@ dotnet publish -c Release -o dist
   (`WristPanel.Grabbable` = !Locked); zárt panelre griplésnél egy rövid haptikus tick jelzi, hogy zárva van.
   A *Reset position* zárva is működik. Az 1.3.1-es frissítést Erik élesben kipróbálta (19:09, dist-ben): rendben.
 
+## 1.3.3 – DXOverlay csak valódi overlayre (2026-10-13)
+
+- Az OSC `isOverlayOpen` / `openOverlayCount` mostantól csak a látható monitorokat, tükrözött ablakokat
+  és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
+  elindult, amikor csak a beállításokat nyitotta meg).
+
 ## Fejlesztői kapcsolók
 
 - `--snapshot <mappa>` – VR nélkül PNG-be rajzol minden panelt + egy-egy képet minden monitorról (saját,

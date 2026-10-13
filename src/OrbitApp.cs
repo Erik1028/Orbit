@@ -1358,8 +1358,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     void SendOsc(double now, bool allOff = false)
     {
         bool kb = !allOff && _kb.Ov?.Visible == true;
-        int desks = allOff ? 0 : _desktops.Count(d => d.Ov?.Visible == true) + _windowPanels.Count(w => w.Ov?.Visible == true)
-                                 + (_settingsPanel.Ov?.Visible == true ? 1 : 0);
+        // monitors and mirrored windows only: Orbit's own settings panel is not "an overlay open" for
+        // avatar add-ons (DXOverlay started its effect when you only opened the settings)
+        int desks = allOff ? 0 : _desktops.Count(d => d.Ov?.Visible == true) + _windowPanels.Count(w => w.Ov?.Visible == true);
         bool wrist = !allOff && _wrist.Ov?.Visible == true && _wrist.Alpha > 0.5f;
         var v = _data.Vr;
         var list = new List<(string, object)>
