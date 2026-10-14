@@ -141,16 +141,35 @@ static class TheaterTest
         Run(0.02f);
         Ck("a screen that is not there any more", !th.On && c.Theater == null);
 
-        // the switcher, both styles
+        // the settings on the bar: size and curve apply to the big screen at once
+        live.Add(c);
+        th.Start(b, b, vr, cfg);
+        Run(0.6f);
+        cfg.Width = 3.5f;
+        cfg.Curved = false;
+        th.Apply(cfg);
+        Run(0.02f);
+        Ck($"bar: size and flat apply at once (w {b.Theater.Width:0.00}, c {b.Theater.Curvature:0.000})", Near(b.Theater.Width, 3.5f) && b.Theater.Curvature == 0);
+        cfg.Curved = true;
+        th.Apply(cfg);
+        Run(0.02f);
+        Ck($"bar: curved again (c {b.Theater.Curvature:0.000})", b.Theater.Curvature > 0.1f);
+        th.Stop(vr, cfg);
+        Ck("bar: the size set there is kept", Near(cfg.Width, 3.5f));
+        Run(0.6f);
+
+        // the bar, both styles: under a screen (Theater button + settings) and in theater mode (switcher + settings)
         var app = new ConfigStore(Path.Combine(dir, "config.json"));
-        using var bar = new TheaterBar(gpu, painter);
+        using var bar = new TheaterBar(gpu, painter, app);
         var choices = new List<ITheaterScreen> { a, b, c, new FakeScreen { Name = "YouTube - Lofi hip hop radio - beats to relax/study to - Mozilla Firefox" } };
+        var view = new TheaterView { Size = 2.8f };
         foreach (var style in new[] { "modern", "classic" })
         {
             app.Data.Appearance.Style = style;
             Theme.Apply(app.Data.Appearance);
-            bar.DrawFor(choices, b).SavePng(gpu, Path.Combine(dir, $"bar_{style}.png"));
-            bar.DrawFor(new List<ITheaterScreen> { a }, a).SavePng(gpu, Path.Combine(dir, $"bar_one_{style}.png"));
+            bar.DrawFor(choices, b, view).SavePng(gpu, Path.Combine(dir, $"bar_{style}.png"));
+            bar.DrawFor(new List<ITheaterScreen> { a }, a, view).SavePng(gpu, Path.Combine(dir, $"bar_one_{style}.png"));
+            bar.DrawFor(new List<ITheaterScreen>(), null).SavePng(gpu, Path.Combine(dir, $"bar_screen_{style}.png"));
         }
         Log.Info($"theatertest: {(fails == 0 ? "ALL OK" : fails + " FAILED")}");
         return fails == 0 ? 0 : 1;

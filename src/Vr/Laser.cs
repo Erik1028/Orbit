@@ -71,6 +71,7 @@ public sealed class Laser : IDisposable
 
     public bool Active => _hover != null || _grab != null || _primary != null;
     public IPointerTarget Hovered => _hover;
+    public Vector2 HoverPx => _lastPx;          // where on Hovered the beam is (texture pixels, top-left origin)
 
     public Laser(Gpu gpu, Painter p, Hand hand)
     {

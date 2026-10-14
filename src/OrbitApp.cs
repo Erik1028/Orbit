@@ -108,7 +108,13 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
         _roomPanel = new RoomPanel(_gpu, _painter, _cfg);
         _theater = new Theater(_gpu, _painter);
-        _theaterBar = new TheaterBar(_gpu, _painter) { OnSwitch = s => _theater.Switch(s), OnExit = ToggleTheater };
+        _theaterBar = new TheaterBar(_gpu, _painter, _cfg)
+        {
+            OnSwitch = s => _theater.Switch(s),
+            OnExit = ToggleTheater,
+            OnTheater = s => { _lastScreen = s; if (!_theater.On) ToggleTheater(); },
+            OnSettings = () => { _theater.Apply(C.Theater); _cfg.MarkDirty(); _win.Dirty = true; },
+        };
         _status = new StatusLine(_osc);
         _data.Dock = _dockSnap;
         _data.DockFaces = _dockFaces;
@@ -447,6 +453,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             bool theaterWas = _theater.On;
             _theater.Update(_vr, dt, C.Theater.Dim, _screens);
             if (theaterWas && !_theater.On) StopTheater(glide: false);      // its screen went away
+            if (_theater.View is { } tv && tv.Size != C.Theater.Width) { C.Theater.Width = tv.Size; _cfg.MarkSoftDirty(); }
             UpdateTheaterBar(now, dt);
             // headset off: no capturing (the overlays keep their last picture)
             if (awake)
@@ -894,7 +901,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _win.Dirty = true;
     }
 
-    // the switcher under the theater screen: shows while a laser is on the screen or on it
+    // the bar under a screen: under the big screen in theater mode (the switcher), else under the monitor / window
+    // whose lower part a laser points at (Theater button + settings)
     void UpdateTheaterBar(double now, float dt)
     {
         _theaterChoices.Clear();
@@ -910,10 +918,18 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             }
             foreach (var w in _windowPanels) if (w.Playable) _theaterChoices.Add(w);
         }
-        bool pointing = false;
+        ITheaterScreen pointed = null;
+        bool lower = false, onBar = false;
         foreach (var la in _lasers)
-            if (la.Hovered != null && (la.Hovered == _theater.Screen || la.Hovered == _theaterBar)) pointing = true;
-        _theaterBar.Update(_vr, now, dt, _theater, _theaterChoices, pointing);
+        {
+            if (la.Hovered == null) continue;
+            if (la.Hovered == _theaterBar) { onBar = true; continue; }
+            if (la.Hovered is not ITheaterScreen s) continue;
+            var ts = s.TextureSize;
+            bool low = ts.Y > 0 && la.HoverPx.Y / ts.Y > 0.72f;
+            if (pointed == null || low) { pointed = s; lower = low; }
+        }
+        _theaterBar.Update(_vr, now, dt, _theater, _theaterChoices, pointed, lower, onBar);
     }
 
     // the big screen goes in front of the middle of your monitors, whichever one plays (same pick as Recenter)
@@ -1653,6 +1669,12 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     }
 
     public void ToggleRoom() => _roomPanel.Toggle();
+
+    public void TheaterEdited()
+    {
+        _theater.Apply(C.Theater);
+        _cfg.MarkDirty();
+    }
 
     // previews in the settings screen are separate draws; they must not nest inside its BeginDraw
     void PreparePreviews(SettingsView v)

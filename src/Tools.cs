@@ -48,6 +48,7 @@ static class Tools
         public string StatusLinePreview => "\U0001F3B5 Midnight City \u2013 M83";
         public string RoomStatus => "12 in Midnight Rooftop · VRCX: 120 friends";
         public void ToggleRoom() { }
+        public void TheaterEdited() { }
         public void TestNotification() { }
         List<WindowInfo> _open;
         public IReadOnlyList<WindowInfo> OpenWindows() => _open ??= WindowList.Enumerate();

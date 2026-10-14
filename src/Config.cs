@@ -119,6 +119,8 @@ public sealed class TheaterConfig
     public float Width { get; set; } = 2.8f;
     public float Distance { get; set; } = 2.5f;
     public float Dim { get; set; } = 0.6f;               // how dark the world gets behind it (0 = not at all)
+    public bool Curved { get; set; } = true;             // bent around you (else flat)
+    public bool Bar { get; set; } = true;                // the bar under a monitor / window: Theater button + these settings
 }
 
 // The VRChat chatbox as a status line (Sys/StatusLine.cs)

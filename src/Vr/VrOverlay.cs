@@ -95,6 +95,8 @@ public sealed class VrOverlay : IDisposable
     }
 
     public void SetWidth(float w) { if (w != _width) { _width = w; Ov.SetOverlayWidthInMeters(Handle, w); } }
+    public float Width => _width > 0 ? _width : 1f;            // as last set (SteamVR's default is 1 m)
+    public float Curvature => Math.Max(0, _curv);
     public void SetAlpha(float a) { if (a != _alpha) { _alpha = a; Ov.SetOverlayAlpha(Handle, a); } }
     public void SetCurvature(float c) { if (c != _curv) { _curv = c; Ov.SetOverlayCurvature(Handle, c); } }
     public void SetTexelAspect(float a) { if (a != _aspect) { _aspect = a; Ov.SetOverlayTexelAspect(Handle, a); } }

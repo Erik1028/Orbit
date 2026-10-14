@@ -29,6 +29,7 @@ public sealed class TheaterView
     public Matrix4x4 World;
     public float Width, Curvature, Opacity = 1;
     public bool Behind;                   // the screen being switched away from: drawn under the new one
+    public bool Flat;                     // the "Curved" setting is off
     float _scaleFrom;
 
     public void Move(in Matrix4x4 world) { Place = world; Refit(); }
@@ -41,7 +42,7 @@ public sealed class TheaterView
 
     // curved around you at whatever distance it is: c = w / (2 pi r); r is the straight distance, as the screen faces
     // your head (also when it is up above you, lying back)
-    public void Refit() => Bend = DesktopLayout.CurvatureFor(Size, Math.Max(0.5f, Vector3.Distance(Place.Translation, Head)));
+    public void Refit() => Bend = Flat ? 0 : DesktopLayout.CurvatureFor(Size, Math.Max(0.5f, Vector3.Distance(Place.Translation, Head)));
 
     public void Mirror(TheaterView v)
     {
@@ -105,7 +106,7 @@ public sealed class Theater : IDisposable
         if (On || screen == null || !vr.HmdValid) return;
         EndLeaving();
         float size = Math.Clamp(cfg.Width, MinWidth, MaxWidth), dist = Math.Clamp(cfg.Distance, 0.6f, 10f);
-        _view = new TheaterView { Size = size, Head = vr.Hmd.Translation };
+        _view = new TheaterView { Size = size, Head = vr.Hmd.Translation, Flat = !cfg.Curved };
         _view.Move(Where(anchor ?? screen, vr, dist));
         bool back = _screen == screen && screen.Theater != null;      // still on its way out: turn around from there
         if (_screen != null && !back) Release(_screen);
@@ -155,6 +156,15 @@ public sealed class Theater : IDisposable
             }
         }
         return Matrix4x4.CreateTranslation(0, 0, -dist) * MathUtil.YawFrame(vr.Hmd);
+    }
+
+    // the settings on the bar under the screen: size and curve apply at once
+    public void Apply(TheaterConfig cfg)
+    {
+        if (!On || _view == null) return;
+        _view.Size = Math.Clamp(cfg.Width, MinWidth, MaxWidth);
+        _view.Flat = !cfg.Curved;
+        _view.Refit();
     }
 
     // Recenter while it plays: the layout has just been brought in front of you, the screen follows it

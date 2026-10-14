@@ -196,6 +196,31 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.9.0 – sáv a képernyők alatt: mozimód az óra nélkül (2026-10-14)
+
+Erik: „a theater mode gomb lehetne a megnyitott kijelző alatt egy pár beállítással együtt” (az óra-rácsa tele van).
+
+- **Sáv a monitor / ablak alatt** (`Panels/TheaterBar.cs`, most két szerepben): ha a lézer egy világba tett
+  monitor- vagy ablakpanel alsó ~28%-án van (`Laser.HoverPx`, felső-bal origó), alatta feltűnik: **Theater** gomb
+  (azzal a képernyővel indul a mozimód) + a mozimód beállításai: **Dim** (0–90%), **Size** (0,8–8 m), **Curved**.
+  2 s-mal az utolsó mutatás után eltűnik; másik monitor alsó részére mutatva átugrik oda. Kézre/fejre tett panel alá
+  nem jön (lemaradna mögötte). Mozimódban ugyanez a sáv a váltó: monitor/ablak gombok + a beállítások élőben + Exit.
+  Húzás közben (és egy stick-lépés után 0,4 s-ig) a sáv a helyén marad, a méret nem húzza ki a lézer alól; a sáv
+  1 cm-rel a vászon előtt van (a növekvő vászon nem takarja el). A stick egész lépésekben állít (egy lépés = 2%).
+- **Config**: `Theater.Curved` (ív be/ki → `TheaterView.Flat`), `Theater.Bar` (a sáv be/ki). `Theater.Apply` a
+  méretet és az ívet élőben alkalmazza; a fogással méretezett vászon mérete minden képkockán visszakerül a configba
+  (`MarkSoftDirty`), így a Dim/Curved állítása nem ugratja vissza, és mindenhol ugyanaz a szám látszik.
+- **Beállítások → Layouts → Theater mode** mindkét stílusban (a sáv ki/be, Dim, Screen size, Curved;
+  `IOrbitHost.TheaterEdited`). A 95-ös Layouts csoportok alacsonyabbak lettek, alattuk a Theater mode csoport.
+- Kódátnézés (3 szempont + cáfoló ellenőrzés) 9 valós hibát talált, mind javítva: a Dim/Curved visszaugratta a fogott
+  méretet; a csúszka 6 m-ig ment, a fogás 8-ig; a sáv nem frissült, ha máshol állítottál; **NullReference**, ha a
+  panel overlay-e megszűnt, miközben alatta halványult a sáv; szerepváltáskor egy beragadt „elengedés” rossz értéket
+  írhatott (`Cancel()` törli a latch-eket); kézre tett panel alatt lemaradt; a stick képkockánként lépett; a növekvő
+  vászon eltakarhatta a húzott sávot; az elengedés a sávon.
+- `--pacetest <s>`: élő, csak olvasó mérés: mi üteme a ciklust. Erik gépén (VRChat): `WaitFrameSync` = a játék
+  képkockái (63–83/s), a kompozitor 75–85/s-ot ad ki, a VRChat GPU-ja 10,2–10,5 ms a 11,1-ből, a kompozitor 0,47 ms,
+  az OrbitOverlay ~1% GPU. Az fps-t a VRChat GPU-ja korlátozza, nem az Orbit.
+
 ## 1.8.2 – mozimód: rendes áttűnés, nincs oldalra úszás (2026-10-14)
 
 Erik élőben (napló: 6 váltás 6 s alatt): „kicsit blokkosodva vált a monitorok között, valamint az oldalra úszó

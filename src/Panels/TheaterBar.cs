@@ -7,85 +7,151 @@ using Vortice.DirectWrite;
 
 namespace Orbit;
 
-// The switcher under the theater screen: a button for every monitor and mirrored window (left to right as they are on
-// your desk, then the windows), the one playing lit, and Exit at the end. It shows up while you point at the screen (and
-// for a moment when theater mode starts), then fades away so nothing sits under the picture.
+// The bar under a screen.
+// - Under a monitor or mirrored window it shows up when you point at the lower part of it (or at the bar itself): a
+//   Theater button and theater mode's settings - how dark the world gets, the big screen's size, curved or flat.
+// - In theater mode it sits under the big screen while you point at it (and for a moment when it starts): a button for
+//   every monitor and window to switch to (left to right as on your desk, then the windows), the same settings, live,
+//   and Exit.
+// It fades away when you are not using it, so nothing sits under the picture. Turned off: Settings > Monitors.
 public sealed class TheaterBar : IPointerTarget, IDisposable
 {
-    // modern: pills on a rounded bar; 95: a strip of taskbar buttons on a half-size canvas, drawn 2x
-    const int H = 84, Pad = 10, ChipW = 230, Gap = 8;
-    const int H95 = 28, Btn95W = 150, Exit95W = 46;
+    // modern: pills on a rounded bar; 95: push buttons, trackbars and a check box on a strip, half-size canvas drawn 2x
+    const int H = 84, Pad = 10, ChipW = 230, Gap = 8, GoW = 196, SliderW = 210, CurveW = 168;
+    const int H95 = 34, Btn95W = 150, Exit95W = 46, Go95W = 86, Track95W = 84;
 
     readonly Gpu _g;
     readonly Painter _p;
     readonly Ui _ui;
+    readonly ConfigStore _cfg;
     readonly PointerState _ptr = new();
     Surface _surf, _canvas95, _retired;     // _retired: the last size's texture, freed once the overlay has the new one
     int _tw, _th, _w95, _layoutKey = -1;
     public VrOverlay Ov { get; private set; }
-    float _vis;
-    bool _dirty = true, _wasOn;
-    double _showUntil;
+    float _vis, _lastSize, _wheelAcc, _drawnDim = -1;
+    bool _dirty = true, _wasOn, _theater, _drawnCurved;
+    double _showUntil, _holdUntil;
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
     readonly List<ITheaterScreen> _choices = new();
-    ITheaterScreen _current;
+    ITheaterScreen _target;                 // the screen the bar is under
+    TheaterView _view;                      // theater mode: the big screen
 
-    public Action<ITheaterScreen> OnSwitch;
+    public Action<ITheaterScreen> OnSwitch;     // theater mode: play this one instead
+    public Action<ITheaterScreen> OnTheater;    // under a screen: start theater mode with it
     public Action OnExit;
+    public Action OnSettings;                   // a setting changed (size and curve apply to the big screen at once)
 
-    public TheaterBar(Gpu g, Painter p) { _g = g; _p = p; _ui = new Ui(p); }
+    TheaterConfig C => _cfg.Data.Theater;
+
+    public TheaterBar(Gpu g, Painter p, ConfigStore cfg) { _g = g; _p = p; _cfg = cfg; _ui = new Ui(p); }
 
     public void CreateOverlay()
     {
-        Ov = new VrOverlay("erik.orbit.theater.bar", "OrbitOverlay theater switcher");
+        Ov = new VrOverlay("erik.orbit.theater.bar", "OrbitOverlay screen bar");
         Ov.SetSortOrder(110);           // over the screens, under the keyboard and the panels
         Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);
         _layoutKey = -1;
         _vis = 0;
     }
 
-    public void DestroyOverlay() { _ptr.Leave(); _owner = null; Ov?.Dispose(); Ov = null; _vis = 0; }
+    public void DestroyOverlay() { Cancel(); Ov?.Dispose(); Ov = null; _vis = 0; _target = null; }
 
-    // choices: the screens that can play, in bar order; pointing: a laser is on the theater screen or on the bar
-    public void Update(VrSession vr, double now, float dt, Theater theater, List<ITheaterScreen> choices, bool pointing)
+    // drop whatever the pointer was doing without it counting as a release: a slider held while the bar changes role
+    // or goes away must not take the stale position as its new value
+    void Cancel()
+    {
+        _ptr.Leave();
+        _ptr.PressedLatch = _ptr.ReleasedLatch = false;
+        _ptr.Wheel = 0;
+        _wheelAcc = 0;
+        _owner = null;
+    }
+
+    // choices: the screens theater mode can switch to, in bar order; pointed: the monitor / window a laser is on (null:
+    // none) and lower: on the lower part of it; onBar: a laser is on the bar
+    public void Update(VrSession vr, double now, float dt, Theater theater, List<ITheaterScreen> choices,
+        ITheaterScreen pointed, bool lower, bool onBar)
     {
         if (Ov == null) return;
-        var view = theater.View;
-        bool on = theater.On && view != null && theater.Screen != null;
-        if (on && !_wasOn) _showUntil = now + 4;        // theater just started: show where the switcher is
-        _wasOn = on;
-        if (on && (pointing || _owner != null)) _showUntil = Math.Max(_showUntil, now + 2.5);
-        _vis = Math.Clamp(_vis + ((on && now < _showUntil) ? dt : -dt) / 0.18f, 0, 1);
-        if (!on || _vis <= 0)
+        _view = theater.View;
+        bool th = theater.On && _view != null && theater.Screen != null;
+        if (th != _theater)
         {
-            _ptr.Leave();
-            _owner = null;
+            // theater mode started or ended: the bar starts afresh in its other role
+            _theater = th;
+            _vis = 0;
+            _target = null;
+            Cancel();
+            _dirty = true;
+        }
+        bool show;
+        if (th)
+        {
+            if (!_wasOn) _showUntil = now + 4;        // just started: show where the switcher is
+            _target = theater.Screen;
+            if (pointed == _target || onBar || _owner != null) _showUntil = Math.Max(_showUntil, now + 2.5);
+            show = now < _showUntil;
+        }
+        else
+        {
+            // a panel that lost its overlay (monitors rebuilt, window closed, layout switched) or went onto a hand / the
+            // head (the bar would trail behind it): the bar goes with it
+            if (_target != null && (_target.Overlay == null || !_target.HomeInWorld)) { _target = null; _vis = 0; }
+            if (C.Bar && pointed != null && lower && pointed != _target && _owner == null && pointed.Playable && pointed.HomeInWorld)
+            {
+                // the lower part of another screen: the bar moves there and fades in afresh
+                _vis = 0;
+                _target = pointed;
+                _dirty = true;
+            }
+            if (_target != null && ((pointed == _target && lower) || onBar || _owner != null)) _showUntil = Math.Max(_showUntil, now + 2);
+            show = C.Bar && _target != null && now < _showUntil && _target.Overlay is { Visible: true } && _target.Playable;
+        }
+        _wasOn = th;
+        _vis = Math.Clamp(_vis + (show ? dt : -dt) / 0.18f, 0, 1);
+        if (_vis <= 0 || _target == null)
+        {
+            Cancel();
+            if (!th) _target = null;
             Ov.Hide();
             return;
         }
 
-        if (!Same(choices) || theater.Screen != _current)
+        // held (a slider dragged) or just stepped with the stick: the bar keeps its place and layout
+        bool held = (_ptr.Down || now < _holdUntil) && _owner != null;
+        if (th && !held && (!Same(choices) || _current != theater.Screen))
         {
             _choices.Clear();
             _choices.AddRange(choices);
             _current = theater.Screen;
             _dirty = true;
         }
-        int key = _choices.Count * 2 + (Theme.Classic ? 1 : 0);
-        if (key != _layoutKey) Relayout(key);
+        int key = (th ? 1000 + _choices.Count * 2 : 0) + (Theme.Classic ? 1 : 0);
+        if (key != _layoutKey && !held) Relayout(key);
+        // changed elsewhere (grabbing the big screen, the settings window): the sliders follow
+        if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved) _dirty = true;
 
-        // under the middle of the screen, the same height on your view whatever the distance, bent like the screen;
-        // it rises into place a little as it fades in
-        var ts = theater.Screen.TextureSize;
-        float screenH = view.Width * ts.Y / Math.Max(1, ts.X);
-        float dist = vr.HmdValid ? Vector3.Distance(vr.Hmd.Translation, view.World.Translation) : 2.5f;
-        float hM = Math.Clamp(0.05f * dist, 0.05f, 0.4f), wM = hM * _tw / _th;
+        // under the middle of the screen, the same height on your view whatever the distance, bent like the screen,
+        // 1 cm nearer than it (a growing big screen must not cover it); it rises into place a little as it fades in.
+        // Held, it stays where it is: a new size moves the screen's bottom edge, and the bar must not slide out from
+        // under the laser. Fading out under a panel it stays where it was too (the panel may be on its way out).
         float e = 1 - MathF.Pow(1 - _vis, 3);
-        _world = Matrix4x4.CreateTranslation(0, -(screenH / 2 + hM * 0.35f + hM / 2) - (1 - e) * hM * 0.4f, 0) * view.World;
+        if (!held && (th || show))
+        {
+            Matrix4x4 sw;
+            float swidth, scurv;
+            if (th) { sw = _view.World; swidth = _view.Width; scurv = _view.Curvature; }
+            else { sw = _target.WorldTransform; swidth = _target.Overlay.Width; scurv = _target.Overlay.Curvature; }
+            var ts = _target.TextureSize;
+            float screenH = swidth * ts.Y / Math.Max(1, ts.X);
+            float dist = vr.HmdValid ? Vector3.Distance(vr.Hmd.Translation, sw.Translation) : 2.5f;
+            float hM = Math.Clamp(0.05f * dist, 0.04f, 0.4f), wM = hM * _tw / _th;
+            _world = Matrix4x4.CreateTranslation(0, -(screenH / 2 + hM * 0.35f + hM / 2) - (1 - e) * hM * 0.4f, 0.01f) * sw;
+            Ov.SetWidth(wM);
+            Ov.SetCurvature(scurv > 0 && swidth > 0 ? Math.Clamp(wM * scurv / swidth, 0, 1) : 0);
+        }
         Ov.SetAbsolute(_world);
-        Ov.SetWidth(wM);
-        Ov.SetCurvature(view.Width > 0 ? Math.Clamp(wM * view.Curvature / view.Width, 0, 1) : 0);
         Ov.SetAlpha(e);
         if (_dirty || _ui.Animating)
         {
@@ -98,6 +164,8 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         Ov.Show();
     }
 
+    ITheaterScreen _current;
+
     bool Same(List<ITheaterScreen> l)
     {
         if (l.Count != _choices.Count) return false;
@@ -105,18 +173,21 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         return true;
     }
 
+    // the width of everything right of the screen buttons / the Theater button
+    float SettingsWidth95() => 8 + 26 + Track95W + 8 + 30 + Track95W + 8 + 19 + _ui.LabelWidth95("Curved") + 10;
+
     void Relayout(int key)
     {
         _layoutKey = key;
         int n = _choices.Count;
         if (Theme.Classic)
         {
-            _w95 = 4 + n * (Btn95W + 3) + Exit95W + 4;
+            _w95 = (int)MathF.Ceiling(4 + (_theater ? n * (Btn95W + 3) : Go95W + 3) + SettingsWidth95() + (_theater ? Exit95W + 3 : 0) + 4);
             _tw = _w95 * 2; _th = H95 * 2;
         }
         else
         {
-            _tw = Pad + n * (ChipW + Gap) + (H - 2 * Pad) + Pad;
+            _tw = Pad + (_theater ? n * (ChipW + Gap) : GoW + Gap) + SliderW + Gap + SliderW + Gap + CurveW + (_theater ? Gap + (H - 2 * Pad) : 0) + Pad;
             _th = H;
         }
         _retired?.Dispose();
@@ -147,6 +218,9 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         else DrawModern();
     }
 
+    // the settings: in theater mode the size is the big screen's own (grabbing changes it too)
+    float SizeNow => _theater && _view != null ? _view.Size : C.Width;
+
     void DrawModern()
     {
         _ui.Begin(_ptr, 1);
@@ -155,32 +229,66 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         _p.Stroke(new RectangleF(1, 1, _tw - 2, _th - 2), 0x40FFFFFF, 2, _th / 2f - 1);
         float x = Pad, ch = _th - 2 * Pad;
         ITheaterScreen pick = null;
-        for (int i = 0; i < _choices.Count; i++, x += ChipW + Gap)
+        bool go = false, exit = false;
+        if (_theater)
         {
-            var r = new RectangleF(x, Pad, ChipW, ch);
-            var s = _choices[i];
-            bool on = s == _current;
-            string id = Ui.Id("thb", i);
-            if (_ui.Clickable(id, r, out bool hover, out bool held) && !on) pick = s;
-            // the lit one moves over with a short fade; hover lightens, a press dips
-            float a = _ui.Anim(id + "#a", on ? 1 : 0, 14), hv = _ui.Anim(id + "#h", hover ? 1 : 0, 18), pr = _ui.Anim(id + "#p", held ? 1 : 0, 30);
-            uint bg = Theme.Mix(Theme.Mix(Theme.Panel3, Theme.Accent, a), 0xFFFFFFFF, 0.12f * hv * (1 - a));
-            bg = Theme.Mix(bg, 0xFF000000, 0.2f * pr);
-            uint fg = Theme.Mix(Theme.Text, Theme.OnAccent, a);
-            r = RectangleF.Inflate(r, -ChipW * 0.02f * pr, -ch * 0.04f * pr);
-            _p.Fill(r, bg, r.Height / 2);
-            _p.Icon(s is WindowPanel ? Theme.IcoWindow : Theme.IcoMonitor, new RectangleF(r.X + 14, r.Y, 30, r.Height), fg, 19);
-            _p.Text(Ellipsize(Label(i), r.Width - 66, 17, FontWeight.SemiBold), new RectangleF(r.X + 50, r.Y, r.Width - 62, r.Height), fg, 17, FontWeight.SemiBold);
+            for (int i = 0; i < _choices.Count; i++, x += ChipW + Gap)
+            {
+                var r = new RectangleF(x, Pad, ChipW, ch);
+                var s = _choices[i];
+                bool on = s == _current;
+                string id = Ui.Id("thb", i);
+                if (_ui.Clickable(id, r, out bool hover, out bool held) && !on) pick = s;
+                // the lit one moves over with a short fade; hover lightens, a press dips
+                float a = _ui.Anim(id + "#a", on ? 1 : 0, 14), hv = _ui.Anim(id + "#h", hover ? 1 : 0, 18), pr = _ui.Anim(id + "#p", held ? 1 : 0, 30);
+                uint bg = Theme.Mix(Theme.Mix(Theme.Panel3, Theme.Accent, a), 0xFFFFFFFF, 0.12f * hv * (1 - a));
+                bg = Theme.Mix(bg, 0xFF000000, 0.2f * pr);
+                uint fg = Theme.Mix(Theme.Text, Theme.OnAccent, a);
+                r = RectangleF.Inflate(r, -ChipW * 0.02f * pr, -ch * 0.04f * pr);
+                _p.Fill(r, bg, r.Height / 2);
+                _p.Icon(s is WindowPanel ? Theme.IcoWindow : Theme.IcoMonitor, new RectangleF(r.X + 14, r.Y, 30, r.Height), fg, 19);
+                _p.Text(Ellipsize(Label(i), r.Width - 66, 17, FontWeight.SemiBold), new RectangleF(r.X + 50, r.Y, r.Width - 62, r.Height), fg, 17, FontWeight.SemiBold);
+            }
         }
-        // Exit: everything glides back
-        var xr = new RectangleF(x, Pad, ch, ch);
-        bool exit = _ui.Clickable("thb.x", xr, out bool xh, out bool xheld);
-        float xa = _ui.Anim("thb.x#h", xh ? 1 : 0, 18), xp = _ui.Anim("thb.x#p", xheld ? 1 : 0, 30);
-        _p.Fill(RectangleF.Inflate(xr, -ch * 0.04f * xp, -ch * 0.04f * xp), Theme.Mix(Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f * xa), Theme.Accent, xp), ch / 2);
-        _p.Icon("\uE711", xr, Theme.Mix(Theme.Text, Theme.OnAccent, xp), 18);
+        else
+        {
+            // the Theater button: the main thing here, in the accent colour
+            var r = new RectangleF(x, Pad, GoW, ch);
+            go = _ui.Clickable("thb.go", r, out bool hover, out bool held);
+            float hv = _ui.Anim("thb.go#h", hover ? 1 : 0, 18), pr = _ui.Anim("thb.go#p", held ? 1 : 0, 30);
+            uint bg = Theme.Mix(Theme.Mix(Theme.Accent, 0xFFFFFFFF, 0.14f * hv), 0xFF000000, 0.2f * pr);
+            r = RectangleF.Inflate(r, -GoW * 0.02f * pr, -ch * 0.04f * pr);
+            _p.Fill(r, bg, r.Height / 2);
+            _p.Icon("\uE8B2", new RectangleF(r.X + 16, r.Y, 30, r.Height), Theme.OnAccent, 19);
+            _p.Text("Theater", new RectangleF(r.X + 54, r.Y, r.Width - 62, r.Height), Theme.OnAccent, 18, FontWeight.SemiBold);
+            x += GoW + Gap;
+        }
+        // the settings, on a slightly lighter pill
+        var g = new RectangleF(x, Pad, SliderW + Gap + SliderW + Gap + CurveW, ch);
+        _p.Fill(g, Theme.WithAlpha(Theme.Panel3, 0.55f), ch / 2);
+        bool changed = false;
+        float dim = C.Dim;
+        if (_ui.Slider("thb.dim", new RectangleF(g.X + 14, Pad + 2, SliderW - 14, ch - 4), "Dim", ref dim, 0, 0.9f, v => $"{v * 100:0} %"))
+        { C.Dim = dim; changed = true; }
+        float size = SizeNow;
+        if (_ui.Slider("thb.size", new RectangleF(g.X + SliderW + Gap, Pad + 2, SliderW, ch - 4), "Size", ref size, Theater.MinWidth, Theater.MaxWidth, v => $"{v:0.0} m"))
+        { C.Width = size; changed = true; }
+        bool curved = C.Curved;
+        if (_ui.Toggle("thb.curve", new RectangleF(g.X + 2 * (SliderW + Gap), Pad, CurveW - 10, ch), "Curved", ref curved))
+        { C.Curved = curved; changed = true; }
+        x = g.Right + Gap;
+        if (_theater)
+        {
+            // Exit: everything goes back
+            var xr = new RectangleF(x, Pad, ch, ch);
+            exit = _ui.Clickable("thb.x", xr, out bool xh, out bool xheld);
+            float xa = _ui.Anim("thb.x#h", xh ? 1 : 0, 18), xp = _ui.Anim("thb.x#p", xheld ? 1 : 0, 30);
+            _p.Fill(RectangleF.Inflate(xr, -ch * 0.04f * xp, -ch * 0.04f * xp), Theme.Mix(Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f * xa), Theme.Accent, xp), ch / 2);
+            _p.Icon("\uE711", xr, Theme.Mix(Theme.Text, Theme.OnAccent, xp), 18);
+        }
         _p.End();
         _ui.End();
-        Act(pick, exit);
+        Act(pick, go, exit, changed);
     }
 
     void Draw95()
@@ -192,29 +300,61 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         var strip = new RectangleF(0, 0, _w95, H95);
         _p.Fill(strip, Theme.W95Face);
         _p.Bevel(strip, Painter.Edge.Raised);
-        float x = 4;
+        float x = 4, by = (H95 - 22) / 2;
         ITheaterScreen pick = null;
-        for (int i = 0; i < _choices.Count; i++, x += Btn95W + 3)
+        bool go = false, exit = false;
+        if (_theater)
         {
-            var s = _choices[i];
-            bool on = s == _current;
-            if (_ui.Button95(Ui.Id("thb95", i), new RectangleF(x, 3, Btn95W, 22), Fit95(Label(i), Btn95W - 30), true, false, on,
-                    s is WindowPanel ? W95Icons.Id.Window : W95Icons.Id.Computer) && !on)
-                pick = s;
+            for (int i = 0; i < _choices.Count; i++, x += Btn95W + 3)
+            {
+                var s = _choices[i];
+                bool on = s == _current;
+                if (_ui.Button95(Ui.Id("thb95", i), new RectangleF(x, by, Btn95W, 22), Fit95(Label(i), Btn95W - 30), true, false, on,
+                        s is WindowPanel ? W95Icons.Id.Window : W95Icons.Id.Computer) && !on)
+                    pick = s;
+            }
         }
-        bool exit = _ui.Button95("thb95.x", new RectangleF(x, 3, Exit95W, 22), "Exit");
+        else
+        {
+            go = _ui.Button95("thb95.go", new RectangleF(x, by, Go95W, 22), "&Theater", true, true, false, W95Icons.Id.Theater);
+            x += Go95W + 3;
+        }
+        // an etched divider, then the settings: two trackbars and a check box
+        _p.Fill(new RectangleF(x + 2, 4, 1, H95 - 8), 0xFF808080);
+        _p.Fill(new RectangleF(x + 3, 4, 1, H95 - 8), 0xFFFFFFFF);
+        x += 8;
+        bool changed = false;
+        _ui.Label95("&Dim:", new RectangleF(x, 10, 26, 15));
+        x += 26;
+        float dim = C.Dim;
+        if (_ui.Track95("thb95.dim", new RectangleF(x, 4, Track95W, 28), ref dim, 0, 0.9f, true, 10)) { C.Dim = dim; changed = true; }
+        x += Track95W + 8;
+        _ui.Label95("&Size:", new RectangleF(x, 10, 30, 15));
+        x += 30;
+        float size = SizeNow;
+        if (_ui.Track95("thb95.size", new RectangleF(x, 4, Track95W, 28), ref size, Theater.MinWidth, Theater.MaxWidth, true, 10)) { C.Width = size; changed = true; }
+        x += Track95W + 8;
+        bool curved = C.Curved;
+        if (_ui.Check95("thb95.curve", x, 11, "&Curved", ref curved)) { C.Curved = curved; changed = true; }
+        x += 19 + _ui.LabelWidth95("Curved") + 10;
+        if (_theater) exit = _ui.Button95("thb95.x", new RectangleF(x, by, Exit95W, 22), "Exit");
         _p.End();
         _p.Begin(_surf.Bitmap, 0x00000000);
         _p.ImageNearest(_canvas95.Bitmap, new RectangleF(0, 0, _tw, _th));
         _p.End();
         _ui.End();
-        Act(pick, exit);
+        Act(pick, go, exit, changed);
     }
 
-    void Act(ITheaterScreen pick, bool exit)
+    void Act(ITheaterScreen pick, bool go, bool exit, bool changed)
     {
+        _lastSize = SizeNow;
+        _drawnDim = C.Dim;
+        _drawnCurved = C.Curved;
+        if (changed) { OnSettings?.Invoke(); _dirty = true; }
         if (pick != null) { OnSwitch?.Invoke(pick); _dirty = true; }
         else if (exit) OnExit?.Invoke();
+        else if (go && _target != null) OnTheater?.Invoke(_target);
     }
 
     string Ellipsize(string s, float maxW, float size, FontWeight wt)
@@ -234,7 +374,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         return s[..n].TrimEnd() + "...";
     }
 
-    // ---------------- input: one hand at a time ----------------
+    // ---------------- input: one hand at a time; the stick moves the slider under the laser ----------------
 
     public VrOverlay Overlay => Ov;
     public bool Interactive => Ov != null && Ov.Visible && _vis > 0.8f;
@@ -246,7 +386,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         _owner ??= h;
         if (_owner != h) return;
         _ptr.Move(px.X, px.Y);
-        if (_ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;
+        if (_ptr.Down || _ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;
     }
 
     public void PointerLeave(Hand h)
@@ -254,6 +394,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         if (_owner != h) return;
         _owner = null;
         _ptr.Leave();
+        _wheelAcc = 0;
         _dirty = true;
     }
 
@@ -276,9 +417,20 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         _dirty = true;
     }
 
-    public void PointerScroll(Hand h, float notches, Vector2 px) { }
+    // whole notches only (the stick gives a little every frame): one step of a slider each
+    public void PointerScroll(Hand h, float notches, Vector2 px)
+    {
+        if (_owner != h) return;
+        _wheelAcc += notches;
+        int n = (int)_wheelAcc;
+        if (n == 0) return;
+        _wheelAcc -= n;
+        _ptr.Wheel += n;
+        _holdUntil = Clock.Now + 0.4;
+        _dirty = true;
+    }
 
-    // it rides under the screen: grab the screen to move both
+    // it rides under its screen: grab the screen to move both
     public bool Grabbable => false;
     public Matrix4x4 WorldTransform => _world;
     public void GrabBegin(bool detach) { }
@@ -289,13 +441,15 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     public bool GrabSnapPreview => false;
     public void GrabEnd() { }
 
-    // used by --snapshot: the bar for these screens, without VR
-    public Surface DrawFor(List<ITheaterScreen> choices, ITheaterScreen current)
+    // used by --theatertest: the bar without VR - theater mode (switcher) when current != null, else a screen's bar
+    public Surface DrawFor(List<ITheaterScreen> choices, ITheaterScreen current, TheaterView view = null)
     {
+        _theater = current != null;
+        _view = view;
         _choices.Clear();
         _choices.AddRange(choices);
         _current = current;
-        int key = _choices.Count * 2 + (Theme.Classic ? 1 : 0);
+        int key = (_theater ? 1000 + _choices.Count * 2 : 0) + (Theme.Classic ? 1 : 0);
         if (key != _layoutKey) Relayout(key);
         Draw();
         return _surf;

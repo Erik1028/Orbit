@@ -42,6 +42,7 @@ public interface IOrbitHost
     string StatusLinePreview { get; }      // what the chatbox status line would say now
     string RoomStatus { get; }             // VRChat log / VRCX found?
     void ToggleRoom();
+    void TheaterEdited();          // theater settings changed in the window: a screen that plays follows at once
     void TestNotification();
     Updater Updates { get; }
     void SwitchLayout(string name);
@@ -396,6 +397,27 @@ public sealed partial class SettingsView
                 ? "The first time you switch to it, everything comes to where you are looking - lying in bed, that is above you - and is remembered from then on."
                 : "Switching puts every panel back where it was in this profile. Recenter still brings the whole arrangement in front of you.",
             Theme.Dim, 13, FontWeight.Normal, true);
+        DrawTheater(ui, lx, wx, cw);
+    }
+
+    // theater mode's settings (the same ones as on the bar under a screen in VR) and the bar itself on / off
+    void DrawTheater(Ui ui, float lx, float wx, float cw)
+    {
+        var p = ui.P;
+        var t = C.Theater;
+        p.Line(lx, 440, 984, 440, Theme.Border, 1);
+        ui.Section(new RectangleF(lx, 450, 352, 22), "Theater mode");
+        bool b = t.Bar;
+        if (ui.Toggle("th.bar", new RectangleF(lx - 10, 474, 362, 54), "Bar under the monitors", ref b,
+                "point at a monitor's bottom: Theater + settings")) t.Bar = b;
+        b = t.Curved;
+        if (ui.Toggle("th.curve", new RectangleF(lx - 10, 530, 362, 54), "Curved", ref b, "bent around you, else flat")) { t.Curved = b; _h.TheaterEdited(); }
+        float v = t.Dim;
+        if (ui.Slider("th.dim", new RectangleF(wx, 470, cw, 58), "Dim the world", ref v, 0, 0.9f, f => f < 0.005f ? "off" : $"{f * 100:0}%"))
+        { t.Dim = v; _h.TheaterEdited(); }
+        v = t.Width;
+        if (ui.Slider("th.size", new RectangleF(wx, 532, cw, 58), "Screen size", ref v, Theater.MinWidth, Theater.MaxWidth, f => $"{f:0.0} m wide"))
+        { t.Width = v; _h.TheaterEdited(); }
     }
 
     // ---------------- Windows ----------------

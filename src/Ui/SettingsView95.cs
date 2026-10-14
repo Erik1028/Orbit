@@ -312,7 +312,7 @@ public sealed partial class SettingsView
     {
         var list = C.Layouts;
         if (_selLayout == null || !list.Any(l => l.Name == _selLayout)) _selLayout = C.ActiveLayout;
-        ui.Group95(new RectangleF(16, 56, 350, 374), "Layout profiles");
+        ui.Group95(new RectangleF(16, 56, 350, 236), "Layout profiles");
         int sel = list.FindIndex(l => l.Name == _selLayout);
         int hit = ui.List95("l95.list", new RectangleF(28, 76, 326, 4 + 6 * 18), list.Count, sel, (i, r, on) =>
         {
@@ -327,7 +327,7 @@ public sealed partial class SettingsView
                                "What you change is kept in the profile you are in when you switch away.", 60);
 
         bool active = s.Name == C.ActiveLayout;
-        ui.Group95(new RectangleF(376, 56, 358, 374), Ui.Esc95(s.Name));
+        ui.Group95(new RectangleF(376, 56, 358, 236), Ui.Esc95(s.Name));
         W95Icons.Draw(ui.P, W95Icons.Id.Layouts, 388, 76);
         ui.Text95(active ? "In use now." : s.Saved is { } t ? $"Last used {t:MMM d, HH:mm}." : "Not used yet.", new RectangleF(410, 77, 312, 15));
         if (ui.Button95("l95.use", new RectangleF(388, 102, 150, 23), active ? "In use" : "&Switch to " + Ui.Esc95(s.Name), !active, isDefault: !active))
@@ -341,6 +341,28 @@ public sealed partial class SettingsView
                 : s.Saved == null
                 ? "The first time you switch to it, everything comes to where you are looking - lying in bed, that is above you."
                 : "Switching puts every panel back where it was in this profile. Recenter still brings everything in front of you.", 60);
+        Theater95(ui);
+    }
+
+    // theater mode: the same settings as on the bar under a screen in VR, and the bar itself on / off
+    void Theater95(Ui ui)
+    {
+        var t = C.Theater;
+        ui.Group95(new RectangleF(16, 300, 718, 130), "Theater mode");
+        W95Icons.Draw(ui.P, W95Icons.Id.Theater, 28, 320);
+        bool b = t.Bar;
+        if (ui.Check95("t95.bar", 52, 322, "Show a &bar under the monitor you point at (its lower part)", ref b)) t.Bar = b;
+        Hint(ui, 70, 340, 640, "The bar has a Theater button and these settings; in theater mode it switches between monitors.", 30);
+        ui.Label95("&Dim the world:", new RectangleF(28, 378, 90, 15));
+        float v = t.Dim;
+        if (ui.Track95("t95.dim", new RectangleF(118, 372, 150, 28), ref v, 0, 0.9f, true, 10)) { t.Dim = v; _h.TheaterEdited(); }
+        ui.Text95(v < 0.005f ? "off" : $"{v * 100:0}%", new RectangleF(274, 378, 40, 15));
+        ui.Label95("Screen si&ze:", new RectangleF(330, 378, 80, 15));
+        v = t.Width;
+        if (ui.Track95("t95.size", new RectangleF(410, 372, 150, 28), ref v, Theater.MinWidth, Theater.MaxWidth, true, 10)) { t.Width = v; _h.TheaterEdited(); }
+        ui.Text95($"{v:0.0} m", new RectangleF(566, 378, 44, 15));
+        b = t.Curved;
+        if (ui.Check95("t95.curve", 628, 378, "&Curved", ref b)) { t.Curved = b; _h.TheaterEdited(); }
     }
 
     // ---------------- Wrist ----------------
