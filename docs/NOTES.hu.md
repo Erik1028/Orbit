@@ -197,6 +197,9 @@ dotnet publish -c Release -o dist
 
 ## 1.4.0 – Windows 95 stílus (2026-10-14)
 
+Kiadva: v1.4.0 (GitHub, OrbitSetup.exe sha256 8eccb33b…d954), és Erik dist-jébe a frissítő úton telepítve
+(`OrbitSetup --update --install-dir dist`, config mentés: `config.json.pre-1.4-20261014-140709`).
+
 Erik kérése: választható Win95-ös kinézet „mint a Mixtape-nél”; az első, csak átszínezett változatra:
 „ez még nem az igazi, lehetne igazán autentikus, a stílus, a betűtípus, a layoutok, minden”. Mintának
 a Regional Settings Properties lapot és egy Date/Time órát küldte.
@@ -226,8 +229,10 @@ a Regional Settings Properties lapot és egy Date/Time órát küldte.
 - **Billentyűzet** (`Panels/KeyboardPanel95.cs`): 95-ös gombok, nyomva benyomódik, rögzített módosító
   raszteres, egyszeri módosító fekete keretes; pixel-nyilak (←, ↵, kurzornyilak); a találati téglalapok
   nem változtak. **Értesítés**: 95-ös ablak navy címsorral és az Info ikonnal.
-- **Ellenőrizve**: a Modern pixelre azonos az 1.3.3-mal (snapshot-diff; csak az óra számjegyei, mert telt
-  az idő); `--snapshot`: lista-választás (Smoothing → High) és a listán kívüli kattintás (a Haptic ticks
+- **Ellenőrizve**: a Modern az 1.3.3-mal azonos (csatornánkénti snapshot-diff), kivéve a szándékos új
+  Style-kapcsolót a Look fül alján és a verziószámot (az óra számjegyei az idő miatt térnek el). CSAPDA: a
+  Pillow `getbbox()` RGBA képen csak az alfát nézi, átlátszatlan képeknél színeltérésre is None-t ad –
+  csatornánként kell összevetni; `--snapshot`: lista-választás (Smoothing → High) és a listán kívüli kattintás (a Haptic ticks
   nem vált); `--wintest`: keret nélküli ablak, HTCAPTION a címsoron, 750×480 96 DPI-n, váltás oda-vissza.
 - **Kiadás előtti átnézés** (4 szempont + 4 cáfoló ellenőr): 12 megerősített, mind javítva – egy 95-ben nyitva
   hagyott lenyíló lista Modernre váltás után is elnyelte a kattintásokat (`BeginPopups95` Modernben eldobja);
