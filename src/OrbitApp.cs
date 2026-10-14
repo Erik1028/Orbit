@@ -58,6 +58,10 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly double[] _gripDownAt = { -10, -10 };
     double _lastChord = -10;
     bool _restoreDesktops = true, _restoreKeyboard;
+    Theater _theater;
+    ITheaterScreen _lastScreen;      // the monitor / window the laser was on last: theater mode plays it
+    bool _theaterKb;                 // theater mode put the keyboard away (it comes back after)
+    readonly List<ITheaterScreen> _screens = new();
     readonly VrSession _vr = new();
     Laser[] _lasers;
     SystemCursor _sysCursor;
@@ -102,6 +106,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockFaces = new HexpadFaces();
         _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
         _roomPanel = new RoomPanel(_gpu, _painter, _cfg);
+        _theater = new Theater(_gpu, _painter);
         _status = new StatusLine(_osc);
         _data.Dock = _dockSnap;
         _data.DockFaces = _dockFaces;
@@ -424,6 +429,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
             _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
             BlockGameInput(awake && !dash, now);
+            foreach (var la in _lasers) if (la.Hovered is ITheaterScreen sc) _lastScreen = sc;
             Perf(1, ref t);
             _wrist.Update(_vr, now, dt, _data);
             Perf(2, ref t);
@@ -433,6 +439,12 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             UpdateDock(now, dt);
             UpdateRoom(now, dt);
             Perf(4, ref t);
+            _screens.Clear();
+            _screens.AddRange(_desktops);
+            _screens.AddRange(_windowPanels);
+            bool theaterWas = _theater.On;
+            _theater.Update(_vr, dt, C.Theater.Dim, _screens);
+            if (theaterWas && !_theater.On) StopTheater(glide: false);      // its screen went away
             // headset off: no capturing (the overlays keep their last picture)
             if (awake)
             {
@@ -472,6 +484,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _room.Active = _vr.Connected && C.Room.Enabled;
         _data.Room = C.Room.Enabled ? _roomSnap : null;
         _data.StatusLine = C.Chatbox.StatusLine;
+        _data.Theater = _theater.On;
         _data.VrConnected = _vr.Connected;
         if (_vr.Connected) _data.VrSince ??= DateTime.Now; else _data.VrSince = null;
         _data.DesktopsVisible = C.General.DesktopsVisible;
@@ -554,6 +567,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _settingsPanel.CreateOverlay(_vr);
         _dockPanel.CreateOverlay(_vr);
         _roomPanel.CreateOverlay(_vr);
+        _theater.CreateOverlay();
         _notifyPanel.CreateOverlay();
         try { _winrtDev ??= MonitorCapture.CreateWinRtDevice(_gpu); }
         catch (Exception e) { Log.Error("WinRT device: " + e); }
@@ -670,6 +684,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _settingsPanel.DestroyOverlay();
         _dockPanel.DestroyOverlay();
         _roomPanel.DestroyOverlay();
+        if (_theater.On) StopTheater(glide: false);
+        _theater.DestroyOverlay();
         _status.Clear(C.General.OscPort, Clock.Now);
         _notifyPanel.DestroyOverlay();
         foreach (var d in _desktops) d.DestroyOverlay();
@@ -848,7 +864,38 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         var missing = _desktops.Where(d => d.Cfg.Enabled && d.Cfg.Place.M == null).ToList();
         if (missing.Count > 0) PlaceDesktops(missing);
         if (C.Keyboard.Visible) PlaceKeyboard();
+        _theater.Recenter(_vr);
         _cfg.MarkDirty();
+    }
+
+    // Theater mode: the monitor / window you used last (else the main monitor) as one big curved screen in front of
+    // you; the other panels and the keyboard step aside and the world dims. The next tap puts everything back.
+    public void ToggleTheater()
+    {
+        if (_theater.On) { StopTheater(glide: true); return; }
+        if (!_vr.Connected || !_vr.HmdValid) return;
+        var screen = _lastScreen is { Playable: true } last ? last
+            : (ITheaterScreen)_desktops.FirstOrDefault(d => d.Mon.Primary && d.Playable) ?? _desktops.FirstOrDefault(d => d.Playable)
+              ?? (ITheaterScreen)_windowPanels.FirstOrDefault(w => w.Playable);
+        if (screen == null)
+        {
+            _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = "Theater", Content = "There is no monitor or window to show.", Timeout = 4 });
+            return;
+        }
+        _theaterKb = C.Keyboard.Visible;
+        if (_theaterKb) { C.Keyboard.Visible = false; _kbAuto = false; _kbHideAt = -1; }
+        _theater.Start(screen, _vr, C.Theater);
+        _cfg.MarkDirty();
+        _win.Dirty = true;
+    }
+
+    void StopTheater(bool glide)
+    {
+        _theater.Stop(glide ? _vr : null, C.Theater);
+        if (_theaterKb && !C.Keyboard.Visible && _vr.Connected) ToggleKeyboard();
+        _theaterKb = false;
+        _cfg.MarkDirty();
+        _win.Dirty = true;
     }
 
     public void ResetDesktop(DesktopConfig d)
@@ -1292,6 +1339,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
     public void ToggleDesktops()
     {
+        if (_theater.On) StopTheater(glide: false);
         C.General.DesktopsVisible = !C.General.DesktopsVisible;
         _cfg.MarkDirty();
         _win.Dirty = true;
@@ -1377,6 +1425,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     // Hides monitors + keyboard together; the next call brings back what was showing (OVR Toolkit style).
     public void QuickToggle()
     {
+        if (_theater.On) StopTheater(glide: false);
         bool anyShown = C.General.DesktopsVisible || C.Keyboard.Visible;
         if (_settingsPanel.IsOpen) _settingsPanel.Toggle();      // the gesture clears the view
         if (anyShown)
@@ -1482,6 +1531,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             case "room":
                 _roomPanel.Toggle();
                 break;
+            case "theater": ToggleTheater(); break;
             case "status":
                 C.Chatbox.StatusLine = !C.Chatbox.StatusLine;
                 _cfg.MarkDirty();
@@ -1576,7 +1626,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _cfg.SaveIfDue(force: true);
         foreach (var d in _desktops) d.Dispose();
         foreach (var w in _windowPanels) w.Dispose();
-        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose();
+        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose();
         _room.Dispose();
         _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();

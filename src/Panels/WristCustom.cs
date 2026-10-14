@@ -107,7 +107,7 @@ public sealed partial class WristPanel
 
     static bool IsOn(string id, PanelData d) =>
         (id == "keyboard" && d.KeyboardVisible) || (id == "desktops" && d.DesktopsVisible) || (id == "night" && d.NightMode) ||
-        (id == "status" && d.StatusLine);
+        (id == "status" && d.StatusLine) || (id == "theater" && d.Theater);
 
     void SampleSources()
     {

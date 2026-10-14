@@ -23,6 +23,7 @@ public sealed class PanelData
     public HexpadFaces DockFaces;
     public RoomWatcher.Snapshot Room;    // who is in the VRChat instance (null = not followed)
     public bool StatusLine;              // the chatbox status line is on
+    public bool Theater;                 // theater mode plays
     public (bool has, string title, string artist, bool playing)? FakeMedia;
     public float GpuLoad => FakeGpuLoad >= 0 ? FakeGpuLoad : Gpu?.Load3D ?? -1;
     public float VramUsed => FakeVram >= 0 ? FakeVram : Gpu?.VramUsedGB ?? -1;

@@ -196,6 +196,28 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.8.0 – Mozimód (2026-10-14)
+
+Erik az ötletlistából: „3-as mehet esetleg” (mozimód).
+
+- **Mozimód** (`Panels/Theater.cs`, óra-gomb `theater`, `WristAction("theater")` → `OrbitApp.ToggleTheater`): a
+  monitor vagy ablak, amin utoljára a lézer volt (`_lastScreen`, a lézerek `Hovered`-jéből), különben a fő monitor,
+  egyetlen nagy, ívelt képernyő lesz előtted: alapból 2,8 m széles 2,5 m-re, `GazeFrame` szerint (fekve is), az
+  ív a fejedre központosít (`c = w / (2π r)`). A többi monitor/ablak panel félreáll (`TheaterHidden`, a szokásos
+  0,2 s-os elhalványulással), a billentyűzet elmegy (és utána visszajön, ha ő tette el), a világ elsötétül: egy a
+  headsethez kötött fekete overlay 0,5 m-re, sort order 1 (minden Orbit-overlay alatt), alfa `Theater.Dim` (0,6).
+  Az óra, az értesítések, a beállítás/dock/szoba panelek maradnak. Ki-be 0,45 s-os siklás (pozíció lerp, forgás
+  slerp, szélesség/ív/átlátszatlanság lerp).
+- **Nem ír a mentett elrendezésbe**: a képernyő helye/mérete felülírás (`TheaterView`) a panel `Cfg`-je mellett.
+  Fogás mozimódban: mozgatás és tolás/húzás a memóriában (az ív követi a távolságot), stick balra/jobbra és két
+  kéz = méret (0,8–8 m); nincs sor-igazítás, nincs `MarkDirty`. Ha fogás közben indul vagy áll le a mozimód, a
+  fogás többi része nem csinál semmit (`_grabView`). Kilépéskor csak a `Theater.Width`/`Distance` mentődik (a
+  következő alkalomra). A Recenter mozimódban a képernyőt is eléd hozza. A Monitors gomb és a dupla markolás
+  előbb kilép a mozimódból (azonnal). Ha a képernyő eltűnik (monitor újraépül, ablak bezárul), magától kilép.
+- **`Product` = OrbitOverlay** (a híd vége: az 1.7 updatere mindkét nevet elfogadja; az 1.6-os ezt már nem
+  telepítené). A release-be továbbra is felkerül `OrbitSetup.exe` néven is.
+- README: a mozimód, és a Hexpad-sor javítva (a tekerők az 1.7.0 óta csúszkák).
+
 ## 1.7.1 – a kurzor nem ugrál középre (2026-10-14)
 
 Erik VR-ben: „ha nem mutatok a kijelzőre, a kurzor folyamatosan próbál vissza ugrálni középre” – a „Keep clicks from

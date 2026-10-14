@@ -113,6 +113,14 @@ public sealed class RoomConfig
     public List<string> Starred { get; set; } = new();   // user ids (usr_...), or names where the log has no id
 }
 
+// Theater mode (Panels/Theater.cs): the big screen's size and distance are kept from the last time
+public sealed class TheaterConfig
+{
+    public float Width { get; set; } = 2.8f;
+    public float Distance { get; set; } = 2.5f;
+    public float Dim { get; set; } = 0.6f;               // how dark the world gets behind it (0 = not at all)
+}
+
 // The VRChat chatbox as a status line (Sys/StatusLine.cs)
 public sealed class ChatboxConfig
 {
@@ -193,6 +201,7 @@ public sealed class Config
     public DockConfig Dock { get; set; } = new();
     public RoomConfig Room { get; set; } = new();
     public ChatboxConfig Chatbox { get; set; } = new();
+    public TheaterConfig Theater { get; set; } = new();
     public List<DesktopConfig> Desktops { get; set; } = new();
     public List<WindowConfig> Windows { get; set; } = new();
     public List<LayoutProfile> Layouts { get; set; } = DefaultLayouts();
@@ -252,7 +261,7 @@ public sealed class ConfigStore
                 {
                     cfg.Wrist ??= new(); cfg.Keyboard ??= new(); cfg.General ??= new(); cfg.Appearance ??= new(); cfg.SettingsPanel ??= new(); cfg.SettingsPanel.Place ??= new();
                     cfg.Dock ??= new(); cfg.Dock.Place ??= new();
-                    cfg.Room ??= new(); cfg.Room.Place ??= new(); cfg.Room.Starred ??= new(); cfg.Chatbox ??= new();
+                    cfg.Room ??= new(); cfg.Room.Place ??= new(); cfg.Room.Starred ??= new(); cfg.Chatbox ??= new(); cfg.Theater ??= new();
                     cfg.Desktops = (cfg.Desktops ?? new()).Where(d => d != null && !string.IsNullOrEmpty(d.Id)).ToList();
                     foreach (var d in cfg.Desktops) d.Place ??= new();
                     cfg.Windows = (cfg.Windows ?? new()).Where(w => w != null && !string.IsNullOrEmpty(w.Id))

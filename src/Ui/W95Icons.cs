@@ -8,7 +8,7 @@ namespace Orbit;
 // whole-pixel sizes, never smoothed.
 public static class W95Icons
 {
-    public enum Id { Orbit, Clock, Moon, Gear, Center, Info32, Computer, ComputerOff, Folder, Note, RadioOff, RadioOn, Window, Layouts, Keyboard, Palette, Delete, Download, Dock, People, Chat }
+    public enum Id { Orbit, Clock, Moon, Gear, Center, Info32, Computer, ComputerOff, Folder, Note, RadioOff, RadioOn, Window, Layouts, Keyboard, Palette, Delete, Download, Dock, People, Chat, Theater }
 
     // k black  w white  s silver  g grey  n navy  b blue  t teal  c cyan  r red  m maroon
     // y yellow o olive  e green   l lime  p purple f fuchsia   . transparent
@@ -56,6 +56,25 @@ public static class W95Icons
             "....kwk.........",
             "....kk..........",
             "....k...........",
+            "................",
+            "................",
+            "................",
+        },
+        Id.Theater => new[]
+        {
+            "................",
+            "kkkkkkkkkkkkkkkk",
+            "krrmkkkkkkkkmrrk",
+            "krrmkcccccckmrrk",
+            "krrmkccccyckmrrk",
+            "krrmkcccccckmrrk",
+            "krrmkcceccckmrrk",
+            "krrmkceeecckmrrk",
+            "krrmkeeeeeekmrrk",
+            "krrmkkkkkkkkmrrk",
+            "krrm........mrrk",
+            "krrrm......mrrrk",
+            "kkkkk......kkkkk",
             "................",
             "................",
             "................",

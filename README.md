@@ -26,7 +26,7 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 - Frame rate, reprojection, GPU frame time and VRAM - as numbers or a live frame-time graph
 - Batteries of the headset, controllers and trackers
 - Now playing (Spotify, browsers, any Windows media session) with previous / play-pause / next
-- Buttons: keyboard, monitors on/off, recenter, layout profile, night mode, settings
+- Buttons: keyboard, monitors on/off, recenter, layout profile, night mode, settings, theater mode
 
 ![Watch faces](docs/img/watch-faces.png)
 
@@ -40,13 +40,16 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 - Grip = grab and move; stick = distance / bend; both hands = resize; panels snap into rows
 - Adjustable size, opacity and curvature; attach to the world, a hand or your head
 - Smart frame rate: what you look at runs at the headset's refresh rate, the rest is throttled
+- **Theater mode** (a watch button): the monitor or window you used last becomes one big curved screen in front
+  of you, the other panels and the keyboard step aside and the world dims behind it. Grab it to move it, the stick
+  or both hands to size it; tap again and everything glides back to where it was. It remembers the size
 
 **Stream dock (Hexpad)** - for an Ajazz AKP03 stream dock run by the Hexpad app
 - The dock as a panel you can place over the real one on your desk: its six keys exactly as they look right
-  now (pages, folders, live tiles, the idle screen), its round buttons and its three knobs with what they do
-- The laser presses keys and buttons (holds and double taps work as on the dock), pushes the knobs, and turns
-  them with the stick or their left / right side; anything that could end your session (lock, sleep, empty
-  the Recycle Bin) asks first
+  now (pages, folders, live tiles, the idle screen), its round buttons, and its three knobs as sliders
+- The laser presses keys and buttons (holds and double taps work as on the dock), drags the sliders (volume,
+  brightness... set directly) and pushes the knobs with the button at a slider's end; anything that could end
+  your session (lock, sleep, empty the Recycle Bin) asks first
 - A "Hexpad" watch widget shows the keys live; a tap opens the panel. Without Hexpad none of this shows up
 
 **VR keyboard**

@@ -19,7 +19,7 @@ public sealed class MouseOwner
 
 // One monitor mirrored into VR. Pointing moves the real Windows cursor there,
 // trigger = left click, B/Y = right click, stick = wheel, grip = grab and move.
-public sealed class DesktopPanel : IPointerTarget, IDisposable
+public sealed class DesktopPanel : ITheaterScreen, IDisposable
 {
     readonly Gpu _g;
     readonly ConfigStore _cfg;
@@ -67,17 +67,22 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
         if (Ov == null) return;
         float dt = (float)Math.Clamp(now - _lastNow, 0, 0.1);
         _lastNow = now;
-        bool want = globallyVisible && Cfg.Enabled && Cfg.Place.M != null && _cap != null && !_cap.Closed;
-        if (want && !Placement.Apply(Cfg.Place, vr, Ov)) want = false;     // attached to a device that is gone
+        var th = Theater;
+        bool want = (globallyVisible || th != null) && !TheaterHidden && Cfg.Enabled && (Cfg.Place.M != null || th != null) && _cap != null && !_cap.Closed;
+        if (want)
+        {
+            if (th != null) Ov.SetAbsolute(th.World);
+            else if (!Placement.Apply(Cfg.Place, vr, Ov)) want = false;     // attached to a device that is gone
+        }
         // fade in once there is a picture, fade out when hidden
         _vis = Math.Clamp(_vis + (want && _hasTexture ? dt : -dt) / 0.2f, 0, 1);
         if (!want && Ov.Visible) ReleaseButtons();
         if (_vis <= 0) Ov.Hide();
         else
         {
-            Ov.SetWidth(Cfg.Width);
-            Ov.SetCurvature(Cfg.Curvature);
-            Ov.SetAlpha(Cfg.Opacity * (1 - MathF.Pow(1 - _vis, 3)));
+            Ov.SetWidth(th?.Width ?? Cfg.Width);
+            Ov.SetCurvature(th?.Curvature ?? Cfg.Curvature);
+            Ov.SetAlpha((th?.Opacity ?? Cfg.Opacity) * (1 - MathF.Pow(1 - _vis, 3)));
             Ov.Show();
         }
         _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
@@ -96,7 +101,9 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     public bool CaptureDead => _cap != null && _cap.Closed;
 
     float EffectiveFps(VrSession vr, int fps) =>
-        SmartCapture ? SmartFps(vr, Cfg.Place, Cfg.Width, _hovering[0] || _hovering[1], fps) : fps;
+        !SmartCapture ? fps
+        : Theater is { } th ? SmartFps(vr, th.World, th.Width, _hovering[0] || _hovering[1], fps)
+        : SmartFps(vr, Cfg.Place, Cfg.Width, _hovering[0] || _hovering[1], fps);
 
     // Paces captures to an exact average rate on a loop that runs at the compositor's rate:
     // "next = now + 1/fps" skipped every other loop when the two were close (60 fps on an
@@ -114,9 +121,15 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     // limited by the monitor's own rate and by the loop), 15 fps at the edge of view, 4 behind you.
     public static float SmartFps(VrSession vr, PlacementConfig place, float width, bool hovered, int fps)
     {
+        if (hovered || !vr.HmdValid) return Math.Max(fps, vr.DisplayHz);
+        if (!Placement.TryWorld(place, vr, out var w)) return fps;
+        return SmartFps(vr, w, width, false, fps);
+    }
+
+    public static float SmartFps(VrSession vr, in Matrix4x4 w, float width, bool hovered, int fps)
+    {
         float focus = Math.Max(fps, vr.DisplayHz);
         if (hovered || !vr.HmdValid) return focus;
-        if (!Placement.TryWorld(place, vr, out var w)) return fps;
         var to = w.Translation - vr.Hmd.Translation;
         if (to.LengthSquared() < 1e-6f) return fps;
         float cos = Vector3.Dot(Vector3.Normalize(to), Vector3.Normalize(MathUtil.Forward(vr.Hmd)));
@@ -217,24 +230,43 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     public bool Grabbable => true;
 
     bool DrivesCursor(Hand h) => Cfg.Mouse && _mouse.Hand == h && _mouse.Panel == this;
-    public float LaserCursorScale(Hand h) => DrivesCursor(h) ? Cfg.Width / Math.Max(1, Mon.W) : 0;
+    public float LaserCursorScale(Hand h) => DrivesCursor(h) ? (Theater?.Width ?? Cfg.Width) / Math.Max(1, Mon.W) : 0;
 
     public Matrix4x4 WorldTransform =>
-        _vr != null && Placement.TryWorld(Cfg.Place, _vr, out var w) ? w : MathUtil.FromArray(Cfg.Place.M);
+        Theater is { } th ? th.World
+        : _vr != null && Placement.TryWorld(Cfg.Place, _vr, out var w) ? w : MathUtil.FromArray(Cfg.Place.M);
+
+    // ---- theater mode (Panels/Theater.cs): the big screen is an override, nothing here is saved ----
+    public TheaterView Theater { get; set; }
+    public bool TheaterHidden { get; set; }
+    public bool Playable => Ov != null && _cap != null && !_cap.Closed && Cfg.Enabled;
+
+    public bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity)
+    {
+        width = Cfg.Width; curvature = Cfg.Curvature; opacity = Cfg.Opacity;
+        world = default;
+        return _vr != null && Cfg.Place.M != null && Placement.TryWorld(Cfg.Place, _vr, out world);
+    }
 
     DesktopLayout.Snap? _snap;
     float[] _twoStartWidths;
     System.Collections.Generic.List<DesktopPanel> _twoRow;
+    TheaterView _grabView;      // the grab started on the theater screen; theater starting / ending mid-grab drops the rest of it
+
+    bool GrabStale => _grabView != Theater;
 
     public void GrabBegin(bool detach)
     {
         _snap = null;
+        _grabView = Theater;
+        if (Theater != null) return;
         if (detach && Cfg.Group != null) Layout?.Detach(this);
     }
 
     public void GrabMove(Matrix4x4 world)
     {
-        if (_vr == null) return;
+        if (_vr == null || GrabStale) return;
+        if (Theater is { } th) { th.Move(world); return; }
         Placement.SetWorld(Cfg.Place, _vr, world);
         if (Cfg.Group != null) Layout?.Reflow(this);       // the whole row follows
         _snap = Layout?.FindSnap(this, world);
@@ -244,6 +276,8 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     // stick left/right while holding: bend (the whole row shares the new radius)
     public void GrabStickX(float v, float dt)
     {
+        if (GrabStale) return;
+        if (Theater is { } th) { th.Resize(v, dt); return; }       // it bends around you by itself: the stick sizes it
         Cfg.Curvature = DesktopLayout.Flat(Math.Clamp(Cfg.Curvature + v * dt * 0.25f, 0f, 1f));
         if (Cfg.Group != null) Layout?.Reflow(this);
         _cfg.MarkDirty();
@@ -251,6 +285,7 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
 
     public void GrabTwoHandBegin()
     {
+        if (Theater is { } th) { th.ScaleBegin(); return; }
         _twoRow = Cfg.Group != null && Layout != null ? Layout.Members(Cfg.Group) : new() { this };
         if (!_twoRow.Contains(this)) _twoRow.Add(this);
         _twoStartWidths = _twoRow.ConvertAll(p => p.Cfg.Width).ToArray();
@@ -259,6 +294,8 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     // uniform scale: widths grow, curvature stays, so the row keeps its shape
     public void GrabTwoHandScale(float ratio)
     {
+        if (GrabStale) return;
+        if (Theater is { } th) { th.Scale(ratio); return; }
         if (_twoRow == null) return;
         for (int i = 0; i < _twoRow.Count; i++)
             _twoRow[i].Cfg.Width = Math.Clamp(_twoStartWidths[i] * ratio, 0.25f, 4f);
@@ -270,10 +307,12 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
 
     public void GrabEnd()
     {
-        if (_snap is { } s && Layout != null) Layout.Join(this, s);
+        bool layout = _grabView == null && Theater == null;
+        _grabView = null;
+        if (layout && _snap is { } s && Layout != null) Layout.Join(this, s);
         _snap = null;
         _twoRow = null;
-        _cfg.MarkDirty();
+        if (layout) _cfg.MarkDirty();
     }
 
     // used by --snapshot
