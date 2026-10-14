@@ -21,7 +21,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     VrSession _vr;
     IDirect3DDevice _dev;
     double _nextFrame, _lastNow;
-    float _wheelAcc, _vis;
+    float _wheelAcc, _vis, _opacity = 1;
     bool _hasTexture;
     readonly bool[] _hovering = new bool[2];
     Vector2 _lastPx;
@@ -126,9 +126,15 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
         if (_vis <= 0) Ov.Hide();
         else
         {
-            Ov.SetWidth(th?.Width ?? Cfg.Width);
-            Ov.SetCurvature(th?.Curvature ?? Cfg.Curvature);
-            Ov.SetAlpha((th?.Opacity ?? Cfg.Opacity) * (1 - MathF.Pow(1 - _vis, 3)));
+            // fading out it keeps the size and bend it had: a screen switched away in theater mode fades out where
+            // and as big as it played, not shrunk to its own size
+            if (want)
+            {
+                Ov.SetWidth(th?.Width ?? Cfg.Width);
+                Ov.SetCurvature(th?.Curvature ?? Cfg.Curvature);
+                _opacity = th?.Opacity ?? Cfg.Opacity;
+            }
+            Ov.SetAlpha(_opacity * (1 - MathF.Pow(1 - _vis, 3)));
             Ov.Show();
         }
         if (_pending is { } pb && now >= _pendingAt) { _pending = null; Press(pb, true); }

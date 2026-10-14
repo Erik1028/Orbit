@@ -196,6 +196,13 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.8.2 – áttűnés váltáskor (2026-10-14)
+
+Erik élőben váltogatott a mozimódban (napló: 6 váltás 6 s alatt). Az `--ovdump` mutatta: a lecserélt monitor a 0,2 s-os
+áttűnés alatt a vászon helyén visszaugrott a saját méretére (2,80 → 1,07 m, ív 0,188 → 0,145), és úgy halványult el.
+Most halványulás közben a panel megtartja az utolsó szélességét, ívét és átlátszatlanságát (`_opacity`; csak
+`want` mellett állítja őket), így a két vászon ugyanott, ugyanakkorán tűnik át. Monitor- és ablakpanel egyaránt.
+
 ## 1.8.1 – a mozimód vászna megjelenik; simább animációk, gyorsabb rajzolás (2026-10-14)
 
 Erik: „még dolgozz az animációkon és sebességen, stabilitáson”, majd az 1.8.0-t kipróbálva: „a theather mode nem

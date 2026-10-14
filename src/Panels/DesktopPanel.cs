@@ -80,9 +80,15 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
         if (_vis <= 0) Ov.Hide();
         else
         {
-            Ov.SetWidth(th?.Width ?? Cfg.Width);
-            Ov.SetCurvature(th?.Curvature ?? Cfg.Curvature);
-            Ov.SetAlpha((th?.Opacity ?? Cfg.Opacity) * (1 - MathF.Pow(1 - _vis, 3)));
+            // fading out it keeps the size and bend it had: a screen switched away in theater mode fades out where
+            // and as big as it played, not shrunk to its own size
+            if (want)
+            {
+                Ov.SetWidth(th?.Width ?? Cfg.Width);
+                Ov.SetCurvature(th?.Curvature ?? Cfg.Curvature);
+                _opacity = th?.Opacity ?? Cfg.Opacity;
+            }
+            Ov.SetAlpha(_opacity * (1 - MathF.Pow(1 - _vis, 3)));
             Ov.Show();
         }
         _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
@@ -142,7 +148,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
     }
 
     bool _hasTexture;
-    float _vis;
+    float _vis, _opacity = 1;
     double _lastNow;
 
     // ---- IPointerTarget ----
