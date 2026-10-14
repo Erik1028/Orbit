@@ -12,6 +12,40 @@ static class PaceTest
 {
     static readonly Compositor_FrameTiming[] _timings = new Compositor_FrameTiming[128];
 
+    // --pacertest: OrbitOverlay's own loop clock without VR - 90 Hz for 3 s with a little work each tick, like the real
+    // loop: how many ticks, how even (interval mean / spread / worst), and whether the high-resolution timer is there
+    public static int Pacer()
+    {
+        Native.timeBeginPeriod(1);
+        try
+        {
+            using var p = new FramePacer();
+            var gaps = new System.Collections.Generic.List<double>();
+            double t0 = Clock.Now, last = t0;
+            p.Wait(90);
+            last = Clock.Now;
+            while (Clock.Now - t0 < 3)
+            {
+                double w = Clock.Now;
+                while (Clock.Now - w < 0.0008) { }        // ~0.8 ms of "work"
+                p.Wait(90);
+                double n = Clock.Now;
+                gaps.Add((n - last) * 1000);
+                last = n;
+            }
+            gaps.Sort();
+            double mean = 0; foreach (var g in gaps) mean += g; mean /= gaps.Count;
+            double sd = 0; foreach (var g in gaps) sd += (g - mean) * (g - mean); sd = Math.Sqrt(sd / gaps.Count);
+            Log.Info(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"pacertest: high-resolution timer {(p.HighResolution ? "yes" : "NO")}, {gaps.Count / 3.0:0.0} ticks/s, interval mean {mean:0.00} ms (target 11.11), " +
+                $"sd {sd:0.00}, min {gaps[0]:0.00}, p99 {gaps[(int)(gaps.Count * 0.99)]:0.00}, max {gaps[^1]:0.00}"));
+            bool ok = p.HighResolution && Math.Abs(gaps.Count / 3.0 - 90) < 2 && Math.Abs(mean - 11.11) < 0.3;
+            Log.Info("pacertest: " + (ok ? "ALL OK" : "FAILED"));
+            return ok ? 0 : 1;
+        }
+        finally { Native.timeEndPeriod(1); }
+    }
+
     public static int Run(double seconds)
     {
         var err = EVRInitError.None;

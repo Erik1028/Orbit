@@ -147,6 +147,7 @@ public sealed class GeneralConfig
     public bool Notifications { get; set; } = true;   // XSOverlay-format notifications on UDP 42069
     public bool SmartCapture { get; set; } = true;    // full frame rate only for monitors you look / point at
     public bool PauseWhenOff { get; set; } = true;    // headset taken off: stop capturing and drawing
+    public bool HeadsetPacing { get; set; } = true;   // the loop on its own clock at the headset's rate (off: once per game frame)
     public bool HighGpuPriority { get; set; } = true; // Orbit's small GPU jobs go ahead of the game's frames (admin)
     public string Raycast { get; set; } = "shadow";    // steamvr | shadow (compare, log) | local (no IPC)
     public string LastVersion { get; set; }            // the version that ran last: tells when an update happened

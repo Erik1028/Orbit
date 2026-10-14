@@ -64,6 +64,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly List<ITheaterScreen> _screens = new(), _theaterChoices = new();
     TheaterBar _theaterBar;
     readonly VrSession _vr = new();
+    readonly FramePacer _pacer = new();
+    bool _awake = true;
     Laser[] _lasers;
     SystemCursor _sysCursor;
     IDirect3DDevice _winrtDev;
@@ -169,13 +171,18 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 SafeTick();
                 if (_vr.Connected)
                 {
-                    // paces the loop to the compositor (72/90/120 Hz); falls back to a short sleep
                     double w0 = Clock.Now;
-                    var we = OpenVR.Overlay.WaitFrameSync(30);
-                    if (we != EVROverlayError.None)
+                    if (C.General.HeadsetPacing)
+                        _pacer.Wait(_awake ? _vr.DisplayHz : 20);       // headset off: a slow tick is plenty (see FramePacer)
+                    else
                     {
-                        if (!_waitWarned) { _waitWarned = true; Log.Warn("WaitFrameSync: " + we); }
-                        Thread.Sleep(5);
+                        // once per game frame (72/90/120 Hz when the game keeps up); a short sleep when none comes
+                        var we = OpenVR.Overlay.WaitFrameSync(30);
+                        if (we != EVROverlayError.None)
+                        {
+                            if (!_waitWarned) { _waitWarned = true; Log.Warn("WaitFrameSync: " + we); }
+                            Thread.Sleep(5);
+                        }
                     }
                     _perfWaitSum += (Clock.Now - w0) * 1000;
                 }
@@ -322,12 +329,32 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         if (rays != null) Log.Info(rays);
         string gpuq = _gpuProbes > 0 ? $", gpu late {100.0 * _gpuLate / _gpuProbes:0.0}%" : "";
         _gpuLate = _gpuProbes = 0;
-        Log.Info($"perf: {_perfFrames / (now - _perfStart):0} loops/s, work {total / _perfFrames:0.00} ms, wait {_perfWaitSum / _perfFrames:0.0} ms{gpuq} | avg/max ms:{sb}");
+        Log.Info($"perf: {_perfFrames / (now - _perfStart):0} loops/s{CompositorRates(now - _perfStart)}, work {total / _perfFrames:0.00} ms, wait {_perfWaitSum / _perfFrames:0.0} ms{gpuq} | avg/max ms:{sb}");
         Array.Clear(_perfSum); Array.Clear(_perfMax);
         _perfFrames = 0; _perfWaitSum = 0; _perfStart = now;
     }
 
     bool _waitWarned;
+
+    // what the game and the compositor managed meanwhile, next to the loop's own rate (the loop runs at the headset's
+    // rate on its own clock; the compositor can only show as many frames as it presents)
+    Compositor_CumulativeStats _cstats;
+    uint _cSubmits, _cPresents;
+
+    string CompositorRates(double secs)
+    {
+        try
+        {
+            var c = OpenVR.Compositor;
+            if (c == null || secs <= 0) return "";
+            c.GetCumulativeStats(ref _cstats, (uint)Marshal.SizeOf<Compositor_CumulativeStats>());
+            uint s = _cstats.m_nNumFrameSubmits, p = _cstats.m_nNumFramePresents;
+            string r = _cPresents == 0 || p < _cPresents ? "" : $" (game {(s - _cSubmits) / secs:0}, compositor {(p - _cPresents) / secs:0} fps)";
+            _cSubmits = s; _cPresents = p;
+            return r;
+        }
+        catch { return ""; }
+    }
 
     int _tickErrors;
     double _nextErrorLog, _nextOsc;
@@ -434,6 +461,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 la.AlwaysOn = C.Appearance.LaserAlways;
             }
             bool awake = _vr.HeadsetWorn || !C.General.PauseWhenOff;
+            _awake = awake;
             _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
             _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
             BlockGameInput(awake && !dash, now);
@@ -1691,6 +1719,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         foreach (var w in _windowPanels) w.Dispose();
         _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose();
         _room.Dispose();
+        _pacer.Dispose();
         _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();
         _gpuStats.Dispose();

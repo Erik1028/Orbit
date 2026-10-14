@@ -196,6 +196,22 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.9.1 – az overlay a headset ütemében frissül, nem a játékéban (2026-10-14)
+
+Erik: „bármi ötlet hogy az overlay még reszponzívabb legyen és több fps-el rendereljen?”, majd az ajánlott 1-esre:
+„mehet”.
+
+- **Mérés előtte** (`--pacetest`, élőben, csak olvasva): `WaitFrameSync` = a VRChat képkockái (63–83/s), a SteamVR
+  „vsync” számlálója is ennyi, a kompozitor 75–85-öt ad ki (a többi újravetített), a kijelző 90 Hz. A VRChat GPU-ja
+  10,2–10,5 ms a 11,1-ből, a kompozitor 0,47 ms, az OrbitOverlay ~1% GPU (PDH, AMD-n alulmér, de arányaiban jó). A
+  `WaitFrameSync` mindig a képkocka legelején tért vissza (fázis-hisztogram), így a frissítés ~10 ms-ot várt a
+  kompozitálásig; időtúllépéskor pedig +5 ms alvás → ~35 ms-os megakadás.
+- **`Sys/FramePacer.cs`**: nagy felbontású waitable timer (`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`), saját 1/Hz-es
+  rács; késésnél egy pótlás, egy egész képkockányi elmaradásnál új rács. A fő ciklus ezzel fut (`General.HeadsetPacing`,
+  alapból be; ki = a régi `WaitFrameSync`). Headset nélkül (`PauseWhenOff`) 20 Hz. `--pacertest`: 89,7 tick/s, átlag
+  11,11 ms, szórás 0,23, max 11,86 (VRChat mellett).
+- A perf sor kiírja a játék és a kompozitor fps-ét is (`GetCumulativeStats`), így látszik a három szám egymás mellett.
+
 ## 1.9.0 – sáv a képernyők alatt: mozimód az óra nélkül (2026-10-14)
 
 Erik: „a theater mode gomb lehetne a megnyitott kijelző alatt egy pár beállítással együtt” (az óra-rácsa tele van).
