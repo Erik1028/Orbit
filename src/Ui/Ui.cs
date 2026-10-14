@@ -86,6 +86,7 @@ public sealed partial class Ui
         Changed = false;
         Animating = false;
         _hot.Clear();
+        Inert = false;
         BeginPopups95();
     }
 
@@ -110,6 +111,7 @@ public sealed partial class Ui
     public void ResetAnimations()
     {
         _anim.Clear();
+        _springs.Clear();
         _lastBegin = 0;
         _lastHot = -2;
     }
@@ -136,9 +138,50 @@ public sealed partial class Ui
         return v;
     }
 
+    // ---- springs (the modern watch): an eased value with velocity, so it can overshoot a little like
+    // Apple's animations. stiffness / damping as in SwiftUI's spring; the 95 style snaps.
+    readonly Dictionary<string, (float x, float v)> _springs = new();
+
+    // snap: a change smaller than this (and nothing in motion) jumps instead of animating - no endless motion
+    // (and redraws) for values that jitter a little, like a frame rate
+    public float Spring(string id, float target, float stiffness = 170, float damping = 20, float snap = 0)
+    {
+        if (Theme.Classic || !_springs.TryGetValue(id, out var s)) { _springs[id] = (target, 0); return target; }
+        if (snap > 0 && MathF.Abs(target - s.x) < snap && MathF.Abs(s.v) < 0.05f) { _springs[id] = (target, 0); return target; }
+        float t = _dt;
+        while (t > 0)
+        {
+            float h = MathF.Min(t, 1 / 240f);         // small steps: stable at any frame rate
+            s.v += (stiffness * (target - s.x) - damping * s.v) * h;
+            s.x += s.v * h;
+            t -= h;
+        }
+        if (MathF.Abs(target - s.x) < 0.0015f && MathF.Abs(s.v) < 0.01f) s = (target, 0);
+        else Animating = true;
+        _springs[id] = s;
+        return s.x;
+    }
+
+    // start a spring from a value (e.g. a widget popping in from 0)
+    public void SpringFrom(string id, float from) => _springs[id] = (from, 0);
+
+    public bool HasSpring(string id) => _springs.ContainsKey(id);
+
+    public void ForgetSprings(Func<string, bool> which)
+    {
+        foreach (var k in new List<string>(_springs.Keys)) if (which(k)) _springs.Remove(k);
+    }
+
+    // a press-and-release area without a look of its own (the caller draws it); held = pressed right now
+    public bool Clickable(string id, RectangleF r, out bool hover, out bool held) => Behave(id, r, out hover, out held);
+
+    // everything drawn while Inert is just a picture: no hover, no clicks (the watch behind an opened widget)
+    public bool Inert;
+
     public bool Hover(RectangleF r)
     {
         _hot.Add(r);
+        if (Inert) return false;
         if (_drop != null && !_inPopup && _dropList.Contains(Mouse.X, Mouse.Y)) return false;   // under an open list
         return Inside && r.Contains(Mouse.X, Mouse.Y);
     }

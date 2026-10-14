@@ -36,7 +36,8 @@ public sealed partial class WristPanel
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(TW95, TH95);
         _p.BeginPixel(Canvas95.Bitmap, 0x00000000);
-        Window95(d);
+        if (C.Face == "custom") Custom95(d);
+        else Window95(d);
         _p.End();
         _p.Begin(Surf.Bitmap, 0x00000000);
         _p.ImageNearest(Canvas95.Bitmap, new RectangleF(0, 0, TW, TH));
@@ -299,7 +300,8 @@ public sealed partial class WristPanel
         float by = MathF.Round(inner.Bottom - inner.Height * (budget / top));
         _p.Fill(new RectangleF(inner.X, by, inner.Width, 1), Wht95);
         string label = v.AppFps < 0 ? "waiting for frames" : $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms GPU  {Math.Max(0, v.ReprojPct):0}% reproj.";
-        _p.Fill(new RectangleF(inner.X + 2, inner.Y + 1, _ui.Width95(label) + 4, 12), Blk95);
+        label = Fit(label, inner.Width - 12);                  // a narrow graph widget
+        _p.Fill(new RectangleF(inner.X + 2, inner.Y + 1, MathF.Min(_ui.Width95(label) + 4, inner.Width - 4), 12), Blk95);
         _ui.Text95(label, new RectangleF(inner.X + 4, inner.Y + 1, inner.Width - 8, 12), green);
     }
 }

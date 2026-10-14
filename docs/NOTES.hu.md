@@ -57,7 +57,8 @@ Windows Graphics Capture. A felülete angol, ez a leírás magyar.
 - **Lézer** (Look fül): szín, **vastagság** (1,5–8 mm), és hogy **mindig látszódjon** (1 m-es sugár akkor
   is, ha nem mutatsz panelre) vagy csak panelre mutatáskor.
 - **Számlapok** (Wrist fül → Watch face): Full (minden), Analog (mutatós óra + akkuk + teljesítmény),
-  Minimal (nagy idő + gombok), Time (csak idő, kis kártya). 12/24 órás óra is itt.
+  Minimal (nagy idő + gombok), Time (csak idő, kis kártya), **Custom** (widgetek egy 6×4-es rácson, lásd 1.5.0).
+  12/24 órás óra is itt.
   Performance: Numbers (számok) vagy **Graph**: az utolsó 5 mp képkockaideje oszlopokban
   (sárga = reprojektált, piros = eldobott képkocka, vonal = a frissítési keret), a SteamVR `GetFrameTiming`-ből.
 - **Egyes ablakok tükrözése** (Windows fül): Add a window → az ablaklistából (mint az Alt+Tab) kiválasztod,
@@ -194,6 +195,47 @@ dotnet publish -c Release -o dist
 - Az OSC `isOverlayOpen` / `openOverlayCount` mostantól csak a látható monitorokat, tükrözött ablakokat
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
+
+## 1.5.0 – widgetes óra (2026-10-14)
+
+Erik backlogjából (memória: orbit-backlog.md) a „sarok-widgetek” és a „az egész óra egy üres felület
+widgetekkel” pont; utána: „több widget, szebb, Apple-szerű animációk, szebb összkép”.
+
+- **Custom számlap** (`Wrist.Face = "custom"`, `Wrist.Widgets` = típus + rács X/Y/W/H, `Wrist.Background`
+  panel|cards). 6×4-es rács, minden rés és a keret is pontosan 10 px (Modern; a 34 px-es óralap-sarokkal a 24 px-es
+  kártyasarok így koncentrikus), 95-ben 4 px; a cellaszélek egész pixelen (Erik: „minden widget széle egyforma
+  távolságban”). `Panels/WatchWidgets.cs`: 24 fajta (méretek, alapméret, tónus: akcent / logó-indigó / a kettő keveréke / zöld), Add (a jelölt cellába bármely
+  befér méretben), Free/InGrid (túlcsordulás-biztos), Step, SnapSize, Seed (a régi számlapokból + „Corners”), Clean
+  (rossz méret → a dobozán belüli legnagyobb megengedett; ismeretlen típus MARAD - egy újabb Orbit widgetje túléli).
+- **Widgetek**: idő, dátum, naptár (havi rács / nagy nap; 95: tépőlapos naptár), analóg óra, **időzítő** (gyűrű,
+  ±1 perc, lejártakor értesítés + csengő: `timer.done`), **stopper**, **VR-ben töltött idő** (`PanelData.VrSince`),
+  akkuk (gyűrűk; kevés hely → a legüresebbek), most szól, **hangerő** (`Sys/SystemStats.cs` SystemVolume: Core Audio
+  IAudioEndpointVolume, 5 mp-enként újra lekérve), teljesítmény-mérők (fps, reprojekció, GPU ms, VRAM), grafikon,
+  **CPU** (GetSystemTimes), **memória** (GlobalMemoryStatusEx), és minden óra-gomb külön.
+- **Modern = Orbit-saját** (Erik: ne legyen egyértelmű Apple-másolat): a Look fül akcentszíne + a logó indigója
+  (téma-váltással együtt változik), az értékek „pályák”: vékony teljes kör, az érték íve, a végén keringő
+  „műhold”-pötty (`Orbit`, `Painter.Arc` kerek végekkel), határértéknél az Orbit Warn/Bad színe; analóg óra:
+  pötty-jelölések, a másodperc egy a peremen keringő akcentpötty; feliratok szürke nagybetűvel, mint a beállításokban;
+  gombok az Orbit panelszínében kerettel, bekapcsolva akcent. Mozgás: `Ui.Spring` (rugó al-lépésekkel; `snap`: a kis
+  remegés nem animál, így az fps nem rajzoltat folyamatosan), a widgetek soronként beúsznak, amikor ránézel
+  (`Intro`), a szerkesztőben új helyre rugóznak, új widget „beugrik”, az óra percei / az időzítő / a VR-idő
+  számjegyei gördülnek (`RollText`). Mozgás közben legfeljebb 45 fps (`_lastDraw`); egy rajz ~2 ms (Debug), a
+  beúszás ~1,25 s. A 95-ös stílusban nincs mozgás (a rugó ott azonnal célba ér).
+- **Szerkesztő** (`Ui/SettingsWatchEditor.cs`, Wrist → Custom → Edit layout; 95: „Edit layout...”): élő előnézet,
+  kattintás = kijelölés (referencia szerint, nem sorszám), húzás = mozgatás, sarok húzása = méret (a megfogáshoz
+  képest), üres cella = ide jön a következő; paletta (Modern 5×5 gomb, 95 lista + Add), Smaller/Larger/Remove,
+  háttér, „Start over from” (Full/Analog/Minimal/Time only/Corners), Empty.
+- **Kinyitható widgetek** (Erik: „ha rálépek… megnagyobbodik a többi előterében és több információ vagy kontroll”;
+  `Panels/WristDetail.cs`): a kártyára bökés kinyitja (`CardTap`, a widget saját gombjai előbb kapják a bökést),
+  Modernben rugóval az egész rácsra nő egy sötétített óra előtt (`Ui.Inert`: mögötte minden csak kép), mellé bökve
+  vagy ×-szel visszaáll; 95-ben a korabeli ablak-„zoom” körvonal után egy 95-ös ablak (X / OK zárja, mellé bökés
+  nem). Nézetek: most szól (nagy borító, vezérlők, hangerő-csúszka), akkuk, idő (óra + dátum + hét + VR-idő; 95:
+  Date/Time Properties), naptár (hónapok lapozva), időzítő (1/3/5/10/15/30 perc), stopper (köridők), teljesítmény
+  (grafikon + átlag/legrosszabb/eldobott), rendszer (CPU-előzmény 60 s), hangerő. Az 1×1-es időzítő/stopper/hangerő
+  bökésre most kinyílik (a vezérlés a kinyitott nézetben). Ha elfordítod a csuklód, bezárul.
+- Az óra már nem rajzol újra minden lézermozdulatra (`NeedsRedrawForMove`), és a képkocka-mintavétel csak akkor
+  fut, ha valami mutatja (`WristPanel.WantsFrames`; a widget-grafikon eddig üres maradt volna).
+- Két ellenőrző kör (review workflow + cáfoló ellenőrök) javításai benne vannak.
 
 ## 1.4.0 – Windows 95 stílus (2026-10-14)
 

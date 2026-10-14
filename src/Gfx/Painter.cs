@@ -268,6 +268,8 @@ public sealed class Painter : IDisposable
     public void End()
     {
         _drawing = false;
+        while (_fades > 0) PopFade();
+        while (_transforms.Count > 0) PopScale();
         while (_clips.Count > 0) PopClip();
         while (_layers.Count > 0) PopRoundedClip();
         var r = Dc.EndDraw();
@@ -290,6 +292,11 @@ public sealed class Painter : IDisposable
         var key = (family, size, w, h, v, wrap);
         if (!_formats.TryGetValue(key, out var f))
         {
+            if (_formats.Count > 600)       // fitted / animated sizes: start over rather than grow forever
+            {
+                foreach (var old in _formats.Values) old.Dispose();
+                _formats.Clear();
+            }
             f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, size, "en-us");
             f.TextAlignment = h;
             f.ParagraphAlignment = v;
@@ -388,6 +395,81 @@ public sealed class Painter : IDisposable
         float p = Px;
         Text(s, new RectangleF(r.X + p, r.Y + p, r.Width, r.Height), Theme.W95Hi, size, w, h, v);
         Text(s, r, Theme.W95Shadow, size, w, h, v);
+    }
+
+    // ---- for the modern watch's widgets: rings, and a scale / fade around a widget while it animates ----
+
+    ID2D1StrokeStyle _roundCaps;
+
+    // a ring segment with round ends, Apple-watch style: 'start' and 'sweep' in turns (0 = 12 o'clock, clockwise)
+    public void Arc(float cx, float cy, float r, float start, float sweep, uint c, float width)
+    {
+        if (sweep <= 0.0005f || r <= 0) return;
+        _roundCaps ??= _g.D2DFactory.CreateStrokeStyle(new StrokeStyleProperties
+        {
+            StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round,
+        });
+        if (sweep >= 0.9995f) { Dc.DrawEllipse(new Ellipse(new Vector2(cx, cy), r, r), Brush(c), width); return; }
+        Vector2 At(float t) => new(cx + r * MathF.Sin(t * MathF.Tau), cy - r * MathF.Cos(t * MathF.Tau));
+        using var geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            sink.BeginFigure(At(start), FigureBegin.Hollow);
+            sink.AddArc(new ArcSegment
+            {
+                Point = At(start + sweep), Size = new Vortice.Mathematics.Size(r, r), RotationAngle = 0,
+                SweepDirection = SweepDirection.Clockwise, ArcSize = sweep > 0.5f ? ArcSize.Large : ArcSize.Small,
+            });
+            sink.EndFigure(FigureEnd.Open);
+            sink.Close();
+        }
+        Dc.DrawGeometry(geo, Brush(c), width, _roundCaps);
+    }
+
+    // a line with round ends (clock hands)
+    public void RoundLine(float x1, float y1, float x2, float y2, uint c, float width)
+    {
+        _roundCaps ??= _g.D2DFactory.CreateStrokeStyle(new StrokeStyleProperties
+        {
+            StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round,
+        });
+        Dc.DrawLine(new Vector2(x1, y1), new Vector2(x2, y2), Brush(c), width, _roundCaps);
+    }
+
+    readonly Stack<Matrix3x2> _transforms = new();
+
+    // draw scaled by s around (cx, cy) until PopScale
+    public void PushScale(float s, float cx, float cy)
+    {
+        _transforms.Push(Dc.Transform);
+        Dc.Transform = Matrix3x2.CreateScale(s, new Vector2(cx, cy)) * Dc.Transform;
+    }
+
+    public void PopScale()
+    {
+        if (_transforms.Count > 0) Dc.Transform = _transforms.Pop();
+    }
+
+    int _fades;
+
+    // everything until PopFade at this opacity (a layer: only while something animates)
+    public void PushFade(float opacity)
+    {
+        Dc.PushLayer(new LayerParameters1
+        {
+            ContentBounds = new Vortice.RawRectF(-100000, -100000, 100000, 100000),
+            MaskAntialiasMode = AntialiasMode.PerPrimitive,
+            MaskTransform = Matrix3x2.Identity,
+            Opacity = Math.Clamp(opacity, 0, 1),
+        }, null);
+        _fades++;
+    }
+
+    public void PopFade()
+    {
+        if (_fades == 0) return;
+        _fades--;
+        Dc.PopLayer();
     }
 
     // a filled polygon (the 95 clock's hands)

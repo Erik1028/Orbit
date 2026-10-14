@@ -17,6 +17,7 @@ public sealed class PanelData
     public bool DesktopsVisible = true, KeyboardVisible, NightMode;
     public string LayoutName = "Desk";
     public float FakeGpuLoad = -1, FakeVram = -1;
+    public DateTime? VrSince;            // when SteamVR connected (the "time in VR" widget)
     public MediaInfo Media;
     public (bool has, string title, string artist, bool playing)? FakeMedia;
     public float GpuLoad => FakeGpuLoad >= 0 ? FakeGpuLoad : Gpu?.Load3D ?? -1;
@@ -38,7 +39,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public float Alpha;
     bool _dirty = true, _grabbing;
     int _themeVersion = -1;
-    double _nextDraw;
+    double _nextDraw, _lastDraw;
     VrSession _vr;
 
     WristConfig C => _cfg.Data.Wrist;
@@ -75,6 +76,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public void Update(VrSession vr, double now, float dt, PanelData d)
     {
         if (Ov == null) return;
+        TickTimers(now);
         uint idx = HandIndex(vr);
         if (!C.Enabled || idx == VrSession.InvalidIndex || !vr.DeviceValid[idx])
         {
@@ -103,17 +105,24 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             else target = 0;
         }
         Alpha += (target - Alpha) * Math.Min(1, dt * 10);
-        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); return; }
+        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); _open = null; return; }      // looking away closes an opened widget
         Ov.SetAlpha(Math.Min(1, Alpha));
-        if (!Ov.Visible) _dirty = true;
+        if (!Ov.Visible)
+        {
+            _dirty = true;
+            if (C.Face == "custom" && !Theme.Classic) Intro();      // the widgets cascade in
+        }
         Ov.Show();
         if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
-        if (_dirty || now >= _nextDraw || _ui.Animating)
+        // motion is drawn at up to 45 fps: smooth on a watch, and half the cost of the headset rate
+        if (_dirty || now >= _nextDraw || (Animating && now - _lastDraw >= 1 / 45.0))
         {
+            _dirty = false;          // before Draw: a tap inside Draw asks for the next frame itself
             Draw(d);
             Ov.SetTexture(Surf.Tex);
-            _dirty = false;
-            _nextDraw = now + (C.ShowPerformance && C.PerfGraph && C.Face is "full" or "analog" ? 0.1 : 0.5);
+            _lastDraw = now;
+            bool fast = WantsFrames || (C.Face == "custom" && FastWidgets);
+            _nextDraw = now + (fast ? 0.1 : 0.5);
             if (Theme.Classic)      // the 95 clock shows seconds: draw again just after the next one starts
                 _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
         }
@@ -123,11 +132,13 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     // buttons), "time" (only the time on a small card, nothing to press).
     public void Draw(PanelData d)
     {
+        _rolling = false;
         if (Theme.Classic) { Draw95(d); return; }
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         string face = C.Face ?? "full";
         var now = DateTime.Now;
+        if (face == "custom") { DrawCustom(d); _p.End(); _ui.End(); return; }
         if (face == "time") { DrawTimeOnly(now); _p.End(); _ui.End(); return; }
 
         var all = new RectangleF(0, 0, TW, TH);
@@ -427,7 +438,11 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public bool Interactive => Ov != null && Ov.Visible && Alpha > 0.6f;
     public bool AcceptsFrom(Hand h) => (C.Hand == "right") != (h == Hand.Right);
     public Vector2 TextureSize => new(TW, TH);
-    public void PointerMove(Hand h, Vector2 px) { _ptr.Move(px.X, px.Y); _dirty = true; }
+    public void PointerMove(Hand h, Vector2 px)
+    {
+        _ptr.Move(px.X, px.Y);
+        if (_ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;     // only when it gets onto another control
+    }
     public void PointerLeave(Hand h) { _ptr.Leave(); _dirty = true; }
     public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
     {
@@ -461,5 +476,5 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
 
     public void GrabEnd() { _grabbing = false; }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); Volume.Dispose(); }
 }

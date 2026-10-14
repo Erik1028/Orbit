@@ -15,13 +15,22 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 ## Features
 
 **Wrist watch** - turn your wrist towards you to see it.
-- Watch faces: full, analog, minimal, time only; 12 / 24-hour clock
+- Watch faces: full, analog, minimal, time only, or **custom**; 12 / 24-hour clock
+- **Custom face**: put widgets anywhere on a 6 x 4 grid - time, date, calendar, analog clock, timer, stopwatch,
+  time in VR, batteries, now playing, volume, performance gauges, frame graph, CPU, memory and every watch button,
+  most in several sizes. Arrange them in Settings > Wrist > Edit layout (drag to move, drag the corner to resize),
+  start from your old face or from "Corners". Tap a widget to open it big, with more to see and to control (cover,
+  controls and volume; every battery; the month; timer presets; laps; the frame graph with averages; CPU history).
+  In the Modern style values are drawn as orbits in your accent colour, with motion: widgets cascade in when you
+  look at the watch, open with a spring, digits roll; in the Windows 95 style they are little 95 windows
 - Frame rate, reprojection, GPU frame time and VRAM - as numbers or a live frame-time graph
 - Batteries of the headset, controllers and trackers
 - Now playing (Spotify, browsers, any Windows media session) with previous / play-pause / next
 - Buttons: keyboard, monitors on/off, recenter, layout profile, night mode, settings
 
 ![Watch faces](docs/img/watch-faces.png)
+
+![Custom watch face](docs/img/watch-widgets.png)
 
 **Desktop in VR**
 - Every monitor as its own panel; first start joins them into one curved screen

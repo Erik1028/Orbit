@@ -13,7 +13,7 @@
     <SelfContained>false</SelfContained>
     <AssemblyName>Orbit</AssemblyName>
     <RootNamespace>Orbit</RootNamespace>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <Product>Orbit</Product>
     <Description>Wrist watch, desktop mirrors and a VR keyboard for SteamVR</Description>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>

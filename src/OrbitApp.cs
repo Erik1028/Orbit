@@ -384,7 +384,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _vr.Update();
             _data.Vr.Update(_vr, now);
             FirstUseIfPending();
-            if (C.Wrist.PerfGraph && C.Wrist.ShowPerformance) _data.Vr.SampleFrame(_vr);
+            if (_wrist.WantsFrames) _data.Vr.SampleFrame(_vr);
             PlaceMissing();
             bool dash = _vr.Ov.IsDashboardVisible();
             if (C.General.QuickToggle) CheckQuickToggle(now);
@@ -438,6 +438,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _notifyIn.SetEnabled(C.General.Notifications && _vr.Connected);
         _media.Active = _vr.Connected;
         _data.VrConnected = _vr.Connected;
+        if (_vr.Connected) _data.VrSince ??= DateTime.Now; else _data.VrSince = null;
         _data.DesktopsVisible = C.General.DesktopsVisible;
         _data.NightMode = C.Appearance.NightMode;
         _data.LayoutName = C.ActiveLayout;
@@ -1409,6 +1410,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 break;
             case "media.prev": _media.Command("prev"); break;
             case "media.play": _media.Command("play"); break;
+            case "timer.done":
+                _notifyIn.Incoming.Enqueue(new Notification { Source = "Orbit", Title = "Timer", Content = "Time is up.", Timeout = 6 });
+                break;
             case "media.next": _media.Command("next"); break;
             case "settings":
                 _settingsPanel.Toggle();        // floating panel; the dashboard tab still exists too

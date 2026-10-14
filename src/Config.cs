@@ -24,10 +24,22 @@ public sealed class WristConfig
     public bool ShowPerformance { get; set; } = true;
     public bool ShowBatteries { get; set; } = true;
     public bool ShowMedia { get; set; } = true;
-    public string Face { get; set; } = "full";          // full | analog | minimal | time
+    public string Face { get; set; } = "full";          // full | analog | minimal | time | custom
     public bool PerfGraph { get; set; } = false;        // frame-time graph instead of the numbers
     public float[] Offset { get; set; }   // relative to the hand; null = default watch spot
     public bool Locked { get; set; }      // the grip can't move or resize the watch (no accidental nudges)
+    public List<WatchWidget> Widgets { get; set; }      // the custom face: widgets on a 6 x 4 grid (null = never set up)
+    public string Background { get; set; } = "panel";   // custom face: panel (one watch panel) | cards (each widget its own card)
+}
+
+// One widget of the custom watch face, in grid cells (see WatchWidgets).
+public sealed class WatchWidget
+{
+    public string Type { get; set; }
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int W { get; set; } = 1;
+    public int H { get; set; } = 1;
 }
 
 public sealed class DesktopConfig

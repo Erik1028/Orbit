@@ -74,6 +74,7 @@ static class Tools
         using var painter = new Painter(gpu);
 
         var data = new PanelData { VrConnected = true, VramTotalGB = gpu.DedicatedVram / (1024f * 1024 * 1024), FakeGpuLoad = 63, FakeVram = 9.4f };
+        data.VrSince = DateTime.Now.AddMinutes(-83);
         data.Vr.AppFps = 86; data.Vr.ReprojPct = 4; data.Vr.GpuMs = 9.3f; data.Vr.DisplayHz = 90;
         data.Vr.Batteries.Add(("HMD", 0.71f, false));
         data.Vr.Batteries.Add(("L", 0.82f, false));
@@ -291,6 +292,163 @@ static class Tools
             cur.Surf.SavePng(gpu, Path.Combine(dir, "cursor.png"));
             Log.Info($"cursor hotspot {cur.Hotspot}");
         }
+        // ---- the custom face (widgets on the grid): the watch, the Wrist tab, the editor and a scripted edit ----
+        var wcfg = cfg.Data.Wrist;
+        string face0 = wcfg.Face;
+        List<WatchWidget> Gallery(int n)
+        {
+            var l = new List<WatchWidget>();
+            void Put(string t, int x, int y, int w, int h) => l.Add(new WatchWidget { Type = t, X = x, Y = y, W = w, H = h });
+            if (n == 0)
+            {
+                Put("analog", 0, 0, 2, 2); Put("time", 2, 0, 2, 1); Put("date", 2, 1, 2, 1); Put("battery", 4, 0, 2, 2);
+                Put("media", 0, 2, 3, 1); Put("graph", 3, 2, 3, 1);
+                Put("fps", 0, 3, 1, 1); Put("reproj", 1, 3, 1, 1); Put("gpu", 2, 3, 1, 1); Put("vram", 3, 3, 1, 1);
+                Put("night", 4, 3, 1, 1); Put("layout", 5, 3, 1, 1);
+            }
+            else if (n == 1)
+            {
+                Put("media", 0, 0, 4, 2); Put("battery", 4, 0, 1, 1); Put("fps", 5, 0, 1, 1); Put("keyboard", 4, 1, 2, 1);
+                Put("perf", 0, 2, 6, 1); Put("time", 0, 3, 3, 1); Put("desktops", 3, 3, 2, 1); Put("settings", 5, 3, 1, 1);
+            }
+            else
+            {
+                // the newer widgets
+                Put("calendar", 0, 0, 2, 2); Put("timer", 2, 0, 2, 2); Put("battery", 4, 0, 2, 2);
+                Put("stopwatch", 0, 2, 2, 1); Put("volume", 2, 2, 3, 1); Put("session", 5, 2, 1, 1);
+                Put("cpu", 0, 3, 2, 1); Put("ram", 2, 3, 1, 1); Put("calendar", 3, 3, 1, 1); Put("volume", 4, 3, 2, 1);
+            }
+            return l;
+        }
+        void SaveCustom(string tag)
+        {
+            for (int n = 0; n < 3; n++)
+                foreach (var bg in new[] { "panel", "cards" })
+                {
+                    wcfg.Widgets = Gallery(n);
+                    wcfg.Background = bg;
+                    wrist.Settle();
+                    wrist.Draw(data);
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_custom{n}_{bg}{tag}.png"));
+                }
+            wcfg.Background = "panel";
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+        }
+        wcfg.Face = "custom";
+        var culture0 = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");   // docs pictures in English
+        SaveCustom("");
+        System.Globalization.CultureInfo.CurrentCulture = culture0;
+        wcfg.Face = "custom";
+        foreach (int g in new[] { 0, 2 })
+        {
+            wcfg.Widgets = Gallery(g);
+            wrist.Settle();
+            wrist.Draw(data);
+            var swc = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 30; i++) { wrist.Draw(data); gpu.Ctx.Flush(); }
+            Log.Info($"custom face {g}: {swc.Elapsed.TotalMilliseconds / 30:0.00} ms per draw (settled)");
+            wrist.Intro();
+            swc.Restart();
+            int frames = 0;
+            while (wrist.Animating && swc.Elapsed.TotalSeconds < 3) { wrist.Draw(data); gpu.Ctx.Flush(); frames++; Thread.Sleep(22); }
+            Log.Info($"custom face {g}: the cascade settles in {swc.Elapsed.TotalSeconds:0.00} s ({frames} frames at ~45 fps)");
+        }
+        wcfg.Widgets = Gallery(0);
+        wrist.Draw(data);
+        wrist.Intro();
+        Thread.Sleep(170);
+        wrist.Draw(data);
+        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_custom_intro.png"));
+        Thread.Sleep(1300);
+        wrist.Draw(data);
+        wcfg.Face = face0;
+        wcfg.Widgets = null;
+        // every opened view once (both styles: see the 95 section), and a tap that opens one / a tap beside it that closes it
+        void SaveOpened(string tag)
+        {
+            var kinds = new[] { ("media", 0), ("battery", 0), ("time", 0), ("calendar", 2), ("timer", 2), ("stopwatch", 2), ("fps", 0), ("cpu", 2), ("volume", 2) };
+            foreach (var (type, g) in kinds)
+            {
+                wcfg.Face = "custom";
+                wcfg.Widgets = Gallery(g);
+                wrist.Settle();
+                if (!wrist.OpenForTest(type)) { Log.Warn("snapshot: no widget " + type); continue; }
+                wrist.Draw(data);
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_open_{type}{tag}.png"));
+                wrist.CloseForTest();
+            }
+            // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
+            wcfg.Widgets = Gallery(0);
+            wrist.Settle();
+            var at = new System.Numerics.Vector2(Theme.Classic ? 150 : 150, Theme.Classic ? 270 : 270);
+            void TapWrist(System.Numerics.Vector2 p)
+            {
+                wrist.PointerMove(Hand.Left, p); wrist.Draw(data);
+                wrist.PointerButton(Hand.Left, PtrButton.Primary, true, p); wrist.Draw(data);
+                wrist.PointerButton(Hand.Left, PtrButton.Primary, false, p); wrist.Draw(data);
+            }
+            TapWrist(at);
+            bool opened = wrist.IsOpen;
+            TapWrist(new System.Numerics.Vector2(3, 3));       // beside the card (modern) / the 95 desktop
+            Log.Info($"opened widget{tag}: a tap opened it {opened} (want True), a tap beside it closed it {!wrist.IsOpen} (want {(!Theme.Classic).ToString()})");
+            wrist.CloseForTest();
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+        }
+        SaveOpened("");
+        string Dump() => string.Join(" ", wcfg.Widgets.Select(w => $"{w.Type}@{w.X},{w.Y}:{w.W}x{w.H}"));
+        // Wrist tab with the custom face picked (seeded from "full"), then the editor
+        view.Tab = SettingsView.TabWrist;
+        void FrameM()
+        {
+            wrist.Draw(data);
+            ui.Begin(ptr, 1.5f);
+            painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
+            view.Draw(ui);
+            painter.End();
+            ui.End();
+        }
+        void ClickM(float x, float y) { ptr.Move(x * 1.5f, y * 1.5f); FrameM(); ptr.Press(); FrameM(); ptr.Release(); FrameM(); }
+        ui.ResetAnimations();
+        wcfg.Face = "full";
+        ClickM(612 + 10 + (376 - 20) * 4.5f / 5, 92 + 372f * WristPanel.TH / WristPanel.TW + 38 + 18);     // the "Custom" segment
+        Log.Info($"custom face: picked '{wcfg.Face}', seeded {wcfg.Widgets?.Count} widgets: {Dump()}");
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_custom.png"));
+        view.EditingWatch = true;
+        ptr.Leave();
+        FrameM();
+        // remove the fps widget, move gpu into its place, stretch gpu to 2 x 1 by its corner
+        static System.Numerics.Vector2 CellM(int cx, int cy) =>
+            new(222 + (16 + cx * (94.6667f + 8) + 47.33f) * 0.75f, 84 + (16 + cy * 104 + 48) * 0.75f);
+        var c42 = CellM(4, 2);
+        ClickM(c42.X, c42.Y);
+        ClickM(724 + 130, 212 + 19);              // Remove
+        var gpuW = wcfg.Widgets.FirstOrDefault(w => w.Type == "gpu");
+        var c52 = CellM(5, 2);
+        ptr.Move(c52.X * 1.5f, c52.Y * 1.5f); FrameM(); ptr.Press(); FrameM();
+        ptr.Move(c42.X * 1.5f, c42.Y * 1.5f); FrameM();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_drag.png"));
+        ptr.Release(); FrameM();
+        Log.Info($"editor: fps removed {wcfg.Widgets.All(w => w.Type != "fps")}, gpu moved to {gpuW?.X},{gpuW?.Y} (want 4,2)");
+        var hnd = new System.Numerics.Vector2(222 + (16 + 5 * 102.6667f - 8) * 0.75f - 2, 84 + (16 + 3 * 104 - 8) * 0.75f - 2);
+        ptr.Move(hnd.X * 1.5f, hnd.Y * 1.5f); FrameM(); ptr.Press(); FrameM();
+        ptr.Move(c52.X * 1.5f, c52.Y * 1.5f); FrameM(); ptr.Release(); FrameM();
+        Log.Info($"editor: gpu size {gpuW?.W}x{gpuW?.H} (want 2x1); layout now {Dump()}");
+        // no room: every cell is taken, so adding must say so and change nothing
+        int before = wcfg.Widgets.Count;
+        ClickM(222 + 58, 452 + 15);               // palette: Time
+        Log.Info($"editor: add with a full grid kept {wcfg.Widgets.Count == before} ({wcfg.Widgets.Count} widgets)");
+        ptr.Leave();
+        FrameM();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor.png"));
+        view.EditingWatch = false;
+        wcfg.Face = face0;
+        wcfg.Widgets = null;
+        view.Tab = 0;
+
         // the Windows 95 skin: every screen once more
         cfg.Data.Appearance = new AppearanceConfig { Style = "classic", Clock24h = true };
         Theme.Apply(cfg.Data.Appearance);
@@ -353,6 +511,27 @@ static class Tools
             np.Draw();
             np.Surface.SavePng(gpu, Path.Combine(dir, "notifications_95.png"));
         }
+        SaveOpened("_95");
+        // the custom face in the 95 style: the watch, the Wrist page and its editor with a selection
+        wcfg.Face = "custom";
+        SaveCustom("_95");
+        wcfg.Face = "custom";
+        wcfg.Widgets = Gallery(0);
+        view.Tab = SettingsView.TabWrist;
+        ui.ResetAnimations();
+        wrist.Draw(data);
+        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_custom_95.png"));
+        view.EditingWatch = true;
+        void Frame95W() { wrist.Draw(data); view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal); }
+        // click the battery window (cells 4-5, rows 0-1): 95 cell 4 starts at 4 + 4 * 52.67
+        ptr.Move((31 + 4 + 4 * 52.67f + 40) * 2, (82 + 4 + 30) * 2);
+        Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W();
+        ptr.Leave(); Frame95W();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_95.png"));
+        view.EditingWatch = false;
+        wcfg.Face = face0;
+        wcfg.Widgets = null;
         System.Globalization.CultureInfo.CurrentCulture = culture;
         Log.Info("snapshot written to " + dir);
         return 0;

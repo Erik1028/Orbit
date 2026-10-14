@@ -346,8 +346,10 @@ public sealed partial class SettingsView
 
     void Wrist95(Ui ui)
     {
+        if (EditingWatch && C.Wrist.Face == "custom") { Wrist95Editor(ui); return; }
         var p = ui.P;
         var w = C.Wrist;
+        bool custom = w.Face == "custom";
         ui.Group95(new RectangleF(16, 56, 350, 218), "Watch");
         bool b = w.Enabled;
         ui.Check95("w95.en", 28, 76, "&Show the watch", ref b);
@@ -355,10 +357,11 @@ public sealed partial class SettingsView
         int hi = w.Hand == "right" ? 1 : 0;
         if (ComboRow(ui, "w95.hand", 28, 98, 108, 100, "&Hand:", new[] { "Left", "Right" }, ref hi, w.Enabled))
         { w.Hand = hi == 1 ? "right" : "left"; w.Offset = null; }
-        string[] faces = { "full", "analog", "minimal", "time" };
+        string[] faces = { "full", "analog", "minimal", "time", "custom" };
         int fi = Math.Max(0, Array.IndexOf(faces, w.Face ?? "full"));
-        if (ComboRow(ui, "w95.face", 28, 126, 108, 100, "&Face:", new[] { "Full", "Analog", "Minimal", "Time only" }, ref fi, w.Enabled))
-            w.Face = faces[fi];
+        if (ComboRow(ui, "w95.face", 28, 126, 108, 100, "&Face:", new[] { "Full", "Analog", "Minimal", "Time only", "Custom" }, ref fi, w.Enabled))
+            ChooseFace(faces[fi]);
+        if (custom && ui.Button95("w95.edit", new RectangleF(214, 125, 140, 23), "&Edit layout...", w.Enabled)) EditingWatch = true;
         b = w.AlwaysVisible;
         ui.Check95("w95.always", 28, 156, "Always &visible (or only when you look at it)", ref b, w.Enabled);
         w.AlwaysVisible = b;
@@ -372,16 +375,16 @@ public sealed partial class SettingsView
 
         ui.Group95(new RectangleF(16, 282, 350, 148), "Show on the watch");
         b = w.ShowBatteries;
-        ui.Check95("w95.bat", 28, 302, "&Batteries", ref b, w.Enabled);
+        ui.Check95("w95.bat", 28, 302, "&Batteries", ref b, w.Enabled && !custom);
         w.ShowBatteries = b;
         b = w.ShowMedia;
-        ui.Check95("w95.media", 28, 322, "&Now playing", ref b, w.Enabled);
+        ui.Check95("w95.media", 28, 322, "&Now playing", ref b, w.Enabled && !custom);
         w.ShowMedia = b;
         b = w.ShowPerformance;
-        ui.Check95("w95.perf", 28, 342, "Frame &timing && GPU", ref b, w.Enabled);
+        ui.Check95("w95.perf", 28, 342, "Frame &timing && GPU", ref b, w.Enabled && !custom);
         w.ShowPerformance = b;
         int pg = w.PerfGraph ? 1 : 0;
-        if (ComboRow(ui, "w95.graph", 47, 362, 128, 100, "Sh&own as:", new[] { "Numbers", "Graph" }, ref pg, w.Enabled && w.ShowPerformance))
+        if (ComboRow(ui, "w95.graph", 47, 362, 128, 100, "Sh&own as:", new[] { "Numbers", "Graph" }, ref pg, w.Enabled && w.ShowPerformance && !custom))
             w.PerfGraph = pg == 1;
         b = C.Appearance.Clock24h;
         ui.Check95("w95.24h", 28, 396, "24-hour &clock", ref b, w.Enabled);

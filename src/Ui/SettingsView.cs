@@ -537,8 +537,10 @@ public sealed partial class SettingsView
 
     void DrawWrist(Ui ui)
     {
+        if (EditingWatch && C.Wrist.Face == "custom") { DrawWristEditor(ui); return; }
         var p = ui.P;
         var w = C.Wrist;
+        bool custom = w.Face == "custom";
         float lx = 222, cw = 376, rx = 602;
         bool b = w.Enabled;
         if (ui.Toggle("w.en", new RectangleF(lx, 84, cw, 50), "Wrist watch", ref b)) w.Enabled = b;
@@ -554,11 +556,11 @@ public sealed partial class SettingsView
         float v = w.Width;
         if (ui.Slider("w.size", new RectangleF(lx, 262, cw, 58), "Size", ref v, 0.07f, 0.25f, f => $"{f * 100:0} cm", w.Enabled)) w.Width = v;
         b = w.ShowPerformance;
-        if (ui.Toggle("w.perf", new RectangleF(lx, 326, cw, 46), "Frame timing & GPU", ref b, null, w.Enabled)) w.ShowPerformance = b;
+        if (ui.Toggle("w.perf", new RectangleF(lx, 326, cw, 46), "Frame timing & GPU", ref b, null, w.Enabled && !custom)) w.ShowPerformance = b;
         b = w.ShowBatteries;
-        if (ui.Toggle("w.bat", new RectangleF(lx, 374, cw, 46), "Batteries", ref b, null, w.Enabled)) w.ShowBatteries = b;
+        if (ui.Toggle("w.bat", new RectangleF(lx, 374, cw, 46), "Batteries", ref b, null, w.Enabled && !custom)) w.ShowBatteries = b;
         b = w.ShowMedia;
-        if (ui.Toggle("w.media", new RectangleF(lx, 422, cw, 46), "Now playing", ref b, null, w.Enabled)) w.ShowMedia = b;
+        if (ui.Toggle("w.media", new RectangleF(lx, 422, cw, 46), "Now playing", ref b, null, w.Enabled && !custom)) w.ShowMedia = b;
         b = w.Locked;
         if (ui.Toggle("w.lock", new RectangleF(lx, 470, cw, 54), "Lock position", ref b, "the grip won't move or resize the watch", w.Enabled))
             w.Locked = b;
@@ -566,13 +568,21 @@ public sealed partial class SettingsView
             _h.ResetWrist();
 
         var prev = WristPreview(p, 92);
-        string[] faces = { "full", "analog", "minimal", "time" };
+        string[] faces = { "full", "analog", "minimal", "time", "custom" };
         ui.Label(new RectangleF(rx + 10, prev.Bottom + 16, cw, 22), "Watch face");
         int fi = Math.Max(0, Array.IndexOf(faces, w.Face ?? "full"));
-        if (ui.Segmented("w.face", new RectangleF(rx + 10, prev.Bottom + 38, cw - 20, 36), new[] { "Full", "Analog", "Minimal", "Time" }, ref fi, w.Enabled))
-            w.Face = faces[fi];
+        if (ui.Segmented("w.face", new RectangleF(rx + 10, prev.Bottom + 38, cw - 20, 36), new[] { "Full", "Analog", "Minimal", "Time", "Custom" }, ref fi, w.Enabled))
+            ChooseFace(faces[fi]);
         b = C.Appearance.Clock24h;
         if (ui.Toggle("w.24h", new RectangleF(rx, prev.Bottom + 82, cw, 44), "24-hour clock", ref b, null, w.Enabled)) C.Appearance.Clock24h = b;
+        if (custom)
+        {
+            if (_h.Wrist.Animating) ui.Animating = true;      // keep the springy preview moving
+            // the custom face: its own widgets, set up in the layout editor
+            if (ui.Button("w.edit", new RectangleF(rx + 10, prev.Bottom + 132, cw - 20, 38), "Edit layout", Theme.IcoLayouts, true, w.Enabled, 14))
+                EditingWatch = true;
+            return;
+        }
         ui.Label(new RectangleF(rx + 10, prev.Bottom + 132, 120, 36), "Performance");
         int pg = w.PerfGraph ? 1 : 0;
         if (ui.Segmented("w.graph", new RectangleF(rx + 130, prev.Bottom + 132, cw - 140, 36), new[] { "Numbers", "Graph" }, ref pg, w.Enabled && w.ShowPerformance))
