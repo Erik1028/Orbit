@@ -423,7 +423,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             bool awake = _vr.HeadsetWorn || !C.General.PauseWhenOff;
             _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
             _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
-            BlockGameInput(awake && !dash);
+            BlockGameInput(awake && !dash, now);
             Perf(1, ref t);
             _wrist.Update(_vr, now, dt, _data);
             Perf(2, ref t);
@@ -485,14 +485,19 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     // A hand whose laser points at / holds an Orbit panel keeps its buttons from the game (no stray VRChat clicks).
     // It is let go only once that hand releases trigger, grip and B / Y: a button still held when the beam leaves
     // the panel must not reach the game as a fresh press.
-    void BlockGameInput(bool on)
+    // It also lingers 1.5 s after the beam leaves: the game gets the input back once, when you are done, not every
+    // time the beam crosses an edge or the gap between two panels (VRChat re-centres its cursor when it gets it back).
+    readonly double[] _blockUntil = new double[2];
+
+    void BlockGameInput(bool on, double now)
     {
         for (int h = 0; h < 2; h++)
         {
             ref var hs = ref _vr.Hands[h];
             bool busy = on && C.General.BlockGameInput && _lasers[h].Active;
-            if (busy) _vr.Suppress[h] = true;
-            else if (_vr.Suppress[h] && !(hs.Click || hs.Grab || hs.Secondary)) _vr.Suppress[h] = false;
+            if (busy) { _vr.Suppress[h] = true; _blockUntil[h] = now + 1.5; }
+            else if (_vr.Suppress[h] && (!on || !C.General.BlockGameInput || now >= _blockUntil[h]) && !(hs.Click || hs.Grab || hs.Secondary))
+                _vr.Suppress[h] = false;
         }
     }
 

@@ -92,6 +92,9 @@ public sealed class RoomWatcher : IDisposable
 
     // ---- the worker ----
     string _file;
+    FileStream _fs;                                      // the followed log, kept open
+    readonly byte[] _buf = new byte[1 << 16];
+    readonly char[] _chars = new char[Encoding.UTF8.GetMaxCharCount(1 << 16)];
     long _pos;
     readonly StringBuilder _partial = new();
     Decoder _dec = Encoding.UTF8.GetDecoder();
@@ -115,6 +118,8 @@ public sealed class RoomWatcher : IDisposable
             catch (Exception e)
             {
                 Log.Info("room: " + e.Message);
+                _fs?.Dispose();
+                _fs = null;
                 _file = null;
                 _nextFileCheck = now + 10;
             }
@@ -135,7 +140,9 @@ public sealed class RoomWatcher : IDisposable
                 if (w > t) { t = w; newest = f; }
             }
         bool found = newest != null;
-        if (newest == _file) { if (found != _logFound) { _logFound = found; return true; } return false; }
+        if (newest == _file && (_fs != null || newest == null)) { if (found != _logFound) { _logFound = found; return true; } return false; }
+        _fs?.Dispose();
+        _fs = null;
         _file = newest;
         _logFound = found;
         ResetRoom();
@@ -145,7 +152,7 @@ public sealed class RoomWatcher : IDisposable
         _dec = Encoding.UTF8.GetDecoder();
         if (newest == null) return true;
         Log.Info("room: following " + Path.GetFileName(newest));
-        using var fs = Open(newest);
+        var fs = _fs = Open(newest);
         FindMe(fs);
         // the history since the last room entered: the state only, no notifications
         long start = LastIndexOf(fs, Encoding.UTF8.GetBytes("[Behaviour] Entering Room: "));
@@ -165,8 +172,8 @@ public sealed class RoomWatcher : IDisposable
 
     bool ReadNew(double now)
     {
-        if (_file == null) return false;
-        using var fs = Open(_file);
+        if (_fs == null) return false;
+        var fs = _fs;
         if (fs.Length < _pos) { _pos = 0; _partial.Clear(); _dec = Encoding.UTF8.GetDecoder(); }   // rewritten: read it again
         if (fs.Length == _pos) return false;
         fs.Position = _pos;
@@ -177,16 +184,14 @@ public sealed class RoomWatcher : IDisposable
 
     bool ReadLines(FileStream fs, bool live, double now)
     {
-        var buf = new byte[1 << 16];
-        var chars = new char[Encoding.UTF8.GetMaxCharCount(buf.Length)];
         bool any = false;
         int n;
-        while ((n = fs.Read(buf, 0, buf.Length)) > 0)
+        while ((n = fs.Read(_buf, 0, _buf.Length)) > 0)
         {
-            int c = _dec.GetChars(buf, 0, n, chars, 0);
+            int c = _dec.GetChars(_buf, 0, n, _chars, 0);
             for (int i = 0; i < c; i++)
             {
-                char ch = chars[i];
+                char ch = _chars[i];
                 if (ch != '\n') { _partial.Append(ch); continue; }
                 any |= Line(_partial.ToString().TrimEnd('\r'), live, now);
                 _partial.Clear();
@@ -374,6 +379,7 @@ public sealed class RoomWatcher : IDisposable
         _stop = true;
         _wake.Set();
         _thread?.Join(2000);
+        _fs?.Dispose();
         _wake.Dispose();
     }
 }

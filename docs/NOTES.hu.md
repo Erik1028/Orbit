@@ -196,6 +196,15 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.7.1 – a kurzor nem ugrál középre (2026-10-14)
+
+Erik VR-ben: „ha nem mutatok a kijelzőre, a kurzor folyamatosan próbál vissza ugrálni középre” – a „Keep clicks from
+the game” kikapcsolásával megszűnt (ő próbálta ki). Ok: amikor a SteamVR visszaadja a bemenetet a VRChatnek (a lézer
+lemegy a panelről), a VRChat újra középre zárja a kurzort; a panelek szélén, a rések fölött, gépelés közben ez ki-be
+billegett. Javítás: a tiltás 1,5 s-ig kitart a lézer távozása után (`OrbitApp._blockUntil`), így csak egyszer adja
+vissza, amikor végeztél. Mellette: a szoba-figyelő nyitva tartja a naplót és újrahasznosítja a puffereit (~2 MB/s
+háttér-allokáció volt).
+
 ## 1.7.0 – OrbitOverlay: szoba, státuszsor, nincs véletlen kattintás, dock-csúszkák (2026-10-14)
 
 Erik: „1 mehet, 2 legyen kapcsolható, 4 de csak az élesebb képek, a dockon … legyen slider”, „amíg az overlayt

@@ -14,7 +14,7 @@
     <AssemblyName>OrbitOverlay</AssemblyName>
     <AssemblyTitle>OrbitOverlay</AssemblyTitle>
     <RootNamespace>Orbit</RootNamespace>
-    <Version>1.7.0</Version>
+    <Version>1.7.1</Version>
     <!-- "Orbit" until 1.8: the in-app updater of 1.6 and older only installs a file whose product name is Orbit -->
     <Product>Orbit</Product>
     <Description>Wrist watch, desktop mirrors and a VR keyboard for SteamVR</Description>
