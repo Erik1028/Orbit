@@ -57,7 +57,7 @@ public sealed partial class WristPanel
     public bool OpenForTest(string type)
     {
         var w = C.Widgets?.Find(x => x?.Type == type);
-        if (w == null) return false;
+        if (w == null || DetailOf(type) == null) return false;        // e.g. the dock: a tap opens its own panel
         _open = w;
         _closing = false;
         _openStart = -10;

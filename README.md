@@ -41,6 +41,14 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 - Adjustable size, opacity and curvature; attach to the world, a hand or your head
 - Smart frame rate: what you look at runs at the headset's refresh rate, the rest is throttled
 
+**Stream dock (Hexpad)** - for an Ajazz AKP03 stream dock run by the Hexpad app
+- The dock as a panel you can place over the real one on your desk: its six keys exactly as they look right
+  now (pages, folders, live tiles, the idle screen), its round buttons and its three knobs with what they do
+- The laser presses keys and buttons (holds and double taps work as on the dock), pushes the knobs, and turns
+  them with the stick or their left / right side; anything that could end your session (lock, sleep, empty
+  the Recycle Bin) asks first
+- A "Hexpad" watch widget shows the keys live; a tap opens the panel. Without Hexpad none of this shows up
+
 **VR keyboard**
 - Follows your Windows keyboard layout, with a built-in English (US) layout on the globe key
 - Shortcut bar (select all, copy, paste, cut, undo, redo), sticky modifiers, key repeat, click sounds

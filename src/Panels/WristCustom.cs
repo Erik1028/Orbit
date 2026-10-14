@@ -321,6 +321,7 @@ public sealed partial class WristPanel
             case "session": SessionOrbit(r, w, d, id); break;
             case "battery": BatteryOrbit(r, w, d, id); break;
             case "media": MediaOrbit(r, w, d, id, tone); break;
+            case "dock": DockOrbit(r, w, d, id, tone); break;
             case "volume": VolumeOrbit(r, w, id, tone); break;
             case "graph": GraphOrbit(d.Vr, r, tone); break;
             case "perf":
@@ -826,7 +827,81 @@ public sealed partial class WristPanel
         Meter(new RectangleF(tr.X, tr.Bottom + gap, tr.Width, lt), b.pct, BatteryColor(b.pct, b.charging), key);
     }
 
-    // now playing: cover (when there is room), title / artist, play-pause (and previous / next when it fits)
+    static bool DockShows(PanelData d) =>
+        d.Dock != null && d.DockFaces != null && d.DockFaces.Any &&
+        d.Dock.State is HexpadLink.LinkState.Ok or HexpadLink.LinkState.ScreenOff;
+
+    static string DockState(PanelData d) => d.Dock?.State switch
+    {
+        HexpadLink.LinkState.NotRunning => "not running",
+        HexpadLink.LinkState.OldHexpad => "update Hexpad",
+        HexpadLink.LinkState.Unplugged => "unplugged",
+        HexpadLink.LinkState.ScreenOff => "screen off",
+        HexpadLink.LinkState.Connecting => "connecting",
+        _ => "",
+    };
+
+    static string DockWhere(HexpadLink.Snapshot s) => s.InFolder ? s.FolderName : s.PageName;
+
+    // the six keys of the dock, 3 x 2, in r (centred); returns the grid's rect
+    RectangleF DockGrid(RectangleF r, PanelData d, float gap, float radius, bool pixel)
+    {
+        float cell = MathF.Floor(MathF.Min((r.Width - 2 * gap) / 3, (r.Height - gap) / 2));
+        float gw = 3 * cell + 2 * gap, gh = 2 * cell + gap;
+        float x0 = MathF.Floor(r.X + (r.Width - gw) / 2), y0 = MathF.Floor(r.Y + (r.Height - gh) / 2);
+        for (int i = 0; i < HexpadLink.Keys; i++)
+        {
+            var k = new RectangleF(x0 + i % 3 * (cell + gap), y0 + i / 3 * (cell + gap), cell, cell);
+            _p.Fill(k, 0xFF000000, radius);
+            var bmp = d.DockFaces.Bitmaps[i];
+            if (bmp == null || d.Dock.Dark) continue;
+            if (pixel) { _p.ImageNearest(bmp, k); continue; }
+            _p.PushRoundedClip(k, radius);
+            _p.Image(bmp, k);
+            _p.PopRoundedClip();
+        }
+        return new RectangleF(x0, y0, gw, gh);
+    }
+
+    // Hexpad's stream dock on the watch: its keys as they are right now; a tap opens it as a panel
+    void DockOrbit(RectangleF r, WatchWidget w, PanelData d, int id, uint tint)
+    {
+        bool click = _ui.Clickable(Ui.Id("wdk", id), r, out bool hover, out bool held);
+        if (held) _p.Fill(r, Theme.WithAlpha(tint, 0.12f), CardRadius);
+        if (click) OnAction?.Invoke("dock");
+        if (!DockShows(d))
+        {
+            float s = MathF.Min(34, r.Height * 0.3f);
+            _p.Icon("\uE80A", new RectangleF(r.X, r.Y + r.Height * 0.14f, r.Width, r.Height * 0.46f), tint, s);
+            string st = DockState(d);
+            _p.Text("Hexpad", new RectangleF(r.X + 8, r.Y + r.Height * 0.58f, r.Width - 16, 20), Theme.Text, 14, FontWeight.SemiBold, TextAlignment.Center);
+            if (st.Length > 0)
+                _p.Text(st, new RectangleF(r.X + 8, r.Y + r.Height * 0.58f + 19, r.Width - 16, 18), Sub,
+                    FitSize(st, r.Width - 16, 12, FontWeight.Normal, null), FontWeight.Normal, TextAlignment.Center);
+            return;
+        }
+        var s2 = d.Dock;
+        if (w.W >= 2 && w.H == 1)
+        {
+            // the keys on the left, where it is on the right
+            var g = DockGrid(new RectangleF(r.X + 10, r.Y + 10, (r.Height - 20) * 1.55f, r.Height - 20), d, 4, 6, false);
+            float tx = g.Right + 12, tw = r.Right - 12 - tx;
+            string where = DockWhere(s2);
+            _p.Text(Ellipsize(where, tw, 15, FontWeight.SemiBold), new RectangleF(tx, r.Y + r.Height / 2 - 24, tw, 24), Theme.Text, 15, FontWeight.SemiBold);
+            string page = s2.Ambient ? "idle" : s2.InFolder ? "folder" : $"{s2.Page + 1} / {s2.Pages}";
+            _p.Text(page, new RectangleF(tx, r.Y + r.Height / 2, tw, 22), Sub, 13);
+            return;
+        }
+        if (w.H >= 2)
+        {
+            var g = DockGrid(new RectangleF(r.X + 12, r.Y + 12, r.Width - 24, r.Height - 52), d, 6, 8, false);
+            string where = DockWhere(s2) + (s2.InFolder ? "" : $"  ·  {s2.Page + 1}/{s2.Pages}");
+            _p.Text(Ellipsize(where, r.Width - 28, 14, FontWeight.SemiBold), new RectangleF(r.X + 14, r.Bottom - 36, r.Width - 28, 22), Sub, 14,
+                FontWeight.SemiBold, TextAlignment.Center);
+            return;
+        }
+        DockGrid(RectangleF.Inflate(r, -9, -9), d, 3, 4, false);
+    }
     void MediaOrbit(RectangleF r, WatchWidget w, PanelData d, int id, uint tint)
     {
         var (has, title, artist, playing) = MediaNow(d);
@@ -1014,6 +1089,7 @@ public sealed partial class WristPanel
                 case "stopwatch": Stopwatch95(c, w, id); break;
                 case "battery": Battery95(c, d, w); break;
                 case "media": Media95Widget(c, d, w, id); break;
+                case "dock": Dock95Widget(r, c, d, w, id); break;
                 case "volume": Volume95(c, w, id); break;
                 case "graph": Graph95(d.Vr, c); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
@@ -1214,6 +1290,32 @@ public sealed partial class WristPanel
             if (bar.Width >= 12) _ui.Progress95(bar, b.pct, low ? 0xFF800000 : Theme.W95Navy);
             _ui.Text95($"{b.pct * 100:0}%", new RectangleF(c.Right - 32, y, 30, 12), low ? 0xFF800000 : Blk95, true, TextAlignment.Trailing);
         }
+    }
+
+    // the dock in a little 95 window: the key faces shrunk (nearest), where it is beside them; a click opens it
+    void Dock95Widget(RectangleF r, RectangleF c, PanelData d, WatchWidget w, int id)
+    {
+        if (_ui.Clickable(Ui.Id("wdk", id), r, out _, out _)) OnAction?.Invoke("dock");
+        if (!DockShows(d))
+        {
+            W95Icons.Draw(_p, W95Icons.Id.Dock, MathF.Floor(c.X + (c.Width - 16) / 2), MathF.Floor(c.Y + (c.Height - 30) / 2));
+            string st = DockState(d);
+            if (st.Length == 0 || _ui.Width95(st) > c.Width - 4) st = "Hexpad";       // a 1x1 says just what it is
+            _ui.Text95(Fit(st, c.Width - 4), new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 30) / 2) + 17, c.Width, 13),
+                Blk95, false, TextAlignment.Center);
+            return;
+        }
+        var s = d.Dock;
+        if (w.W >= 2 && w.H == 1)
+        {
+            float gh = MathF.Min(c.Height - 6, 30), gw = MathF.Floor((gh - 2) / 2) * 3 + 4;
+            var g = DockGrid(new RectangleF(c.X + 3, c.Y + 3, gw, gh), d, 2, 0, true);
+            float tx = g.Right + 5, tw = c.Right - 3 - tx;
+            _ui.Text95(Fit(DockWhere(s), tw), new RectangleF(tx, c.Y + c.Height / 2 - 14, tw, 13));
+            _ui.Text95(Fit(s.Ambient ? "Idle" : s.InFolder ? "Folder" : $"{s.Page + 1} of {s.Pages}", tw), new RectangleF(tx, c.Y + c.Height / 2 + 1, tw, 13), Gry95);
+            return;
+        }
+        DockGrid(RectangleF.Inflate(c, -3, -3), d, 2, 0, true);
     }
 
     // the CD Player: green on black, |<<  >  >>|, and the cover when the window is tall

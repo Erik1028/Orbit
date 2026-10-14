@@ -196,6 +196,34 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.6.0 – a Hexpad stream dock VR-ben (2026-10-14)
+
+Erik backlogjának 1. pontja („ajazzdock compatibility, screen on overlay”), döntései: tükör + lézeres irányítás,
+lebegő panel, a veszélyes műveletek VR-ből megerősítést kérnek.
+
+- **Hexpad oldal** (ajazz-dock e943e27, csak helyben commitolva – a repo publikus): új, KÜLÖN pipe
+  `Hexpad_mirror_v1` (`dock/mirror.py`, QLocalServer UserAccessOption, soronként egy JSON). A régi
+  `AjazzDock_ipc_v1`-hez nem nyúltunk – arra bármi más mint "status" feldobja a konfigurátort, ezért Orbit csak a
+  NEVÉT keresi a pipe-listában, sosem nyitja meg. Képcsap az `AKP03`-ban: `set_key_image` / `clear_*` → függő,
+  `flush` → egy tuple-csere (`mirror = (gen, 6 JPEG)`), `sleep`/`wake` → `mirror_dark`. Bemenet: `inject()` sorba
+  teszi, az eszköz-szál dolgozza fel (a HID írás egyszálú), így a hold / double-tap ugyanúgy működik; `request_wake()`
+  kilép az idle képernyőből anélkül, hogy bármit elsütne (különben az első nyomást lenyelné). Kliens alatt a ciklus
+  25 ms-re pollol. `status()`: api 1, folder, display_on, ambient. A `controls` üzenet minden gomb / tekerő
+  funkcióját küldi (`_action_summary`, `_CTRL_SHORT`), `danger` = bármely gesztus "system" vagy Quick
+  lomtár-ürítés / zárolás (makrón belül is). Teszt: `tools/test_mirror.py` (37 ok, hamis HID + saját pipe-név).
+  Telepítés: `build.ps1` + önemelő `install.ps1` (UAC), a config bájtra azonos maradt.
+- **Orbit oldal**: `Sys/HexpadLink.cs` (háttérszál, aszinkron pipe, JPEG → visszaforgatás `Rotate270FlipNone`,
+  mirror, kalibrációs eltolás vissza; csak akkor kapcsolódik, ha a panel nyitva van vagy van Hexpad widget; a pipe
+  létezését 3 s-onként nézi), `Panels/DockPanel.cs` (800×480; modern: sötét lap, 3×2 gomb, kerek gombok alattuk,
+  nagy tekerő jobb fent, két kicsi alatta; 95: „Hexpad - <profil>” ablak, 68×68-as képdobozok 1:1, tekerők
+  Group95 + ◄ Push ► gombokkal, státuszsor). Lézer: lenyom/felenged a valódi gesztusokhoz, a tekerő bal/jobb
+  harmada forgat (tartva ismétel), közepe nyom, a stick a tekerő fölött forgat; rámutatáskor `wake`.
+  Megerősítés: „Run “System: sleep”?” – a megerősítésig semmit nem küld. `HexpadFaces` = közös bitmapek a panelnek
+  és az óra-widgetnek. Új widget `dock` (1x1/2x1/2x2), a palettán csak ha a Hexpad pipe létezik.
+  `--docktest <dir>`: élő, csak olvasó kapcsolat (csak hello) + minden állapot hamis képekkel, mindkét stílusban.
+- Mérve élőben: kapcsolódás 0,1 s, 6 arc 68×68, 12 vezérlő; `wake` → idle ki 70 ms alatt. Gombot / tekerőt élőben
+  NEM nyomtunk (Erik eszköze) – azt VR-ben kell kipróbálni.
+
 ## 1.5.2 – vonalak a gyűrűk helyett, teljes vizuális átnézés (2026-10-14)
 
 Erik: „aránytalanul kicsik a kijelzett akkuszázalékok… ellenőrizd át rendesen, ne legyenek ilyen gondok”, majd

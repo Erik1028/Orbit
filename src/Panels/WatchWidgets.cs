@@ -49,7 +49,14 @@ public static class WatchWidgets
         new("layout", "Layout", "Layout", Theme.IcoLayouts, W95Icons.Id.Layouts, Btn, 0, true, 2),
         new("night", "Night mode", "Night", Theme.IcoNight, W95Icons.Id.Moon, Btn, 0, true, 1),
         new("settings", "Settings", "Settings", Theme.IcoSettings, W95Icons.Id.Gear, Btn, 0, true, 0),
+        // the stream dock (Hexpad): its keys live; a tap opens it as a panel. Offered only while Hexpad runs.
+        new("dock", "Hexpad", "Hexpad", "\uE80A", W95Icons.Id.Dock, new[] { (1, 1), (2, 1), (2, 2) }, 1, false, 1),
     };
+
+    // what the editor offers: the dock only when Hexpad is there (set by the app)
+    public static bool DockAvailable;
+    static readonly Kind[] _noDock = Array.FindAll(Kinds, k => k.Id != "dock");
+    public static Kind[] Palette => DockAvailable ? Kinds : _noDock;
 
     public static Kind Find(string id) => Array.Find(Kinds, k => k.Id == id);
 

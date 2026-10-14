@@ -708,6 +708,114 @@ static class Tools
     // --wintest DIR: the desktop settings window in both styles (with its own config in DIR), on screen
     // for a moment each: a screenshot, its size at this DPI, and what the 95 caption answers to
     // WM_NCHITTEST (it must drag the window, but not over its ? and X boxes).
+    // Hexpad's stream dock without a headset. Reads the live link (read-only: nothing is pressed or woken) and
+    // draws the panel in both styles and the watch widget in its sizes; then the same with made-up faces in every
+    // state (not running, unplugged, idle, folder, a confirmation, hover / pressed), so it also works without Hexpad.
+    public static int DockTest(string dir)
+    {
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(dir);
+        var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+        using var link = new HexpadLink();
+        link.Start();
+        link.Active = true;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var live = link.Get();
+        while (sw.Elapsed.TotalSeconds < 8)
+        {
+            live = link.Get();
+            if (live.State == HexpadLink.LinkState.Ok && live.Controls.Count > 0 && Array.TrueForAll(live.Faces, f => f != null)) break;
+            if (live.State is HexpadLink.LinkState.NotRunning or HexpadLink.LinkState.OldHexpad && sw.Elapsed.TotalSeconds > 4) break;
+            Thread.Sleep(100);
+        }
+        link.Active = false;                     // read once; never sends anything but hello
+        int nf = Array.FindAll(live.Faces, f => f != null).Length;
+        Log.Info($"docktest: {live.State} in {sw.Elapsed.TotalSeconds:0.0} s, present {link.Present}; page '{live.PageName}' {live.Page + 1}/{live.Pages}, " +
+                 $"folder '{live.FolderName}', idle {live.Ambient}, dark {live.Dark}, faces {nf} ({live.FaceW}x{live.FaceH}), controls {live.Controls.Count}");
+        foreach (var (k, c) in live.Controls)
+            Log.Info($"docktest: {k,-5} '{c.Label}'{(c.Push.Length > 0 ? $" push '{c.Push}'" : "")}{(c.Left.Length > 0 ? $" left '{c.Left}' right '{c.Right}'" : "")}{(c.Danger ? " DANGER" : "")}");
+
+        using var faces = new HexpadFaces();
+        using var panel = new DockPanel(gpu, painter, cfg, link, faces);
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        var data = new PanelData { VrConnected = true };
+        void Shots(string tag, HexpadLink.Snapshot s, (string name, string hover, string pressed, string confirm)[] extra = null)
+        {
+            faces.Update(painter, s);
+            foreach (var style in new[] { "modern", "classic" })
+            {
+                cfg.Data.Appearance.Style = style;
+                Theme.Apply(cfg.Data.Appearance);
+                string st = style == "classic" ? "_95" : "";
+                panel.DrawFor(s, Clock.Now);
+                panel.Surf.SavePng(gpu, Path.Combine(dir, $"dock_{tag}{st}.png"));
+                foreach (var (name, hover, pressed, confirm) in extra ?? Array.Empty<(string, string, string, string)>())
+                {
+                    panel.DrawFor(s, Clock.Now, hover, pressed, confirm);
+                    panel.Surf.SavePng(gpu, Path.Combine(dir, $"dock_{tag}_{name}{st}.png"));
+                }
+                // the watch widget in its three sizes, beside a few others
+                data.Dock = s;
+                data.DockFaces = faces;
+                cfg.Data.Wrist.Face = "custom";
+                cfg.Data.Wrist.Widgets = new List<WatchWidget>
+                {
+                    new() { Type = "dock", X = 0, Y = 0, W = 1, H = 1 }, new() { Type = "dock", X = 1, Y = 0, W = 2, H = 1 },
+                    new() { Type = "dock", X = 3, Y = 0, W = 2, H = 2 }, new() { Type = "time", X = 0, Y = 1, W = 3, H = 1 },
+                    new() { Type = "battery", X = 0, Y = 2, W = 2, H = 2 }, new() { Type = "media", X = 2, Y = 2, W = 4, H = 1 },
+                    new() { Type = "settings", X = 5, Y = 0, W = 1, H = 1 },
+                };
+                wrist.Settle();
+                wrist.Draw(data);
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_dock_{tag}{st}.png"));
+            }
+            cfg.Data.Appearance.Style = "modern";
+            Theme.Apply(cfg.Data.Appearance);
+        }
+        if (nf > 0) Shots("live", live, new (string, string, string, string)[] { ("hover", "key2", null, null), ("knob", "enc1:r", null, null) });
+
+        // made-up faces: a colour per key with its number, so orientation and order show
+        var fake = new HexpadLink.Snapshot { State = HexpadLink.LinkState.Ok, Profile = "Default", PageName = "Home", Page = 0, Pages = 10, Version = 1 };
+        uint[] cols = { 0xFF2D6CDF, 0xFFE0473C, 0xFF3CB371, 0xFFE8A33D, 0xFF8E5BD8, 0xFF2BB5B8 };
+        for (int i = 0; i < HexpadLink.Keys; i++)
+        {
+            var px = new uint[68 * 68];
+            for (int y = 0; y < 68; y++)
+                for (int x = 0; x < 68; x++)
+                {
+                    bool edge = x < 3 || y < 3 || x > 64 || y > 64, mark = x > 8 && x < 8 + 6 * (i + 1) && y > 8 && y < 16;
+                    px[y * 68 + x] = edge ? 0xFFFFFFFF : mark ? 0xFF000000 : cols[i];
+                }
+            fake.Faces[i] = px;
+            fake.FaceVersion[i] = 1000 + i;           // never equal to a live face version
+        }
+        fake.Controls = new Dictionary<string, HexpadLink.Control>
+        {
+            ["key1"] = new() { Label = "Clock" }, ["key2"] = new() { Label = "Folder" }, ["key3"] = new() { Label = "System: sleep", Danger = true },
+            ["key4"] = new() { Label = "Media: play" }, ["key5"] = new() { Label = "Folder" }, ["key6"] = new() { Label = "Quick: Empty Recycle Bin", Danger = true },
+            ["btn7"] = new() { Label = "Page: prev" }, ["btn8"] = new() { Label = "Page: goto" }, ["btn9"] = new() { Label = "Page: next" },
+            ["enc0"] = new() { Label = "Bright", Left = "Brightness: down", Right = "Brightness: up", Push = "Brightness: set" },
+            ["enc1"] = new() { Label = "Volume", Left = "Volume: down", Right = "Volume: up", Push = "Volume: mute" },
+            ["enc2"] = new() { Label = "Screen", Left = "Monitors: down", Right = "Monitors: up" },
+        };
+        Shots("fake", fake, new (string, string, string, string)[]
+        {
+            ("hover", "key4", null, null), ("pressed", "key4", "key4", null), ("knob", "enc1:l", "enc1:l", null), ("push", "enc0", "enc0", null),
+            ("confirm", null, null, "key3"),
+        });
+        HexpadLink.Snapshot With(Action<HexpadLink.Snapshot> f) { var c = fake.Copy(); c.Version++; f(c); return c; }
+        Shots("idle", With(c => c.Ambient = true));
+        Shots("folder", With(c => { c.InFolder = true; c.FolderName = "Games"; c.FolderPage = 0; c.FolderPages = 2; }));
+        Shots("notrunning", With(c => c.State = HexpadLink.LinkState.NotRunning));
+        Shots("unplugged", With(c => c.State = HexpadLink.LinkState.Unplugged));
+        Shots("old", With(c => c.State = HexpadLink.LinkState.OldHexpad));
+        Log.Info("docktest: done");
+        return 0;
+    }
+
     public static int WinTest(string dir)
     {
         Directory.CreateDirectory(dir);

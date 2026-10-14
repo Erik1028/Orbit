@@ -37,7 +37,7 @@ static class Program
         int uf = Array.IndexOf(args, "--updated-from");
         if (uf >= 0 && uf + 1 < args.Length) UpdatedFrom = args[uf + 1];
         bool has(string a) => args.Contains(a);
-        bool tool = has("--snapshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest");
+        bool tool = has("--snapshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest");
         if (tool) return RunTool(args);
 
         // install / uninstall (the same exe: named "OrbitSetup.exe" it is the installer)
@@ -127,6 +127,11 @@ static class Program
             {
                 int i = Array.IndexOf(args, "--snapshot");
                 return Tools.Snapshot(i + 1 < args.Length ? args[i + 1] : "snapshot");
+            }
+            if (args.Contains("--docktest"))
+            {
+                int i = Array.IndexOf(args, "--docktest");
+                return Tools.DockTest(i + 1 < args.Length ? args[i + 1] : "docktest");
             }
             if (args.Contains("--wintest"))
             {

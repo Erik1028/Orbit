@@ -19,6 +19,8 @@ public sealed class PanelData
     public float FakeGpuLoad = -1, FakeVram = -1;
     public DateTime? VrSince;            // when SteamVR connected (the "time in VR" widget)
     public MediaInfo Media;
+    public HexpadLink.Snapshot Dock;     // Hexpad's stream dock (null = not looked for)
+    public HexpadFaces DockFaces;
     public (bool has, string title, string artist, bool playing)? FakeMedia;
     public float GpuLoad => FakeGpuLoad >= 0 ? FakeGpuLoad : Gpu?.Load3D ?? -1;
     public float VramUsed => FakeVram >= 0 ? FakeVram : Gpu?.VramUsedGB ?? -1;

@@ -28,6 +28,10 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly PanelData _data = new();
     readonly GpuStats _gpuStats = new();
     readonly MediaInfo _media = new();
+    readonly HexpadLink _hexpad = new();
+    HexpadFaces _dockFaces;
+    DockPanel _dockPanel;
+    HexpadLink.Snapshot _dockSnap = new();
     readonly NotificationListener _notifyIn = new();
     NotificationPanel _notifyPanel;
     WristPanel _wrist;
@@ -90,6 +94,11 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _wrist = new WristPanel(_gpu, _painter, _cfg) { OnAction = WristAction };
         _kb = new KeyboardPanel(_gpu, _painter, _cfg);
         _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
+        _dockFaces = new HexpadFaces();
+        _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
+        _data.Dock = _dockSnap;
+        _data.DockFaces = _dockFaces;
+        _hexpad.Start();
         _notifyPanel = new NotificationPanel(_gpu, _painter, _cfg);
         // VRChat chatbox: /chatbox/input <text> <send now> <notification sound>, /chatbox/typing <bool>
         _kb.OnChatSend = text => { _osc.SendMessage(C.General.OscPort, "/chatbox/input", text, true, true); Log.Info($"chatbox: {text.Length} chars"); };
@@ -408,6 +417,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _kb.Update(_vr, now);
             Perf(3, ref t);
             _settingsPanel.Update(_vr, now, dt);
+            UpdateDock(now, dt);
             Perf(4, ref t);
             // headset off: no capturing (the overlays keep their last picture)
             if (awake)
@@ -453,7 +463,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     List<IPointerTarget> Targets()
     {
         if (_targets != null) return _targets;
-        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 3) { _settingsPanel, _wrist, _kb };
+        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _wrist, _kb };
         _targets.AddRange(_windowPanels);
         _targets.AddRange(_desktops);
         return _targets;
@@ -498,6 +508,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         // first draws load fonts (~25 ms each): do it now, not when you first look at the watch / keyboard
         try { _wrist.Draw(_data); _kb.Draw(); _settingsPanel.Warm(); } catch (Exception e) { Log.Warn("warm-up draw: " + e.Message); }
         _settingsPanel.CreateOverlay(_vr);
+        _dockPanel.CreateOverlay(_vr);
         _notifyPanel.CreateOverlay();
         try { _winrtDev ??= MonitorCapture.CreateWinRtDevice(_gpu); }
         catch (Exception e) { Log.Error("WinRT device: " + e); }
@@ -612,6 +623,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _wrist.DestroyOverlay();
         _kb.DestroyOverlay();
         _settingsPanel.DestroyOverlay();
+        _dockPanel.DestroyOverlay();
         _notifyPanel.DestroyOverlay();
         foreach (var d in _desktops) d.DestroyOverlay();
         foreach (var w in _windowPanels) w.DestroyOverlay();
@@ -1417,7 +1429,28 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             case "settings":
                 _settingsPanel.Toggle();        // floating panel; the dashboard tab still exists too
                 break;
+            case "dock":
+                _dockPanel.Toggle();            // Hexpad's stream dock as a panel
+                break;
         }
+    }
+
+    // Hexpad's stream dock: the link runs while something shows it (its panel, or a watch widget while VR runs);
+    // the faces become bitmaps once per change, for the panel and the widget alike
+    void UpdateDock(double now, float dt)
+    {
+        var d = C.Dock;
+        bool widget = C.Wrist.Face == "custom" && (C.Wrist.Widgets?.Exists(w => w.Type == "dock") ?? false);
+        _hexpad.Active = _vr.Connected && d.Enabled && (d.Visible || widget);
+        WatchWidgets.DockAvailable = d.Enabled && _hexpad.Present;
+        int v = _hexpad.Version;
+        if (v != _dockSnap.Version)
+        {
+            _dockSnap = _hexpad.Get();
+            _dockFaces.Update(_painter, _dockSnap);
+            _data.Dock = _dockSnap;
+        }
+        _dockPanel.Update(_vr, now, dt, _dockSnap);
     }
 
     // previews in the settings screen are separate draws; they must not nest inside its BeginDraw
@@ -1433,7 +1466,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _cfg.SaveIfDue(force: true);
         foreach (var d in _desktops) d.Dispose();
         foreach (var w in _windowPanels) w.Dispose();
-        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose();
+        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose();
+        _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();
         _gpuStats.Dispose();
         _notifyIn.Dispose();

@@ -90,6 +90,16 @@ public sealed class SettingsPanelConfig
     public PlacementConfig Place { get; set; } = new();
 }
 
+// Hexpad's stream dock as a floating panel (only when Hexpad runs; see Sys/HexpadLink.cs)
+public sealed class DockConfig
+{
+    public bool Enabled { get; set; } = true;     // look for Hexpad (its pipe); nothing shows without it
+    public bool Visible { get; set; }             // the floating panel is open
+    public bool Input { get; set; } = true;       // the laser presses keys and turns knobs
+    public float Width { get; set; } = 0.32f;
+    public PlacementConfig Place { get; set; } = new();
+}
+
 public sealed class GeneralConfig
 {
     public string LaserHand { get; set; } = "both";
@@ -157,6 +167,7 @@ public sealed class Config
     public GeneralConfig General { get; set; } = new();
     public AppearanceConfig Appearance { get; set; } = new();
     public SettingsPanelConfig SettingsPanel { get; set; } = new();
+    public DockConfig Dock { get; set; } = new();
     public List<DesktopConfig> Desktops { get; set; } = new();
     public List<WindowConfig> Windows { get; set; } = new();
     public List<LayoutProfile> Layouts { get; set; } = DefaultLayouts();
@@ -215,6 +226,7 @@ public sealed class ConfigStore
                 if (cfg != null)
                 {
                     cfg.Wrist ??= new(); cfg.Keyboard ??= new(); cfg.General ??= new(); cfg.Appearance ??= new(); cfg.SettingsPanel ??= new(); cfg.SettingsPanel.Place ??= new();
+                    cfg.Dock ??= new(); cfg.Dock.Place ??= new();
                     cfg.Desktops = (cfg.Desktops ?? new()).Where(d => d != null && !string.IsNullOrEmpty(d.Id)).ToList();
                     foreach (var d in cfg.Desktops) d.Place ??= new();
                     cfg.Windows = (cfg.Windows ?? new()).Where(w => w != null && !string.IsNullOrEmpty(w.Id))
