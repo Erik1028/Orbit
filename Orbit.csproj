@@ -11,9 +11,11 @@
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
-    <AssemblyName>Orbit</AssemblyName>
+    <AssemblyName>OrbitOverlay</AssemblyName>
+    <AssemblyTitle>OrbitOverlay</AssemblyTitle>
     <RootNamespace>Orbit</RootNamespace>
-    <Version>1.6.0</Version>
+    <Version>1.7.0</Version>
+    <!-- "Orbit" until 1.8: the in-app updater of 1.6 and older only installs a file whose product name is Orbit -->
     <Product>Orbit</Product>
     <Description>Wrist watch, desktop mirrors and a VR keyboard for SteamVR</Description>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
@@ -35,7 +37,7 @@
     <!-- also embedded, so a single-file build / the installer can write them next to the exe -->
     <EmbeddedResource Include="assets\*.json" LogicalName="files/assets/%(Filename)%(Extension)" />
     <EmbeddedResource Include="orbit.vrmanifest" LogicalName="files/orbit.vrmanifest" />
-    <EmbeddedResource Include="docs\Orbit Quick Start.txt" LogicalName="files/Orbit Quick Start.txt" />
+    <EmbeddedResource Include="docs\OrbitOverlay Quick Start.txt" LogicalName="files/OrbitOverlay Quick Start.txt" />
   </ItemGroup>
 
 </Project>

@@ -45,7 +45,7 @@ public sealed class DesktopPanel : IPointerTarget, IDisposable
     public void CreateOverlay(VrSession vr, IDirect3DDevice winrtDevice, int n)
     {
         _vr = vr;
-        Ov = new VrOverlay($"erik.orbit.desktop.{n}", $"Orbit Desktop {Mon.Name}");
+        Ov = new VrOverlay($"erik.orbit.desktop.{n}", $"OrbitOverlay Desktop {Mon.Name}");
         Ov.SetFlag(VROverlayFlags.IgnoreTextureAlpha, true);
         Ov.SetSortOrder(100);
         try { _cap = new MonitorCapture(_g, winrtDevice, Mon); }

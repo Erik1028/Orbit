@@ -60,15 +60,27 @@ public sealed class InstallOptions
     public bool Update;                  // in-app update: replace the files only, leave shortcuts and settings alone
 }
 
-// Per-user install (no admin needed): %LOCALAPPDATA%\Programs\Orbit, Start menu + desktop
-// shortcuts, an entry in Settings > Apps. Started as "OrbitSetup.exe" it shows the installer;
-// "Orbit.exe --uninstall" removes it again.
+// Per-user install (no admin needed): %LOCALAPPDATA%\Programs\OrbitOverlay, Start menu + desktop
+// shortcuts, an entry in Settings > Apps. Started as "OrbitOverlaySetup.exe" it shows the installer;
+// "OrbitOverlay.exe --uninstall" removes it again. Until 1.6 the app was "Orbit" (Orbit.exe, Orbit.lnk): installing or
+// updating over such a folder moves it over (MoveFromOrbit). The ids nobody sees stay: the Apps key, the admin task,
+// the settings folder %LOCALAPPDATA%\Orbit, SteamVR's app key.
 static class Installer
 {
+    public const string ExeName = "OrbitOverlay.exe", OldExeName = "Orbit.exe";
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Orbit";
-    public static string DefaultDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Orbit");
-    static string StartMenuLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Orbit.lnk");
-    static string DesktopLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Orbit.lnk");
+    // a new install goes to Programs\OrbitOverlay; one that exists already (maybe Programs\Orbit) is updated where it is
+    public static string DefaultDir =>
+        Registry.CurrentUser.OpenSubKey(UninstallKey)?.GetValue("InstallLocation") as string is { Length: > 0 } reg && Directory.Exists(reg) ? reg
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OrbitOverlay");
+    static string StartMenuLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "OrbitOverlay.lnk");
+    static string DesktopLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "OrbitOverlay.lnk");
+    static string OldStartMenuLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Orbit.lnk");
+    static string OldDesktopLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Orbit.lnk");
+
+    // the app's exe in a folder: OrbitOverlay.exe, or the Orbit.exe of 1.6 and older
+    static string ExeIn(string dir) => File.Exists(Path.Combine(dir, ExeName)) || !File.Exists(Path.Combine(dir, OldExeName))
+        ? Path.Combine(dir, ExeName) : Path.Combine(dir, OldExeName);
     public static string Version => typeof(Installer).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
 
     public static bool IsSetupMode(string[] args) =>
@@ -93,15 +105,15 @@ static class Installer
         opt.RunAsAdmin = cfg.Data.General.RunAsAdmin;
         if (args.Contains("--update"))
         {
-            // started by "Check for updates" in Orbit: replace the copy in --install-dir without asking
-            // (settings, shortcuts and the Apps entry stay as they are), then start Orbit again
+            // started by "Check for updates": replace the copy in --install-dir without asking
+            // (settings, shortcuts and the Apps entry stay as they are), then start it again
             opt.WriteConfig = false;
             opt.Update = true;
             // the version being replaced, read before it is overwritten - the new Orbit announces the update
             string from = null;
             try
             {
-                var old = FileVersionInfo.GetVersionInfo(Path.Combine(opt.Dir, "Orbit.exe")).ProductVersion;
+                var old = FileVersionInfo.GetVersionInfo(ExeIn(opt.Dir)).ProductVersion;
                 if (!string.IsNullOrEmpty(old)) from = old.Split('+')[0];
             }
             catch { }
@@ -110,8 +122,8 @@ static class Installer
             {
                 Install(opt);
                 if (args.Contains("--no-start")) { Log.Info("update installed (--no-start)"); return 0; }   // tests
-                Log.Info("update installed, starting Orbit");
-                var psi = new ProcessStartInfo(Path.Combine(opt.Dir, "Orbit.exe")) { UseShellExecute = false, WorkingDirectory = opt.Dir };
+                Log.Info("update installed, starting OrbitOverlay");
+                var psi = new ProcessStartInfo(Path.Combine(opt.Dir, ExeName)) { UseShellExecute = false, WorkingDirectory = opt.Dir };
                 if (VrSession.RuntimeRunning()) psi.ArgumentList.Add("--steamvr");
                 if (from != null && from != Version) { psi.ArgumentList.Add("--updated-from"); psi.ArgumentList.Add(from); }
                 Process.Start(psi);
@@ -120,7 +132,7 @@ static class Installer
             catch (Exception e)
             {
                 Log.Error("update failed: " + e);
-                MessageBox.Show("Orbit could not be updated:\n" + e.Message, "Orbit update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("OrbitOverlay could not be updated:\n" + e.Message, "OrbitOverlay update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return 1;
             }
         }
@@ -150,7 +162,7 @@ static class Installer
     static void StopRunningOrbit()
     {
         if (!NamedObjects.InstanceExists(Program.MutexName)) return;
-        Log.Info("asking the running Orbit to quit");
+        Log.Info("asking the running OrbitOverlay to quit");
         NamedObjects.Signal(OrbitApp.ExitEventName);
         for (int i = 0; i < 80 && NamedObjects.InstanceExists(Program.MutexName); i++) Thread.Sleep(100);
         Thread.Sleep(300);
@@ -160,13 +172,14 @@ static class Installer
     {
         if (o.StopRunning) StopRunningOrbit();
         Directory.CreateDirectory(o.Dir);
-        string exe = Path.Combine(o.Dir, "Orbit.exe");
+        string exe = Path.Combine(o.Dir, ExeName);
         for (int attempt = 0; ; attempt++)
         {
             try { File.Copy(Environment.ProcessPath, exe, true); break; }
             catch (IOException) when (attempt < 20) { Thread.Sleep(250); }
         }
         AppFiles.WriteAll(o.Dir);
+        MoveFromOrbit(o.Dir, exe);
 
         if (o.Update)
         {
@@ -188,9 +201,9 @@ static class Installer
 
         using (var k = Registry.CurrentUser.CreateSubKey(UninstallKey))
         {
-            k.SetValue("DisplayName", "Orbit");
+            k.SetValue("DisplayName", "OrbitOverlay");
             k.SetValue("DisplayVersion", Version);
-            k.SetValue("Publisher", "Orbit");
+            k.SetValue("Publisher", "OrbitOverlay");
             k.SetValue("DisplayIcon", exe + ",0");
             k.SetValue("InstallLocation", o.Dir);
             k.SetValue("UninstallString", $"\"{exe}\" --uninstall");
@@ -211,15 +224,58 @@ static class Installer
         Log.Info($"installed to {o.Dir}");
     }
 
+    // A folder of the "Orbit" days (1.6 and older): what started Orbit.exe now starts OrbitOverlay.exe - the admin task
+    // (when we may: the in-app update runs elevated), the Start menu / desktop shortcuts (renamed OrbitOverlay.lnk), the
+    // Apps entry - then the old exe and the old quick start go. SteamVR follows by itself: the manifest written next to the
+    // exe names OrbitOverlay.exe, and the app registers it again when the path it finds differs.
+    static void MoveFromOrbit(string dir, string exe)
+    {
+        string old = Path.Combine(dir, OldExeName);
+        if (!File.Exists(old)) return;
+        Log.Info($"moving {old} over to {exe}");
+        try
+        {
+            if (TaskStarts(old))
+            {
+                if (Elevation.IsElevated) Elevation.InstallTask(true, Elevation.TaskName, exe);
+                else Log.Info("admin task still starts Orbit.exe: OrbitOverlay asks once (UAC) to point it at itself");
+            }
+        }
+        catch (Exception e) { Log.Warn("admin task: " + e.Message); }
+        foreach (var (oldLink, newLink) in new[] { (OldStartMenuLink, StartMenuLink), (OldDesktopLink, DesktopLink) })
+        {
+            if (LinkTarget(oldLink)?.Equals(old, StringComparison.OrdinalIgnoreCase) != true) continue;
+            MakeShortcut(newLink, exe, dir);
+            try { File.Delete(oldLink); } catch { }
+            Log.Info($"shortcut {oldLink} -> {newLink}");
+        }
+        using (var uk = Registry.CurrentUser.OpenSubKey(UninstallKey, writable: true))
+            if (uk?.GetValue("InstallLocation") is string loc &&
+                string.Equals(Path.GetFullPath(loc).TrimEnd('\\'), Path.GetFullPath(dir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            {
+                uk.SetValue("DisplayName", "OrbitOverlay");
+                uk.SetValue("Publisher", "OrbitOverlay");
+                uk.SetValue("DisplayIcon", exe + ",0");
+                uk.SetValue("UninstallString", $"\"{exe}\" --uninstall");
+                uk.SetValue("QuietUninstallString", $"\"{exe}\" --uninstall --quiet");
+            }
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            try { File.Delete(old); break; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Thread.Sleep(250); }
+        }
+        try { File.Delete(Path.Combine(dir, "Orbit Quick Start.txt")); } catch { }
+    }
+
     public static void Launch(string dir)
     {
-        try { Process.Start(new ProcessStartInfo(Path.Combine(dir, "Orbit.exe")) { UseShellExecute = true, WorkingDirectory = dir }); }
+        try { Process.Start(new ProcessStartInfo(Path.Combine(dir, ExeName)) { UseShellExecute = true, WorkingDirectory = dir }); }
         catch (Exception e) { Log.Warn("launch: " + e.Message); }
     }
 
     public static void OpenQuickStart(string dir)
     {
-        try { Process.Start(new ProcessStartInfo(Path.Combine(dir, "Orbit Quick Start.txt")) { UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo(Path.Combine(dir, "OrbitOverlay Quick Start.txt")) { UseShellExecute = true }); }
         catch (Exception e) { Log.Warn("quick start: " + e.Message); }
     }
 
@@ -230,8 +286,8 @@ static class Installer
         Log.Init("orbit-setup.log");
         string dir = Path.GetDirectoryName(Environment.ProcessPath);
         string exe = Environment.ProcessPath;
-        if (!quiet && MessageBox.Show("Remove Orbit from this PC?\n\nYour settings in %LOCALAPPDATA%\\Orbit are kept.",
-                "Uninstall Orbit", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        if (!quiet && MessageBox.Show("Remove OrbitOverlay from this PC?\n\nYour settings in %LOCALAPPDATA%\\Orbit are kept.",
+                "Uninstall OrbitOverlay", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return 1;
         Log.Info($"uninstall {dir}");
         string registeredDir = Registry.CurrentUser.OpenSubKey(UninstallKey)?.GetValue("InstallLocation") as string;
@@ -244,7 +300,7 @@ static class Installer
             Elevation.RemoveTask();
             if (TaskStarts(exe)) Elevation.RelaunchWithPrompt($"--remove-task \"{exe}\"");
         }
-        foreach (var link in new[] { StartMenuLink, DesktopLink })
+        foreach (var link in new[] { StartMenuLink, DesktopLink, OldStartMenuLink, OldDesktopLink })
             if (LinkTarget(link)?.Equals(exe, StringComparison.OrdinalIgnoreCase) == true)
                 try { File.Delete(link); } catch { }
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch { }
@@ -264,7 +320,7 @@ static class Installer
         }
         else Log.Warn($"not deleting files: {dir} is not the registered install folder ({registeredDir})");
         Log.Info("uninstalled");
-        if (!quiet) MessageBox.Show("Orbit has been removed.", "Uninstall Orbit", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (!quiet) MessageBox.Show("OrbitOverlay has been removed.", "Uninstall OrbitOverlay", MessageBoxButtons.OK, MessageBoxIcon.Information);
         return 0;
     }
 
@@ -328,7 +384,7 @@ static class Installer
             File.Copy(cfg, cfg + ".orbit-uninstall-bak", true);
             foreach (var h in hits) arr.Remove(h);
             File.WriteAllText(cfg, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            Log.Info("removed Orbit from " + cfg);
+            Log.Info("removed OrbitOverlay from " + cfg);
         }
         catch (Exception ex) { Log.Warn("unregister from SteamVR: " + ex.Message); }
     }
@@ -344,7 +400,7 @@ static class Installer
             lnk.TargetPath = target;
             lnk.WorkingDirectory = workDir;
             lnk.IconLocation = target + ",0";
-            lnk.Description = "Orbit - SteamVR overlay";
+            lnk.Description = "OrbitOverlay - SteamVR overlay";
             lnk.Save();
         }
         catch (Exception e) { Log.Warn($"shortcut {path}: {e.Message}"); }
@@ -382,12 +438,12 @@ sealed class InstallerWindow : Form
     public InstallerWindow(InstallOptions o)
     {
         _o = o;
-        _update = File.Exists(Path.Combine(o.Dir, "Orbit.exe"));
+        _update = File.Exists(Path.Combine(o.Dir, Installer.ExeName)) || File.Exists(Path.Combine(o.Dir, Installer.OldExeName));
         _g = new Gpu(-1);
         Theme.Apply(new ConfigStore().Data.Appearance);
         _p = new Painter(_g);
         _ui = new Ui(_p);
-        Text = _update ? "Update Orbit" : "Install Orbit";
+        Text = _update ? "Update OrbitOverlay" : "Install OrbitOverlay";
         Icon = Tray.MakeIcon(64);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
@@ -443,7 +499,7 @@ sealed class InstallerWindow : Form
         p.Line(0, 104, LW, 104, Theme.Border, 1);
         p.Ring(56, 52, 20, Theme.Accent, 5);
         p.Circle(73, 36, 6.5f, Theme.Accent2);
-        p.Text("Orbit", new RectangleF(96, 22, 300, 40), Theme.Text, 30, FontWeight.SemiBold);
+        p.Text("OrbitOverlay", new RectangleF(96, 22, 400, 40), Theme.Text, 30, FontWeight.SemiBold);
         p.Text("v" + Installer.Version, new RectangleF(200, 30, 120, 30), Theme.Dim, 14);
         p.Text("Wrist watch, desktop mirrors and a VR keyboard for SteamVR", new RectangleF(98, 60, 480, 26), Theme.Dim, 14);
 
@@ -456,7 +512,7 @@ sealed class InstallerWindow : Form
                 bool b = _o.DesktopShortcut;
                 if (_ui.Toggle("i.desk", new RectangleF(22, 172, 556, 46), "Desktop shortcut", ref b)) _o.DesktopShortcut = b;
                 b = _o.StartWithSteamVR;
-                if (_ui.Toggle("i.vr", new RectangleF(22, 222, 556, 52), "Start with SteamVR", ref b, "Orbit starts and stops together with SteamVR")) _o.StartWithSteamVR = b;
+                if (_ui.Toggle("i.vr", new RectangleF(22, 222, 556, 52), "Start with SteamVR", ref b, "OrbitOverlay starts and stops together with SteamVR")) _o.StartWithSteamVR = b;
                 b = _o.RunAsAdmin;
                 if (_ui.Toggle("i.adm", new RectangleF(22, 278, 556, 52), "Run as administrator", ref b,
                         "the VR mouse also works in admin windows - Windows asks once")) _o.RunAsAdmin = b;
@@ -482,15 +538,15 @@ sealed class InstallerWindow : Form
                 _ui.Anim("done0", 0);   // first frame of the page starts small
                 p.Circle(LW / 2, 168, 30 * (0.6f + 0.4f * s), Theme.Accent);
                 p.Icon(Theme.IcoCheck, new RectangleF(LW / 2 - 30, 138, 60, 60), Theme.OnAccent, 26 * s);
-                p.Text(_update ? "Orbit is updated" : "Orbit is installed", new RectangleF(0, 210, LW, 34), Theme.Text, 22, FontWeight.SemiBold, TextAlignment.Center);
-                p.Text("Start SteamVR - Orbit comes with it (look for the tray icon).\nTurn your left wrist towards you to see the watch.",
+                p.Text(_update ? "OrbitOverlay is updated" : "OrbitOverlay is installed", new RectangleF(0, 210, LW, 34), Theme.Text, 22, FontWeight.SemiBold, TextAlignment.Center);
+                p.Text("Start SteamVR - OrbitOverlay comes with it (look for the tray icon).\nTurn your left wrist towards you to see the watch.",
                     new RectangleF(40, 250, LW - 80, 60), Theme.Dim, 14, FontWeight.Normal, TextAlignment.Center, ParagraphAlignment.Near, null, true);
                 float bx = 32;
                 if (_ui.Button("d.guide", new RectangleF(bx, 376, 150, 40), "Quick start", null, false, true, 15))
                     Installer.OpenQuickStart(_o.Dir);
                 if (_ui.Button("d.close", new RectangleF(LW - 32 - 160 - 12 - 110, 376, 110, 40), "Close", null, false, true, 15))
                     Close();
-                if (_ui.Button("d.launch", new RectangleF(LW - 32 - 160, 376, 160, 40), "Launch Orbit", null, true, true, 15))
+                if (_ui.Button("d.launch", new RectangleF(LW - 32 - 160, 376, 160, 40), "Launch OrbitOverlay", null, true, true, 15))
                 {
                     Installer.Launch(_o.Dir);
                     Close();

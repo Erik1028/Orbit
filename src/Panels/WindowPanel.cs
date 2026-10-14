@@ -51,7 +51,7 @@ public sealed class WindowPanel : IPointerTarget, IDisposable
     {
         _vr = vr;
         _dev = dev;
-        Ov = new VrOverlay($"erik.orbit.window.{Cfg.Id}", "Orbit Window");
+        Ov = new VrOverlay($"erik.orbit.window.{Cfg.Id}", "OrbitOverlay Window");
         Ov.SetFlag(VROverlayFlags.IgnoreTextureAlpha, true);
         Ov.SetSortOrder(105);       // in front of monitors where they overlap
         if (Hwnd != IntPtr.Zero) StartCapture();

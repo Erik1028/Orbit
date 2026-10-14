@@ -77,15 +77,15 @@ public sealed class Laser : IDisposable
         _hand = hand;
         _p = p;
         _beamTex = new Surface(gpu, BeamW, BeamH);
-        _beam = new VrOverlay($"erik.orbit.laser.{hand.ToString().ToLowerInvariant()}", $"Orbit laser {hand}");
+        _beam = new VrOverlay($"erik.orbit.laser.{hand.ToString().ToLowerInvariant()}", $"OrbitOverlay laser {hand}");
         _beam.SetFlag(VROverlayFlags.IsPremultiplied, true);
         _beam.SetSortOrder(200);
         _dotTex = new Surface(gpu, 64, 64);
-        _dot = new VrOverlay($"erik.orbit.laserdot.{hand.ToString().ToLowerInvariant()}", $"Orbit laser dot {hand}");
+        _dot = new VrOverlay($"erik.orbit.laserdot.{hand.ToString().ToLowerInvariant()}", $"OrbitOverlay laser dot {hand}");
         _dot.SetFlag(VROverlayFlags.IsPremultiplied, true);
         _dot.SetSortOrder(201);
         _dot.SetWidth(DotSize);
-        _cursor = new VrOverlay($"erik.orbit.cursor.{hand.ToString().ToLowerInvariant()}", $"Orbit cursor {hand}");
+        _cursor = new VrOverlay($"erik.orbit.cursor.{hand.ToString().ToLowerInvariant()}", $"OrbitOverlay cursor {hand}");
         _cursor.SetFlag(VROverlayFlags.IsPremultiplied, true);
         _cursor.SetSortOrder(202);
         Redraw();

@@ -20,7 +20,7 @@ public sealed class Tray : IDisposable
         menu.Items.Add("Keyboard", null, (_, _) => toggleKeyboard());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => exit());
-        _icon = new NotifyIcon { Icon = MakeIcon(32), Text = "Orbit (SteamVR overlay)", Visible = true, ContextMenuStrip = menu };
+        _icon = new NotifyIcon { Icon = MakeIcon(32), Text = "OrbitOverlay (SteamVR overlay)", Visible = true, ContextMenuStrip = menu };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) settings(); };
     }
 

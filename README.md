@@ -1,14 +1,14 @@
-# Orbit
+# OrbitOverlay
 
 **A wrist watch, your desktop and a keyboard - floating in SteamVR.**
 
-Orbit is a lightweight SteamVR overlay for Windows, in the spirit of XSOverlay and OVR Toolkit:
+OrbitOverlay (formerly Orbit) is a lightweight SteamVR overlay for Windows, in the spirit of XSOverlay and OVR Toolkit:
 a watch on your wrist, your monitors (or single app windows) as curved screens around you with a
 laser mouse, a full VR keyboard, and its own settings panel you can grab and move in VR.
 
-![Orbit settings - Look tab](docs/img/settings-look.png)
+![OrbitOverlay settings - Look tab](docs/img/settings-look.png)
 
-> 🤖 **Made with AI.** Orbit was written primarily by an AI assistant (Anthropic's Claude, via Claude Code)
+> 🤖 **Made with AI.** OrbitOverlay was written primarily by an AI assistant (Anthropic's Claude, via Claude Code)
 > working from a human's requests and testing in VR. It's shared in good faith - please use it with the
 > same care you'd give any community software.
 
@@ -57,13 +57,23 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 
 ![Keyboard](docs/img/keyboard.png)
 
+**VRChat**
+- **Who is in the room**: a panel with everyone in your instance - friends (from VRCX, if you use it) and
+  people you star first - and who left lately; a card when a friend or a starred person comes or goes.
+  Arriving in a world gives one card for everyone you know who is there, not one per person. A "Room" watch
+  widget shows how many are there. Read from VRChat's own log; nothing is sent anywhere
+- **Status line**: what you are listening to (and, if you like, the time and your time in VR) as your chatbox
+  text over your head, kept up to date; switch it on from the watch or Settings > VRChat (needs OSC on in VRChat)
+- **No stray clicks in the game**: while a laser points at an OrbitOverlay panel, the game doesn't get that
+  hand's trigger, grip, stick or B / Y (SteamVR's overlay input priority) - switchable in Settings > VRChat
+
 **And also**
 - **Layout profiles** (Desk / Bed / Couch): each remembers where everything was - switch from the watch;
   lying in bed, the screens come above you
 - **Night mode**: dims every panel, one tap on the watch
 - Themes and any accent colour, panel colour and opacity, laser colour / thickness
 - **Windows 95 style** (Settings > Look > Style): the settings, the watch, the keyboard and the notifications
-  as real 1995 Windows - an "Orbit Properties" property sheet, a Date/Time window on your wrist, MS Sans Serif,
+  as real 1995 Windows - an "OrbitOverlay Properties" property sheet, a Date/Time window on your wrist, MS Sans Serif,
   3D bevels, drop-down lists - drawn at their original pixel size and enlarged without smoothing
 - **Notifications** in XSOverlay's format (UDP 42069) - e.g. from VRCX
 - **VRChat avatar parameters** compatible with XSOverlay (works with DXOverlay and similar avatar add-ons)
@@ -76,14 +86,15 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 
 ## Download
 
-Get **`OrbitSetup.exe`** from the [latest release](https://github.com/Erik1028/Orbit/releases/latest) and run it.
-It installs for your user only (no admin needed), adds a Start menu entry, and can start Orbit together
+Get **`OrbitOverlaySetup.exe`** from the [latest release](https://github.com/Erik1028/OrbitOverlay/releases/latest) and run it.
+It installs for your user only (no admin needed), adds a Start menu entry, and can start OrbitOverlay together
 with SteamVR. Uninstall from Windows Settings > Apps.
 
 - The installer is not code-signed, so Windows SmartScreen may warn: *More info > Run anyway*.
 - The first start asks once for administrator rights (so the VR mouse can click into admin windows);
   you can say No - everything else still works.
-- `Orbit Quick Start.txt` next to the installed app explains the controls.
+- `OrbitOverlay Quick Start.txt` next to the installed app explains the controls. Updating from Orbit 1.6 or
+  older moves the install over by itself (Orbit.exe becomes OrbitOverlay.exe, shortcuts follow, settings stay).
 
 **Requirements:** Windows 10 (2004+) or 11, a DirectX 11 GPU, SteamVR. Overlays show while the game runs
 through SteamVR (Virtual Desktop users: pick SteamVR as the runtime, not VDXR / OpenXR).
@@ -102,7 +113,7 @@ through SteamVR (Virtual Desktop users: pick SteamVR as the runtime, not VDXR / 
 
 ## Privacy
 
-No account, no telemetry. Orbit talks to SteamVR, to VRChat over OSC on `127.0.0.1`, and listens for
+No account, no telemetry. OrbitOverlay talks to SteamVR, to VRChat over OSC on `127.0.0.1`, and listens for
 notifications on `127.0.0.1:42069`. The only internet request is the GitHub release check when you press
 *Check for updates*. Settings and logs stay in `%LOCALAPPDATA%\Orbit`.
 
@@ -112,7 +123,7 @@ notifications on `127.0.0.1:42069`. The only internet request is the GitHub rele
 
 ```
 dotnet build -c Release
-powershell -File build_release.ps1      # -> release\OrbitSetup.exe (self-contained single file)
+powershell -File build_release.ps1      # -> release\OrbitOverlaySetup.exe (+ OrbitSetup.exe for old updaters)
 ```
 
 Developer switches (`--snapshot`, `--selftest`, `--raytest`, `--leaktest`, `--focustest`, ...) and the

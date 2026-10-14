@@ -100,10 +100,33 @@ public sealed class DockConfig
     public PlacementConfig Place { get; set; } = new();
 }
 
+// Who is in the VRChat instance (Sys/RoomWatcher.cs, Panels/RoomPanel.cs)
+public sealed class RoomConfig
+{
+    public bool Enabled { get; set; } = true;            // follow VRChat's log while SteamVR runs
+    public bool Visible { get; set; }                    // the floating panel is open
+    public float Width { get; set; } = 0.5f;
+    public PlacementConfig Place { get; set; } = new();
+    public bool NotifyFriends { get; set; } = true;      // a card when a friend (VRCX) comes or goes
+    public bool NotifyStarred { get; set; } = true;
+    public bool NotifyEveryone { get; set; }
+    public List<string> Starred { get; set; } = new();   // user ids (usr_...), or names where the log has no id
+}
+
+// The VRChat chatbox as a status line (Sys/StatusLine.cs)
+public sealed class ChatboxConfig
+{
+    public bool StatusLine { get; set; }                 // switched from the watch or the VRChat settings tab
+    public bool ShowMedia { get; set; } = true;
+    public bool ShowTime { get; set; }
+    public bool ShowVrTime { get; set; }
+}
+
 public sealed class GeneralConfig
 {
     public string LaserHand { get; set; } = "both";
     public bool Haptics { get; set; } = true;
+    public bool BlockGameInput { get; set; } = true;  // while a laser uses an Orbit panel, the game does not get that hand's buttons
     public int CaptureFps { get; set; } = 60;
     public bool DesktopsVisible { get; set; } = true;
     public bool AutoStart { get; set; } = true;       // wanted state; applied whenever SteamVR is reachable
@@ -168,6 +191,8 @@ public sealed class Config
     public AppearanceConfig Appearance { get; set; } = new();
     public SettingsPanelConfig SettingsPanel { get; set; } = new();
     public DockConfig Dock { get; set; } = new();
+    public RoomConfig Room { get; set; } = new();
+    public ChatboxConfig Chatbox { get; set; } = new();
     public List<DesktopConfig> Desktops { get; set; } = new();
     public List<WindowConfig> Windows { get; set; } = new();
     public List<LayoutProfile> Layouts { get; set; } = DefaultLayouts();
@@ -227,6 +252,7 @@ public sealed class ConfigStore
                 {
                     cfg.Wrist ??= new(); cfg.Keyboard ??= new(); cfg.General ??= new(); cfg.Appearance ??= new(); cfg.SettingsPanel ??= new(); cfg.SettingsPanel.Place ??= new();
                     cfg.Dock ??= new(); cfg.Dock.Place ??= new();
+                    cfg.Room ??= new(); cfg.Room.Place ??= new(); cfg.Room.Starred ??= new(); cfg.Chatbox ??= new();
                     cfg.Desktops = (cfg.Desktops ?? new()).Where(d => d != null && !string.IsNullOrEmpty(d.Id)).ToList();
                     foreach (var d in cfg.Desktops) d.Place ??= new();
                     cfg.Windows = (cfg.Windows ?? new()).Where(w => w != null && !string.IsNullOrEmpty(w.Id))

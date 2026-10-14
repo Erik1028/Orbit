@@ -171,7 +171,7 @@ public sealed class NotificationPanel : IDisposable
 
     public void CreateOverlay()
     {
-        _ov = new VrOverlay("erik.orbit.notifications", "Orbit Notifications");
+        _ov = new VrOverlay("erik.orbit.notifications", "OrbitOverlay Notifications");
         _ov.SetFlag(VROverlayFlags.IsPremultiplied, true);
         _ov.SetSortOrder(180);
         _ov.SetWidth(Width);

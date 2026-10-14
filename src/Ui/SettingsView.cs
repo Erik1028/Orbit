@@ -39,6 +39,9 @@ public interface IOrbitHost
     void SetRunAsAdmin(bool on);
     void RestartElevated();
     string NotificationStatus { get; }
+    string StatusLinePreview { get; }      // what the chatbox status line would say now
+    string RoomStatus { get; }             // VRChat log / VRCX found?
+    void ToggleRoom();
     void TestNotification();
     Updater Updates { get; }
     void SwitchLayout(string name);
@@ -58,9 +61,9 @@ public interface IOrbitHost
 public sealed partial class SettingsView
 {
     public const float W = 1000, H = 640;
-    static readonly string[] Tabs = { "Desktops", "Windows", "Layouts", "Wrist", "Keyboard", "Look", "General" };
-    static readonly string[] TabIcons = { Theme.IcoMonitor, Theme.IcoWindow, Theme.IcoLayouts, Theme.IcoWatch, Theme.IcoKeyboard, Theme.IcoColor, Theme.IcoSettings };
-    public const int TabDesktops = 0, TabWindows = 1, TabLayouts = 2, TabWrist = 3, TabKeyboard = 4, TabLook = 5, TabGeneral = 6;
+    static readonly string[] Tabs = { "Desktops", "Windows", "Layouts", "Wrist", "Keyboard", "Look", "VRChat", "General" };
+    static readonly string[] TabIcons = { Theme.IcoMonitor, Theme.IcoWindow, Theme.IcoLayouts, Theme.IcoWatch, Theme.IcoKeyboard, Theme.IcoColor, "\uE8BD", Theme.IcoSettings };
+    public const int TabDesktops = 0, TabWindows = 1, TabLayouts = 2, TabWrist = 3, TabKeyboard = 4, TabLook = 5, TabVrchat = 6, TabGeneral = 7;
     public static int TabCount => Tabs.Length;
     static readonly string[] AttachIds = { "world", "left", "right", "head" };
     static readonly string[] AttachNames = { "World", "Left hand", "Right hand", "Head" };
@@ -94,6 +97,7 @@ public sealed partial class SettingsView
             case TabWrist: DrawWrist(ui); break;
             case TabKeyboard: DrawKeyboard(ui); break;
             case TabLook: DrawLook(ui); break;
+            case TabVrchat: DrawVrchat(ui); break;
             default: DrawGeneral(ui); break;
         }
         if (ui.Changed) _h.Cfg.MarkDirty();
@@ -155,9 +159,10 @@ public sealed partial class SettingsView
         // logo: ring + moon
         p.Ring(40, 32, 13, Theme.Accent, 3.5f);
         p.Circle(51, 21, 4.5f, Theme.Accent2);
-        p.Text("Orbit", new RectangleF(64, 0, 100, 64), Theme.Text, 22, FontWeight.SemiBold);
+        p.Text("OrbitOverlay", new RectangleF(64, 0, 180, 64), Theme.Text, 22, FontWeight.SemiBold);
         bool on = _h.VrConnected;
-        var pill = new RectangleF(140, 19, Math.Max(190, ui.P.MeasureWidth(_h.VrStatus, 13) + 36), 26);
+        float px = 64 + p.MeasureWidth("OrbitOverlay", 22, FontWeight.SemiBold) + 16;       // the pill right after the name
+        var pill = new RectangleF(px, 19, MathF.Min(Math.Max(190, ui.P.MeasureWidth(_h.VrStatus, 13) + 36), 500 - px), 26);
         p.Fill(pill, on ? 0x2234D399u : 0x22FFFFFFu, 13);
         p.Circle(pill.X + 14, pill.Y + 13, 4.5f, on ? Theme.Good : Theme.Faint);
         p.Text(_h.VrStatus, new RectangleF(pill.X + 26, pill.Y, pill.Width - 30, pill.Height), on ? Theme.Text : Theme.Dim, 13);
@@ -192,7 +197,7 @@ public sealed partial class SettingsView
         if (caption)
         {
             var cap = new RectangleF(4, 4, W - 8, 24);
-            p.Caption(cap, "Orbit Settings", 13);
+            p.Caption(cap, "OrbitOverlay Settings", 13);
             var close = new RectangleF(cap.Right - 22, cap.Y + 3, 19, 18);
             if (ui.Button("hdr.close", close, null, "\uE8BB", false, true, 7)) OnClose();
             by = 33;
@@ -735,6 +740,51 @@ public sealed partial class SettingsView
     }
 
     // ---------------- General ----------------
+    // VRChat: the chatbox status line, who is in the room, and keeping clicks from the game
+    void DrawVrchat(Ui ui)
+    {
+        var p = ui.P;
+        var cb = C.Chatbox;
+        var rm = C.Room;
+        var g = C.General;
+        float lx = 222, cw = 376, rx = 602, rw = 382;
+        ui.Section(new RectangleF(lx + 10, 84, cw, 22), "Chatbox status line");
+        bool b = cb.StatusLine;
+        if (ui.Toggle("vc.status", new RectangleF(lx, 108, cw, 54), "Status line", ref b, "over your head in VRChat (needs OSC on in VRChat)"))
+            cb.StatusLine = b;
+        b = cb.ShowMedia;
+        if (ui.Toggle("vc.media", new RectangleF(lx, 164, cw, 44), "Now playing", ref b)) cb.ShowMedia = b;
+        b = cb.ShowTime;
+        if (ui.Toggle("vc.time", new RectangleF(lx, 210, cw, 44), "Clock", ref b)) cb.ShowTime = b;
+        b = cb.ShowVrTime;
+        if (ui.Toggle("vc.vrtime", new RectangleF(lx, 256, cw, 44), "Time in VR", ref b)) cb.ShowVrTime = b;
+        ui.Label(new RectangleF(lx + 10, 306, cw - 20, 20), cb.StatusLine ? "It says now:" : "It would say:");
+        string prev = _h.StatusLinePreview;
+        var box = new RectangleF(lx + 10, 330, cw - 20, 64);
+        p.Fill(box, Theme.Panel, 10);
+        p.Text(string.IsNullOrEmpty(prev) ? "nothing - the chatbox stays empty" : prev, RectangleF.Inflate(box, -12, -6),
+            string.IsNullOrEmpty(prev) ? Theme.Dim : Theme.Text, 14, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, null, true);
+        ui.Section(new RectangleF(lx + 10, 412, cw, 22), "Controllers");
+        b = g.BlockGameInput;
+        if (ui.Toggle("vc.block", new RectangleF(lx, 436, cw, 54), "Keep clicks from the game", ref b, "while a laser is on an OrbitOverlay panel"))
+            g.BlockGameInput = b;
+
+        ui.Section(new RectangleF(rx + 10, 84, rw, 22), "Who is in the room");
+        b = rm.Enabled;
+        if (ui.Toggle("vc.room", new RectangleF(rx, 108, rw, 54), "Follow VRChat's log", ref b, _h.RoomStatus)) rm.Enabled = b;
+        b = rm.NotifyFriends;
+        if (ui.Toggle("vc.nf", new RectangleF(rx, 164, rw, 54), "Tell me when friends come and go", ref b, "friends from VRCX", rm.Enabled))
+            rm.NotifyFriends = b;
+        b = rm.NotifyStarred;
+        if (ui.Toggle("vc.ns", new RectangleF(rx, 220, rw, 54), "... and starred people", ref b, "star them in the Room panel", rm.Enabled))
+            rm.NotifyStarred = b;
+        b = rm.NotifyEveryone;
+        if (ui.Toggle("vc.ne", new RectangleF(rx, 276, rw, 44), "... and everyone", ref b, null, rm.Enabled)) rm.NotifyEveryone = b;
+        if (ui.Button("vc.open", new RectangleF(rx + 10, 336, 220, 38), rm.Visible ? "Hide the Room panel" : "Show the Room panel", "\uE716", false,
+                _h.VrConnected && rm.Enabled, 14))
+            _h.ToggleRoom();
+    }
+
     void DrawGeneral(Ui ui)
     {
         var p = ui.P;
@@ -757,7 +807,7 @@ public sealed partial class SettingsView
                 $"XSOverlay-style, for DXOverlay · 127.0.0.1:{g.OscPort}")) g.Osc = b;
         b = g.AutoStart;
         if (ui.Toggle("g.auto", new RectangleF(lx, 354, cw, 54), "Start with SteamVR", ref b,
-                b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start Orbit yourself"))
+                b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start OrbitOverlay yourself"))
             _h.SetAutoStart(b);
         b = g.RunAsAdmin;
         string adminHint = _h.IsElevated ? "running as admin: works in admin windows too"

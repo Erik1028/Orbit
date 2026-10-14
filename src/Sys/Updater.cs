@@ -10,14 +10,14 @@ using System.Threading.Tasks;
 
 namespace Orbit;
 
-// "Check for updates": asks GitHub for the latest release of Erik1028/Orbit, and the same button then
-// updates in place: OrbitSetup.exe is downloaded, checked (size and SHA-256 as GitHub lists them, file
-// version) and started with --update for the folder Orbit runs from, which closes Orbit, replaces its
-// files (settings, shortcuts and the Apps entry stay as they are) and starts it again.
+// "Check for updates": asks GitHub for the latest release of Erik1028/OrbitOverlay (renamed from Erik1028/Orbit; GitHub
+// redirects the old name), and the same button then updates in place: OrbitOverlaySetup.exe is downloaded, checked (size
+// and SHA-256 as GitHub lists them, file version) and started with --update for the folder OrbitOverlay runs from, which
+// closes it, replaces its files (settings and shortcuts stay as they are) and starts it again.
 public sealed class Updater
 {
-    public const string Repo = "Erik1028/Orbit";
-    const string AssetName = "OrbitSetup.exe";
+    public const string Repo = "Erik1028/OrbitOverlay";
+    static readonly string[] AssetNames = { "OrbitOverlaySetup.exe", "OrbitSetup.exe" };     // the second: releases before the rename
 
     public enum State { Idle, Checking, UpToDate, Available, Downloading, Starting, Failed }
 
@@ -49,7 +49,7 @@ public sealed class Updater
     static HttpClient Client()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd($"Orbit/{Current.ToString(3)} (+https://github.com/{Repo})");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd($"OrbitOverlay/{Current.ToString(3)} (+https://github.com/{Repo})");
         return c;
     }
 
@@ -75,9 +75,13 @@ public sealed class Updater
                 string page = root.TryGetProperty("html_url", out var h) ? h.GetString() : $"https://github.com/{Repo}/releases/latest";
                 string url = null, sha = null;
                 long size = 0;
+                int rank = int.MaxValue;
                 foreach (var a in root.GetProperty("assets").EnumerateArray())
                 {
-                    if (!string.Equals(a.GetProperty("name").GetString(), AssetName, StringComparison.OrdinalIgnoreCase)) continue;
+                    int r = Array.FindIndex(AssetNames, n => string.Equals(a.GetProperty("name").GetString(), n, StringComparison.OrdinalIgnoreCase));
+                    if (r < 0 || r >= rank) continue;
+                    rank = r;
+                    sha = null;
                     url = a.GetProperty("browser_download_url").GetString();
                     size = a.TryGetProperty("size", out var s) ? s.GetInt64() : 0;
                     if (a.TryGetProperty("digest", out var dg) && dg.GetString() is { } d && d.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
@@ -118,7 +122,7 @@ public sealed class Updater
             try
             {
                 string file = await DownloadVerified(url, sha, size, v);
-                Set(State.Starting, "installing - Orbit restarts in a moment");
+                Set(State.Starting, "installing - OrbitOverlay restarts in a moment");
                 Log.Info($"update: starting {file} --update --install-dir \"{dir}\"");
                 Process.Start(new ProcessStartInfo(file)
                 {
@@ -141,8 +145,9 @@ public sealed class Updater
     {
         string folder = Path.Combine(Log.Dir, "updates");
         Directory.CreateDirectory(folder);
-        foreach (var old in Directory.GetFiles(folder, "OrbitSetup-*.exe")) { try { File.Delete(old); } catch { } }
-        string file = Path.Combine(folder, $"OrbitSetup-{v.ToString(3)}.exe");
+        foreach (var pattern in new[] { "OrbitSetup-*.exe", "OrbitOverlaySetup-*.exe" })
+            foreach (var old in Directory.GetFiles(folder, pattern)) { try { File.Delete(old); } catch { } }
+        string file = Path.Combine(folder, $"OrbitOverlaySetup-{v.ToString(3)}.exe");
         try
         {
             using (var http = Client())
@@ -172,8 +177,8 @@ public sealed class Updater
                 if (hash != sha) throw new InvalidDataException("SHA-256 does not match the release");
             }
             var fv = FileVersionInfo.GetVersionInfo(file);
-            if (fv.ProductName != "Orbit" || !(fv.ProductVersion ?? "").StartsWith(v.ToString(3)))
-                throw new InvalidDataException($"the download is '{fv.ProductName} {fv.ProductVersion}', expected Orbit {v.ToString(3)}");
+            if (fv.ProductName is not ("Orbit" or "OrbitOverlay") || !(fv.ProductVersion ?? "").StartsWith(v.ToString(3)))
+                throw new InvalidDataException($"the download is '{fv.ProductName} {fv.ProductVersion}', expected OrbitOverlay {v.ToString(3)}");
             Log.Info($"update: {file} verified ({length} bytes, sha256 {(sha != null ? "matches" : "not listed")}, version {fv.ProductVersion})");
             return file;
         }

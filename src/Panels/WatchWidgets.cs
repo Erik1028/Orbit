@@ -49,6 +49,9 @@ public static class WatchWidgets
         new("layout", "Layout", "Layout", Theme.IcoLayouts, W95Icons.Id.Layouts, Btn, 0, true, 2),
         new("night", "Night mode", "Night", Theme.IcoNight, W95Icons.Id.Moon, Btn, 0, true, 1),
         new("settings", "Settings", "Settings", Theme.IcoSettings, W95Icons.Id.Gear, Btn, 0, true, 0),
+        new("status", "Status line", "Status", "\uE8BD", W95Icons.Id.Chat, Btn, 1, true, 1),
+        // VRChat: who is in the instance; a tap opens the Room panel
+        new("room", "Room", "Room", "\uE716", W95Icons.Id.People, new[] { (1, 1), (2, 1) }, 1, false, 2),
         // the stream dock (Hexpad): its keys live; a tap opens it as a panel. Offered only while Hexpad runs.
         new("dock", "Hexpad", "Hexpad", "\uE80A", W95Icons.Id.Dock, new[] { (1, 1), (2, 1), (2, 2) }, 1, false, 1),
     };

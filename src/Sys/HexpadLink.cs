@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
 using System.Text;
@@ -15,6 +16,9 @@ namespace Orbit;
 // Hexpad (an app for the Ajazz AKP03 stream dock) publishes on the local pipe "Hexpad_mirror_v1" what the dock's
 // six keys show, which page / folder it is on and what every key, round button and knob does; we can press keys,
 // turn knobs and wake its idle screen. One JSON object per line (see Hexpad's dock/mirror.py).
+// api 2 (additive, an api 1 Hexpad simply ignores what it does not know): the faces also drawn at 2x for us, each
+// knob says whether it is a slider Hexpad can read and set ("abs") or only turn ("jog"), its value comes in
+// "values", and we "set" a value or "jog" a knob by n detents (never accelerated).
 // Its OTHER pipe, AjazzDock_ipc_v1, is only ever looked for by name, never opened: any message there but
 // "status" pops Hexpad's window on the desktop.
 public sealed class HexpadLink : IDisposable
@@ -28,27 +32,51 @@ public sealed class HexpadLink : IDisposable
     {
         public string Label = "", Left = "", Right = "", Push = "";
         public bool Danger;
+        // a knob's turn: "abs" = Hexpad reads and sets a value (api 2), "jog" = turns only, "" = turning does nothing.
+        // An api 1 Hexpad does not say: a knob with a left / right action is a "jog" one then.
+        public string Slider = "", Kind = "";      // Kind: the turn action's type ("volume", "brightness", "monitor"...)
+        public int Max = 100;
     }
 
-    // what the panel draws; Faces are replaced, never changed in place, so a copy of the array is a safe picture
+    // a knob's value (api 2): V 0..1, null when Hexpad does not know it; Muted (volume), Off (monitors powered off)
+    public sealed class Value
+    {
+        public float? V;
+        public bool Muted, Off;
+    }
+
+    // one key's picture, upright, premultiplied BGRA; never changed once made
+    public sealed class Face
+    {
+        public readonly uint[] Px;
+        public readonly int W, H;
+        public Face(uint[] px, int w, int h) { Px = px; W = w; H = h; }
+    }
+
+    // what the panel draws; faces, controls and values are replaced, never changed in place, so a copy of the
+    // arrays is a safe picture
     public sealed class Snapshot
     {
         public int Version;
         public LinkState State;
+        public int Api = 1;                 // what Hexpad's hello said (1 = no sliders, no sharp faces)
+        public string[] Caps = Array.Empty<string>();
         public bool Ambient, Dark, InFolder;
         public string Profile = "", PageName = "", FolderName = "";
         public int Page, Pages = 1, FolderPage, FolderPages;
-        public uint[][] Faces = new uint[Keys][];
+        public Face[] Faces = new Face[Keys];       // the device JPEGs (68 px): the dock's own pixels
+        public Face[] HiFaces = new Face[Keys];     // api 2: the same faces drawn at 2x; null = only the device one
         public int[] FaceVersion = new int[Keys];
-        public int FaceW = 68, FaceH = 68;
         public Dictionary<string, Control> Controls = new();
+        public Dictionary<string, Value> Values = new();    // "enc0".."enc2" (abs sliders only)
         public string Echo;                 // the last physical input on the dock ("key3", "enc1"...)
         public double EchoAt = -10;
 
         public Snapshot Copy()
         {
             var s = (Snapshot)MemberwiseClone();
-            s.Faces = (uint[][])Faces.Clone();
+            s.Faces = (Face[])Faces.Clone();
+            s.HiFaces = (Face[])HiFaces.Clone();
             s.FaceVersion = (int[])FaceVersion.Clone();
             return s;
         }
@@ -61,9 +89,17 @@ public sealed class HexpadLink : IDisposable
     Thread _thread;
     volatile bool _stop, _active;
     volatile bool _present, _oldPresent;
+    volatile int _api = 1;
     // what hello said about the device JPEGs
     int _rot = 90, _dx, _dy;
     bool _mirror;
+
+    // slider values and jogs wait here for the worker: only the newest value per knob, the detents summed up
+    readonly object _qlock = new();
+    readonly Dictionary<string, (string kind, float v, bool final)> _set = new();
+    readonly Dictionary<string, (float v, double at)> _setSent = new();
+    readonly Dictionary<string, int> _jog = new();
+    double _jogNext;
 
     // set every tick: VR is on and something shows the dock (its panel or a watch widget)
     public bool Active
@@ -81,6 +117,8 @@ public sealed class HexpadLink : IDisposable
     // Hexpad's mirror pipe exists (checked every few seconds while VR runs, without connecting)
     public bool Present => _present;
     public bool Connected => Get().State is LinkState.Ok or LinkState.Unplugged or LinkState.ScreenOff;
+    // Hexpad sets absolute values (api 2); an older one only turns knobs
+    public bool CanSet => _api >= 2;
 
     public Snapshot Get() { lock (_lock) return _s.Copy(); }
     public int Version { get { lock (_lock) return _s.Version; } }
@@ -98,12 +136,46 @@ public sealed class HexpadLink : IDisposable
     public void Turn(string id, int dir) => Send($"{{\"t\":\"input\",\"id\":\"{id}\",\"turn\":{(dir > 0 ? 1 : -1)}}}");
     public void Wake() => Send("{\"t\":\"wake\"}");
 
+    // a slider's value 0..1 for a knob whose turn is 'kind' (Hexpad drops it when the knob does something else by
+    // now). The newest one per knob wins: at most ~30 a second, only a change of 0.5 % or more; final (on release)
+    // always goes out. Only an api 2 Hexpad sets values.
+    public void Set(string id, string kind, float value, bool final)
+    {
+        if (!_active || _api < 2 || string.IsNullOrEmpty(kind) || !float.IsFinite(value)) return;
+        lock (_qlock) _set[id] = (kind, Math.Clamp(value, 0, 1), final);
+        _wake.Set();
+    }
+
+    // turn a knob by n detents, without Hexpad's acceleration: up to 10 per message, ~20 messages a second.
+    // An api 1 Hexpad gets single turns, one every 0.1 s (it would speed up turns that arrive together).
+    public void Jog(string id, int steps)
+    {
+        if (!_active || steps == 0) return;
+        lock (_qlock)
+        {
+            // a backlog stays short: an api 1 Hexpad gets at most 10 single turns (a second), api 2 three messages
+            int cap = _api >= 2 ? 30 : 10;
+            _jog.TryGetValue(id, out int n);
+            n = Math.Clamp(n + steps, -cap, cap);
+            if (n == 0) _jog.Remove(id); else _jog[id] = n;
+        }
+        _wake.Set();
+    }
+
     void Send(string line)
     {
         if (!_active) return;
         _out.Enqueue(line);
         _wake.Set();
     }
+
+    void ClearPending()
+    {
+        while (_out.TryDequeue(out _)) { }
+        lock (_qlock) { _set.Clear(); _setSent.Clear(); _jog.Clear(); }
+    }
+
+    bool Pending { get { lock (_qlock) return _set.Count > 0 || _jog.Count > 0; } }
 
     // ---- the worker ----
     static bool PipeExists(string name)
@@ -142,7 +214,7 @@ public sealed class HexpadLink : IDisposable
             }
             if (!_active || !_present)
             {
-                while (_out.TryDequeue(out _)) { }
+                ClearPending();
                 SetState(!_active ? LinkState.Off : _oldPresent ? LinkState.OldHexpad : LinkState.NotRunning);
                 _wake.WaitOne(_active ? 1000 : 3000);
                 continue;
@@ -171,18 +243,31 @@ public sealed class HexpadLink : IDisposable
     {
         using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         pipe.Connect(1500);
-        var hello = Encoding.UTF8.GetBytes($"{{\"t\":\"hello\",\"client\":\"Orbit\",\"ver\":\"{Updater.Current.ToString(3)}\"}}\n");
-        pipe.Write(hello, 0, hello.Length);
+        // a new connection starts as api 1 until Hexpad's hello says more; nothing queued for the last one goes out
+        ClearPending();
+        _api = 1;
+        lock (_lock) { _s.Api = 1; _s.Caps = Array.Empty<string>(); _s.Values = new(); _s.HiFaces = new Face[Keys]; _s.Version++; }
+        // api 2 and "hi": 2 ask for sliders and the faces at 2x; an api 1 Hexpad ignores both
+        Write(pipe, $"{{\"t\":\"hello\",\"client\":\"OrbitOverlay\",\"ver\":\"{Updater.Current.ToString(3)}\",\"api\":2,\"hi\":2}}");
         Log.Info("hexpad link: connected");
         var buf = new byte[64 * 1024];
         var line = new MemoryStream();
         Task<int> read = null;
+        WaitHandle[] waits = null;
         while (!_stop && _active)
         {
-            read ??= pipe.ReadAsync(buf, 0, buf.Length);
-            if (read.Wait(30))
+            if (read == null)
+            {
+                read = pipe.ReadAsync(buf, 0, buf.Length);
+                waits = new[] { ((IAsyncResult)read).AsyncWaitHandle, _wake };
+            }
+            // a line from Hexpad, or something to send (a press goes out at once; a slider value due later wants a
+            // short nap)
+            if (!read.IsCompleted) WaitHandle.WaitAny(waits, Pending ? 8 : 30);
+            if (read.IsCompleted)
             {
                 int n = read.Result;
+                read.Dispose();
                 read = null;
                 if (n <= 0) throw new IOException("Hexpad closed the pipe");
                 for (int i = 0; i < n; i++)
@@ -193,13 +278,56 @@ public sealed class HexpadLink : IDisposable
                 }
                 if (line.Length > 16 * 1024 * 1024) throw new IOException("line too long");
             }
-            while (_out.TryDequeue(out var msg))
-            {
-                var b = Encoding.UTF8.GetBytes(msg + "\n");
-                pipe.Write(b, 0, b.Length);
-            }
+            while (_out.TryDequeue(out var msg)) Write(pipe, msg);
+            Flush(pipe);
         }
         Log.Info("hexpad link: closed (not needed)");
+    }
+
+    static void Write(Stream pipe, string msg)
+    {
+        var b = Encoding.UTF8.GetBytes(msg + "\n");
+        pipe.Write(b, 0, b.Length);
+    }
+
+    // the slider values and jogs that are due
+    void Flush(Stream pipe)
+    {
+        List<string> lines = null;
+        double now = Clock.Now;
+        lock (_qlock)
+        {
+            if (_set.Count > 0)
+                foreach (var id in new List<string>(_set.Keys))
+                {
+                    var (kind, v, final) = _set[id];
+                    var last = _setSent.TryGetValue(id, out var ls) ? ls : (-1f, -10.0);
+                    if (!final)
+                    {
+                        if (Math.Abs(v - last.Item1) < 0.005f) { _set.Remove(id); continue; }     // nothing new
+                        if (now - last.Item2 < 1 / 30.0) continue;                             // next pass
+                    }
+                    (lines ??= new()).Add($"{{\"t\":\"set\",\"id\":\"{id}\",\"kind\":{JsonSerializer.Serialize(kind)}," +
+                                          $"\"value\":{v.ToString("0.0###", CultureInfo.InvariantCulture)},\"final\":{(final ? "true" : "false")}}}");
+                    // after a release the next drag starts afresh (even at the same value)
+                    _setSent[id] = (final ? -1f : v, now);
+                    _set.Remove(id);
+                }
+            if (_jog.Count > 0 && now >= _jogNext)
+            {
+                foreach (var id in new List<string>(_jog.Keys))
+                {
+                    int n = _jog[id];
+                    int send = _api >= 2 ? Math.Clamp(n, -10, 10) : Math.Sign(n);
+                    (lines ??= new()).Add(_api >= 2
+                        ? $"{{\"t\":\"jog\",\"id\":\"{id}\",\"steps\":{send}}}"
+                        : $"{{\"t\":\"input\",\"id\":\"{id}\",\"turn\":{send}}}");
+                    if (n - send == 0) _jog.Remove(id); else _jog[id] = n - send;
+                }
+                _jogNext = now + (_api >= 2 ? 0.05 : 0.1);
+            }
+        }
+        if (lines != null) foreach (var l in lines) Write(pipe, l);
     }
 
     void Handle(ReadOnlySpan<byte> json)
@@ -214,9 +342,17 @@ public sealed class HexpadLink : IDisposable
                 _mirror = m.TryGetProperty("mirror", out var mv) && mv.ValueKind == JsonValueKind.True;
                 if (m.TryGetProperty("shift", out var sh) && sh.ValueKind == JsonValueKind.Array && sh.GetArrayLength() == 2)
                 {
-                    _dx = sh[0].GetInt32();
-                    _dy = sh[1].GetInt32();
+                    _dx = Int(sh[0], 0);
+                    _dy = Int(sh[1], 0);
                 }
+                int api = Math.Max(1, Int(m, "api", 1));
+                var caps = new List<string>();
+                if (m.TryGetProperty("caps", out var cv) && cv.ValueKind == JsonValueKind.Array)
+                    foreach (var c in cv.EnumerateArray())
+                        if (c.ValueKind == JsonValueKind.String) caps.Add(c.GetString());
+                _api = api;
+                lock (_lock) { _s.Api = api; _s.Caps = caps.ToArray(); _s.Version++; }
+                Log.Info($"hexpad link: api {api}" + (caps.Count > 0 ? $" ({string.Join(", ", caps)})" : ""));
                 break;
             case "state":
                 lock (_lock)
@@ -241,26 +377,64 @@ public sealed class HexpadLink : IDisposable
                 {
                     if (p.Value.ValueKind != JsonValueKind.Object) continue;
                     var v = p.Value;
-                    ctl[p.Name] = new Control
+                    var c = new Control
                     {
                         Label = Str(v, "label"), Left = Str(v, "left"), Right = Str(v, "right"), Push = Str(v, "push"),
-                        Danger = Bool(v, "danger"),
+                        Danger = Bool(v, "danger"), Max = Math.Max(1, Int(v, "max", 100)),
                     };
+                    c.Slider = v.TryGetProperty("slider", out var sv) && sv.ValueKind == JsonValueKind.String ? sv.GetString() ?? ""
+                        : c.Left.Length > 0 || c.Right.Length > 0 ? "jog" : "";
+                    // api 1 has no kind: the summary's "Page: next" says "page" (only the jog distance needs it)
+                    c.Kind = v.TryGetProperty("kind", out var kv) && kv.ValueKind == JsonValueKind.String ? kv.GetString() ?? ""
+                        : KindOf(c.Left.Length > 0 ? c.Left : c.Right);
+                    ctl[p.Name] = c;
                 }
                 lock (_lock) { _s.Controls = ctl; _s.Version++; }
                 break;
+            case "values":
+                var vals = new Dictionary<string, Value>();
+                foreach (var p in m.EnumerateObject())
+                {
+                    if (p.Value.ValueKind != JsonValueKind.Object) continue;
+                    var v = p.Value;
+                    float? x = null;
+                    if (v.TryGetProperty("v", out var xv) && xv.ValueKind == JsonValueKind.Number && xv.TryGetDouble(out double d) && double.IsFinite(d))
+                        x = (float)Math.Clamp(d, 0, 1);
+                    vals[p.Name] = new Value { V = x, Muted = Bool(v, "muted"), Off = Bool(v, "off") };
+                }
+                lock (_lock) { _s.Values = vals; _s.Version++; }
+                break;
             case "faces":
                 bool dark = Bool(m, "dark");
-                var faces = new List<(int, uint[])>();
+                var dev = new List<(int, Face)>();
+                var hi = new List<(int, Face)>();
                 if (m.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Object)
                     foreach (var k in keys.EnumerateObject())
                     {
                         if (!int.TryParse(k.Name, out int i) || i < 0 || i >= Keys) continue;
-                        faces.Add((i, k.Value.ValueKind == JsonValueKind.String ? Decode(k.Value.GetString(), out _, out _) : null));
+                        dev.Add((i, k.Value.ValueKind == JsonValueKind.String ? Decode(k.Value.GetString(), true) : null));
+                    }
+                // only for a client that asked for them: null / absent = that key has only its device face now
+                bool hasHi = m.TryGetProperty("hi", out var hk) && hk.ValueKind == JsonValueKind.Object;
+                if (hasHi)
+                    foreach (var k in hk.EnumerateObject())
+                    {
+                        if (!int.TryParse(k.Name, out int i) || i < 0 || i >= Keys) continue;
+                        hi.Add((i, k.Value.ValueKind == JsonValueKind.String ? Decode(k.Value.GetString(), false) : null));
                     }
                 lock (_lock)
                 {
-                    foreach (var (i, px) in faces) { _s.Faces[i] = px; _s.FaceVersion[i]++; }
+                    foreach (var (i, face) in dev)
+                    {
+                        _s.Faces[i] = face;
+                        _s.HiFaces[i] = null;           // a new device face makes the old sharp one stale
+                        _s.FaceVersion[i]++;
+                    }
+                    foreach (var (i, face) in hi)
+                    {
+                        _s.HiFaces[i] = face;
+                        _s.FaceVersion[i]++;
+                    }
                     _s.Dark = dark;
                     _s.Version++;
                 }
@@ -276,23 +450,34 @@ public sealed class HexpadLink : IDisposable
         }
     }
 
-    // the device JPEG back to the face Hexpad drew: undo the 90 degree turn, the mirror and the calibration shift
-    uint[] Decode(string b64, out int w, out int h)
+    static string KindOf(string summary)
     {
-        w = h = 0;
+        int i = string.IsNullOrEmpty(summary) ? -1 : summary.IndexOf(':');
+        return i > 0 ? summary[..i].Trim().ToLowerInvariant() : "";
+    }
+
+    // a face JPEG to pixels. The device one back to the face Hexpad drew: undo the 90 degree turn, the mirror and
+    // the calibration shift. The sharp (2x) one is sent upright, as drawn.
+    Face Decode(string b64, bool device)
+    {
         try
         {
             using var ms = new MemoryStream(Convert.FromBase64String(b64));
             using var img = new Bitmap(ms);
-            img.RotateFlip(_rot switch { 90 => RotateFlipType.Rotate270FlipNone, 180 => RotateFlipType.Rotate180FlipNone,
-                270 => RotateFlipType.Rotate90FlipNone, _ => RotateFlipType.RotateNoneFlipNone });
-            if (_mirror) img.RotateFlip(RotateFlipType.RotateNoneFlipX);
-            w = img.Width; h = img.Height;
+            if (device)
+            {
+                img.RotateFlip(_rot switch { 90 => RotateFlipType.Rotate270FlipNone, 180 => RotateFlipType.Rotate180FlipNone,
+                    270 => RotateFlipType.Rotate90FlipNone, _ => RotateFlipType.RotateNoneFlipNone });
+                if (_mirror) img.RotateFlip(RotateFlipType.RotateNoneFlipX);
+            }
+            int w = img.Width, h = img.Height;
+            if (w <= 0 || h <= 0 || w > 1024 || h > 1024) return null;
             using var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.Clear(Color.Black);
-                g.DrawImageUnscaled(img, -_dx, -_dy);
+                if (device) g.DrawImageUnscaled(img, -_dx, -_dy);
+                else g.DrawImageUnscaled(img, 0, 0);
             }
             var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
             var px = new uint[w * h];
@@ -303,8 +488,7 @@ public sealed class HexpadLink : IDisposable
                         Buffer.MemoryCopy((byte*)data.Scan0 + y * data.Stride, dst + y * w, w * 4L, w * 4L);
             }
             bmp.UnlockBits(data);
-            lock (_lock) { _s.FaceW = w; _s.FaceH = h; }
-            return px;
+            return new Face(px, w, h);
         }
         catch (Exception e)
         {
@@ -314,7 +498,10 @@ public sealed class HexpadLink : IDisposable
     }
 
     static string Str(JsonElement e, string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
-    static int Int(JsonElement e, string n, int def) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : def;
+    static int Int(JsonElement e, string n, int def) => e.TryGetProperty(n, out var v) ? Int(v, def) : def;
+    static int Int(JsonElement v, int def) =>
+        v.ValueKind != JsonValueKind.Number ? def : v.TryGetInt32(out int i) ? i
+        : v.TryGetDouble(out double d) && double.IsFinite(d) ? (int)Math.Clamp(Math.Round(d), int.MinValue, int.MaxValue) : def;
     static bool Bool(JsonElement e, string n, bool def = false) =>
         e.TryGetProperty(n, out var v) ? v.ValueKind == JsonValueKind.True || (v.ValueKind != JsonValueKind.False && def) : def;
 

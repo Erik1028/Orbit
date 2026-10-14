@@ -7,7 +7,7 @@ using Vortice.DirectWrite;
 
 namespace Orbit;
 
-// The settings in the Windows 95 style: an "Orbit Properties" property sheet at real 1995 pixel size
+// The settings in the Windows 95 style: an "OrbitOverlay Properties" property sheet at real 1995 pixel size
 // (750 x 480, enlarged with whole pixels by the host). Tabs, group boxes, "Label:  [control]" rows,
 // drop-down lists, access keys, OK / Close / Apply. Same settings and actions as the modern screen.
 public sealed partial class SettingsView
@@ -48,7 +48,7 @@ public sealed partial class SettingsView
         p.Fill(all, Theme.W95Face);
         p.Bevel(all, Painter.Edge.Window);
         var close = OnClose ?? OnClose95;
-        ui.Caption95(new RectangleF(3, 3, W95W - 6, 18), "Orbit Properties");
+        ui.Caption95(new RectangleF(3, 3, W95W - 6, 18), "OrbitOverlay Properties");
         if (ui.CaptionHelp95("p95.help", W95W - 5 - 16 - 2 - 16, 5)) Tab = TabGeneral;   // "What's this?" -> About
         if (ui.CaptionClose95("p95.close", W95W - 5 - 16, 5, close != null)) close?.Invoke();
 
@@ -67,6 +67,7 @@ public sealed partial class SettingsView
             case TabWrist: Wrist95(ui); break;
             case TabKeyboard: Keyboard95(ui); break;
             case TabLook: Look95(ui); break;
+            case TabVrchat: Vrchat95(ui); break;
             default: General95(ui); break;
         }
 
@@ -515,6 +516,57 @@ public sealed partial class SettingsView
 
     // ---------------- General ----------------
 
+    void Vrchat95(Ui ui)
+    {
+        var cb = C.Chatbox;
+        var rm = C.Room;
+        var g = C.General;
+        ui.Group95(new RectangleF(16, 56, 350, 206), "Chatbox status line");
+        bool b = cb.StatusLine;
+        ui.Check95("vc95.on", 28, 76, "Send a &status line to the chatbox", ref b);
+        cb.StatusLine = b;
+        Hint(ui, 47, 93, 310, "over OSC - OSC must be on in VRChat");
+        b = cb.ShowMedia;
+        ui.Check95("vc95.m", 47, 114, "&Now playing", ref b);
+        cb.ShowMedia = b;
+        b = cb.ShowTime;
+        ui.Check95("vc95.t", 47, 134, "C&lock", ref b);
+        cb.ShowTime = b;
+        b = cb.ShowVrTime;
+        ui.Check95("vc95.v", 47, 154, "Time in &VR", ref b);
+        cb.ShowVrTime = b;
+        ui.Label95("Preview:", new RectangleF(28, 178, 80, 15));
+        var box = new RectangleF(28, 196, 326, 56);
+        ui.P.Fill(box, 0xFFFFFFFF);
+        ui.P.Bevel(box, Painter.Edge.Sunken);
+        string prev = _h.StatusLinePreview;
+        ui.Text95(string.IsNullOrEmpty(prev) ? "(nothing - the chatbox stays empty)" : prev, new RectangleF(box.X + 4, box.Y + 3, box.Width - 8, box.Height - 6),
+            string.IsNullOrEmpty(prev) ? 0xFF808080 : K95, false, TextAlignment.Leading, true, true);
+
+        ui.Group95(new RectangleF(16, 270, 350, 64), "Controllers");
+        b = g.BlockGameInput;
+        ui.Check95("vc95.block", 28, 290, "&Keep clicks from the game", ref b);
+        g.BlockGameInput = b;
+        Hint(ui, 47, 307, 310, "while a laser points at an OrbitOverlay panel");
+
+        ui.Group95(new RectangleF(376, 56, 358, 166), "Who is in the room");
+        b = rm.Enabled;
+        ui.Check95("vc95.room", 388, 76, "&Follow VRChat's log", ref b);
+        rm.Enabled = b;
+        Hint(ui, 407, 93, 320, Fit95(ui, _h.RoomStatus, 320));
+        b = rm.NotifyFriends;
+        ui.Check95("vc95.nf", 388, 114, "Tell me when &friends come and go", ref b, rm.Enabled);
+        rm.NotifyFriends = b;
+        b = rm.NotifyStarred;
+        ui.Check95("vc95.ns", 388, 134, "... and s&tarred people", ref b, rm.Enabled);
+        rm.NotifyStarred = b;
+        b = rm.NotifyEveryone;
+        ui.Check95("vc95.ne", 388, 154, "... and &everyone", ref b, rm.Enabled);
+        rm.NotifyEveryone = b;
+        if (ui.Button95("vc95.open", new RectangleF(388, 186, 140, 23), rm.Visible ? "Hide Room &panel" : "Show Room &panel", _h.VrConnected && rm.Enabled))
+            _h.ToggleRoom();
+    }
+
     void General95(Ui ui)
     {
         var g = C.General;
@@ -535,7 +587,7 @@ public sealed partial class SettingsView
         ui.Group95(new RectangleF(16, 186, 350, 244), "Startup and system");
         b = g.AutoStart;
         ui.Check95("g95.auto", 28, 206, "Start with Steam&VR", ref b);
-        Hint(ui, 47, 223, 300, Fit95(ui, b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start Orbit yourself", 300));
+        Hint(ui, 47, 223, 300, Fit95(ui, b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start OrbitOverlay yourself", 300));
         if (b != g.AutoStart) _h.SetAutoStart(b);
         b = g.RunAsAdmin;
         ui.Check95("g95.admin", 28, 244, "Run as &administrator", ref b);
@@ -559,9 +611,9 @@ public sealed partial class SettingsView
             _h.OpenConfigFolder();
 
         // System Properties' General tab: the logo, the name, the version, the machine
-        ui.Group95(new RectangleF(376, 56, 358, 178), "About Orbit");
+        ui.Group95(new RectangleF(376, 56, 358, 178), "About OrbitOverlay");
         W95Icons.Draw(ui.P, W95Icons.Id.Orbit, 388, 74, 2);
-        ui.Text95("Orbit", new RectangleF(430, 74, 200, 15), K95, true);
+        ui.Text95("OrbitOverlay", new RectangleF(430, 74, 200, 15), K95, true);
         ui.Text95($"Version {Updater.Current.ToString(3)}", new RectangleF(430, 90, 200, 15));
         float ry = 116;
         void Row(string key, string val)

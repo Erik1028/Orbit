@@ -21,6 +21,8 @@ public sealed class PanelData
     public MediaInfo Media;
     public HexpadLink.Snapshot Dock;     // Hexpad's stream dock (null = not looked for)
     public HexpadFaces DockFaces;
+    public RoomWatcher.Snapshot Room;    // who is in the VRChat instance (null = not followed)
+    public bool StatusLine;              // the chatbox status line is on
     public (bool has, string title, string artist, bool playing)? FakeMedia;
     public float GpuLoad => FakeGpuLoad >= 0 ? FakeGpuLoad : Gpu?.Load3D ?? -1;
     public float VramUsed => FakeVram >= 0 ? FakeVram : Gpu?.VramUsedGB ?? -1;
@@ -56,7 +58,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public void CreateOverlay(VrSession vr)
     {
         _vr = vr;
-        Ov = new VrOverlay("erik.orbit.wrist", "Orbit Wrist");
+        Ov = new VrOverlay("erik.orbit.wrist", "OrbitOverlay Wrist");
         Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);
         Ov.SetSortOrder(150);
         Ov.SetMouseScale(TW, TH);

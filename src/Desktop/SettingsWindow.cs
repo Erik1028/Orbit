@@ -27,7 +27,7 @@ public sealed class SettingsWindow : Form
         _g = g; _p = p; View = view; _beforeDraw = beforeDraw;
         _ui = new Ui(p);
         View.OnClose95 = Hide;
-        Text = "Orbit";
+        Text = "OrbitOverlay";
         Icon = icon;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;

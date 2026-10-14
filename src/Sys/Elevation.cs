@@ -26,7 +26,7 @@ static class Elevation
         }
     }
 
-    static string Exe => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Orbit.exe");
+    static string Exe => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, Installer.ExeName);
 
     static dynamic Service()
     {
@@ -69,13 +69,14 @@ static class Elevation
     }
 
     // Needs an elevated process when highest = true.
-    public static bool InstallTask(bool highest = true, string name = TaskName)
+    public static bool InstallTask(bool highest = true, string name = TaskName, string exe = null)
     {
+        exe ??= Exe;
         string esc(string s) => System.Security.SecurityElement.Escape(s);
         string xml = $@"<?xml version=""1.0"" encoding=""UTF-16""?>
 <Task version=""1.2"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
   <RegistrationInfo>
-    <Description>Starts Orbit (SteamVR overlay) with administrator rights so its VR mouse and keyboard can reach admin windows. Created by Orbit; removed when 'Run as administrator' is switched off.</Description>
+    <Description>Starts OrbitOverlay (SteamVR overlay) with administrator rights so its VR mouse and keyboard can reach admin windows. Created by OrbitOverlay; removed when 'Run as administrator' is switched off.</Description>
   </RegistrationInfo>
   <Principals>
     <Principal id=""Author"">
@@ -97,9 +98,9 @@ static class Elevation
   </Settings>
   <Actions Context=""Author"">
     <Exec>
-      <Command>{esc(Exe)}</Command>
+      <Command>{esc(exe)}</Command>
       <Arguments>--from-task $(Arg0)</Arguments>
-      <WorkingDirectory>{esc(Path.GetDirectoryName(Exe))}</WorkingDirectory>
+      <WorkingDirectory>{esc(Path.GetDirectoryName(exe))}</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>";
@@ -107,7 +108,7 @@ static class Elevation
         {
             dynamic folder = Service().GetFolder("\\");
             folder.RegisterTask(name, xml, 6 /* TASK_CREATE_OR_UPDATE */, null, null, 3 /* TASK_LOGON_INTERACTIVE_TOKEN */, null);
-            Log.Info($"task '{name}' registered for {Exe}");
+            Log.Info($"task '{name}' registered for {exe}");
             return true;
         }
         catch (Exception e) { Log.Warn("register task: " + e.Message); return false; }

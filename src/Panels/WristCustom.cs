@@ -106,7 +106,8 @@ public sealed partial class WristPanel
     uint[] _artSource;
 
     static bool IsOn(string id, PanelData d) =>
-        (id == "keyboard" && d.KeyboardVisible) || (id == "desktops" && d.DesktopsVisible) || (id == "night" && d.NightMode);
+        (id == "keyboard" && d.KeyboardVisible) || (id == "desktops" && d.DesktopsVisible) || (id == "night" && d.NightMode) ||
+        (id == "status" && d.StatusLine);
 
     void SampleSources()
     {
@@ -322,6 +323,7 @@ public sealed partial class WristPanel
             case "battery": BatteryOrbit(r, w, d, id); break;
             case "media": MediaOrbit(r, w, d, id, tone); break;
             case "dock": DockOrbit(r, w, d, id, tone); break;
+            case "room": RoomOrbit(r, w, d, id, tone); break;
             case "volume": VolumeOrbit(r, w, id, tone); break;
             case "graph": GraphOrbit(d.Vr, r, tone); break;
             case "perf":
@@ -827,6 +829,65 @@ public sealed partial class WristPanel
         Meter(new RectangleF(tr.X, tr.Bottom + gap, tr.Width, lt), b.pct, BatteryColor(b.pct, b.charging), key);
     }
 
+    // who is in the VRChat instance: how many, and the friends among them; a tap opens the Room panel
+    static (int people, int friends, string names) RoomCount(PanelData d)
+    {
+        var s = d.Room;
+        if (s == null || !s.InRoom) return (-1, 0, "");
+        int f = 0;
+        var names = new System.Text.StringBuilder();
+        foreach (var p in s.Here)
+        {
+            if (!p.Friend) continue;
+            if (f < 2) names.Append(names.Length > 0 ? ", " : "").Append(p.Name);
+            f++;
+        }
+        if (f > 2) names.Append($" +{f - 2}");
+        return (s.Here.Count, f, names.ToString());
+    }
+
+    void RoomOrbit(RectangleF r, WatchWidget w, PanelData d, int id, uint tint)
+    {
+        bool click = _ui.Clickable(Ui.Id("wrm", id), r, out _, out bool held);
+        if (held) _p.Fill(r, Theme.WithAlpha(tint, 0.12f), CardRadius);
+        if (click) OnAction?.Invoke("room");
+        var (n, f, names) = RoomCount(d);
+        string value = n < 0 ? "–" : n.ToString();
+        string cap = n < 0 ? (d.Room?.LogFound == false ? "no VRChat" : "not in a world") : n == 1 ? "person here" : "people here";
+        if (w.W >= 2)
+        {
+            var (vr, _) = Reading(r, "Room", n < 0 ? "" : d.Room.World);
+            _p.Text(value, new RectangleF(vr.X, vr.Y, 80, vr.Height), Theme.Text, FitSize(value, 76, 32, FontWeight.SemiBold, Theme.Display),
+                FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
+            float vw = _p.MeasureWidth(value, FitSize(value, 76, 32, FontWeight.SemiBold, Theme.Display), FontWeight.SemiBold, Theme.Display) + 10;
+            string line = f > 0 ? names : cap;
+            _p.Text(Ellipsize(line, vr.Width - vw, 14, FontWeight.SemiBold), new RectangleF(vr.X + vw, vr.Y, vr.Width - vw, vr.Height),
+                f > 0 ? Theme.Good : Sub, 14, FontWeight.SemiBold);
+            return;
+        }
+        Header(r, "Room", 11, true);
+        _p.Text(value, new RectangleF(r.X, r.Y + 22, r.Width, r.Height - 46), Theme.Text, FitSize(value, r.Width - 20, 34, FontWeight.SemiBold, Theme.Display),
+            FontWeight.SemiBold, TextAlignment.Center, ParagraphAlignment.Center, Theme.Display);
+        string small = f > 0 ? (f == 1 ? "1 friend" : $"{f} friends") : n < 0 ? cap : "here";
+        _p.Text(Ellipsize(small, r.Width - 12, 12, FontWeight.SemiBold), new RectangleF(r.X + 6, r.Bottom - 26, r.Width - 12, 18), f > 0 ? Theme.Good : Sub, 12,
+            FontWeight.SemiBold, TextAlignment.Center);
+    }
+
+    void Room95Widget(RectangleF r, RectangleF c, PanelData d, WatchWidget w, int id)
+    {
+        if (_ui.Clickable(Ui.Id("wrm", id), r, out _, out _)) OnAction?.Invoke("room");
+        var (n, f, names) = RoomCount(d);
+        if (w.W >= 2)
+        {
+            _ui.Text95(Fit(n < 0 ? "Not in a world" : n == 1 ? "1 person" : $"{n} people", c.Width - 8, Ui.F95, true),
+                new RectangleF(c.X + 4, c.Y + c.Height / 2 - 14, c.Width - 8, 13), Blk95, true);
+            _ui.Text95(Fit(f > 0 ? (f == 1 ? "1 friend" : $"{f} friends") + ": " + names : n < 0 ? "" : d.Room.World, c.Width - 8),
+                new RectangleF(c.X + 4, c.Y + c.Height / 2 + 1, c.Width - 8, 13), f > 0 ? 0xFF008000 : Gry95);
+            return;
+        }
+        Value95(c, n < 0 ? "--" : n.ToString(), f > 0 ? $"{f} friend{(f == 1 ? "" : "s")}" : "in room", Blk95);
+    }
+
     static bool DockShows(PanelData d) =>
         d.Dock != null && d.DockFaces != null && d.DockFaces.Any &&
         d.Dock.State is HexpadLink.LinkState.Ok or HexpadLink.LinkState.ScreenOff;
@@ -853,7 +914,7 @@ public sealed partial class WristPanel
         {
             var k = new RectangleF(x0 + i % 3 * (cell + gap), y0 + i / 3 * (cell + gap), cell, cell);
             _p.Fill(k, 0xFF000000, radius);
-            var bmp = d.DockFaces.Bitmaps[i];
+            var bmp = pixel ? d.DockFaces.Bitmaps[i] : d.DockFaces.Best(i);      // 95: the dock's own pixels
             if (bmp == null || d.Dock.Dark) continue;
             if (pixel) { _p.ImageNearest(bmp, k); continue; }
             _p.PushRoundedClip(k, radius);
@@ -1090,6 +1151,7 @@ public sealed partial class WristPanel
                 case "battery": Battery95(c, d, w); break;
                 case "media": Media95Widget(c, d, w, id); break;
                 case "dock": Dock95Widget(r, c, d, w, id); break;
+                case "room": Room95Widget(r, c, d, w, id); break;
                 case "volume": Volume95(c, w, id); break;
                 case "graph": Graph95(d.Vr, c); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;

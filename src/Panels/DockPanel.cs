@@ -9,41 +9,56 @@ using Vortice.DirectWrite;
 namespace Orbit;
 
 // The faces of the dock's six keys as bitmaps, shared by the dock panel and the watch widget (one Painter,
-// one device). Rebuilt only for the keys that changed.
+// one device). Rebuilt only for the keys that changed. Bitmaps are the device's own 68 px faces (the 95 window
+// and the watch draw them pixel for pixel); Hi the same faces drawn at 2x by an api 2 Hexpad (null when none).
 public sealed class HexpadFaces : IDisposable
 {
     public readonly ID2D1Bitmap[] Bitmaps = new ID2D1Bitmap[HexpadLink.Keys];
-    readonly int[] _ver = new int[HexpadLink.Keys];
+    public readonly ID2D1Bitmap[] Hi = new ID2D1Bitmap[HexpadLink.Keys];
+    readonly HexpadLink.Face[] _dev = new HexpadLink.Face[HexpadLink.Keys], _hi = new HexpadLink.Face[HexpadLink.Keys];
     public bool Any { get; private set; }
+
+    // the sharpest picture of key i
+    public ID2D1Bitmap Best(int i) => Hi[i] ?? Bitmaps[i];
 
     public void Update(Painter p, HexpadLink.Snapshot s)
     {
         Any = false;
         for (int i = 0; i < HexpadLink.Keys; i++)
         {
-            if (s.FaceVersion[i] != _ver[i])
-            {
-                _ver[i] = s.FaceVersion[i];
-                Bitmaps[i]?.Dispose();
-                Bitmaps[i] = null;
-                var px = s.Faces[i];
-                if (px != null && px.Length == s.FaceW * s.FaceH) Bitmaps[i] = p.CreateBitmap(px, s.FaceW, s.FaceH);
-            }
-            Any |= Bitmaps[i] != null;
+            Rebuild(p, s.Faces[i], _dev, Bitmaps, i);
+            Rebuild(p, s.HiFaces[i], _hi, Hi, i);
+            Any |= Bitmaps[i] != null || Hi[i] != null;
         }
+    }
+
+    static void Rebuild(Painter p, HexpadLink.Face f, HexpadLink.Face[] made, ID2D1Bitmap[] bmps, int i)
+    {
+        if (ReferenceEquals(f, made[i])) return;
+        made[i] = f;
+        bmps[i]?.Dispose();
+        bmps[i] = null;
+        if (f != null && f.W > 0 && f.H > 0 && f.Px.Length == f.W * f.H) bmps[i] = p.CreateBitmap(f.Px, f.W, f.H);
     }
 
     public void Dispose()
     {
-        for (int i = 0; i < Bitmaps.Length; i++) { Bitmaps[i]?.Dispose(); Bitmaps[i] = null; }
+        for (int i = 0; i < Bitmaps.Length; i++)
+        {
+            Bitmaps[i]?.Dispose(); Bitmaps[i] = null; _dev[i] = null;
+            Hi[i]?.Dispose(); Hi[i] = null; _hi[i] = null;
+        }
     }
 }
 
-// The stream dock in VR: Hexpad's AKP03 laid out like the real one - six keys (what they show right now),
-// a round button under each column, the big knob top right and the two small ones under it. The laser presses
-// keys and buttons (press and release, so Hexpad's hold and double tap work), pushes knobs, and turns them
-// (the stick over a knob, or the knob's left / right side). What could end the VR session (lock, sleep,
-// empty the bin) asks first. Grab it once onto the real dock on your desk; it stays there.
+// The stream dock in VR: Hexpad's AKP03 laid out like the real one - six keys (what they show right now) and
+// a round button under each column - with its three knobs as sliders on the right (a knob is awkward to turn
+// with a laser): the big knob first, then the two small ones. A slider Hexpad can read and set ("abs": volume,
+// key brightness, monitors) shows the value and sets it as you drag; any other turn is a "jog" slider that springs
+// back to the middle and turns the knob a detent per bit of drag. The stick over a slider moves it too. The button
+// beside each slider pushes the knob. The laser presses keys and buttons (press and release, so Hexpad's hold and
+// double tap work); what could end the VR session (lock, sleep, empty the bin) asks first. Grab it once onto the
+// real dock on your desk; it stays there.
 public sealed class DockPanel : IPointerTarget, IDisposable
 {
     public const int TW = 800, TH = 480, W95 = TW / 2, H95 = TH / 2;
@@ -69,9 +84,26 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     Hand? _owner;
     string _hover, _pressed, _confirm, _scrollId;
     float _scrollAcc;
-    double _repeatAt, _wokeAt = -10;
-    readonly Dictionary<string, RectangleF> _hit = new();     // control -> rect in texture pixels
-    readonly Dictionary<string, float> _spin = new();         // knob -> turned angle (it spins as you turn it)
+    double _wokeAt = -10;
+    readonly Dictionary<string, RectangleF> _hit = new();     // control -> rect in texture pixels ("enc1:s" = its slider)
+    readonly Dictionary<string, RectangleF> _cards = new();   // knob -> its whole row (the stick over it moves the slider)
+    readonly Dictionary<string, RectangleF> _track = new();   // knob -> where its thumb's centre runs (texture pixels)
+
+    // the slider being dragged
+    string _drag, _dragKind;
+    bool _dragAbs;
+    float _dragGrab;            // abs: where on the thumb it was taken (px from its centre); jog: where the drag began
+    float _jogOff;              // jog: how far it is dragged (px)
+    int _jogSent;               // jog: detents sent in this drag
+    // abs: the value we set is shown instead of Hexpad's while dragging and for a moment after (its read-back lags)
+    readonly Dictionary<string, float> _local = new();
+    readonly Dictionary<string, double> _holdUntil = new();
+    readonly Dictionary<string, (double at, string kind)> _stickEnd = new();   // the stick moved it: final then
+
+    const double Hold = 0.6, StickFinal = 0.4;
+    const float StickStep = 0.02f;
+
+    enum Slide { None, Abs, Jog }
 
     DockConfig C => _cfg.Data.Dock;
     public bool Shown => C.Enabled && C.Visible;
@@ -86,7 +118,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     public void CreateOverlay(VrSession vr)
     {
         _vr = vr;
-        Ov = new VrOverlay("erik.orbit.dock", "Orbit Hexpad");
+        Ov = new VrOverlay("erik.orbit.dock", "OrbitOverlay Hexpad");
         Ov.SetSortOrder(135);
         Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);
         Ov.SetMouseScale(TW, TH);
@@ -143,12 +175,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         Ov.SetAlpha(e);
         Ov.SetWidth(Math.Clamp(C.Width, 0.15f, 0.9f) * (0.92f + 0.08f * e));
         if (s.Version != _seen) { _seen = s.Version; _s = s; _dirty = true; }
-        // a knob side held down turns it again and again, like a 1995 spin button
-        if (_pressed != null && _pressed.Contains(':') && now >= _repeatAt)
-        {
-            Turn(_pressed[..4], _pressed.EndsWith(":l") ? -1 : 1);
-            _repeatAt = now + 0.12;
-        }
+        Timers(now);
         bool flashing = now - _s.EchoAt < 0.4;
         if (_dirty || flashing || now >= _nextDraw || _ui.Animating)
         {
@@ -158,6 +185,28 @@ public sealed class DockPanel : IPointerTarget, IDisposable
             _nextDraw = now + 1;
         }
         Ov.Show();
+    }
+
+    // the stick's final value once it stops; Hexpad's own value again once a hold runs out
+    void Timers(double now)
+    {
+        if (_stickEnd.Count > 0)
+            foreach (var id in new List<string>(_stickEnd.Keys))
+            {
+                var (at, kind) = _stickEnd[id];
+                if (now < at) continue;
+                _stickEnd.Remove(id);
+                if (_local.TryGetValue(id, out float v)) _link.Set(id, kind, v, true);
+                _holdUntil[id] = now + Hold;
+            }
+        if (_holdUntil.Count > 0)
+            foreach (var id in new List<string>(_holdUntil.Keys))
+                if (now >= _holdUntil[id] && _drag != id && !_stickEnd.ContainsKey(id))
+                {
+                    _holdUntil.Remove(id);
+                    _local.Remove(id);
+                    _dirty = true;
+                }
     }
 
     // ---------------- input ----------------
@@ -172,24 +221,39 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         return null;
     }
 
-    static string Base(string id) => id != null && id.Contains(':') ? id[..id.IndexOf(':')] : id;
-
-    void Turn(string enc, int dir)
+    string CardAt(Vector2 px)
     {
-        _link.Turn(enc, dir);
-        _spin[enc] = (_spin.TryGetValue(enc, out var a) ? a : 0) + dir * 24;
-        _dirty = true;
+        foreach (var (id, r) in _cards)
+            if (r.Contains(px.X, px.Y)) return id;
+        return null;
     }
+
+    static string Base(string id) => id != null && id.Contains(':') ? id[..id.IndexOf(':')] : id;
+    static string S(string id) => Ui.Id(id, ":s");          // a knob's slider (the push is the knob's own id)
+
+    // what a knob's slider does now
+    Slide TypeOf(string id)
+    {
+        var c = Ctl(id);
+        if (c == null || string.IsNullOrEmpty(c.Slider)) return Slide.None;
+        if (c.Slider == "abs") return _s.Api >= 2 && !string.IsNullOrEmpty(c.Kind) ? Slide.Abs : Slide.Jog;
+        return Slide.Jog;
+    }
+
+    bool Off(string id) => _s.Values.TryGetValue(id, out var v) && v.Off;
+
+    // an abs slider's value: ours while dragging and just after, else Hexpad's (null = it does not know)
+    float? AbsValue(string id, double now)
+    {
+        if ((_drag == id || _holdUntil.TryGetValue(id, out var t) && now < t) && _local.TryGetValue(id, out float mine)) return mine;
+        return _s.Values.TryGetValue(id, out var v) ? v.V : null;
+    }
+
+    // drag this far for one detent; pages and tracks are whole steps, so they want a longer pull
+    float Detent(string id) => Ctl(id)?.Kind is "page" or "media" ? 60 : 24;
 
     void Press(string id)
     {
-        if (id.Contains(':'))
-        {
-            Turn(Base(id), id.EndsWith(":l") ? -1 : 1);
-            _pressed = id;
-            _repeatAt = Clock.Now + 0.45;
-            return;
-        }
         if (_s.Controls.TryGetValue(id, out var c) && c.Danger)
         {
             _confirm = id;               // nothing is sent until it is confirmed
@@ -199,10 +263,76 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _pressed = id;
     }
 
+    // the laser lets go (or leaves, or the panel goes): the key comes up, a drag ends, the stick's value is final
     void ReleasePress()
     {
-        if (_pressed != null && !_pressed.Contains(':')) _link.Input(_pressed, false);
+        if (_pressed != null) _link.Input(_pressed, false);
         _pressed = null;
+        EndDrag();
+        if (_stickEnd.Count > 0)
+        {
+            foreach (var (id, (_, kind)) in _stickEnd)
+                if (_local.TryGetValue(id, out float v)) _link.Set(id, kind, v, true);
+            foreach (var id in _stickEnd.Keys) _holdUntil[id] = Clock.Now + Hold;
+            _stickEnd.Clear();
+        }
+    }
+
+    void BeginDrag(string id, Vector2 px)
+    {
+        var t = TypeOf(id);
+        if (t == Slide.None || t == Slide.Abs && Off(id) || !_track.TryGetValue(id, out var tr)) return;
+        _drag = id;
+        _dragKind = Ctl(id)?.Kind;          // a page change mid-drag must not turn a volume drag into something else
+        _dragAbs = t == Slide.Abs;
+        _stickEnd.Remove(id);
+        if (_dragAbs)
+        {
+            // taken by the thumb it keeps where it was held; anywhere else on the track it jumps there
+            float? cur = AbsValue(id, Clock.Now);
+            float grab = Theme.Classic ? 14 : 24;
+            _dragGrab = 0;
+            if (cur is float v && MathF.Abs(px.X - (tr.X + tr.Width * v)) <= grab) _dragGrab = px.X - (tr.X + tr.Width * v);
+        }
+        else
+        {
+            _dragGrab = px.X;
+            _jogOff = 0;
+            _jogSent = 0;
+        }
+        DragTo(px);
+    }
+
+    void DragTo(Vector2 px)
+    {
+        if (_drag == null || !_track.TryGetValue(_drag, out var tr)) return;
+        if (_dragAbs)
+        {
+            float v = Math.Clamp((px.X - _dragGrab - tr.X) / tr.Width, 0, 1);
+            _local[_drag] = v;
+            _holdUntil[_drag] = double.MaxValue;
+            _link.Set(_drag, _dragKind, v, false);
+        }
+        else
+        {
+            _jogOff = px.X - _dragGrab;
+            int n = (int)(_jogOff / Detent(_drag));         // towards zero: a detent per full step of drag
+            if (n != _jogSent) { _link.Jog(_drag, n - _jogSent); _jogSent = n; }
+        }
+        _dirty = true;
+    }
+
+    void EndDrag()
+    {
+        if (_drag == null) return;
+        if (_dragAbs)
+        {
+            if (_local.TryGetValue(_drag, out float v)) _link.Set(_drag, _dragKind, v, true);
+            _holdUntil[_drag] = Clock.Now + Hold;
+        }
+        _drag = null;
+        _jogOff = 0;
+        _dirty = true;
     }
 
     public void PointerMove(Hand h, Vector2 px)
@@ -210,7 +340,8 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _owner ??= h;
         if (_owner != h) return;
         _ptr.Move(px.X, px.Y);
-        string hov = CanPress ? HitTest(px) : null;
+        if (_drag != null) DragTo(px);
+        string hov = _drag != null ? S(_drag) : CanPress ? HitTest(px) : null;
         if (hov != _hover) { _hover = hov; _dirty = true; }
         if (_ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;
         // the dock's idle screen swallows the first press: wake it as soon as the laser arrives
@@ -236,11 +367,15 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         if (b != PtrButton.Primary) return;
         if (down)
         {
-            if (_owner != h && (_ptr.Down || _pressed != null)) return;
+            if (_owner != h && (_ptr.Down || _pressed != null || _drag != null)) return;
             _owner = h;
             _ptr.Move(px.X, px.Y);
             _ptr.Press();
-            if (CanPress && HitTest(px) is { } id) Press(id);
+            if (CanPress && HitTest(px) is { } id)
+            {
+                if (id.EndsWith(":s")) BeginDrag(Base(id), px);
+                else Press(id);
+            }
         }
         else
         {
@@ -252,16 +387,33 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _dirty = true;
     }
 
-    // the stick over a knob turns it, one detent per notch
+    // the stick over a knob's row: an abs slider moves 2 % per notch (its final value once the stick rests),
+    // a jog one turns a detent per notch
     public void PointerScroll(Hand h, float notches, Vector2 px)
     {
-        if (_owner != h || !CanPress) return;
-        string id = Base(HitTest(px));
-        if (id == null || !id.StartsWith("enc")) return;
+        if (_owner != h || !CanPress || _drag != null) return;
+        string id = CardAt(px);
+        if (id == null) return;
+        var t = TypeOf(id);
+        if (t == Slide.Abs)
+        {
+            if (Off(id) || AbsValue(id, Clock.Now) is not float cur) return;
+            string kind = Ctl(id).Kind;
+            float v = Math.Clamp(cur + StickStep * notches, 0, 1);
+            _local[id] = v;
+            _holdUntil[id] = double.MaxValue;
+            _stickEnd[id] = (Clock.Now + StickFinal, kind);
+            _link.Set(id, kind, v, false);
+            _dirty = true;
+            return;
+        }
+        if (t != Slide.Jog) return;
         if (_scrollId != id) { _scrollId = id; _scrollAcc = 0; }
         _scrollAcc += notches;
-        while (_scrollAcc >= 1) { Turn(id, 1); _scrollAcc -= 1; }
-        while (_scrollAcc <= -1) { Turn(id, -1); _scrollAcc += 1; }
+        int n = 0;
+        while (_scrollAcc >= 1) { n++; _scrollAcc -= 1; }
+        while (_scrollAcc <= -1) { n--; _scrollAcc += 1; }
+        if (n != 0) _link.Jog(id, n);
     }
 
     public VrOverlay Overlay => Ov;
@@ -281,16 +433,35 @@ public sealed class DockPanel : IPointerTarget, IDisposable
 
     // ---------------- drawing ----------------
 
-    // without VR (--docktest): this snapshot, a pointer over a control, a pending confirmation
-    public void DrawFor(HexpadLink.Snapshot s, double now, string hover = null, string pressed = null, string confirm = null)
+    // without VR (--docktest): this snapshot, a pointer over a control, a pending confirmation, a slider being
+    // dragged (drag = the knob; dragAt = the value for an abs slider, the pull in texture px for a jog one).
+    // Only draws: nothing is sent.
+    public void DrawFor(HexpadLink.Snapshot s, double now, string hover = null, string pressed = null, string confirm = null,
+        string drag = null, float dragAt = 0)
     {
         _s = s; _hover = hover; _pressed = pressed; _confirm = confirm;
+        _local.Clear(); _holdUntil.Clear(); _stickEnd.Clear();
+        _drag = null; _jogOff = 0; _jogSent = 0;
+        _ui.ResetAnimations();
+        if (drag != null)
+        {
+            _drag = drag;
+            _dragAbs = TypeOf(drag) == Slide.Abs;
+            _dragKind = Ctl(drag)?.Kind;
+            if (_dragAbs) { _local[drag] = Math.Clamp(dragAt, 0, 1); _holdUntil[drag] = double.MaxValue; }
+            else { _jogOff = dragAt; _jogSent = (int)(dragAt / Detent(drag)); }
+            _hover ??= S(drag);
+        }
         Draw(now);
+        _drag = null; _jogOff = 0; _jogSent = 0;
+        _local.Clear(); _holdUntil.Clear();
     }
 
     public void Draw(double now)
     {
         _hit.Clear();
+        _cards.Clear();
+        _track.Clear();
         if (Theme.Classic) Draw95(now);
         else DrawModern(now);
     }
@@ -311,7 +482,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _ => "Connecting to Hexpad...",
     };
 
-    HexpadLink.Control Ctl(string id) => _s.Controls.TryGetValue(id, out var c) ? c : null;
+    HexpadLink.Control Ctl(string id) => id != null && _s.Controls.TryGetValue(id, out var c) ? c : null;
 
     // "Volume: mute" -> "Mute": a knob's group / caption already says what it is
     static string Short(string summary)
@@ -323,11 +494,38 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     }
     bool Flash(string id, double now) => now - _s.EchoAt < 0.4 && _s.Echo == id;
 
+    // a knob's name: what it turns ("Volume"), else where it sits on the dock
+    static string KnobName(string id, HexpadLink.Control c) =>
+        !string.IsNullOrEmpty(c?.Label) ? c.Label : id switch { "enc1" => "Big knob", "enc0" => "Left knob", _ => "Right knob" };
+
+    static string PushLabel(HexpadLink.Control c) => string.IsNullOrEmpty(c?.Push) ? "" : Short(c.Push);
+
+    // the value beside a slider's name: "42%" (abs), the detents of this pull (jog), or why the track rests
+    string ValueText(string id, Slide t, double now)
+    {
+        var c = Ctl(id);
+        if (t == Slide.Abs)
+        {
+            _s.Values.TryGetValue(id, out var x);
+            if (x?.Off == true) return "Off";
+            float? v = AbsValue(id, now);
+            if (v == null) return "--";
+            bool mine = _drag == id || _holdUntil.ContainsKey(id);
+            if (x?.Muted == true && !mine) return "Muted";
+            return $"{MathF.Round(v.Value * Math.Max(1, c?.Max ?? 100))}%";
+        }
+        if (t == Slide.Jog)
+            return _drag != id ? "" : _jogSent > 0 ? $"+{_jogSent}" : _jogSent < 0 ? $"−{-_jogSent}" : "0";
+        return "";
+    }
+
     // ---- modern: a dark slab like the device ----
     const float Pad = 20, Tile = 136, Gap = 12, KeysY = 66;
     static float KeyX(int col) => Pad + col * (Tile + Gap);
     static float KeyY(int row) => KeysY + row * (Tile + Gap);
-    const float KnobCx = 638;
+    // the knobs' column: the big one first, then the small left and right ones
+    const float ColX = 472, RowH = 116, RowGap = 12;
+    static readonly string[] Knobs = { "enc1", "enc0", "enc2" };
 
     void DrawModern(double now)
     {
@@ -374,7 +572,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
             return;
         }
 
-        // the six keys
+        // the six keys: the sharp faces when Hexpad sends them, else the device's
         for (int i = 0; i < HexpadLink.Keys; i++)
         {
             string id = $"key{i + 1}";
@@ -383,7 +581,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
             bool down = _pressed == id, hov = _hover == id, flash = Flash(id, now);
             var rr = down ? RectangleF.Inflate(r, -5, -5) : r;
             _p.Fill(rr, 0xFF000000, 18);
-            var bmp = _faces.Bitmaps[i];
+            var bmp = _faces.Best(i);
             if (bmp != null && !_s.Dark)
             {
                 _p.PushRoundedClip(rr, 18);
@@ -409,10 +607,9 @@ public sealed class DockPanel : IPointerTarget, IDisposable
                 FitSize(label, Tile - 4, 14), FontWeight.SemiBold, TextAlignment.Center);
         }
 
-        // the knobs: the big one top right, the two small ones under it (left = Encoder 0, right = Encoder 2)
-        Knob("enc1", KnobCx, 138, 72, now, sub);
-        Knob("enc0", KnobCx - 76, 296, 50, now, sub);
-        Knob("enc2", KnobCx + 76, 296, 50, now, sub);
+        // the knobs as sliders
+        for (int k = 0; k < Knobs.Length; k++)
+            SliderRow(Knobs[k], new RectangleF(ColX, KeysY + k * (RowH + RowGap), TW - Pad - ColX, RowH), now, sub);
 
         if (_confirm != null) ConfirmModern(sub);
         _p.End();
@@ -426,6 +623,15 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         return w100 <= 0 ? max : MathF.Max(9, MathF.Min(max, MathF.Floor(100 * w / w100 * 2) / 2));
     }
 
+    // what does not fit even at the smallest size it may have ends in "…"
+    string Ellipsize(string s, float w, float size)
+    {
+        if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, FontWeight.SemiBold) <= w) return s;
+        int n = s.Length;
+        while (n > 1 && _p.MeasureWidth(s[..n].TrimEnd() + "…", size, FontWeight.SemiBold) > w) n--;
+        return s[..n].TrimEnd() + "…";
+    }
+
     bool HeaderButton(string id, RectangleF r, string icon)
     {
         bool click = _ui.Clickable(id, r, out bool hover, out bool held);
@@ -434,41 +640,106 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         return click;
     }
 
-    // a knob: a disc that spins as it turns, its function inside; its left / right third turn it, the middle pushes
-    void Knob(string id, float cx, float cy, float rad, double now, uint sub)
+    // one knob: a card with its name and value, the push as a pill on the right, and a wide track for the laser
+    void SliderRow(string id, RectangleF card, double now, uint sub)
     {
         var c = Ctl(id);
-        var box = new RectangleF(cx - rad, cy - rad, rad * 2, rad * 2);
-        float third = rad * 2 / 3;
-        _hit[id + ":l"] = new RectangleF(box.X - 6, box.Y, third + 6, box.Height);
-        _hit[id + ":r"] = new RectangleF(box.Right - third, box.Y, third + 6, box.Height);
-        _hit[id] = new RectangleF(box.X + third, box.Y, third, box.Height);
-        string b = Base(_pressed);
-        bool hov = Base(_hover) == id, pushed = _pressed == id, flash = Flash(id, now);
-        _p.Circle(cx, cy, rad, pushed ? Theme.Mix(Theme.Panel3, Theme.Accent, 0.35f) : Theme.Panel3);
-        _p.Circle(cx, cy, rad - 7, Theme.Mix(Theme.Panel3, 0xFF000000, 0.18f));
-        // the notch, turned with every detent
-        float a = (_spin.TryGetValue(id, out var deg) ? deg : 0) * MathF.PI / 180;
-        float nr = rad - 14;
-        _p.Circle(cx + nr * MathF.Sin(a), cy - nr * MathF.Cos(a), MathF.Max(3, rad * 0.07f), flash || b == id ? Theme.Accent : Theme.Text);
-        if (hov || flash) _p.Stroke(RectangleF.Inflate(box, 3, 3), Theme.Accent, 2.5f, rad + 3);
-        if (hov)
+        var t = TypeOf(id);
+        bool off = t == Slide.Abs && Off(id), on = t != Slide.None && !off;
+        bool dragging = _drag == id, flash = Flash(id, now);
+        bool hovS = on && (dragging || _hover == S(id)), hovP = _hover == id;
+        _cards[id] = card;
+        _p.Fill(card, Theme.Panel2, 18);
+        if (flash) _p.Stroke(RectangleF.Inflate(card, -1, -1), Theme.Accent, 2, 17);
+
+        // the push: a pill at the right of the name
+        string push = PushLabel(c);
+        float right = card.Right - 16;
+        if (push.Length > 0)
         {
-            bool l = _hover == id + ":l", r = _hover == id + ":r";
-            _p.Icon(Theme.IcoLeft, new RectangleF(box.X + 4, cy - 14, 24, 28), l ? Theme.Accent : sub, 14);
-            _p.Icon(Theme.IcoRight, new RectangleF(box.Right - 28, cy - 14, 24, 28), r ? Theme.Accent : sub, 14);
+            float bw = Math.Clamp(_p.MeasureWidth(push, 15, FontWeight.SemiBold) + 36, 84, 132);
+            var b = new RectangleF(card.Right - 12 - bw, card.Y + 12, bw, 38);
+            _hit[id] = RectangleF.Inflate(b, 6, 4);
+            bool down = _pressed == id;
+            var bb = down ? RectangleF.Inflate(b, -2, -2) : b;
+            _p.Fill(bb, down ? Theme.Accent : hovP ? Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f) : Theme.Panel3, bb.Height / 2);
+            if (hovP && !down) _p.Stroke(RectangleF.Inflate(b, 2, 2), Theme.Accent, 2, b.Height / 2 + 2);
+            // what could end the session (it asks first) has the keys' red dot, beside the label
+            float dr = c.Danger ? 10 : 0, pw = b.Width - 24 - dr, ps = MathF.Max(12, FitSize(push, pw - 2, 15));
+            _p.Text(Ellipsize(push, pw, ps), new RectangleF(b.X + 12, b.Y, pw, b.Height), down ? Theme.OnAccent : Theme.Text,
+                ps, FontWeight.SemiBold, TextAlignment.Center);
+            if (c.Danger) _p.Circle(b.Right - 15, b.Y + b.Height / 2, 4, Theme.Bad);
+            right = b.X - 12;
         }
-        string label = c?.Label ?? "";
-        _p.Text(label, new RectangleF(cx - rad + 16, cy - 14, rad * 2 - 32, 28), Theme.Text, FitSize(label, rad * 2 - 40, rad > 60 ? 19 : 15),
-            FontWeight.SemiBold, TextAlignment.Center);
-        string push = string.IsNullOrEmpty(c?.Push) ? "" : "push: " + Short(c.Push).ToLowerInvariant();
-        _p.Text(push, new RectangleF(cx - 90, cy + rad + 4, 180, 22), sub, FitSize(push, 176, 13), FontWeight.SemiBold, TextAlignment.Center);
+
+        // name, then the value
+        string name = KnobName(id, c), value = ValueText(id, t, now);
+        if (t == Slide.None) value = push.Length > 0 ? "push only" : "";
+        float x0 = card.X + 18;
+        float vw = value.Length > 0 ? _p.MeasureWidth(value, 16, FontWeight.SemiBold) + 12 : 0;
+        float nmax = MathF.Max(40, right - x0 - vw);
+        float ns = MathF.Max(15, FitSize(name, nmax, 20));
+        name = Ellipsize(name, nmax, ns);
+        float nw = MathF.Min(_p.MeasureWidth(name, ns, FontWeight.SemiBold), nmax);
+        _p.Text(name, new RectangleF(x0, card.Y + 12, nmax + 2, 38), Theme.Text, ns, FontWeight.SemiBold);
+        if (value.Length > 0)
+        {
+            uint vc = t == Slide.None || off ? Theme.Faint : dragging && t == Slide.Jog ? Theme.Accent : value == "Muted" ? Theme.Warn : sub;
+            _p.Text(value, new RectangleF(x0 + nw + 12, card.Y + 12, MathF.Max(0, right - x0 - nw - 10), 38), vc, 16, FontWeight.SemiBold);
+        }
+
+        // the track: 14 px, a 28 px thumb; the whole lower part of the card takes the laser
+        float cy = card.Y + 84;
+        var tr = new RectangleF(card.X + 30, cy - 7, card.Width - 60, 14);
+        _track[id] = tr;
+        if (on) _hit[S(id)] = new RectangleF(card.X, card.Y + 56, card.Width, card.Height - 56 + 5);
+        float hl = _ui.Anim(Ui.Id("dkh", id), hovS ? 1 : 0, 18);
+        if (!on)
+        {
+            _p.Fill(tr, Theme.WithAlpha(Theme.Panel3, 0.55f), 7);
+            return;
+        }
+        _p.Fill(tr, Theme.Panel3, 7);
+        if (t == Slide.Abs)
+        {
+            if (AbsValue(id, now) is not float v)
+            {
+                _p.Ring(tr.X + tr.Width / 2, cy, 11, Theme.Faint, 2);     // Hexpad does not know it yet
+                return;
+            }
+            float kx = tr.X + tr.Width * v;
+            bool muted = _s.Values.TryGetValue(id, out var x) && x.Muted && !dragging && !_holdUntil.ContainsKey(id);
+            if (kx - tr.X > 1) _p.Fill(new RectangleF(tr.X, tr.Y, MathF.Max(14, kx - tr.X + 7), tr.Height), muted ? Theme.Faint : Theme.Accent, 7);
+            Thumb(kx, cy, hl, dragging);
+            return;
+        }
+        // jog: detent marks either side of the middle; the thumb follows the pull and springs back
+        float mid = tr.X + tr.Width / 2, d = Detent(id), half = tr.Width / 2;
+        for (float k = d; k < half - 6; k += d)
+        {
+            _p.Circle(mid - k, cy, 2, Theme.WithAlpha(Theme.Text, 0.3f));
+            _p.Circle(mid + k, cy, 2, Theme.WithAlpha(Theme.Text, 0.3f));
+        }
+        _p.Icon(Theme.IcoLeft, new RectangleF(tr.X + 1, tr.Y, 14, tr.Height), sub, 9);
+        _p.Icon(Theme.IcoRight, new RectangleF(tr.Right - 15, tr.Y, 14, tr.Height), sub, 9);
+        float off2 = _ui.Anim(Ui.Id("dkj", id), dragging ? Math.Clamp(_jogOff, -half, half) : 0, dragging ? 1000 : 14);
+        if (MathF.Abs(off2) > 1)
+        {
+            float a = MathF.Min(mid, mid + off2), w = MathF.Abs(off2);
+            _p.Fill(new RectangleF(a - 7, tr.Y, w + 14, tr.Height), Theme.Accent, 7);
+        }
+        Thumb(mid + off2, cy, hl, dragging);
+    }
+
+    void Thumb(float x, float y, float hl, bool held)
+    {
+        if (hl > 0.01f) _p.Circle(x, y, 14 + 9 * hl, Theme.WithAlpha(Theme.Accent, 0.22f * hl));
+        _p.Circle(x, y, held ? 15 : 14, Theme.Text);
     }
 
     void ConfirmModern(uint sub)
     {
-        string label = Ctl(_confirm)?.Label;
-        if (string.IsNullOrEmpty(label)) label = _confirm;
+        string label = ConfirmLabel();
         _p.Fill(new RectangleF(0, 0, TW, TH), Theme.WithAlpha(0xFF000000, 0.55f), 30);
         var card = new RectangleF(TW / 2 - 230, TH / 2 - 100, 460, 200);
         _p.Fill(card, Theme.Panel, 22);
@@ -485,10 +756,16 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         }
     }
 
-    // ---- Windows 95: a "Hexpad" window, the key faces 1:1 in picture boxes, spin buttons for the knobs ----
+    // a key says what it does; a knob's push is its own action
+    string ConfirmLabel()
+    {
+        var c = Ctl(_confirm);
+        string label = _confirm.StartsWith("enc") && !string.IsNullOrEmpty(c?.Push) ? c.Push : c?.Label;
+        return string.IsNullOrEmpty(label) ? _confirm : label;
+    }
+
+    // ---- Windows 95: a "Hexpad" window, the key faces 1:1 in picture boxes, a trackbar group per knob ----
     const uint Blk95 = 0xFF000000, Wht95 = 0xFFFFFFFF, Navy95 = 0xFF000080;
-    static readonly string[] LeftGlyph = { "...k", "..kk", ".kkk", "kkkk", ".kkk", "..kk", "...k" };
-    static readonly string[] RightGlyph = { "k...", "kk..", "kkk.", "kkkk", "kkk.", "kk..", "k..." };
 
     void Draw95(double now)
     {
@@ -538,10 +815,9 @@ public sealed class DockPanel : IPointerTarget, IDisposable
             string label = Ctl(id)?.Label ?? "";
             _ui.Text95(Fit95(label, inner.Width - 4), inner, Blk95, false, TextAlignment.Center, show);
         }
-        // the knobs as spin groups: the big one top right, the small ones under it
-        KnobGroup95("enc1", new RectangleF(246, 24, 146, 52), show, now);
-        KnobGroup95("enc0", new RectangleF(246, 82, 146, 48), show, now);
-        KnobGroup95("enc2", new RectangleF(246, 136, 146, 48), show, now);
+        // the knobs: a trackbar group each, the big one first
+        for (int k = 0; k < Knobs.Length; k++)
+            SliderGroup95(Knobs[k], new RectangleF(243, 23 + k * 63, 152, 61), show, now);
         // status bar
         string pages = _s.InFolder ? (_s.FolderPages > 1 ? $"Folder {_s.FolderPage + 1} of {_s.FolderPages}" : "Folder")
             : $"Page {_s.Page + 1} of {_s.Pages}";
@@ -578,39 +854,60 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         for (float y = r.Y; y < r.Bottom; y += 2) { _p.Fill(new RectangleF(r.X, y, 1, 1), c); _p.Fill(new RectangleF(r.Right - 1, y, 1, 1), c); }
     }
 
-    void KnobGroup95(string id, RectangleF g, bool show, double now)
+    // a group box titled with what the knob does: a trackbar (no ticks, so its thumb is the plain raised block),
+    // under it the value and a push button. Focus dots round the trackbar while the laser is on it.
+    void SliderGroup95(string id, RectangleF g, bool show, double now)
     {
         var c = Ctl(id);
-        string title = string.IsNullOrEmpty(c?.Label) ? "Knob" : c.Label;
-        _ui.Group95(g, title);
-        float y = g.Y + (g.Height - 22) / 2 + 4;
-        float x0 = g.X + (g.Width - (26 + 4 + 64 + 4 + 26)) / 2;
-        var l = new RectangleF(x0, y, 26, 22);
-        var push = new RectangleF(x0 + 30, y, 64, 22);
-        var r = new RectangleF(x0 + 98, y, 26, 22);
-        _hit[id + ":l"] = Tex(l);
-        _hit[id] = Tex(push);
-        _hit[id + ":r"] = Tex(r);
-        Spin95(l, LeftGlyph, _pressed == id + ":l", show);
-        var inner = _p.ButtonFace95(push, false, _pressed == id || Flash(id, now), false);
-        string pl = string.IsNullOrEmpty(c?.Push) ? "Push" : Short(c.Push);
-        _ui.Text95(Fit95(pl, inner.Width - 4), inner, Blk95, false, TextAlignment.Center, show);
-        Spin95(r, RightGlyph, _pressed == id + ":r", show);
-    }
+        var t = show ? TypeOf(id) : Slide.None;
+        bool off = t == Slide.Abs && Off(id), on = t != Slide.None && !off;
+        bool dragging = _drag == id;
+        _cards[id] = Tex(g);
+        _ui.Group95(g, Fit95(KnobName(id, c), g.Width - 20));
 
-    void Spin95(RectangleF r, string[] glyph, bool down, bool enabled)
-    {
-        var b = _p.ButtonFace95(r, false, down, false);
+        // the trackbar: a 4 px channel, an 11 x 18 thumb whose centre runs from end to end of it
+        var bar = new RectangleF(g.X + 7, g.Y + 15, g.Width - 14, 18);
+        var ch = new RectangleF(bar.X + 5, bar.Y + 7, bar.Width - 10, 4);
+        _track[id] = Tex(new RectangleF(ch.X, ch.Y, ch.Width - 1, ch.Height));
+        if (on) _hit[S(id)] = Tex(new RectangleF(g.X + 2, g.Y + 8, g.Width - 4, 28));
+        _p.Fill(ch, Wht95);
+        _p.Bevel(ch, Painter.Edge.Sunken);
+        float mid = ch.X + MathF.Floor((ch.Width - 1) / 2), tx = mid;
+        bool known = true;
+        if (t == Slide.Abs && !off)
+        {
+            if (AbsValue(id, now) is float v) tx = ch.X + MathF.Round((ch.Width - 1) * v);
+            else known = false;
+        }
+        else if (t == Slide.Jog && dragging)
+            tx = mid + Math.Clamp(MathF.Round(_jogOff / 2), -(ch.Width - 1) / 2, (ch.Width - 1) / 2);
+        var thumb = new RectangleF(tx - 5, bar.Y, 11, bar.Height);
+        _p.Fill(thumb, Theme.W95Face);
+        _p.Bevel(thumb, Painter.Edge.Raised);
+        if (!on || !known) _p.FillChecker(RectangleF.Inflate(thumb, -2, -2), Wht95, Theme.W95Face);   // greyed: nothing to show / turn
+        if (on && (_hover == S(id) || dragging) || Flash(id, now)) Dotted(new RectangleF(g.X + 4, g.Y + 13, g.Width - 8, 22), Blk95);
+
+        // the value, and the push button
+        float by = g.Y + 37;
+        string push = PushLabel(c);
+        bool canPush = show && push.Length > 0;
+        if (!canPush) push = "Push";
+        float bw = Math.Clamp(_ui.Width95(push) + 18, 52, 75);
+        var b = new RectangleF(g.Right - 8 - bw, by, bw, 20);
+        if (canPush) _hit[id] = Tex(RectangleF.Inflate(b, 1, 1));
+        bool down = canPush && _pressed == id;
+        var inner = _p.ButtonFace95(b, false, down, false);
         float o = down ? 1 : 0;
-        float gx = b.X + MathF.Floor((b.Width - glyph[0].Length) / 2) + o, gy = b.Y + MathF.Floor((b.Height - glyph.Length) / 2) + o;
-        if (!enabled) _p.Pixels(glyph, gx + 1, gy + 1, Wht95);
-        _p.Pixels(glyph, gx, gy, enabled ? Blk95 : 0xFF808080);
+        _ui.Text95(Fit95(push, inner.Width - 6), new RectangleF(inner.X + o, inner.Y + o, inner.Width, inner.Height), Blk95, false,
+            TextAlignment.Center, canPush);
+        string value = show ? ValueText(id, t, now).Replace('−', '-') : "";     // 1995 typed a hyphen
+        var vr = new RectangleF(g.X + 9, by, b.X - g.X - 13, 20);
+        _ui.Text95(Fit95(value, vr.Width), vr, Blk95, false, TextAlignment.Leading, on);
     }
 
     void Confirm95()
     {
-        string label = Ctl(_confirm)?.Label;
-        if (string.IsNullOrEmpty(label)) label = _confirm;
+        string label = ConfirmLabel();
         var box = new RectangleF(W95 / 2 - 130, H95 / 2 - 56, 260, 112);
         _p.Fill(box, Theme.W95Face);
         _p.Bevel(box, Painter.Edge.Window);

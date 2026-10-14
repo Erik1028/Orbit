@@ -29,6 +29,11 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly GpuStats _gpuStats = new();
     readonly MediaInfo _media = new();
     readonly HexpadLink _hexpad = new();
+    readonly RoomWatcher _room = new();
+    RoomWatcher.Snapshot _roomSnap = new();
+    RoomPanel _roomPanel;
+    StatusLine _status;
+    double _nextStatus;
     HexpadFaces _dockFaces;
     DockPanel _dockPanel;
     HexpadLink.Snapshot _dockSnap = new();
@@ -96,13 +101,20 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
         _dockFaces = new HexpadFaces();
         _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
+        _roomPanel = new RoomPanel(_gpu, _painter, _cfg);
+        _status = new StatusLine(_osc);
         _data.Dock = _dockSnap;
         _data.DockFaces = _dockFaces;
         _hexpad.Start();
         _notifyPanel = new NotificationPanel(_gpu, _painter, _cfg);
         // VRChat chatbox: /chatbox/input <text> <send now> <notification sound>, /chatbox/typing <bool>
-        _kb.OnChatSend = text => { _osc.SendMessage(C.General.OscPort, "/chatbox/input", text, true, true); Log.Info($"chatbox: {text.Length} chars"); };
-        _kb.OnChatTyping = on => _osc.SendMessage(C.General.OscPort, "/chatbox/typing", on);
+        _kb.OnChatSend = text =>
+        {
+            _osc.SendMessage(C.General.OscPort, "/chatbox/input", text, true, true);
+            _status.Pause(Clock.Now, 20);                    // your own line stays up for a while
+            Log.Info($"chatbox: {text.Length} chars");
+        };
+        _kb.OnChatTyping = on => { _status.Typing = on; _osc.SendMessage(C.General.OscPort, "/chatbox/typing", on); };
         SyncMonitors(force: true);
         SyncWindowPanels();
         NoteVersion();
@@ -411,6 +423,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             bool awake = _vr.HeadsetWorn || !C.General.PauseWhenOff;
             _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
             _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
+            BlockGameInput(awake && !dash);
             Perf(1, ref t);
             _wrist.Update(_vr, now, dt, _data);
             Perf(2, ref t);
@@ -418,6 +431,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             Perf(3, ref t);
             _settingsPanel.Update(_vr, now, dt);
             UpdateDock(now, dt);
+            UpdateRoom(now, dt);
             Perf(4, ref t);
             // headset off: no capturing (the overlays keep their last picture)
             if (awake)
@@ -440,6 +454,13 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 _nextOsc = now + 0.1;
                 SendOsc(now);
             }
+            if (now >= _nextStatus)
+            {
+                _nextStatus = now + 1;
+                var m = _media.Snapshot();
+                _status.Update(now, C.Chatbox.StatusLine, C.General.OscPort,
+                    StatusLine.Compose(C.Chatbox, (m.has, m.title, m.artist, m.playing), DateTime.Now, _data.VrSince, C.Appearance.Clock24h));
+            }
             Perf(6, ref t);
             GpuProbeIssue();
             PerfFrame(now);
@@ -448,6 +469,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _notifyIn.SetEnabled(C.General.Notifications && _vr.Connected);
         _media.Active = _vr.Connected;
         WatchWidgets.DockAvailable = C.Dock.Enabled && _hexpad.Present;     // the editor offers the dock widget (also on the desktop)
+        _room.Active = _vr.Connected && C.Room.Enabled;
+        _data.Room = C.Room.Enabled ? _roomSnap : null;
+        _data.StatusLine = C.Chatbox.StatusLine;
         _data.VrConnected = _vr.Connected;
         if (_vr.Connected) _data.VrSince ??= DateTime.Now; else _data.VrSince = null;
         _data.DesktopsVisible = C.General.DesktopsVisible;
@@ -458,13 +482,27 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _cfg.SaveIfDue();
     }
 
+    // A hand whose laser points at / holds an Orbit panel keeps its buttons from the game (no stray VRChat clicks).
+    // It is let go only once that hand releases trigger, grip and B / Y: a button still held when the beam leaves
+    // the panel must not reach the game as a fresh press.
+    void BlockGameInput(bool on)
+    {
+        for (int h = 0; h < 2; h++)
+        {
+            ref var hs = ref _vr.Hands[h];
+            bool busy = on && C.General.BlockGameInput && _lasers[h].Active;
+            if (busy) _vr.Suppress[h] = true;
+            else if (_vr.Suppress[h] && !(hs.Click || hs.Grab || hs.Secondary)) _vr.Suppress[h] = false;
+        }
+    }
+
     List<IPointerTarget> _targets;
 
     // rebuilt only when the monitor panels change (SyncMonitors clears it)
     List<IPointerTarget> Targets()
     {
         if (_targets != null) return _targets;
-        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _wrist, _kb };
+        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _roomPanel, _wrist, _kb };
         _targets.AddRange(_windowPanels);
         _targets.AddRange(_desktops);
         return _targets;
@@ -510,6 +548,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         try { _wrist.Draw(_data); _kb.Draw(); _settingsPanel.Warm(); } catch (Exception e) { Log.Warn("warm-up draw: " + e.Message); }
         _settingsPanel.CreateOverlay(_vr);
         _dockPanel.CreateOverlay(_vr);
+        _roomPanel.CreateOverlay(_vr);
         _notifyPanel.CreateOverlay();
         try { _winrtDev ??= MonitorCapture.CreateWinRtDevice(_gpu); }
         catch (Exception e) { Log.Error("WinRT device: " + e); }
@@ -531,7 +570,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     {
         try
         {
-            (_dash, _dashThumb) = VrOverlay.CreateDashboard(AppKey + ".settings", "Orbit");
+            (_dash, _dashThumb) = VrOverlay.CreateDashboard(AppKey + ".settings", "OrbitOverlay");
             _dash.SetWidth(2.5f);
             _vr.Ov.SetOverlayInputMethod(_dash.Handle, VROverlayInputMethod.Mouse);
             var scale = new HmdVector2_t { v0 = DashW, v1 = DashH };
@@ -625,6 +664,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _kb.DestroyOverlay();
         _settingsPanel.DestroyOverlay();
         _dockPanel.DestroyOverlay();
+        _roomPanel.DestroyOverlay();
+        _status.Clear(C.General.OscPort, Clock.Now);
         _notifyPanel.DestroyOverlay();
         foreach (var d in _desktops) d.DestroyOverlay();
         foreach (var w in _windowPanels) w.DestroyOverlay();
@@ -1215,7 +1256,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 }
                 if (e == EVRApplicationError.None && !apps.GetApplicationAutoLaunch(AppKey))
                     e = apps.SetApplicationAutoLaunch(AppKey, true);
-                AutoStartStatus = e == EVRApplicationError.None ? "on: SteamVR starts Orbit and closes it on exit" : "SteamVR refused: " + e;
+                AutoStartStatus = e == EVRApplicationError.None ? "on: SteamVR starts OrbitOverlay and closes it on exit" : "SteamVR refused: " + e;
             }
             else if (installed)
             {
@@ -1268,7 +1309,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             Updates.NoteUpdated(last);
             _notifyIn.Incoming.Enqueue(new Notification
             {
-                Source = "Orbit", Title = "Orbit updated",
+                Source = "OrbitOverlay", Title = "OrbitOverlay updated",
                 Content = $"Now running {now} (was {last}).", Timeout = 8,
             });
         }
@@ -1278,7 +1319,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
     public void TestNotification() => _notifyIn.Incoming.Enqueue(new Notification
     {
-        Source = "Orbit", Title = "Test notification",
+        Source = "OrbitOverlay", Title = "Test notification",
         Content = "Notifications from VRCX and other tools appear here.", Timeout = 4,
     });
 
@@ -1424,7 +1465,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             case "media.prev": _media.Command("prev"); break;
             case "media.play": _media.Command("play"); break;
             case "timer.done":
-                _notifyIn.Incoming.Enqueue(new Notification { Source = "Orbit", Title = "Timer", Content = "Time is up.", Timeout = 6 });
+                _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = "Timer", Content = "Time is up.", Timeout = 6 });
                 break;
             case "media.next": _media.Command("next"); break;
             case "settings":
@@ -1432,6 +1473,14 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 break;
             case "dock":
                 _dockPanel.Toggle();            // Hexpad's stream dock as a panel
+                break;
+            case "room":
+                _roomPanel.Toggle();
+                break;
+            case "status":
+                C.Chatbox.StatusLine = !C.Chatbox.StatusLine;
+                _cfg.MarkDirty();
+                _win.Dirty = true;
                 break;
         }
     }
@@ -1453,6 +1502,62 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockPanel.Update(_vr, now, dt, _dockSnap);
     }
 
+    // who is in the VRChat instance: the panel, and a card when a friend / a starred person comes or goes (arriving
+    // in a world: one card for everyone you know who is already there, not one per person)
+    void UpdateRoom(double now, float dt)
+    {
+        if (_room.Version != _roomSnap.Version)
+        {
+            _roomSnap = _room.Get();
+            if (C.Room.Enabled) _data.Room = _roomSnap;
+        }
+        var r = C.Room;
+        while (_room.Events.TryDequeue(out var ev))
+        {
+            if (!r.Enabled) continue;
+            bool Known(RoomWatcher.Person p) => (r.NotifyFriends && p.Friend) || (r.NotifyStarred && r.Starred.Contains(p.Key));
+            string world = ev.World.Length > 60 ? ev.World[..59] + "\u2026" : ev.World;
+            if (ev.Kind == RoomWatcher.Kind.Arrived)
+            {
+                var who = Array.FindAll(ev.People, Known);
+                if (who.Length == 0) continue;
+                string names = string.Join(", ", Array.ConvertAll(who.Length > 4 ? who[..4] : who, p => p.Name)) + (who.Length > 4 ? $" +{who.Length - 4}" : "");
+                RoomCard(who.Length == 1 ? $"{who[0].Name} is here" : $"{who.Length} people you know are here", names + (world.Length > 0 ? " · " + world : ""));
+                continue;
+            }
+            var p = ev.People[0];
+            if (!(r.NotifyEveryone || Known(p))) continue;
+            RoomCard(ev.Kind == RoomWatcher.Kind.Joined ? $"{p.Name} joined" : $"{p.Name} left", world);
+        }
+        _roomPanel.Update(_vr, now, dt, _roomSnap);
+    }
+
+    void RoomCard(string title, string content) =>
+        _notifyIn.Incoming.Enqueue(new Notification { Source = "Room", Title = title, Content = content, Timeout = 4, Volume = 0.5f });
+
+    public string StatusLinePreview
+    {
+        get
+        {
+            var m = _media.Snapshot();
+            return StatusLine.Compose(C.Chatbox, (m.has, m.title, m.artist, m.playing), DateTime.Now, _data.VrSince, C.Appearance.Clock24h);
+        }
+    }
+
+    public string RoomStatus
+    {
+        get
+        {
+            var s = _roomSnap;
+            if (!_vr.Connected) return "follows the log while SteamVR runs";
+            if (!s.LogFound) return "no VRChat log found";
+            string where = s.InRoom ? $"{s.Here.Count} in {(s.World.Length > 28 ? s.World[..27] + "\u2026" : s.World)}" : "not in a world";
+            return where + (s.VrcxFound ? $" · VRCX: {s.Friends} friends" : " · VRCX not found");
+        }
+    }
+
+    public void ToggleRoom() => _roomPanel.Toggle();
+
     // previews in the settings screen are separate draws; they must not nest inside its BeginDraw
     void PreparePreviews(SettingsView v)
     {
@@ -1466,7 +1571,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _cfg.SaveIfDue(force: true);
         foreach (var d in _desktops) d.Dispose();
         foreach (var w in _windowPanels) w.Dispose();
-        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose();
+        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose();
+        _room.Dispose();
         _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();
         _gpuStats.Dispose();

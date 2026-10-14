@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -30,7 +31,7 @@ static class Tools
         public void SetKeyboardAttach(string a) { }
         public void SetDesktopEnabled(DesktopConfig d, bool on) => d.Enabled = on;
         public void SetAutoStart(bool on) { }
-        public string AutoStartStatus => "on: SteamVR starts Orbit and closes it on exit";
+        public string AutoStartStatus => "on: SteamVR starts OrbitOverlay and closes it on exit";
         public void ToggleKeyboard() { }
         public void ToggleDesktops() { }
         public void OpenConfigFolder() { }
@@ -44,6 +45,9 @@ static class Tools
         public void SetRunAsAdmin(bool on) { }
         public void RestartElevated() { }
         public string NotificationStatus => "listening on UDP 42069";
+        public string StatusLinePreview => "\U0001F3B5 Midnight City \u2013 M83";
+        public string RoomStatus => "12 in Midnight Rooftop · VRCX: 120 friends";
+        public void ToggleRoom() { }
         public void TestNotification() { }
         List<WindowInfo> _open;
         public IReadOnlyList<WindowInfo> OpenWindows() => _open ??= WindowList.Enumerate();
@@ -708,9 +712,10 @@ static class Tools
     // --wintest DIR: the desktop settings window in both styles (with its own config in DIR), on screen
     // for a moment each: a screenshot, its size at this DPI, and what the 95 caption answers to
     // WM_NCHITTEST (it must drag the window, but not over its ? and X boxes).
-    // Hexpad's stream dock without a headset. Reads the live link (read-only: nothing is pressed or woken) and
-    // draws the panel in both styles and the watch widget in its sizes; then the same with made-up faces in every
-    // state (not running, unplugged, idle, folder, a confirmation, hover / pressed), so it also works without Hexpad.
+    // Hexpad's stream dock without a headset. Reads the live link (read-only: it only says hello - nothing is pressed,
+    // turned, set or woken) and draws the panel in both styles and the watch widget in its sizes; then the same with
+    // made-up faces (68 px device ones and 136 px sharp ones) in every state: not running, unplugged, idle, folder,
+    // a confirmation, hover / pressed, sliders dragged (abs and jog), a disabled one, an api 1 Hexpad, long names.
     public static int DockTest(string dir)
     {
         dir = Path.GetFullPath(dir);
@@ -726,22 +731,30 @@ static class Tools
         while (sw.Elapsed.TotalSeconds < 8)
         {
             live = link.Get();
-            if (live.State == HexpadLink.LinkState.Ok && live.Controls.Count > 0 && Array.TrueForAll(live.Faces, f => f != null)) break;
+            bool ok = live.State == HexpadLink.LinkState.Ok && live.Controls.Count > 0 && Array.TrueForAll(live.Faces, f => f != null);
+            // an api 2 Hexpad sends the sharp faces a tick or two after the device ones
+            if (ok && (live.Api < 2 || Array.Exists(live.HiFaces, f => f != null) || sw.Elapsed.TotalSeconds > 3)) break;
             if (live.State is HexpadLink.LinkState.NotRunning or HexpadLink.LinkState.OldHexpad && sw.Elapsed.TotalSeconds > 4) break;
             Thread.Sleep(100);
         }
         link.Active = false;                     // read once; never sends anything but hello
-        int nf = Array.FindAll(live.Faces, f => f != null).Length;
-        Log.Info($"docktest: {live.State} in {sw.Elapsed.TotalSeconds:0.0} s, present {link.Present}; page '{live.PageName}' {live.Page + 1}/{live.Pages}, " +
-                 $"folder '{live.FolderName}', idle {live.Ambient}, dark {live.Dark}, faces {nf} ({live.FaceW}x{live.FaceH}), controls {live.Controls.Count}");
+        int nf = Array.FindAll(live.Faces, f => f != null).Length, nh = Array.FindAll(live.HiFaces, f => f != null).Length;
+        var f0 = Array.Find(live.Faces, f => f != null);
+        var h0 = Array.Find(live.HiFaces, f => f != null);
+        Log.Info($"docktest: {live.State} in {sw.Elapsed.TotalSeconds:0.0} s, present {link.Present}, api {live.Api} [{string.Join(",", live.Caps)}]; " +
+                 $"page '{live.PageName}' {live.Page + 1}/{live.Pages}, folder '{live.FolderName}', idle {live.Ambient}, dark {live.Dark}, " +
+                 $"faces {nf} ({f0?.W}x{f0?.H}), sharp {nh} ({h0?.W}x{h0?.H}), controls {live.Controls.Count}, values {live.Values.Count}");
         foreach (var (k, c) in live.Controls)
-            Log.Info($"docktest: {k,-5} '{c.Label}'{(c.Push.Length > 0 ? $" push '{c.Push}'" : "")}{(c.Left.Length > 0 ? $" left '{c.Left}' right '{c.Right}'" : "")}{(c.Danger ? " DANGER" : "")}");
+            Log.Info($"docktest: {k,-5} '{c.Label}'{(c.Push.Length > 0 ? $" push '{c.Push}'" : "")}{(c.Left.Length > 0 ? $" left '{c.Left}' right '{c.Right}'" : "")}" +
+                     $"{(c.Danger ? " DANGER" : "")}{(k.StartsWith("enc") ? $" slider '{c.Slider}' kind '{c.Kind}' max {c.Max}" : "")}");
+        foreach (var (k, v) in live.Values)
+            Log.Info($"docktest: {k,-5} value {(v.V is float x ? x.ToString("0.00") : "null")}{(v.Muted ? " muted" : "")}{(v.Off ? " off" : "")}");
 
         using var faces = new HexpadFaces();
         using var panel = new DockPanel(gpu, painter, cfg, link, faces);
         using var wrist = new WristPanel(gpu, painter, cfg);
         var data = new PanelData { VrConnected = true };
-        void Shots(string tag, HexpadLink.Snapshot s, (string name, string hover, string pressed, string confirm)[] extra = null)
+        void Shots(string tag, HexpadLink.Snapshot s, (string name, string hover, string pressed, string confirm, string drag, float at)[] extra = null)
         {
             faces.Update(painter, s);
             foreach (var style in new[] { "modern", "classic" })
@@ -751,9 +764,9 @@ static class Tools
                 string st = style == "classic" ? "_95" : "";
                 panel.DrawFor(s, Clock.Now);
                 panel.Surf.SavePng(gpu, Path.Combine(dir, $"dock_{tag}{st}.png"));
-                foreach (var (name, hover, pressed, confirm) in extra ?? Array.Empty<(string, string, string, string)>())
+                foreach (var (name, hover, pressed, confirm, drag, at) in extra ?? Array.Empty<(string, string, string, string, string, float)>())
                 {
-                    panel.DrawFor(s, Clock.Now, hover, pressed, confirm);
+                    panel.DrawFor(s, Clock.Now, hover, pressed, confirm, drag, at);
                     panel.Surf.SavePng(gpu, Path.Combine(dir, $"dock_{tag}_{name}{st}.png"));
                 }
                 // the watch widget in its three sizes, beside a few others
@@ -775,10 +788,18 @@ static class Tools
             cfg.Data.Appearance.Style = "modern";
             Theme.Apply(cfg.Data.Appearance);
         }
-        if (nf > 0) Shots("live", live, new (string, string, string, string)[] { ("hover", "key2", null, null), ("knob", "enc1:r", null, null) });
+        if (nf > 0) Shots("live", live, new (string, string, string, string, string, float)[]
+        {
+            ("hover", "key2", null, null, null, 0), ("slider", "enc1:s", null, null, null, 0),
+        });
 
-        // made-up faces: a colour per key with its number, so orientation and order show
-        var fake = new HexpadLink.Snapshot { State = HexpadLink.LinkState.Ok, Profile = "Default", PageName = "Home", Page = 0, Pages = 10, Version = 1 };
+        // made-up faces: a colour per key with its number, so orientation and order show; the sharp (136 px) ones
+        // also have a ring, so a shot shows which of the two is drawn (modern: sharp, 95: the device's)
+        var fake = new HexpadLink.Snapshot
+        {
+            State = HexpadLink.LinkState.Ok, Api = 2, Caps = new[] { "hi", "values", "set", "jog" },
+            Profile = "Default", PageName = "Home", Page = 0, Pages = 10, Version = 1,
+        };
         uint[] cols = { 0xFF2D6CDF, 0xFFE0473C, 0xFF3CB371, 0xFFE8A33D, 0xFF8E5BD8, 0xFF2BB5B8 };
         for (int i = 0; i < HexpadLink.Keys; i++)
         {
@@ -789,24 +810,65 @@ static class Tools
                     bool edge = x < 3 || y < 3 || x > 64 || y > 64, mark = x > 8 && x < 8 + 6 * (i + 1) && y > 8 && y < 16;
                     px[y * 68 + x] = edge ? 0xFFFFFFFF : mark ? 0xFF000000 : cols[i];
                 }
-            fake.Faces[i] = px;
-            fake.FaceVersion[i] = 1000 + i;           // never equal to a live face version
+            fake.Faces[i] = new HexpadLink.Face(px, 68, 68);
+            var hp = new uint[136 * 136];
+            for (int y = 0; y < 136; y++)
+                for (int x = 0; x < 136; x++)
+                {
+                    bool edge = x < 6 || y < 6 || x > 129 || y > 129, mark = x > 16 && x < 16 + 12 * (i + 1) && y > 16 && y < 32;
+                    float d = MathF.Sqrt((x - 68) * (x - 68) + (y - 80) * (y - 80));
+                    hp[y * 136 + x] = edge ? 0xFFFFFFFF : mark ? 0xFF000000 : MathF.Abs(d - 34) < 1.5f ? 0xFFFFFFFF : cols[i];
+                }
+            fake.HiFaces[i] = new HexpadLink.Face(hp, 136, 136);
+            fake.FaceVersion[i] = 1000 + i;
         }
         fake.Controls = new Dictionary<string, HexpadLink.Control>
         {
             ["key1"] = new() { Label = "Clock" }, ["key2"] = new() { Label = "Folder" }, ["key3"] = new() { Label = "System: sleep", Danger = true },
             ["key4"] = new() { Label = "Media: play" }, ["key5"] = new() { Label = "Folder" }, ["key6"] = new() { Label = "Quick: Empty Recycle Bin", Danger = true },
             ["btn7"] = new() { Label = "Page: prev" }, ["btn8"] = new() { Label = "Page: goto" }, ["btn9"] = new() { Label = "Page: next" },
-            ["enc0"] = new() { Label = "Bright", Left = "Brightness: down", Right = "Brightness: up", Push = "Brightness: set" },
-            ["enc1"] = new() { Label = "Volume", Left = "Volume: down", Right = "Volume: up", Push = "Volume: mute" },
-            ["enc2"] = new() { Label = "Screen", Left = "Monitors: down", Right = "Monitors: up" },
+            ["enc0"] = new() { Label = "Bright", Left = "Brightness: down", Right = "Brightness: up", Push = "Brightness: set", Slider = "abs", Kind = "brightness" },
+            ["enc1"] = new() { Label = "Volume", Left = "Volume: down", Right = "Volume: up", Push = "Volume: mute", Slider = "abs", Kind = "volume" },
+            ["enc2"] = new() { Label = "Light", Left = "Smartlight: brightness_down", Right = "Smartlight: brightness_up", Push = "Smartlight: toggle",
+                               Slider = "jog", Kind = "smartlight" },
         };
-        Shots("fake", fake, new (string, string, string, string)[]
+        fake.Values = new Dictionary<string, HexpadLink.Value> { ["enc0"] = new() { V = 0 }, ["enc1"] = new() { V = 0.42f } };
+        Shots("fake", fake, new (string, string, string, string, string, float)[]
         {
-            ("hover", "key4", null, null), ("pressed", "key4", "key4", null), ("knob", "enc1:l", "enc1:l", null), ("push", "enc0", "enc0", null),
-            ("confirm", null, null, "key3"),
+            ("hover", "key4", null, null, null, 0), ("pressed", "key4", "key4", null, null, 0), ("push", "enc1", "enc1", null, null, 0),
+            ("slider", "enc1:s", null, null, null, 0), ("drag_abs", null, null, null, "enc1", 0.7f), ("drag_abs0", null, null, null, "enc0", 1f),
+            ("drag_jog", null, null, null, "enc2", 62), ("drag_jog_far", null, null, null, "enc2", -400),
+            ("confirm", null, null, "key3", null, 0),
         });
         HexpadLink.Snapshot With(Action<HexpadLink.Snapshot> f) { var c = fake.Copy(); c.Version++; f(c); return c; }
+        void Ctl(HexpadLink.Snapshot c, string id, HexpadLink.Control v) => c.Controls = new(c.Controls) { [id] = v };
+        // no turn binding (push only), monitors powered off, a volume Hexpad does not know yet
+        Shots("disabled", With(c =>
+        {
+            Ctl(c, "enc0", new() { Label = "Mic", Push = "Mic: toggle" });
+            Ctl(c, "enc2", new() { Label = "Screen", Left = "Monitors: down", Right = "Monitors: up", Push = "Monitors: set", Slider = "abs", Kind = "monitor" });
+            c.Values = new() { ["enc1"] = new() { V = null }, ["enc2"] = new() { V = 0.5f, Off = true } };
+        }));
+        Shots("muted", With(c => c.Values = new() { ["enc0"] = new() { V = 0.66f }, ["enc1"] = new() { V = 0.42f, Muted = true } }));
+        // an api 1 Hexpad: no values, no sharp faces, every turn a jog (what the parser makes of its controls)
+        Shots("api1", With(c =>
+        {
+            c.Api = 1; c.Caps = Array.Empty<string>(); c.Values = new(); c.HiFaces = new HexpadLink.Face[HexpadLink.Keys];
+            Ctl(c, "enc0", new() { Label = "Page", Left = "Page: prev", Right = "Page: next", Push = "Page: goto", Slider = "jog", Kind = "page" });
+            Ctl(c, "enc1", new() { Label = "Volume", Left = "Volume: down", Right = "Volume: up", Push = "Volume: mute", Slider = "jog", Kind = "volume" });
+            Ctl(c, "enc2", new() { Label = "Screen", Left = "Monitors: down", Right = "Monitors: up", Push = "Monitors: set", Slider = "jog", Kind = "monitors" });
+        }), new (string, string, string, string, string, float)[] { ("drag_page", null, null, null, "enc0", 130), ("drag_vol", null, null, null, "enc1", -50) });
+        // long names and pushes: nothing may run out of its box
+        Shots("long", With(c =>
+        {
+            Ctl(c, "enc0", new() { Label = "Discord output volume", Left = "Discord: outvol_down", Right = "Discord: outvol_up", Push = "Discord: outvol_down",
+                                   Slider = "abs", Kind = "discord", Max = 200 });
+            Ctl(c, "enc1", new() { Label = "Desktop Audio (OBS)", Left = "OBS: vol_down", Right = "OBS: vol_up", Push = "OBS: vol_mute", Slider = "jog", Kind = "obs",
+                                   Danger = true });
+            Ctl(c, "enc2", new() { Label = "Prisma scene brightness", Left = "Rgbscene: bright_down", Right = "Rgbscene: bright_up",
+                                   Push = "Rgbscene: next_scene_please", Slider = "jog", Kind = "rgbscene" });
+            c.Values = new() { ["enc0"] = new() { V = 0.5f } };
+        }), new (string, string, string, string, string, float)[] { ("drag", null, null, null, "enc0", 1f), ("confirm", null, null, "enc1", null, 0) });
         Shots("idle", With(c => c.Ambient = true));
         Shots("folder", With(c => { c.InFolder = true; c.FolderName = "Games"; c.FolderPage = 0; c.FolderPages = 2; }));
         Shots("notrunning", With(c => c.State = HexpadLink.LinkState.NotRunning));
@@ -814,6 +876,123 @@ static class Tools
         Shots("old", With(c => c.State = HexpadLink.LinkState.OldHexpad));
         Log.Info("docktest: done");
         return 0;
+    }
+
+    // Who is in the room, without VRChat or a headset. 1) A made-up log written line by line into a temp folder (no VRCX):
+    // arriving in a world (an 80-person burst = ONE "arrived" event), a join, a leave, OnPlayerLeftRoom, leaving the world
+    // (no events) - checked, and the result logged. 2) The real newest VRChat log and VRCX, read-only, drawn as the panel
+    // and the watch widget in both styles (names are Erik's own data: the PNGs stay local).
+    public static int RoomTest(string dir)
+    {
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(dir);
+        int fails = 0;
+        void Ck(string name, bool ok) { Log.Info($"roomtest: {(ok ? "ok  " : "FAIL")} {name}"); if (!ok) fails++; }
+
+        // ---- 1. the parser on a made-up log ----
+        var logDir = Path.Combine(dir, "log");
+        if (Directory.Exists(logDir)) Directory.Delete(logDir, true);
+        Directory.CreateDirectory(logDir);
+        var file = Path.Combine(logDir, "output_log_2026-10-14_20-00-00.txt");
+        string T() => DateTime.Now.ToString("yyyy.MM.dd HH:mm:ss");
+        void W(params string[] lines)
+        {
+            using var f = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            var b = Encoding.UTF8.GetBytes(string.Concat(Array.ConvertAll(lines, l => $"{T()} Debug      -  {l}\r\n")));
+            f.Write(b, 0, b.Length);
+        }
+        W("[Behaviour] Entering Room: Old World", "[Behaviour] OnPlayerJoined Before Person (usr_00000000-0000-0000-0000-000000000001)");
+        using (var w = new RoomWatcher { LogDir = logDir, VrcxDb = Path.Combine(dir, "no-vrcx.sqlite3") })
+        {
+            w.Active = true;
+            bool Wait(Func<RoomWatcher.Snapshot, bool> cond, double s)
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                while (sw.Elapsed.TotalSeconds < s) { if (cond(w.Get())) return true; Thread.Sleep(100); }
+                return false;
+            }
+            Ck("history: the last room from the log, no events", Wait(s => s.InRoom && s.World == "Old World" && s.Here.Count == 1, 8) && w.Events.IsEmpty);
+            W("[Behaviour] OnLeftRoom", "[Behaviour] OnPlayerLeft Before Person (usr_00000000-0000-0000-0000-000000000001)");
+            Ck("leaving a world: nobody 'left', no events", Wait(s => !s.InRoom && s.Here.Count == 0, 4) && w.Events.IsEmpty);
+            W("[Behaviour] Entering Room: Midnight Rooftop", "[Behaviour] Joining wrld_x:1", "[Behaviour] Successfully joined room");
+            var burst = new List<string>();
+            for (int i = 0; i < 80; i++) burst.Add($"[Behaviour] OnPlayerJoined Guest {i} (Tag) (usr_10000000-0000-0000-0000-{i:000000000000})");
+            W(burst.ToArray());
+            Ck("arriving: the burst is one 'arrived' event after it settles", Wait(s => s.InRoom && !s.Arriving && s.Here.Count == 80, 12));
+            int arrived = 0, other = 0;
+            while (w.Events.TryDequeue(out var ev)) { if (ev.Kind == RoomWatcher.Kind.Arrived && ev.People.Length == 80) arrived++; else other++; }
+            Ck("exactly one arrived event with 80 people", arrived == 1 && other == 0);
+            Ck("a name with brackets keeps them, the id is the last (usr_", w.Get().Here.Exists(p => p.Name == "Guest 7 (Tag)" && p.Id.EndsWith("000000000007")));
+            W("[Behaviour] OnPlayerJoined Late Friend (usr_20000000-0000-0000-0000-000000000001)");
+            Ck("a join after arriving is an event", Wait(_ => !w.Events.IsEmpty, 4) && w.Events.TryDequeue(out var j) && j.Kind == RoomWatcher.Kind.Joined && j.People[0].Name == "Late Friend");
+            W("[Behaviour] OnPlayerLeftRoom", "[Behaviour] OnPlayerLeft Late Friend (usr_20000000-0000-0000-0000-000000000001)");
+            Ck("a leave is an event (OnPlayerLeftRoom is not)", Wait(_ => !w.Events.IsEmpty, 4) && w.Events.TryDequeue(out var l) && l.Kind == RoomWatcher.Kind.Left
+                && w.Events.IsEmpty && w.Get().Gone.Count == 1);
+            Ck("the counts", w.Get().Here.Count == 80);
+            // a new log (VRChat restarted): followed from its start
+            var file2 = Path.Combine(logDir, "output_log_2026-10-14_21-00-00.txt");
+            File.WriteAllText(file2, $"{T()} Debug      -  [Behaviour] Entering Room: Second\n");
+            File.SetLastWriteTimeUtc(file2, DateTime.UtcNow.AddSeconds(5));
+            Ck("a newer log takes over", Wait(s => s.World == "Second" && s.Here.Count == 0, 12));
+        }
+
+        // ---- 2. the real log + VRCX, drawn ----
+        var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+        RoomWatcher.Snapshot live;
+        using (var w = new RoomWatcher())
+        {
+            w.Active = true;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            live = w.Get();
+            while (sw.Elapsed.TotalSeconds < 6 && live.Version < 2) { Thread.Sleep(200); live = w.Get(); }
+            Thread.Sleep(500);
+            live = w.Get();
+        }
+        Log.Info($"roomtest: real log found {live.LogFound}, in room {live.InRoom}, {live.Here.Count} here ({live.Here.FindAll(p => p.Friend).Count} friends), " +
+                 $"{live.Gone.Count} gone, VRCX {live.VrcxFound} ({live.Friends} friends), me {(live.MeId.Length > 0 ? "known" : "unknown")}");
+        // a made-up room for the pictures that may be shown
+        var fake = new RoomWatcher.Snapshot { Version = 1, LogFound = true, InRoom = true, World = "Midnight Rooftop", VrcxFound = true, Friends = 120 };
+        string[] names = { "Nova", "Pixel Fox", "Moss", "Kite", "Juniper", "Static", "Orbit Fan 2000", "Lumen", "Quill", "Sable", "Wren", "Echo" };
+        for (int i = 0; i < names.Length; i++)
+            fake.Here.Add(new RoomWatcher.Person { Id = $"usr_{i}", Name = names[i], Joined = DateTime.Now.AddMinutes(-3 * i - 1), Friend = i is 1 or 4 or 9 });
+        fake.Gone.Add(new RoomWatcher.Person { Id = "usr_g", Name = "Drifter", Joined = DateTime.Now.AddMinutes(-40), Left = DateTime.Now.AddMinutes(-2) });
+        cfg.Data.Room.Starred.Add("usr_6");
+        using var panel = new RoomPanel(gpu, painter, cfg);
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        var data = new PanelData { VrConnected = true };
+        foreach (var (tag, s) in new[] { ("live", live), ("fake", fake), ("empty", new RoomWatcher.Snapshot { Version = 1, LogFound = true }) })
+            foreach (var style in new[] { "modern", "classic" })
+            {
+                cfg.Data.Appearance.Style = style;
+                Theme.Apply(cfg.Data.Appearance);
+                string st = style == "classic" ? "_95" : "";
+                panel.DrawFor(s, DateTime.Now);
+                panel.Surf.SavePng(gpu, Path.Combine(dir, $"room_{tag}{st}.png"));
+                data.Room = s;
+                cfg.Data.Wrist.Face = "custom";
+                cfg.Data.Wrist.Widgets = new List<WatchWidget>
+                {
+                    new() { Type = "room", X = 0, Y = 0, W = 1, H = 1 }, new() { Type = "room", X = 1, Y = 0, W = 2, H = 1 },
+                    new() { Type = "status", X = 3, Y = 0, W = 2, H = 1 }, new() { Type = "status", X = 5, Y = 0, W = 1, H = 1 },
+                    new() { Type = "time", X = 0, Y = 1, W = 4, H = 2 },
+                };
+                data.StatusLine = tag == "fake";
+                wrist.Settle();
+                wrist.Draw(data);
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_room_{tag}{st}.png"));
+            }
+        // the status line text
+        var cb = new ChatboxConfig { StatusLine = true, ShowMedia = true, ShowTime = true, ShowVrTime = true };
+        string line = StatusLine.Compose(cb, (true, "Midnight City", "M83", true), new DateTime(2026, 10, 14, 21, 34, 0), DateTime.Now.AddMinutes(-83), true);
+        Ck("status line: " + line, line.Contains("Midnight City") && line.Contains("21:34") && line.Contains("in VR"));
+        string longLine = StatusLine.Compose(cb, (true, new string('x', 300), "y", true), DateTime.Now, null, true);
+        Ck("status line is cut to 144", longLine.Length <= StatusLine.Max);
+        Ck("nothing playing, nothing else: empty", StatusLine.Compose(new ChatboxConfig { StatusLine = true }, (false, null, null, false), DateTime.Now, null, true) == "");
+        Log.Info($"roomtest: {(fails == 0 ? "ALL OK" : fails + " FAILED")}");
+        return fails == 0 ? 0 : 1;
     }
 
     public static int WinTest(string dir)

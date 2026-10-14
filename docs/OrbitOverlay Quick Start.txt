@@ -1,7 +1,7 @@
 ORBIT - QUICK START
 ===================
 
-Orbit is a SteamVR overlay: a watch on your wrist, your desktop monitors floating
+OrbitOverlay is a SteamVR overlay: a watch on your wrist, your desktop monitors floating
 in VR (with a laser mouse), a full VR keyboard and its own settings panel.
 
 
@@ -12,7 +12,7 @@ REQUIREMENTS
 
 
 FIRST START
-1. Start SteamVR. Orbit starts with it (tray icon), unless you switched that off
+1. Start SteamVR. OrbitOverlay starts with it (tray icon), unless you switched that off
    in the installer.
 2. The first time, Windows asks once for administrator rights. With them, the VR
    mouse and keyboard also work in admin windows (Task Manager, installers...).
@@ -40,7 +40,7 @@ CONTROLS
 
 SETTINGS
 - In VR: the gear button on the watch opens the settings panel (grab it, close with X).
-- On the desktop: click the tray icon (or start Orbit again from the Start menu).
+- On the desktop: click the tray icon (or start OrbitOverlay again from the Start menu).
 - Tabs: Desktops (which monitors, size, curve, join/separate, smart frame rate),
   Windows (mirror single app windows), Layouts (Desk / Bed / Couch profiles),
   Wrist (watch face incl. a Custom face of widgets you arrange with Edit layout, 24-hour clock,
@@ -59,7 +59,7 @@ kept in that profile when you switch away.
 
 
 NIGHT MODE
-The moon button on the watch (or Look > Night mode) dims every Orbit panel in VR;
+The moon button on the watch (or Look > Night mode) dims every OrbitOverlay panel in VR;
 Look > Night brightness sets how much.
 
 
@@ -102,14 +102,14 @@ play-pause / next buttons. Can be hidden under Wrist.
 
 
 NOTIFICATIONS
-Orbit shows notifications sent in XSOverlay's format (UDP port 42069 on this PC) as
+OrbitOverlay shows notifications sent in XSOverlay's format (UDP port 42069 on this PC) as
 cards in the lower part of your view - e.g. VRCX: Settings > Notifications > enable the
 XSOverlay notifications. General > Notifications > Test shows a sample.
-If XSOverlay itself is running it owns that port, then Orbit can't receive them.
+If XSOverlay itself is running it owns that port, then OrbitOverlay can't receive them.
 
 
 VRCHAT AVATAR PARAMETERS (OSC)
-Orbit sends the same avatar parameters as XSOverlay (isOverlayOpen, isKeyboardOpen,
+OrbitOverlay sends the same avatar parameters as XSOverlay (isOverlayOpen, isKeyboardOpen,
 isWristVisible, openOverlayCount, controller/tracker batteries) to VRChat on
 127.0.0.1:9000, so avatar add-ons such as DXOverlay react to it.
 Turn OSC on in VRChat's action menu. Can be switched off under General.
@@ -127,11 +127,11 @@ TROUBLESHOOTING
 
 
 UPDATES
-Settings > General > Check for updates. If a newer Orbit is out, the button turns into
-"Update to ..." - Orbit downloads the new installer from GitHub, checks it, installs it over
+Settings > General > Check for updates. If a newer OrbitOverlay is out, the button turns into
+"Update to ..." - OrbitOverlay downloads the new installer from GitHub, checks it, installs it over
 itself (your settings are kept) and starts again.
 
 
 UNINSTALL
-Windows Settings > Apps > Installed apps > Orbit > Uninstall.
+Windows Settings > Apps > Installed apps > OrbitOverlay > Uninstall.
 Your settings in %LOCALAPPDATA%\Orbit are kept unless you delete that folder.

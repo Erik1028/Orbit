@@ -39,7 +39,7 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
     public void CreateOverlay(VrSession vr)
     {
         _vr = vr;
-        Ov = new VrOverlay("erik.orbit.settingspanel", "Orbit Settings");
+        Ov = new VrOverlay("erik.orbit.settingspanel", "OrbitOverlay Settings");
         Ov.SetSortOrder(140);
         Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);     // transparent rounded corners
         Ov.SetMouseScale(TW, TH);

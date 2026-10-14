@@ -45,6 +45,14 @@ public sealed class VrSession : IDisposable
         _secondary = new ulong[2], _scroll = new ulong[2], _haptic = new ulong[2];
     bool _inputOk;
     readonly VRActiveActionSet_t[] _sets = new VRActiveActionSet_t[1];
+    // Per hand: while its laser uses one of our panels, our action set on that hand runs at SteamVR's global overlay
+    // priority, so the game (VRChat) does not get the trigger, grip, stick or B / Y it would otherwise also see.
+    // Set by the app every frame; one entry per hand, restricted to that hand.
+    public readonly bool[] Suppress = new bool[2];
+    readonly ulong[] _handSource = new ulong[2];
+    readonly VRActiveActionSet_t[] _handSets = new VRActiveActionSet_t[2];
+    bool _perHandFailed;
+    const int OverlayGlobalPriority = 0x01000000;      // k_nActionSetOverlayGlobalPriorityMin
     float _vsyncToPhotons = 0.01f;
     float _predict;
 
@@ -121,8 +129,33 @@ public sealed class VrSession : IDisposable
             _in.GetActionHandle($"/actions/orbit/in/scroll_{side[h]}", ref _scroll[h]);
             _in.GetActionHandle($"/actions/orbit/out/haptic_{side[h]}", ref _haptic[h]);
         }
+        _in.GetInputSourceHandle("/user/hand/left", ref _handSource[0]);
+        _in.GetInputSourceHandle("/user/hand/right", ref _handSource[1]);
+        _perHandFailed = false;
         _inputOk = _set != 0;
         InputStatus = _inputOk ? "ok" : "no action set";
+    }
+
+    void UpdateActionSets()
+    {
+        uint size = (uint)Marshal.SizeOf<VRActiveActionSet_t>();
+        bool any = Suppress[0] || Suppress[1];
+        if (any && !_perHandFailed && _handSource[0] != 0 && _handSource[1] != 0)
+        {
+            for (int h = 0; h < 2; h++)
+            {
+                _handSets[h].ulActionSet = _set;
+                _handSets[h].ulRestrictedToDevice = _handSource[h];
+                _handSets[h].nPriority = Suppress[h] ? OverlayGlobalPriority : 0;
+            }
+            var e = _in.UpdateActionState(_handSets, size);
+            if (e == EVRInputError.None) return;
+            _perHandFailed = true;           // this runtime refuses one set per hand: block both hands while one is busy
+            Log.Warn("UpdateActionState per hand: " + e + " - blocking game input for both hands while one uses Orbit");
+        }
+        _sets[0].ulActionSet = _set;
+        _sets[0].nPriority = any ? OverlayGlobalPriority : 0;
+        _in.UpdateActionState(_sets, size);
     }
 
     public float FloatProp(uint dev, ETrackedDeviceProperty p, float fallback)
@@ -164,8 +197,7 @@ public sealed class VrSession : IDisposable
 
         if (_inputOk)
         {
-            _sets[0].ulActionSet = _set;
-            _in.UpdateActionState(_sets, (uint)Marshal.SizeOf<VRActiveActionSet_t>());
+            UpdateActionSets();
             for (int h = 0; h < 2; h++)
             {
                 ref var hs = ref Hands[h];

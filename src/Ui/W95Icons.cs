@@ -8,7 +8,7 @@ namespace Orbit;
 // whole-pixel sizes, never smoothed.
 public static class W95Icons
 {
-    public enum Id { Orbit, Clock, Moon, Gear, Center, Info32, Computer, ComputerOff, Folder, Note, RadioOff, RadioOn, Window, Layouts, Keyboard, Palette, Delete, Download, Dock }
+    public enum Id { Orbit, Clock, Moon, Gear, Center, Info32, Computer, ComputerOff, Folder, Note, RadioOff, RadioOn, Window, Layouts, Keyboard, Palette, Delete, Download, Dock, People, Chat }
 
     // k black  w white  s silver  g grey  n navy  b blue  t teal  c cyan  r red  m maroon
     // y yellow o olive  e green   l lime  p purple f fuchsia   . transparent
@@ -22,6 +22,44 @@ public static class W95Icons
 
     static string[] Map(Id id) => id switch
     {
+        Id.People => new[]
+        {
+            "................",
+            "................",
+            ".....kkk........",
+            "....kyyyk.kkk...",
+            "....kyyyk.kyyk..",
+            "....kyyyk.kyyyk.",
+            ".....kkk..kyyyk.",
+            "...kkbbbkk.kkk..",
+            "..kbbbbbbbk.kkk.",
+            "..kbbbbbbbkkrrrk",
+            "..kbbbbbbbkrrrrk",
+            "..kbbbbbbbkrrrrk",
+            "..kkkkkkkkkkkkkk",
+            "................",
+            "................",
+            "................",
+        },
+        Id.Chat => new[]
+        {
+            "................",
+            "..kkkkkkkkkkkk..",
+            ".kwwwwwwwwwwwwk.",
+            ".kwkkkkwkkkkwwk.",
+            ".kwwwwwwwwwwwwk.",
+            ".kwkkkwkkkkkwwk.",
+            ".kwwwwwwwwwwwwk.",
+            ".kwkkkkkwwwwwwk.",
+            ".kwwwwwwwwwwwwk.",
+            "..kkkwwkkkkkkk..",
+            "....kwk.........",
+            "....kk..........",
+            "....k...........",
+            "................",
+            "................",
+            "................",
+        },
         Id.Dock => new[]
         {
             "................",

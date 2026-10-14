@@ -12,3 +12,5 @@ docs/vr-test-*.png
 # outdated UI renders (the README uses docs/img/)
 docs/look-tab-pink-midnight.png
 docs/wrist.png
+
+.claude/

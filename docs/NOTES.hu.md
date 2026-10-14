@@ -196,6 +196,57 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.7.0 – OrbitOverlay: szoba, státuszsor, nincs véletlen kattintás, dock-csúszkák (2026-10-14)
+
+Erik: „1 mehet, 2 legyen kapcsolható, 4 de csak az élesebb képek, a dockon … legyen slider”, „amíg az overlayt
+használom, a vrchatben ne kattintsak semmire”, „az app neve is lehetne Orbitoverlay” (→ OrbitOverlay, teljes
+átnevezés a GitHub repóval együtt).
+
+- **Átnevezés**: exe `OrbitOverlay.exe` (`AssemblyName`), minden látható felirat, telepítő, `.lnk`-k, Start menü,
+  README, a GitHub repó `Erik1028/OrbitOverlay` (a régi név átirányít). Maradtak a láthatatlan azonosítók: a
+  beállítások mappája `%LOCALAPPDATA%\Orbit`, a SteamVR app kulcs `erik.orbit`, az overlay-kulcsok, az Apps
+  registry-kulcs `Uninstall\Orbit`, az admin task neve `Orbit (admin)`, a mutex/eventek. **Híd egy kiadásra**:
+  a fájl `Product`-ja még „Orbit”, mert az 1.6-os updater csak ilyet telepít (`fv.ProductName != "Orbit"`),
+  és a release-ben `OrbitSetup.exe` néven IS ott a telepítő (a régi updater azt keresi). Az 1.7-es updater
+  mindkét nevet és mindkét terméknevet elfogadja → 1.8-ban a `Product` átállítható. Frissítéskor a telepítő
+  `MoveFromOrbit`: admin task → új exe (az in-app update emelt jogú), `Orbit.lnk` → `OrbitOverlay.lnk`
+  (csak ami a régi exére mutatott), Apps bejegyzés, majd a régi `Orbit.exe` és Quick Start törlése. A SteamVR
+  magától követi: a manifest (`binary_path_windows`) már az új exét írja, az app pedig újraregisztrál, ha az
+  útvonal eltér.
+- **Ki van a szobában** (`Sys/RoomWatcher.cs`, `Panels/RoomPanel.cs`, widget `room`): a legfrissebb
+  `output_log_*.txt` követése háttérszálon (FileShare.ReadWrite|Delete, tartós UTF-8 dekóder, csak időbélyeggel
+  kezdődő sorok). Indításkor visszafelé keres az utolsó `[Behaviour] Entering Room:`-ig (a napló 54 MB is lehet),
+  onnan csak állapot, esemény nélkül. Érkezés: mindenki egy csomóban jön 11–74 s-mal a belépés után → egyetlen
+  „Arrived” esemény, ha 3 s-ig nincs új join (max 180 s). `OnLeftRoom` és `HandleApplicationQuit` után nincs
+  kilépés-esemény. Saját magunk: VRCX tábla előtagja (`usr<hex32>_friend_log_current`) vagy a napló
+  `post login checks for <név> (usr_…)` sora. Barátok: VRCX `VRCX.sqlite3` a Windows `winsqlite3.dll`-jével,
+  `immutable=1` csak-olvasás (soha nem zárol), 5 percenként. Csillag: `Room.Starred` (usr_ id). Értesítés:
+  barátok/csillagosak (alap), mindenki (opció); érkezéskor 1 kártya. `--roomtest`: kitalált napló (80-as
+  hullám, zárójeles név, OnPlayerLeftRoom, új naplófájl) + a valódi napló/VRCX csak olvasva.
+- **Státuszsor** (`Sys/StatusLine.cs`, widget `status` = kapcsoló, Settings > VRChat): `/chatbox/input` (azonnal,
+  hang nélkül), csak változáskor (min. 3 s), 15 s-onként frissít; most szól / óra / idő VR-ben; max 144 karakter;
+  szünetel, amíg a billentyűzet chatbox-módjában gépelsz, és 20 s-ig a saját sorod után; kikapcsoláskor törli.
+  Erik VRChat-naplói szerint az OSC ki van kapcsolva – azt VRChatben kell bekapcsolni.
+- **Nincs véletlen kattintás a játékban** (`VrSession.UpdateActionSets`, `OrbitApp.BlockGameInput`,
+  `General.BlockGameInput`, alapból be): amíg egy kéz lézere Orbit-panelen van / fog, azon a kézen az akciókészlet
+  `0x01000000` (k_nActionSetOverlayGlobalPriorityMin) prioritással fut, kézenként `ulRestrictedToDevice`-szal.
+  Felengedésig marad (különben a még nyomott ravaszt a játék új nyomásnak látná). Ha a SteamVR nem fogadja a
+  kézenkénti bejegyzést, mindkét kézre vált (naplózva). VR-ben még nem próbálta senki.
+- **Beállítások**: új „VRChat” fül mindkét stílusban (TabVrchat = 6, General = 7). A widget-paletta 6/sor (27 fajta).
+- **Dock: csúszkák a tekerők helyett, éles képek** (Hexpad 44364d6 + Orbit `DockPanel`/`HexpadLink`; két ügynök
+  párhuzamosan, az Orbit-rész külön worktree-ben). Mirror **api 2** (visszafelé kompatibilis): hello `caps`
+  [hi, values, set, jog]; `faces.hi` = tiszta 2x (136 px) JPEG a kliensnek, ha kérte (Hexpad a renderelőkből veszi:
+  `render_face`/`folder_face` `scale`, `live_face` a saját 3x-éből, idle-képernyő 2x csempék; a dockra menő kép
+  bájtra ugyanaz), null = a dock 68 px-es képe (animációk, HUD); `controls.encN.slider` abs|jog|"", `kind`;
+  `values` (v 0..1, muted, off); kliens `set` (fényerő: `set_brightness_live` + mentés a végén, hangerő: az egyetlen
+  sysvol szálon, monitor: csendes `_MonitorDimmer`, kikapcsolt monitornál eldobva; csak ha a tekerő aktuális fajtája
+  egyezik) és `jog` (±10, gyorsítás nélkül; a távoli tekerés soha nem gyorsul). Orbit: abs csúszka (húzás =
+  set 30 Hz-ig, a végén final; 0,6 s-ig nem veszi át a visszajövő értéket), jog csúszka (24 px = 1 lépés, page/media
+  60 px, visszaugrik), a nyomás gomb a sor jobb szélén (veszélyesnél megerősítés); 95-ben Group95 + saját trackbar.
+  A modern panel és az óra-widget az éles képet rajzolja, a 95 a dock saját pixeleit 1:1. Élőben: api 2, 6 éles kép,
+  hangerő/monitor értékek jönnek; set/jog élőben NEM ment (Erik eszköze) – VR-ben kell kipróbálni. Telepítés:
+  UAC; a `Start-Process -Wait` a Hexpad-ra is vár (gyereke) → a várakozót le kell állítani, a Hexpad fut tovább.
+
 ## 1.6.0 – a Hexpad stream dock VR-ben (2026-10-14)
 
 Erik backlogjának 1. pontja („ajazzdock compatibility, screen on overlay”), döntései: tükör + lézeres irányítás,

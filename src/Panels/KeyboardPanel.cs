@@ -297,7 +297,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
     public void CreateOverlay(VrSession vr)
     {
         _vr = vr;
-        Ov = new VrOverlay("erik.orbit.keyboard", "Orbit Keyboard");
+        Ov = new VrOverlay("erik.orbit.keyboard", "OrbitOverlay Keyboard");
         Ov.SetFlag(VROverlayFlags.IsPremultiplied, true);
         Ov.SetSortOrder(120);
         Ov.SetMouseScale(TW, TH);
