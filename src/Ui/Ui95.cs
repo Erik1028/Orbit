@@ -244,7 +244,9 @@ public sealed partial class Ui
         float bw = Math.Max(4, MathF.Round(inner.Height * 0.66f));
         int n = (int)((inner.Width + 2) / (bw + 2));
         int on = (int)MathF.Round(Math.Clamp(frac, 0, 1) * n);
-        for (int i = 0; i < on; i++) P.Fill(new RectangleF(inner.X + i * (bw + 2), inner.Y, bw, inner.Height), block);
+        if (on == 0 && frac >= 0.01f) on = 1;           // a low battery still shows its one red block
+        float x0 = inner.X + MathF.Floor((inner.Width + 2 - n * (bw + 2)) / 2);     // the leftover split on both ends
+        for (int i = 0; i < on; i++) P.Fill(new RectangleF(x0 + i * (bw + 2), inner.Y, bw, inner.Height), block);
     }
 
     // ---- property sheet tabs + page ----
@@ -347,10 +349,11 @@ public sealed partial class Ui
     }
 
     // the boxes in a caption (16 x 14): close, help, minimise, maximise
-    bool CaptionButton95(string id, float x, float y, string[] glyph, float gx, float gy, bool enabled)
+    // pad: a bigger, invisible target around the 16x14 button (a laser in VR)
+    bool CaptionButton95(string id, float x, float y, string[] glyph, float gx, float gy, bool enabled, float pad = 0)
     {
         var r = new RectangleF(x, y, 16, 14);
-        bool click = Behave(id, r, out _, out bool held) && enabled;
+        bool click = Behave(id, RectangleF.Inflate(r, pad, pad), out _, out bool held) && enabled;
         bool down = held && enabled;
         P.Fill(r, Face);
         P.Bevel(r, down ? Painter.Edge.Pressed : Painter.Edge.Raised);
@@ -360,7 +363,7 @@ public sealed partial class Ui
         return click;
     }
 
-    public bool CaptionClose95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, CloseGlyph, 4, 3, enabled);
+    public bool CaptionClose95(string id, float x, float y, bool enabled = true, float pad = 0) => CaptionButton95(id, x, y, CloseGlyph, 4, 3, enabled, pad);
     public bool CaptionHelp95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, HelpGlyph, 5, 3, enabled);
     public bool CaptionMin95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, MinGlyph, 4, 9, enabled);
     public bool CaptionMax95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, MaxGlyph, 3, 2, enabled);

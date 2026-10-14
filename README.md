@@ -21,7 +21,7 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
   most in several sizes. Arrange them in Settings > Wrist > Edit layout (drag to move, drag the corner to resize),
   start from your old face or from "Corners". Tap a widget to open it big, with more to see and to control (cover,
   controls and volume; every battery; the month; timer presets; laps; the frame graph with averages; CPU history).
-  In the Modern style values are drawn as orbits in your accent colour, with motion: widgets cascade in when you
+  In the Modern style values are big numbers over a plain line in your accent colour, with motion: widgets cascade in when you
   look at the watch, open with a spring, digits roll; in the Windows 95 style they are little 95 windows
 - Frame rate, reprojection, GPU frame time and VRAM - as numbers or a live frame-time graph
 - Batteries of the headset, controllers and trackers

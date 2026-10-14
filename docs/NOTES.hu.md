@@ -196,6 +196,34 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.5.2 – vonalak a gyűrűk helyett, teljes vizuális átnézés (2026-10-14)
+
+Erik: „aránytalanul kicsik a kijelzett akkuszázalékok… ellenőrizd át rendesen, ne legyenek ilyen gondok”, majd
+közben: „ezek a kör alakú bar kijelzések nem a legjobbak, lehetne csak egy sima vonal a szöveg alatt”.
+
+- **Gyűrűk helyett vonal** (Modern): `Meter` = halvány sáv + balról kitöltés (rugós), `Gauge` = nagy szám, alatta a
+  vonal, alatta kicsiben a mértékegység; `Reading` (2x1) = név balra + megjegyzés jobbra, nagy szám, vonal. Akkuk:
+  soronként név (⚡ ha tölt, piros ha alacsony) + százalék + vonal, egy widgeten belül egy betűméret
+  (`BatteryRowSize`); 1 eszköz / 1x1 = nagy szám. Időzítő, hangerő, stat-widgetek, kinyitott nézetek ugyanígy; a
+  kinyitott hangerőnél a csúszka maga a vonal. Az analóg óra számlapja maradt. `Orbit()` törölve.
+- **Hibák az átnézésből** (226 kép mindkét stílusban + 4 ügynökös vizuális QA, majd újrarenderelés):
+  - `_wid` gyorsítótár 32 felesleg felett *mindent* törölt → élő widgetek új azonosítót kaptak és újra „beugrottak”
+    40 %-ról. Most csak a törölt widgetek kerülnek ki.
+  - Kilógó / szélre tapadó: 95 Timer „Start” levágva (most ▶ gomb + szóhoz méretezett -1 / Reset / +1), modern
+    Timer 2x2 gombjai 14 px-re a széltől, 95 stopper / Mute pipa felhúzva, 95 teljesítmény-sáv rövid feliratokkal
+    („86 fps”, „4%”), 95 dátum rövidül évszám nélkülire mielőtt levágná (`FitDate95`), 95 grafikon felirata.
+  - Kicsi számok: idő-widget AM/PM 20 px margóval; stat 1x1 számai; kinyitott akku; hangerő 3x1 csúszka (húzható).
+  - Átfedés: naptár nyilai a hónap mellett (nem a bezáró X alatt); 95 CPU felirat mögött fekete, rács alatta;
+    95 ablak pontosan a rácsot fedi (nem lóg ki mögüle widgetsarok); 95 X gomb nagyobb láthatatlan célterület.
+  - Üres sávok: kinyitott Timer jobb oszlop középre, Stopwatch üres köridő-táblázat fejléccel, 95 Power Meter
+    csoportdobozban középen, 95 CD Player (magas) hangerő-sorral, 95 Timer / Volume gombsorok feljebb.
+  - Egyéb: „since 2:20 PM” mint az óra (nem „du.”); GPU-sáv a keretidő arányában (mint a felirat); naptár annyi
+    sorral, ahány hét; CPU nézetben nem kétszer ugyanaz (átlag + csúcs az utolsó percből, memória: szabad);
+    VRAM / RAM 1x1 megkülönböztethető („GB VRAM” / „GB RAM”); 95 akku: töltés = rendben (kék), félkövér %,
+    alacsonyon is látszik 1 blokk; teli 95 sáv középre igazítva.
+- `--snapshot`: `qa/` mappába minden widget × méret × stílus + kinyitott nézetek + nehéz esetek (1-6 akku, hosszú
+  cím, semmi nem szól); a dokumentációs képhez előbb CPU-mérés. Elrendezés-ellenőrzés: 0 hiba mindkét stílusban.
+
 ## 1.5.1 – minden belefér (2026-10-14)
 
 Erik a kinyitott lejátszón látta, hogy a „következő” gomb lelóg, és kérte: semmi ne lógjon le és ne legyen túl közel

@@ -266,12 +266,19 @@ public sealed partial class WristPanel
             (vram < 0 ? "-- GB" : d.VramTotalGB > 0 ? $"{vram:0.0}/{d.VramTotalGB:0} GB" : $"{vram:0.0} GB",
                 vram > 0 && d.VramTotalGB > 0 && vram > d.VramTotalGB * 0.92f ? 0xFF806000 : Blk95),
         };
+        // narrow panes drop the words: "86 fps", "4%", "9.3 ms", "9.4 GB"
+        string[] shortText =
+        {
+            v.AppFps < 0 ? "--" : $"{v.AppFps:0} fps", v.ReprojPct < 0 ? "--" : $"{v.ReprojPct:0}%", v.GpuMs < 0 ? "--" : $"{v.GpuMs:0.0} ms",
+            vram < 0 ? "--" : $"{vram:0.0} GB",
+        };
         float pw = MathF.Floor((r.Width - 3 * 2) / 4);
         for (int i = 0; i < 4; i++)
         {
             var pr = new RectangleF(r.X + i * (pw + 2), r.Y + 3, i == 3 ? r.Right - (r.X + i * (pw + 2)) : pw, 18);
             _ui.Pane95(pr, null);
-            _ui.Text95(panes[i].Item1, new RectangleF(pr.X + 4, pr.Y, pr.Width - 6, pr.Height), panes[i].Item2);
+            string s = _ui.Width95(panes[i].Item1) <= pr.Width - 7 ? panes[i].Item1 : Fit(shortText[i], pr.Width - 7);
+            _ui.Text95(s, new RectangleF(pr.X + 4, pr.Y, pr.Width - 6, pr.Height), panes[i].Item2);
         }
     }
 
@@ -300,6 +307,8 @@ public sealed partial class WristPanel
         float by = MathF.Round(inner.Bottom - inner.Height * (budget / top));
         _p.Fill(new RectangleF(inner.X, by, inner.Width, 1), Wht95);
         string label = v.AppFps < 0 ? "waiting for frames" : $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms GPU  {Math.Max(0, v.ReprojPct):0}% reproj.";
+        if (v.AppFps >= 0 && _ui.Width95(label) > inner.Width - 12)
+            label = $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms  {Math.Max(0, v.ReprojPct):0}%";
         label = Fit(label, inner.Width - 12);                  // a narrow graph widget
         _p.Fill(new RectangleF(inner.X + 2, inner.Y + 1, MathF.Min(_ui.Width95(label) + 4, inner.Width - 4), 12), Blk95);
         _ui.Text95(label, new RectangleF(inner.X + 4, inner.Y + 1, inner.Width - 8, 12), green);

@@ -338,6 +338,9 @@ static class Tools
         wcfg.Face = "custom";
         var culture0 = System.Globalization.CultureInfo.CurrentCulture;
         System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");   // docs pictures in English
+        wrist.Stats.Sample(Clock.Now);                 // a CPU reading needs two samples
+        System.Threading.Thread.Sleep(400);
+        wrist.Stats.Sample(Clock.Now + 2);
         SaveCustom("");
         System.Globalization.CultureInfo.CurrentCulture = culture0;
         wcfg.Face = "custom";
@@ -624,6 +627,8 @@ static class Tools
                 wrist.Settle();
                 wrist.Draw(data);
                 wrist.Draw(data);
+                Directory.CreateDirectory(Path.Combine(dir, "qa"));
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}_{kind.Id}_{w}x{h}.png"));
                 var px = Read();
                 var r = WatchWidgets.CellRect(0, 0, w, h, classic);
                 r = new System.Drawing.RectangleF(r.X * k, r.Y * k, r.Width * k, r.Height * k);
@@ -646,9 +651,10 @@ static class Tools
             if (!wrist.OpenForTest(kind.Id)) continue;
             wrist.Draw(data);
             wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}_open_{kind.Id}.png"));
             var px = Read();
-            var t = classic ? new System.Drawing.RectangleF(16, 12, (WristPanel.TW95 - 16) * 2, (WristPanel.TH95 - 12) * 2)
-                : WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, false);
+            var t = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, classic);       // the opened window covers the grid
+            if (classic) t = new System.Drawing.RectangleF(t.X * 2, t.Y * 2, t.Width * 2, t.Height * 2);
             var own = WatchWidgets.CellRect(0, 0, w, h, classic);
             own = new System.Drawing.RectangleF(own.X * k, own.Y * k, own.Width * k, own.Height * k);
             var (o, ow) = Outside(px, t, classic ? 0 : 1.5f, own);
@@ -661,6 +667,39 @@ static class Tools
             wrist.CloseForTest();
         }
         wrist.LayoutTest = false;
+        var bats0 = new List<(string, float, bool)>(data.Vr.Batteries);
+        var fake0 = data.FakeMedia;
+        void Shot(string type, int w, int h, string name, bool open)
+        {
+            wcfg.Widgets = new List<WatchWidget> { new() { Type = type, X = 0, Y = 0, W = w, H = h } };
+            wrist.Settle();
+            if (open) wrist.OpenForTest(type);
+            wrist.Draw(data);
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}_case_{name}.png"));
+            wrist.CloseForTest();
+        }
+        (string, float, bool)[] all =
+        {
+            ("HMD", 0.71f, false), ("L", 0.82f, false), ("R", 0.18f, true), ("Trk×6", 0.44f, false), ("C", 0.09f, false), ("Trk×2", 1f, false),
+        };
+        foreach (int nb in new[] { 1, 2, 3, 5, 6 })
+        {
+            data.Vr.Batteries.Clear();
+            for (int i = 0; i < nb; i++) data.Vr.Batteries.Add(all[i]);
+            Shot("battery", 2, 2, $"bat{nb}_2x2", false);
+            Shot("battery", 3, 2, $"bat{nb}_3x2", false);
+            Shot("battery", 2, 2, $"bat{nb}_open", true);
+        }
+        data.Vr.Batteries.Clear();
+        data.Vr.Batteries.AddRange(bats0);
+        data.FakeMedia = (true, "A Very Long Song Title That Goes On And On (Extended Club Remix)", "Somebody Featuring Somebody Else", true);
+        foreach (var (w, h) in new[] { (2, 1), (3, 1), (4, 1), (6, 1), (4, 2), (6, 2) }) Shot("media", w, h, $"longtitle_{w}x{h}", false);
+        Shot("media", 4, 2, "longtitle_open", true);
+        data.FakeMedia = (false, null, null, false);
+        foreach (var (w, h) in new[] { (2, 1), (4, 1), (4, 2) }) Shot("media", w, h, $"nothing_{w}x{h}", false);
+        Shot("media", 4, 2, "nothing_open", true);
+        data.FakeMedia = fake0;
         wcfg.Background = "panel";
         Log.Info($"layout {style}: {problems} problem(s)");
         return problems;
