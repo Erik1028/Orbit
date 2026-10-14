@@ -270,6 +270,10 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     public bool TheaterHidden { get; set; }
     public string TheaterLabel => string.IsNullOrWhiteSpace(Cfg.Title) ? "Window" : Cfg.Title;
     public bool Playable => Ov != null && _cap != null && !_cap.Closed && Cfg.Enabled && Hwnd != IntPtr.Zero;
+    public bool HomeInWorld => Placement.IsWorld(Cfg.Place);
+    public string TheaterState =>
+        $"overlay {(Ov == null ? "none" : Ov.Visible ? "shown" : "hidden")}, fade {_vis:0.00}, picture {(_hasTexture ? "yes" : "no")}, " +
+        $"capture {(_cap == null ? "none" : _cap.Closed ? "closed" : "live")}";
 
     public bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity)
     {

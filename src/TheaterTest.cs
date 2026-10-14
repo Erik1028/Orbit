@@ -18,6 +18,8 @@ static class TheaterTest
         public bool TheaterHidden { get; set; }
         public string TheaterLabel => Name;
         public bool Playable => IsPlayable;
+        public bool HomeInWorld => true;
+        public string TheaterState => "fake";
         public bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity)
         {
             world = HomeWorld; width = 0.6f; curvature = 0.05f; opacity = 0.9f;
@@ -57,7 +59,9 @@ static class TheaterTest
         var fwd = Vector3.Normalize(MathUtil.Forward(vr.Hmd));
 
         var a = new FakeScreen { Name = "AOC 24G4X", HomeWorld = Matrix4x4.CreateTranslation(-0.7f, 1.2f, -1f) };
-        var b = new FakeScreen { Name = "Xiaomi Monitor", HomeWorld = Matrix4x4.CreateTranslation(0, 1.2f, -1.1f) };
+        // the middle monitor: up and ahead, tilted back 30 degrees (lying back), 1.2 m from the head
+        var bDir = Vector3.Normalize(new Vector3(0.2f, 0.6f, -1f));
+        var b = new FakeScreen { Name = "Xiaomi Monitor", HomeWorld = Matrix4x4.CreateRotationX(0.52f) * Matrix4x4.CreateTranslation(head + bDir * 1.2f) };
         var c = new FakeScreen { Name = "Xiaomi Monitor", HomeWorld = Matrix4x4.CreateTranslation(0.7f, 1.2f, -1f) };
         var live = new List<ITheaterScreen> { a, b, c };
         var cfg = new TheaterConfig();
@@ -67,19 +71,24 @@ static class TheaterTest
         using var th = new Theater(gpu, painter);
         void Run(float seconds) { for (float t = 0; t < seconds; t += 1 / 90f) th.Update(vr, 1 / 90f, cfg.Dim, live); }
 
+        // started from the watch: looking down at the wrist - the screen must still go where the monitor is
+        var level = vr.Device[0];
+        vr.Device[0] = Matrix4x4.CreateRotationX(-0.9f) * level;
         th.Start(b, vr, cfg);
+        vr.Device[0] = level;
         th.Update(vr, 0, cfg.Dim, live);
         Ck("start: the screen plays, the others step aside", b.Theater != null && !b.TheaterHidden && a.TheaterHidden && c.TheaterHidden);
         Ck("start: it begins at its own place", Vector3.Distance(b.Theater.World.Translation, b.HomeWorld.Translation) < 0.01f);
         Run(0.6f);
         var v = b.Theater;
-        var want = head + fwd * 2.5f;
-        Ck($"glided in: 2.5 m in front ({v.World.Translation})", Vector3.Distance(v.World.Translation, want) < 0.01f);
-        Ck($"glided in: 2.8 m wide, bent around you (c {v.Curvature:0.000})", Near(v.Width, 2.8f) && Near(v.Curvature, 2.8f / (2 * MathF.PI * 2.5f), 0.002f) && Near(v.Opacity, 1));
-        Ck("it faces you", Vector3.Dot(MathUtil.Back(v.World), -fwd) > 0.999f);
+        var want = head + bDir * 2.5f;
+        Ck($"glided in: 2.5 m out where the monitor is, not where you looked ({v.World.Translation})", Vector3.Distance(v.World.Translation, want) < 0.01f);
+        Ck($"glided in: 2.8 m wide, bent around your head (c {v.Curvature:0.000})", Near(v.Width, 2.8f) && Near(v.Curvature, 2.8f / (2 * MathF.PI * 2.5f), 0.002f) && Near(v.Opacity, 1));
+        Ck("it faces you", Vector3.Dot(MathUtil.Back(v.World), -bDir) > 0.999f);
+        Ck("it keeps the monitor's tilt", Vector3.Dot(MathUtil.Up(v.World), Vector3.Normalize(MathUtil.Up(b.HomeWorld) - Vector3.Dot(MathUtil.Up(b.HomeWorld), bDir) * bDir)) > 0.999f);
 
-        // grab: pull it back to 4 m and make it bigger - only the override moves
-        v.Move(Matrix4x4.CreateTranslation(0, 0, -4) * MathUtil.GazeFrame(vr.Hmd));
+        // grab: pull it back to 4 m (level ahead) and make it bigger - only the override moves
+        v.Move(Matrix4x4.CreateTranslation(0, 0, -4) * MathUtil.YawFrame(vr.Hmd));
         v.ScaleBegin();
         v.Scale(1.5f);
         Run(0.05f);

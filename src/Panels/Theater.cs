@@ -12,6 +12,8 @@ public interface ITheaterScreen : IPointerTarget
     bool TheaterHidden { get; set; }      // another panel is: step aside
     string TheaterLabel { get; }          // its name on the switcher under the screen
     bool Playable { get; }                // has an overlay and a live capture
+    bool HomeInWorld { get; }             // its own place is in the room (not on a hand / the head)
+    string TheaterState { get; }          // for the log: is it showing, has it a picture
     // its own (saved) place, size, bend and opacity, where the screen glides from and back to
     bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity);
 }
@@ -35,13 +37,9 @@ public sealed class TheaterView
     public void ScaleBegin() => _scaleFrom = Size;
     public void Scale(float ratio) { Size = Math.Clamp(_scaleFrom * ratio, Theater.MinWidth, Theater.MaxWidth); Refit(); }
 
-    // curved around you at whatever distance it is: c = w / (2 pi r)
-    public void Refit()
-    {
-        var d = Place.Translation - Head;
-        d.Y = 0;
-        Bend = DesktopLayout.CurvatureFor(Size, Math.Max(0.5f, d.Length()));
-    }
+    // curved around you at whatever distance it is: c = w / (2 pi r); r is the straight distance, as the screen faces
+    // your head (also when it is up above you, lying back)
+    public void Refit() => Bend = DesktopLayout.CurvatureFor(Size, Math.Max(0.5f, Vector3.Distance(Place.Translation, Head)));
 }
 
 // Theater mode: one monitor or window becomes a big curved screen in front of you, the other panels and the keyboard
@@ -63,7 +61,9 @@ public sealed class Theater : IDisposable
 
     public Theater(Gpu g, Painter p) { _g = g; _p = p; }
 
-    // The world dims behind it: a black overlay locked to the headset, under every other Orbit overlay.
+    // The world dims behind it: a wide black wall just behind the screen, bent around you (half a circle). It is
+    // under the screen both by sort order and by distance, so it can't end up in front of it whichever one SteamVR
+    // goes by (1.8.0 used a sheet on the headset, 0.5 m away: in front of everything by distance).
     public void CreateOverlay()
     {
         _black ??= new Surface(_g, 8, 8);
@@ -71,9 +71,8 @@ public sealed class Theater : IDisposable
         _p.End();
         _dim = new VrOverlay("erik.orbit.theater.dim", "OrbitOverlay theater dim");
         _dim.SetSortOrder(1);
-        _dim.SetWidth(4);
         _dim.SetTexture(_black.Tex);
-        _dim.SetRelative(OpenVR.k_unTrackedDeviceIndex_Hmd, Matrix4x4.CreateTranslation(0, 0, -0.5f));
+        _dim.SetCurvature(0.5f);
     }
 
     public void DestroyOverlay()
@@ -104,23 +103,52 @@ public sealed class Theater : IDisposable
         if (On || screen == null || !vr.HmdValid) return;
         float size = Math.Clamp(cfg.Width, MinWidth, MaxWidth), dist = Math.Clamp(cfg.Distance, 0.6f, 10f);
         _view = new TheaterView { Size = size, Head = vr.Hmd.Translation };
-        _view.Move(Matrix4x4.CreateTranslation(0, 0, -dist) * MathUtil.GazeFrame(vr.Hmd));
+        _view.Move(Where(screen, vr, dist));
         if (_screen != null && _screen != screen) _screen.Theater = null;     // still gliding back from the last time
         _screen = screen;
         _t = _screen.Theater != null ? _t : 0;
         Blend(vr);
         _screen.Theater = _view;
         On = true;
-        Log.Info("theater: on");
+        _checked = false;
+        Log.Info($"theater: on - {screen.TheaterLabel} ({screen.TheaterState})");
     }
 
-    // in front of you again (Recenter while it plays)
+    // Where the big screen goes: out along the line from your head through the monitor / window it plays, tilted like
+    // it, at the theater distance - where your screens are. NOT where you look: theater mode is started from the
+    // watch, so at that moment you look at your wrist (lying back with the arm up, that put the screen on the ceiling).
+    // A screen on a hand or the head has no such place: then level in front of you.
+    public static Matrix4x4 Where(ITheaterScreen screen, VrSession vr, float dist)
+    {
+        var head = vr.Hmd.Translation;
+        if (screen.HomeInWorld && screen.Home(out var home, out _, out _, out _))
+        {
+            var dir = home.Translation - head;
+            if (dir.Length() > 0.2f)
+            {
+                var z = -Vector3.Normalize(dir);
+                var up = MathUtil.Up(home);
+                up -= Vector3.Dot(up, z) * z;
+                if (up.Length() < 0.3f) { up = Vector3.UnitY - Vector3.Dot(Vector3.UnitY, z) * z; }
+                if (up.Length() > 0.1f)
+                {
+                    up = Vector3.Normalize(up);
+                    var x = Vector3.Normalize(Vector3.Cross(up, z));
+                    up = Vector3.Cross(z, x);
+                    return MathUtil.Basis(x, up, z, head - z * dist);
+                }
+            }
+        }
+        return Matrix4x4.CreateTranslation(0, 0, -dist) * MathUtil.YawFrame(vr.Hmd);
+    }
+
+    // Recenter while it plays: the layout has just been brought in front of you, the screen follows it
     public void Recenter(VrSession vr)
     {
-        if (!On || !vr.HmdValid) return;
-        var d = _view.Place.Translation - vr.Hmd.Translation;
+        if (!On || !vr.HmdValid || _screen == null) return;
+        float dist = Math.Clamp(Vector3.Distance(_view.Place.Translation, _view.Head), 0.6f, 10f);
         _view.Head = vr.Hmd.Translation;
-        _view.Move(Matrix4x4.CreateTranslation(0, 0, -Math.Clamp(d.Length(), 0.6f, 10f)) * MathUtil.GazeFrame(vr.Hmd));
+        _view.Move(Where(_screen, vr, dist));
     }
 
     // glides back (vr != null), or snaps back at once; keeps the size and distance for next time
@@ -160,10 +188,27 @@ public sealed class Theater : IDisposable
         if (_dim != null)
         {
             float a = Math.Clamp(dim, 0, 0.95f) * Ease(_t);
-            if (a <= 0.004f) _dim.Hide();
-            else { _dim.SetAlpha(a); _dim.Show(); }
+            if (a <= 0.004f || _screen == null) _dim.Hide();
+            else
+            {
+                const float Behind = 0.6f;
+                float r = Vector3.Distance(_view.World.Translation, _view.Head) + Behind;
+                _dim.SetAbsolute(Matrix4x4.CreateTranslation(0, 0, -Behind) * _view.World);
+                _dim.SetWidth(MathF.PI * r);        // half a circle around you at that radius (curvature 0.5)
+                _dim.SetAlpha(a);
+                _dim.Show();
+            }
+        }
+        // once it has glided in: how the screen is doing (if it does not show up, the log says why)
+        if (On && _screen != null && _t >= 1 && !_checked)
+        {
+            _checked = true;
+            Log.Info($"theater: playing {_screen.TheaterLabel} - {_screen.TheaterState}, " +
+                     $"{Vector3.Distance(_view.World.Translation, _view.Head):0.00} m away, {_view.Width:0.00} m wide");
         }
     }
+
+    bool _checked;
 
     static bool Contains(IReadOnlyCollection<ITheaterScreen> live, ITheaterScreen s)
     {

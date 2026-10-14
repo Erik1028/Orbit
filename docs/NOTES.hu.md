@@ -196,9 +196,24 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
-## 1.8.1 – simább animációk, gyorsabb rajzolás (2026-10-14)
+## 1.8.1 – a mozimód vászna megjelenik; simább animációk, gyorsabb rajzolás (2026-10-14)
 
-Erik: „még dolgozz az animációkon és sebességen, stabilitáson”.
+Erik: „még dolgozz az animációkon és sebességen, stabilitáson”, majd az 1.8.0-t kipróbálva: „a theather mode nem
+működik, nem jelenik meg ablak”.
+
+- **Mozimód, a vászon nem jelent meg** (napló: 4× be/ki, hiba nélkül; a váltósáv megjelent 2,6 m-re; Erik félig
+  fekve, a monitorok fölötte döntve, `DesktopsVisible` ki). Két gyanús pont, mindkettő javítva:
+  1. **Hova kerül**: az 1.8.0 a `GazeFrame` szerint tette, vagyis amerre a koppintás pillanatában nézel – az pedig
+     mindig az óra (fekve, felemelt karral: a plafon felé). Most: a fejedből a lejátszott monitor/ablak saját helye
+     felé, annak dőlésével (`Theater.Where`); kézre/fejre tett panelnél vízszintesen előre. A Recenter mozimódban
+     ugyanezt használja (a frissen eléd hozott elrendezés után). Az ív a valódi 3D távolságból (fölötted is a
+     fejedre központos).
+  2. **A sötétítés**: az 1.8.0-ban egy fejhez rögzített fekete lap volt 0,5 m-re, sort order 1. Ha a SteamVR nem
+     (csak) a sort order szerint rajzol, a lap a vászon elé kerül. Most: széles, félkörben köréd hajló fekete fal
+     0,6 m-rel a vászon MÖGÖTT (szélesség π·r, ív 0,5) – sorrend és távolság szerint is a vászon alatt van.
+  Napló: `theater: on - <név> (overlay …, fade …, picture …, capture …)` és a beúszás után `theater: playing …`;
+  `--ovdump <s>`: csak olvasva kiírja a futó OrbitOverlay overlay-einek SteamVR-állapotát (látható, alfa,
+  szélesség, ív, sort, textúra, hely és távolság a fejtől), változáskor.
 
 - **Mérés előbb** (`--perfbench <dir>`: Erik saját óra-elrendezése a config MÁSOLATÁBÓL, 90 Hz-es ütemben: beúszás
   hidegen/melegen, nyugalom, minden widget kinyitva; CPU és „kész a GPU-n” idő). Egy órarajzolás ~1,85 ms volt, ebből
