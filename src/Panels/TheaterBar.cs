@@ -20,7 +20,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     readonly Painter _p;
     readonly Ui _ui;
     readonly PointerState _ptr = new();
-    Surface _surf, _canvas95;
+    Surface _surf, _canvas95, _retired;     // _retired: the last size's texture, freed once the overlay has the new one
     int _tw, _th, _w95, _layoutKey = -1;
     public VrOverlay Ov { get; private set; }
     float _vis;
@@ -75,20 +75,24 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         int key = _choices.Count * 2 + (Theme.Classic ? 1 : 0);
         if (key != _layoutKey) Relayout(key);
 
-        // under the middle of the screen, the same height on your view whatever the distance, bent like the screen
+        // under the middle of the screen, the same height on your view whatever the distance, bent like the screen;
+        // it rises into place a little as it fades in
         var ts = theater.Screen.TextureSize;
         float screenH = view.Width * ts.Y / Math.Max(1, ts.X);
         float dist = vr.HmdValid ? Vector3.Distance(vr.Hmd.Translation, view.World.Translation) : 2.5f;
         float hM = Math.Clamp(0.05f * dist, 0.05f, 0.4f), wM = hM * _tw / _th;
-        _world = Matrix4x4.CreateTranslation(0, -(screenH / 2 + hM * 0.35f + hM / 2), 0) * view.World;
+        float e = 1 - MathF.Pow(1 - _vis, 3);
+        _world = Matrix4x4.CreateTranslation(0, -(screenH / 2 + hM * 0.35f + hM / 2) - (1 - e) * hM * 0.4f, 0) * view.World;
         Ov.SetAbsolute(_world);
         Ov.SetWidth(wM);
         Ov.SetCurvature(view.Width > 0 ? Math.Clamp(wM * view.Curvature / view.Width, 0, 1) : 0);
-        Ov.SetAlpha(1 - MathF.Pow(1 - _vis, 3));
+        Ov.SetAlpha(e);
         if (_dirty || _ui.Animating)
         {
             Draw();
             Ov.SetTexture(_surf.Tex);
+            _retired?.Dispose();
+            _retired = null;
             _dirty = _ui.Interacting || _ui.Changed;
         }
         Ov.Show();
@@ -115,9 +119,10 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
             _tw = Pad + n * (ChipW + Gap) + (H - 2 * Pad) + Pad;
             _th = H;
         }
-        var old = _surf;
+        _retired?.Dispose();
+        _retired = Ov != null ? _surf : null;           // the overlay still shows it until the next SetTexture
+        if (Ov == null) _surf?.Dispose();
         _surf = new Surface(_g, _tw, _th);
-        old?.Dispose();
         _canvas95?.Dispose();
         _canvas95 = null;
         Ov?.SetMouseScale(_tw, _th);
@@ -155,19 +160,24 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
             var r = new RectangleF(x, Pad, ChipW, ch);
             var s = _choices[i];
             bool on = s == _current;
-            if (_ui.Clickable(Ui.Id("thb", i), r, out bool hover, out bool held) && !on) pick = s;
-            uint bg = on ? Theme.Accent : hover ? Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f) : Theme.Panel3;
-            if (held) bg = Theme.Mix(bg, 0xFF000000, 0.2f);
-            uint fg = on ? Theme.OnAccent : Theme.Text;
-            _p.Fill(r, bg, ch / 2);
+            string id = Ui.Id("thb", i);
+            if (_ui.Clickable(id, r, out bool hover, out bool held) && !on) pick = s;
+            // the lit one moves over with a short fade; hover lightens, a press dips
+            float a = _ui.Anim(id + "#a", on ? 1 : 0, 14), hv = _ui.Anim(id + "#h", hover ? 1 : 0, 18), pr = _ui.Anim(id + "#p", held ? 1 : 0, 30);
+            uint bg = Theme.Mix(Theme.Mix(Theme.Panel3, Theme.Accent, a), 0xFFFFFFFF, 0.12f * hv * (1 - a));
+            bg = Theme.Mix(bg, 0xFF000000, 0.2f * pr);
+            uint fg = Theme.Mix(Theme.Text, Theme.OnAccent, a);
+            r = RectangleF.Inflate(r, -ChipW * 0.02f * pr, -ch * 0.04f * pr);
+            _p.Fill(r, bg, r.Height / 2);
             _p.Icon(s is WindowPanel ? Theme.IcoWindow : Theme.IcoMonitor, new RectangleF(r.X + 14, r.Y, 30, r.Height), fg, 19);
             _p.Text(Ellipsize(Label(i), r.Width - 66, 17, FontWeight.SemiBold), new RectangleF(r.X + 50, r.Y, r.Width - 62, r.Height), fg, 17, FontWeight.SemiBold);
         }
         // Exit: everything glides back
         var xr = new RectangleF(x, Pad, ch, ch);
         bool exit = _ui.Clickable("thb.x", xr, out bool xh, out bool xheld);
-        _p.Fill(xr, xheld ? Theme.Accent : xh ? Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f) : Theme.Panel3, ch / 2);
-        _p.Icon("", xr, xheld ? Theme.OnAccent : Theme.Text, 18);
+        float xa = _ui.Anim("thb.x#h", xh ? 1 : 0, 18), xp = _ui.Anim("thb.x#p", xheld ? 1 : 0, 30);
+        _p.Fill(RectangleF.Inflate(xr, -ch * 0.04f * xp, -ch * 0.04f * xp), Theme.Mix(Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f * xa), Theme.Accent, xp), ch / 2);
+        _p.Icon("\uE711", xr, Theme.Mix(Theme.Text, Theme.OnAccent, xp), 18);
         _p.End();
         _ui.End();
         Act(pick, exit);
@@ -295,6 +305,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     {
         DestroyOverlay();
         _surf?.Dispose();
+        _retired?.Dispose();
         _canvas95?.Dispose();
     }
 }

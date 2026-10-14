@@ -146,8 +146,10 @@ public sealed class Theater : IDisposable
             _screen = null;
             if (On) { On = false; Log.Info("theater: its screen went away"); }
         }
-        // the others step aside while it plays (a window panel added meanwhile too), and come back as it glides home
-        foreach (var s in live) s.TheaterHidden = On && s != _screen;
+        // the others step aside while it plays (a window panel added meanwhile too), and come back near the end of
+        // the glide home, so the screen does not pass through them on its way
+        bool aside = On || (_screen != null && _t > 0.3f);
+        foreach (var s in live) s.TheaterHidden = aside && s != _screen;
         _t = Math.Clamp(_t + (On ? dt : -dt) / Glide, 0, 1);
         if (_screen != null)
         {

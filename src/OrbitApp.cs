@@ -900,7 +900,14 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _theaterChoices.Clear();
         if (_theater.On)
         {
-            foreach (var d in _desktops.OrderBy(d => d.Mon.X)) if (d.Playable) _theaterChoices.Add(d);
+            // monitors left to right as they stand on the desk, then the windows (no garbage: it runs every frame)
+            foreach (var d in _desktops)
+            {
+                if (!d.Playable) continue;
+                int at = _theaterChoices.Count;
+                while (at > 0 && ((DesktopPanel)_theaterChoices[at - 1]).Mon.X > d.Mon.X) at--;
+                _theaterChoices.Insert(at, d);
+            }
             foreach (var w in _windowPanels) if (w.Playable) _theaterChoices.Add(w);
         }
         bool pointing = false;

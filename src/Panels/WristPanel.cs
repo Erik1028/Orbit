@@ -119,8 +119,8 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         }
         Ov.Show();
         if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
-        // motion is drawn at up to 45 fps: smooth on a watch, and half the cost of the headset rate
-        if (_dirty || now >= _nextDraw || (Animating && now - _lastDraw >= 1 / 45.0))
+        // motion is drawn at the headset's rate (it was 45 fps; laid-out text is kept now, a frame is ~1.5 ms)
+        if (_dirty || now >= _nextDraw || Animating)
         {
             _dirty = false;          // before Draw: a tap inside Draw asks for the next frame itself
             Draw(d);

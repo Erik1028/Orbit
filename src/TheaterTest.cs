@@ -98,10 +98,10 @@ static class TheaterTest
         // stop: glides home, the others come back, size and distance are kept for next time
         th.Stop(vr, cfg);
         th.Update(vr, 0, cfg.Dim, live);
-        Ck("stop: everything comes back", !a.TheaterHidden && !b.TheaterHidden && !c.TheaterHidden && !th.On);
+        Ck("stop: the others wait while the screen is on its way home", !th.On && b.TheaterHidden && c.TheaterHidden && !a.TheaterHidden);
         Ck($"stop: keeps {cfg.Width:0.00} m wide at {cfg.Distance:0.00} m", Near(cfg.Width, 4.2f) && Near(cfg.Distance, 4f, 0.02f));
         Run(0.6f);
-        Ck("glided home: no override left", a.Theater == null);
+        Ck("glided home: no override left, everything is back", a.Theater == null && !a.TheaterHidden && !b.TheaterHidden && !c.TheaterHidden);
 
         // the screen goes away mid-theater (window closed / monitor rebuilt)
         th.Start(b, vr, cfg);

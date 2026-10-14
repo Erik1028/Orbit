@@ -194,6 +194,12 @@ public sealed class Painter : IDisposable
     bool _drawing;
     readonly Dictionary<(string, float, FontWeight, string), float> _widths = new();
     readonly Dictionary<(string, float, FontWeight, TextAlignment, ParagraphAlignment, bool), IDWriteTextFormat> _formats = new();
+    // Laid-out text, kept: DrawText lays its string out again on every call (~50 us each, 80 % of a watch frame).
+    // Keyed by the format object too, so a format thrown away (the cap below) takes its layouts with it.
+    readonly Dictionary<(string, IDWriteTextFormat, float, float), IDWriteTextLayout> _layouts = new();
+    public int FormatCount => _formats.Count;
+    public int WidthCount => _widths.Count;
+    public int LayoutCount => _layouts.Count;
     readonly Stack<int> _clips = new();
     public float Scale { get; private set; } = 1;
 
@@ -294,6 +300,7 @@ public sealed class Painter : IDisposable
         {
             if (_formats.Count > 600)       // fitted / animated sizes: start over rather than grow forever
             {
+                DropLayouts();
                 foreach (var old in _formats.Values) old.Dispose();
                 _formats.Clear();
             }
@@ -501,10 +508,28 @@ public sealed class Painter : IDisposable
     {
         if (string.IsNullOrEmpty(s)) return;
         var f = Format(family ?? Theme.Font, size, w, h, v, wrap);
+        // the 95 skin's GDI-measured pixel text stays exactly as it was
         if (PixelMode)
+        {
             Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip, Vortice.DCommon.MeasuringMode.GdiClassic);
-        else
-            Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip);
+            return;
+        }
+        float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
+        var key = (s, f, lw, lh);
+        if (!_layouts.TryGetValue(key, out var lay))
+        {
+            // a ticking clock or a springing card makes new ones all the time: start over rather than grow forever
+            if (_layouts.Count >= 1000) DropLayouts();
+            lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            _layouts[key] = lay;
+        }
+        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), DrawTextOptions.Clip);
+    }
+
+    void DropLayouts()
+    {
+        foreach (var l in _layouts.Values) l.Dispose();
+        _layouts.Clear();
     }
 
     public void Icon(string glyph, RectangleF r, uint c, float size) =>
@@ -578,6 +603,7 @@ public sealed class Painter : IDisposable
     {
         _brush?.Dispose();
         _brush = null;
+        DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();
     }

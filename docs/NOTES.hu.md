@@ -196,6 +196,28 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.8.1 – simább animációk, gyorsabb rajzolás (2026-10-14)
+
+Erik: „még dolgozz az animációkon és sebességen, stabilitáson”.
+
+- **Mérés előbb** (`--perfbench <dir>`: Erik saját óra-elrendezése a config MÁSOLATÁBÓL, 90 Hz-es ütemben: beúszás
+  hidegen/melegen, nyugalom, minden widget kinyitva; CPU és „kész a GPU-n” idő). Egy órarajzolás ~1,85 ms volt, ebből
+  ~1,5 ms a szöveg: képkockánként ~29 `DrawText`, mindegyik újratördeli a szöveget (~50 µs). Szöveg nélkül 0,38 ms.
+- **Szövegelrendezés-gyorsítótár** (`Painter.Text`, csak a modern út): kulcs (szöveg, formátum, szélesség,
+  magasság) → `IDWriteTextLayout`, `DrawTextLayout`; 1000 felett újrakezdi, formátum-ürítéskor vele dobja. A 95-ös
+  GDI-mért pixelszöveg változatlan. Snapshot-összevetés RGBA mind a 4 csatornán: 100 widget-kép bitre azonos, az
+  eltérők mind élő adatot mutatnak (óra, CPU/RAM, idő VR-ben). Eredmény: nyugalom 1,85 → 1,23 ms, beúszás 2,23 →
+  1,8 ms.
+- **Az óra animációi a headset rátáján** (eddig max. 45 fps volt, spórolásból): a beúszás, a rugók, a görgő
+  számjegyek most 90 Hz-en mennek.
+- **Mozimód**: kilépéskor a többi panel csak a siklás utolsó harmadában jön vissza (a hazatérő vászon nem halad át
+  rajtuk); a váltósáv kicsit felcsúszva jelenik meg, a modern gombok kiemelése/hover/nyomás animált (a világító
+  gomb átúszik a választottra); a sáv régi textúrája csak az új átadása után szabadul fel; a gomblista képkockánként
+  szemét nélkül épül.
+- **Stabilitás**: Erik 1.7.1-es 36 perces VR-futásában 1 figyelmeztetés (`WaitFrameSync: TimedOut` induláskor), 0 hiba;
+  a ciklus 90 alatti tempója (61–74/s) akkor is megvolt, amikor az Orbit 0,15 ms-ot dolgozott → a GPU-terhelés
+  (VRChat/kompozitor) korlátoz, nem az Orbit.
+
 ## 1.8.0 – Mozimód (2026-10-14)
 
 Erik az ötletlistából: „3-as mehet esetleg” (mozimód).
