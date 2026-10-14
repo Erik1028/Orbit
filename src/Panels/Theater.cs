@@ -10,6 +10,7 @@ public interface ITheaterScreen : IPointerTarget
 {
     TheaterView Theater { get; set; }     // non-null: this panel is the theater screen, drawn where it says
     bool TheaterHidden { get; set; }      // another panel is: step aside
+    string TheaterLabel { get; }          // its name on the switcher under the screen
     bool Playable { get; }                // has an overlay and a live capture
     // its own (saved) place, size, bend and opacity, where the screen glides from and back to
     bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity);
@@ -83,6 +84,20 @@ public sealed class Theater : IDisposable
     }
 
     public ITheaterScreen Screen => On ? _screen : null;
+    public TheaterView View => On ? _view : null;
+
+    // the switcher under the screen: another monitor / window takes the same place and size, the two cross-fade there
+    // (a panel that stops showing stays where it was while it fades)
+    public void Switch(ITheaterScreen to)
+    {
+        if (!On || to == null || to == _screen || !to.Playable) return;
+        _screen.Theater = null;
+        _screen.TheaterHidden = true;
+        to.TheaterHidden = false;
+        _screen = to;
+        _screen.Theater = _view;
+        Log.Info("theater: switched to " + to.TheaterLabel);
+    }
 
     public void Start(ITheaterScreen screen, VrSession vr, TheaterConfig cfg)
     {

@@ -42,7 +42,8 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
 - Smart frame rate: what you look at runs at the headset's refresh rate, the rest is throttled
 - **Theater mode** (a watch button): the monitor or window you used last becomes one big curved screen in front
   of you, the other panels and the keyboard step aside and the world dims behind it. Grab it to move it, the stick
-  or both hands to size it; tap again and everything glides back to where it was. It remembers the size
+  or both hands to size it; tap again and everything glides back to where it was. It remembers the size.
+  Point at the screen and a switcher shows up under it: one button per monitor and window to swap what plays
 
 **Stream dock (Hexpad)** - for an Ajazz AKP03 stream dock run by the Hexpad app
 - The dock as a panel you can place over the real one on your desk: its six keys exactly as they look right

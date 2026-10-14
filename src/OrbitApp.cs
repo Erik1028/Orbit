@@ -61,7 +61,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     Theater _theater;
     ITheaterScreen _lastScreen;      // the monitor / window the laser was on last: theater mode plays it
     bool _theaterKb;                 // theater mode put the keyboard away (it comes back after)
-    readonly List<ITheaterScreen> _screens = new();
+    readonly List<ITheaterScreen> _screens = new(), _theaterChoices = new();
+    TheaterBar _theaterBar;
     readonly VrSession _vr = new();
     Laser[] _lasers;
     SystemCursor _sysCursor;
@@ -107,6 +108,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
         _roomPanel = new RoomPanel(_gpu, _painter, _cfg);
         _theater = new Theater(_gpu, _painter);
+        _theaterBar = new TheaterBar(_gpu, _painter) { OnSwitch = s => _theater.Switch(s), OnExit = ToggleTheater };
         _status = new StatusLine(_osc);
         _data.Dock = _dockSnap;
         _data.DockFaces = _dockFaces;
@@ -445,6 +447,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             bool theaterWas = _theater.On;
             _theater.Update(_vr, dt, C.Theater.Dim, _screens);
             if (theaterWas && !_theater.On) StopTheater(glide: false);      // its screen went away
+            UpdateTheaterBar(now, dt);
             // headset off: no capturing (the overlays keep their last picture)
             if (awake)
             {
@@ -520,7 +523,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     List<IPointerTarget> Targets()
     {
         if (_targets != null) return _targets;
-        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _roomPanel, _wrist, _kb };
+        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _roomPanel, _wrist, _kb, _theaterBar };
         _targets.AddRange(_windowPanels);
         _targets.AddRange(_desktops);
         return _targets;
@@ -568,6 +571,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockPanel.CreateOverlay(_vr);
         _roomPanel.CreateOverlay(_vr);
         _theater.CreateOverlay();
+        _theaterBar.CreateOverlay();
         _notifyPanel.CreateOverlay();
         try { _winrtDev ??= MonitorCapture.CreateWinRtDevice(_gpu); }
         catch (Exception e) { Log.Error("WinRT device: " + e); }
@@ -686,6 +690,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _roomPanel.DestroyOverlay();
         if (_theater.On) StopTheater(glide: false);
         _theater.DestroyOverlay();
+        _theaterBar.DestroyOverlay();
         _status.Clear(C.General.OscPort, Clock.Now);
         _notifyPanel.DestroyOverlay();
         foreach (var d in _desktops) d.DestroyOverlay();
@@ -887,6 +892,21 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _theater.Start(screen, _vr, C.Theater);
         _cfg.MarkDirty();
         _win.Dirty = true;
+    }
+
+    // the switcher under the theater screen: shows while a laser is on the screen or on it
+    void UpdateTheaterBar(double now, float dt)
+    {
+        _theaterChoices.Clear();
+        if (_theater.On)
+        {
+            foreach (var d in _desktops.OrderBy(d => d.Mon.X)) if (d.Playable) _theaterChoices.Add(d);
+            foreach (var w in _windowPanels) if (w.Playable) _theaterChoices.Add(w);
+        }
+        bool pointing = false;
+        foreach (var la in _lasers)
+            if (la.Hovered != null && (la.Hovered == _theater.Screen || la.Hovered == _theaterBar)) pointing = true;
+        _theaterBar.Update(_vr, now, dt, _theater, _theaterChoices, pointing);
     }
 
     void StopTheater(bool glide)
@@ -1626,7 +1646,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _cfg.SaveIfDue(force: true);
         foreach (var d in _desktops) d.Dispose();
         foreach (var w in _windowPanels) w.Dispose();
-        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose();
+        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose();
         _room.Dispose();
         _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();

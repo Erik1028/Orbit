@@ -239,6 +239,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
     // ---- theater mode (Panels/Theater.cs): the big screen is an override, nothing here is saved ----
     public TheaterView Theater { get; set; }
     public bool TheaterHidden { get; set; }
+    public string TheaterLabel => string.IsNullOrWhiteSpace(Mon.Name) ? Mon.Device.TrimStart('\\', '.') : Mon.Name;
     public bool Playable => Ov != null && _cap != null && !_cap.Closed && Cfg.Enabled;
 
     public bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity)

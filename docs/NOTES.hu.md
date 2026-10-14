@@ -214,6 +214,15 @@ Erik az ötletlistából: „3-as mehet esetleg” (mozimód).
   fogás többi része nem csinál semmit (`_grabView`). Kilépéskor csak a `Theater.Width`/`Distance` mentődik (a
   következő alkalomra). A Recenter mozimódban a képernyőt is eléd hozza. A Monitors gomb és a dupla markolás
   előbb kilép a mozimódból (azonnal). Ha a képernyő eltűnik (monitor újraépül, ablak bezárul), magától kilép.
+- **Váltósáv a képernyő alatt** (Erik közben: „a theater módban lehessen gyorsan és kényelmesen váltani a monitorok
+  között egy kijelző alatt megjelenő gombbal”; `Panels/TheaterBar.cs`): gombonként egy monitor (balról jobbra, ahogy
+  az asztalon állnak; azonos nevűek sorszámot kapnak) és a tükrözött ablakok, a játszó kiemelve, a végén kilépés.
+  Megjelenik, amíg a lézer a képernyőn vagy a sávon van (és belépéskor 4 s-ig), utána 2,5 s múlva elhalványul. A
+  látott magassága állandó (0,05 × távolság), ugyanúgy ívelt, mint a képernyő (`c = w·c_k / w_k`), sort order 110.
+  Modern: pirulák; 95: tálca-szerű gombsor (a játszó benyomva). Váltás (`Theater.Switch`): az új ugyanoda és
+  ugyanakkorára kerül, a régi a helyén halványul el (rejtett panel nem mozgatja az overlayt) → áttűnés.
+  `--theatertest <dir>`: VR nélkül, kitalált headsettel és képernyőkkel (indulás, siklás, fogás, váltás, kilépés,
+  eltűnő képernyő) + a sáv képei mindkét stílusban.
 - **`Product` = OrbitOverlay** (a híd vége: az 1.7 updatere mindkét nevet elfogadja; az 1.6-os ezt már nem
   telepítené). A release-be továbbra is felkerül `OrbitSetup.exe` néven is.
 - README: a mozimód, és a Hexpad-sor javítva (a tekerők az 1.7.0 óta csúszkák).
