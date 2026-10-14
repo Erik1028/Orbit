@@ -447,6 +447,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
         _notifyIn.SetEnabled(C.General.Notifications && _vr.Connected);
         _media.Active = _vr.Connected;
+        WatchWidgets.DockAvailable = C.Dock.Enabled && _hexpad.Present;     // the editor offers the dock widget (also on the desktop)
         _data.VrConnected = _vr.Connected;
         if (_vr.Connected) _data.VrSince ??= DateTime.Now; else _data.VrSince = null;
         _data.DesktopsVisible = C.General.DesktopsVisible;
@@ -1442,7 +1443,6 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         var d = C.Dock;
         bool widget = C.Wrist.Face == "custom" && (C.Wrist.Widgets?.Exists(w => w.Type == "dock") ?? false);
         _hexpad.Active = _vr.Connected && d.Enabled && (d.Visible || widget);
-        WatchWidgets.DockAvailable = d.Enabled && _hexpad.Present;
         int v = _hexpad.Version;
         if (v != _dockSnap.Version)
         {
