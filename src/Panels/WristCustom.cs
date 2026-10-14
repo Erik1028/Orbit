@@ -370,7 +370,7 @@ public sealed partial class WristPanel
     void Gauge(RectangleF r, float frac, uint tint, string key, string value, string unit, float valueSize = 0)
     {
         float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2;
-        float rad = MathF.Min(r.Width, r.Height) / 2 - 12;
+        float rad = MathF.Min(r.Width, r.Height) / 2 - 16;       // the satellite stays well inside the card
         if (rad < 8) return;
         Orbit(cx, cy, rad, frac, tint, key, MathF.Max(3, rad * 0.1f));
         bool hasUnit = !string.IsNullOrEmpty(unit);
@@ -625,8 +625,8 @@ public sealed partial class WristPanel
         {
             // a big orbit with the time inside; - / start-pause / + under it
             float bs = 46;
-            var ringArea = new RectangleF(r.X, r.Y, r.Width, r.Height - bs - 14);
-            float rad = MathF.Min(ringArea.Width, ringArea.Height) / 2 - 10, cx = r.X + r.Width / 2, cy = ringArea.Y + ringArea.Height / 2 + 4;
+            var ringArea = new RectangleF(r.X, r.Y + 6, r.Width, r.Height - bs - 22);
+            float rad = MathF.Min(ringArea.Width, ringArea.Height) / 2 - 14, cx = r.X + r.Width / 2, cy = ringArea.Y + ringArea.Height / 2;
             Orbit(cx, cy, rad, frac, tint, Ui.Id("wtr", id), MathF.Max(4, rad * 0.08f));
             RollText(Ui.Id("wtx", id), txt, new RectangleF(cx - rad, cy - rad * 0.42f, rad * 2, rad * 0.62f), Theme.Text,
                 FitSize(txt, rad * 1.4f, rad * 0.5f, FontWeight.SemiBold, Theme.Display), FontWeight.SemiBold, Theme.Display);
@@ -646,7 +646,7 @@ public sealed partial class WristPanel
         else
         {
             var ring = w.W >= 2 ? new RectangleF(r.X, r.Y, r.Height, r.Height) : r;
-            float rad = MathF.Min(ring.Width, ring.Height) / 2 - 12, cx = ring.X + ring.Width / 2, cy = ring.Y + ring.Height / 2;
+            float rad = MathF.Min(ring.Width, ring.Height) / 2 - 16, cx = ring.X + ring.Width / 2, cy = ring.Y + ring.Height / 2;
             Orbit(cx, cy, rad, frac, tint, Ui.Id("wtr", id), MathF.Max(3, rad * 0.1f));
             if (w.W >= 2)
             {
@@ -746,9 +746,9 @@ public sealed partial class WristPanel
         {
             var b = bats[pick[j]];
             var cell = new RectangleF(r.X + j % cols * cw, r.Y + j / cols * ch, cw, ch);
-            float rad = MathF.Min(cw, ch - 22) / 2 - 9;
+            float rad = MathF.Min(cw - 20, ch - 46) / 2;
             if (rad < 8) continue;
-            float cx = cell.X + cw / 2, cy = cell.Y + 9 + rad + 4;
+            float cx = cell.X + cw / 2, cy = cell.Y + 12 + rad;
             Orbit(cx, cy, rad, b.pct, BatteryColor(b.pct, b.charging), Ui.Id("wbt", id * 8 + j), MathF.Max(3, rad * 0.11f));
             _p.Text(b.label, new RectangleF(cx - rad, cy - rad, rad * 2, rad * 2), Theme.Text,
                 FitSize(b.label, rad * 1.4f, MathF.Max(11, rad * 0.48f), FontWeight.SemiBold, null), FontWeight.SemiBold, TextAlignment.Center);

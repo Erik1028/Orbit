@@ -17,6 +17,7 @@ public sealed partial class WristPanel
     int _calOffset;                     // months browsed away from today in the opened calendar
     readonly List<double> _laps = new();
     const string OpenKey = "wopen";
+    public bool LayoutTest;             // --snapshot: no dimming, no clip (whatever sticks out of the card shows)
 
     // which opened view a widget has (null = it has none: the buttons just act)
     static string DetailOf(string type) => type switch
@@ -90,7 +91,7 @@ public sealed partial class WristPanel
         if (_closing && e < 0.03f) { _open = null; _closing = false; return; }
         float ec = Math.Clamp(e, 0, 1);
         var all = new RectangleF(0, 0, TW, TH);
-        _p.Fill(all, Theme.WithAlpha(0xFF000000, 0.62f * ec), 34);
+        if (!LayoutTest) _p.Fill(all, Theme.WithAlpha(0xFF000000, 0.62f * ec), 34);
         if (_ui.Clickable("wscrim", all, out _, out _) && !_closing) CloseDetail();        // a tap beside it
         var target = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, false);
         var r = Lerp(WatchWidgets.Rect(_open, false), target, e);
@@ -100,7 +101,7 @@ public sealed partial class WristPanel
         float ca = Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
         if (ca <= 0.01f) return;
         _halo = Theme.Panel;
-        _p.PushClip(r);
+        if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
         var E = target;
         _p.Text(k.Name, new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Theme.Text, 24, FontWeight.SemiBold);
@@ -121,7 +122,7 @@ public sealed partial class WristPanel
             case "volume": VolumeDetail(c); break;
         }
         if (ca < 0.999f) _p.PopFade();
-        _p.PopClip();
+        if (!LayoutTest) _p.PopClip();
     }
 
     // a bar with a knob: drag along it (or tap) to set 0..1
@@ -142,8 +143,8 @@ public sealed partial class WristPanel
     {
         var (has, title, artist, playing) = MediaNow(d);
         Volume.Sample(Clock.Now);
-        float s = c.Height;
-        var cover = new RectangleF(c.X, c.Y, s, s);
+        float s = MathF.Min(c.Height, c.Width * 0.44f);
+        var cover = new RectangleF(c.X, c.Y + (c.Height - s) / 2, s, s);
         _p.Fill(cover, Theme.Panel3, 20);
         if (_art != null)
         {
@@ -161,10 +162,12 @@ public sealed partial class WristPanel
         else _p.Text("Nothing playing", new RectangleF(x, c.Y + 6, w, 42), Sub, 26);
         string[] ids = { "media.prev", "media.play", "media.next" };
         string[] icons = { "", playing ? "" : "", "" };
-        float by = c.Y + 116;
-        if (Press("wdm0", new RectangleF(x, by + 10, 64, 64), icons[0], null, false, Theme.Accent, has, 24, true)) OnAction?.Invoke(ids[0]);
-        if (Press("wdm1", new RectangleF(x + 78, by, 84, 84), icons[1], null, true, Theme.Accent, has, 32, true)) OnAction?.Invoke(ids[1]);
-        if (Press("wdm2", new RectangleF(x + 176, by + 10, 64, 64), icons[2], null, false, Theme.Accent, has, 24, true)) OnAction?.Invoke(ids[2]);
+        float gap = 14, big = MathF.Min(84, (w - 2 * gap) * 0.4f), small = MathF.Min(64, (w - 2 * gap - big) / 2);
+        float by = c.Y + 116, bx = x;
+        if (Press("wdm0", new RectangleF(bx, by + (big - small) / 2, small, small), icons[0], null, false, Theme.Accent, has, 24, true)) OnAction?.Invoke(ids[0]);
+        if (Press("wdm1", new RectangleF(bx + small + gap, by, big, big), icons[1], null, true, Theme.Accent, has, 32, true)) OnAction?.Invoke(ids[1]);
+        if (Press("wdm2", new RectangleF(bx + small + gap + big + gap, by + (big - small) / 2, small, small), icons[2], null, false, Theme.Accent, has, 24, true))
+            OnAction?.Invoke(ids[2]);
         // the system volume under it
         float lvl = Volume.Level;
         bool ok = lvl >= 0, muted = Volume.Muted;

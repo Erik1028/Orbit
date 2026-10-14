@@ -365,6 +365,13 @@ static class Tools
         wrist.Draw(data);
         wcfg.Face = face0;
         wcfg.Widgets = null;
+        void LayoutCheck(string style)
+        {
+            string f0 = wcfg.Face;
+            LayoutCheckRun(wrist, data, wcfg, gpu, dir, style);
+            wcfg.Face = f0;
+            wcfg.Widgets = null;
+        }
         // every opened view once (both styles: see the 95 section), and a tap that opens one / a tap beside it that closes it
         void SaveOpened(string tag)
         {
@@ -399,6 +406,7 @@ static class Tools
             wcfg.Widgets = null;
         }
         SaveOpened("");
+        LayoutCheck("modern");
         string Dump() => string.Join(" ", wcfg.Widgets.Select(w => $"{w.Type}@{w.X},{w.Y}:{w.W}x{w.H}"));
         // Wrist tab with the custom face picked (seeded from "full"), then the editor
         view.Tab = SettingsView.TabWrist;
@@ -512,6 +520,7 @@ static class Tools
             np.Surface.SavePng(gpu, Path.Combine(dir, "notifications_95.png"));
         }
         SaveOpened("_95");
+        LayoutCheck("95");
         // the custom face in the 95 style: the watch, the Wrist page and its editor with a selection
         wcfg.Face = "custom";
         SaveCustom("_95");
@@ -539,6 +548,123 @@ static class Tools
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
+
+    // Every widget kind at every size, alone on a watch with no background ("cards"), and every opened view
+    // without its clip: anything drawn outside the card sticks out (a non-transparent pixel there), and in the
+    // modern style anything within a few pixels of the card's edge is too close to it. Logged, one line each.
+    static int LayoutCheckRun(WristPanel wrist, PanelData data, WristConfig wcfg, Gpu gpu, string dir, string style)
+    {
+        bool classic = Theme.Classic;
+        int problems = 0;
+        float k = classic ? 2 : 1;                       // 95: the canvas is shown 2x
+        uint[] Read()
+        {
+            string tmp = Path.Combine(dir, "_layout.png");
+            wrist.Surf.SavePng(gpu, tmp);
+            uint[] px;
+            using (var bmp = new System.Drawing.Bitmap(tmp))
+            {
+                px = new uint[bmp.Width * bmp.Height];
+                var bd = bmp.LockBits(new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                System.Runtime.InteropServices.Marshal.Copy(bd.Scan0, (int[])(object)px, 0, px.Length);
+                bmp.UnlockBits(bd);
+            }
+            File.Delete(tmp);
+            return px;
+        }
+        // pixels outside 'r' (grown by 'grow') that are not transparent; and pixels in the band [inset, inset2) inside r
+        // that differ from the card's own colour (the colour at its centre-left edge band, sampled)
+        (int outside, string where) Outside(uint[] px, System.Drawing.RectangleF r, float grow, System.Drawing.RectangleF? also = null)
+        {
+            int n = 0; string where = null;
+            for (int y = 0; y < WristPanel.TH; y++)
+                for (int x = 0; x < WristPanel.TW; x++)
+                {
+                    if (x >= r.Left - grow && x < r.Right + grow && y >= r.Top - grow && y < r.Bottom + grow) continue;
+                    if (also is { } a && x >= a.Left - grow && x < a.Right + grow && y >= a.Top - grow && y < a.Bottom + grow) continue;
+                    if ((px[y * WristPanel.TW + x] >> 24) > 24) { n++; where ??= $"({x},{y})"; }
+                }
+            return (n, where);
+        }
+        (int close, string where) TooClose(uint[] px, System.Drawing.RectangleF r, float from, float to)
+        {
+            // the card colour: the most common colour in the band
+            var counts = new Dictionary<uint, int>();
+            var band = new List<(int, int)>();
+            for (int y = (int)r.Top; y < (int)r.Bottom; y++)
+                for (int x = (int)r.Left; x < (int)r.Right; x++)
+                {
+                    float dx = MathF.Min(x - r.Left, r.Right - 1 - x), dy = MathF.Min(y - r.Top, r.Bottom - 1 - y), d = MathF.Min(dx, dy);
+                    // skip the rounded corners (the card's own curve lives there)
+                    if (dx < 26 && dy < 26) continue;
+                    if (d < from || d >= to) continue;
+                    uint c = px[y * WristPanel.TW + x];
+                    band.Add((x, y));
+                    counts[c] = counts.TryGetValue(c, out int v) ? v + 1 : 1;
+                }
+            if (band.Count == 0) return (0, null);
+            uint card = 0; int best = -1;
+            foreach (var kv in counts) if (kv.Value > best) { best = kv.Value; card = kv.Key; }
+            int n = 0; string where = null;
+            foreach (var (x, y) in band)
+            {
+                uint c = px[y * WristPanel.TW + x];
+                int dr = (int)((c >> 16) & 255) - (int)((card >> 16) & 255), dg = (int)((c >> 8) & 255) - (int)((card >> 8) & 255), db = (int)(c & 255) - (int)(card & 255);
+                if (Math.Abs(dr) + Math.Abs(dg) + Math.Abs(db) > 24) { n++; where ??= $"({x},{y})"; }
+            }
+            return (n, where);
+        }
+        wcfg.Face = "custom";
+        wcfg.Background = "cards";
+        foreach (var kind in WatchWidgets.Kinds)
+            foreach (var (w, h) in kind.Sizes)
+            {
+                wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
+                wrist.Settle();
+                wrist.Draw(data);
+                wrist.Draw(data);
+                var px = Read();
+                var r = WatchWidgets.CellRect(0, 0, w, h, classic);
+                r = new System.Drawing.RectangleF(r.X * k, r.Y * k, r.Width * k, r.Height * k);
+                var (o, ow) = Outside(px, r, classic ? 0 : 1.5f);
+                var (cl, cw) = classic || kind.Button ? (0, null) : TooClose(px, r, 3, 8);
+                if (o > 0 || cl > 0)
+                {
+                    problems++;
+                    Log.Warn($"layout {style}: {kind.Id} {w}x{h}: {(o > 0 ? $"{o} px outside the card, first at {ow}" : "")}{(o > 0 && cl > 0 ? "; " : "")}{(cl > 0 ? $"{cl} px within 8 px of its edge, first at {cw}" : "")}");
+                }
+            }
+        // the opened views: a 2x2 (or the smallest) widget of each, opened, without clip / dimming
+        wrist.LayoutTest = true;
+        foreach (var kind in WatchWidgets.Kinds)
+        {
+            if (kind.Button) continue;
+            var (w, h) = kind.Sizes[kind.Default];
+            wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
+            wrist.Settle();
+            if (!wrist.OpenForTest(kind.Id)) continue;
+            wrist.Draw(data);
+            wrist.Draw(data);
+            var px = Read();
+            var t = classic ? new System.Drawing.RectangleF(16, 12, (WristPanel.TW95 - 16) * 2, (WristPanel.TH95 - 12) * 2)
+                : WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, false);
+            var own = WatchWidgets.CellRect(0, 0, w, h, classic);
+            own = new System.Drawing.RectangleF(own.X * k, own.Y * k, own.Width * k, own.Height * k);
+            var (o, ow) = Outside(px, t, classic ? 0 : 1.5f, own);
+            var (cl, cw) = classic ? (0, null) : TooClose(px, t, 3, 14);
+            if (o > 0 || cl > 0)
+            {
+                problems++;
+                Log.Warn($"layout {style}: opened {kind.Id}: {(o > 0 ? $"{o} px outside the card, first at {ow}" : "")}{(o > 0 && cl > 0 ? "; " : "")}{(cl > 0 ? $"{cl} px within 14 px of its edge, first at {cw}" : "")}");
+            }
+            wrist.CloseForTest();
+        }
+        wrist.LayoutTest = false;
+        wcfg.Background = "panel";
+        Log.Info($"layout {style}: {problems} problem(s)");
+        return problems;
+    }
 
     // --wintest DIR: the desktop settings window in both styles (with its own config in DIR), on screen
     // for a moment each: a screenshot, its size at this DPI, and what the 95 caption answers to

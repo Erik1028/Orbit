@@ -222,7 +222,9 @@ public sealed partial class SettingsView
         {
             var k = WatchWidgets.Kinds[i];
             var r = new RectangleF(222 + i % 5 * 97, 450 + i / 5 * 34, 93, 30);
-            if (ui.Button(Ui.Id("wpal", i), r, k.Name, k.Icon, false, true, 11)) AddWidget(ui, list, k);
+            // the icon only when it fits with the name and a margin on both sides
+            string icon = 11 + 8 + p.MeasureWidth(k.Name, 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
+            if (ui.Button(Ui.Id("wpal", i), r, k.Name, icon, false, true, 11)) AddWidget(ui, list, k);
         }
 
         float rx = 724, rw = 260;

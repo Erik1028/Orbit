@@ -196,6 +196,17 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.5.1 – minden belefér (2026-10-14)
+
+Erik a kinyitott lejátszón látta, hogy a „következő” gomb lelóg, és kérte: semmi ne lógjon le és ne legyen túl közel
+a széléhez. `--snapshot` most automatikusan ellenőrzi (`Tools.LayoutCheckRun`): minden widget minden méretben,
+mindkét stílusban, egyedül, háttér nélkül → ami a kártyán kívül nem átlátszó, az kilóg; Modernben a kártya
+szélétől 3–8 px-en belüli (kinyitott nézetben 3–14 px) eltérő színű képpont = túl közel. Kinyitott nézetek
+vágás és sötétítés nélkül (`WristPanel.LayoutTest`). Igazolva, hogy jelez: a régi lejátszó-elrendezésre 404 px-t
+talált. Javítva: a lejátszó gombjai a szabad szélességhez méreteződnek, a borító legfeljebb a szélesség 44 %-a;
+mérők/gyűrűk 16 px margó (a „műhold” is bent marad); az időzítő-gyűrű; az akkuk százaléka; a szerkesztő
+palettáján ikon csak ha mellette is van margó. Eredmény: 0 hiba Modernben és 95-ben.
+
 ## 1.5.0 – widgetes óra (2026-10-14)
 
 Erik backlogjából (memória: orbit-backlog.md) a „sarok-widgetek” és a „az egész óra egy üres felület
