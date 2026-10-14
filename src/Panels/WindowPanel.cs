@@ -53,7 +53,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
         _dev = dev;
         Ov = new VrOverlay($"erik.orbit.window.{Cfg.Id}", "OrbitOverlay Window");
         Ov.SetFlag(VROverlayFlags.IgnoreTextureAlpha, true);
-        Ov.SetSortOrder(105);       // in front of monitors where they overlap
+        Ov.SetSortOrder(BaseSort);
         if (Hwnd != IntPtr.Zero) StartCapture();
     }
 
@@ -109,6 +109,8 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
         _hasTexture = false;
     }
 
+    const uint BaseSort = 105;      // in front of monitors where they overlap
+
     public void Update(VrSession vr, double now, bool globallyVisible, int fps, bool smart)
     {
         if (Ov == null) return;
@@ -118,6 +120,8 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
         bool want = (globallyVisible || th != null) && !TheaterHidden && Cfg.Enabled && (Cfg.Place.M != null || th != null) && _cap != null && !_cap.Closed;
         if (want)
         {
+            // the theater screen draws over the other panels; while switching, the new one over the old one
+            Ov.SetSortOrder(th == null ? BaseSort : th.Behind ? 106u : 107u);
             if (th != null) Ov.SetAbsolute(th.World);
             else if (!Placement.Apply(Cfg.Place, vr, Ov)) want = false;
         }
@@ -139,9 +143,11 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
         }
         if (_pending is { } pb && now >= _pendingAt) { _pending = null; Press(pb, true); }
         _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
-        if (!want) return;
+        // aside in theater mode it is still captured, slowly: switching to it shows what is on it now
+        bool warm = !want && TheaterHidden && _cap != null && !_cap.Closed;
+        if (!want && !warm) return;
         bool hovered = _hovering[0] || _hovering[1];
-        float rate = !smart ? fps
+        float rate = !want ? 3 : !smart ? fps
             : th != null ? DesktopPanel.SmartFps(vr, th.World, th.Width, hovered, fps)
             : DesktopPanel.SmartFps(vr, Cfg.Place, Cfg.Width, hovered, fps);
         if (!DesktopPanel.CaptureDue(ref _nextFrame, now, rate)) return;
@@ -277,6 +283,8 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     public string TheaterLabel => string.IsNullOrWhiteSpace(Cfg.Title) ? "Window" : Cfg.Title;
     public bool Playable => Ov != null && _cap != null && !_cap.Closed && Cfg.Enabled && Hwnd != IntPtr.Zero;
     public bool HomeInWorld => Placement.IsWorld(Cfg.Place);
+    public float TheaterFade => _vis;
+    public void TheaterVanish() => _vis = 0;
     public string TheaterState =>
         $"overlay {(Ov == null ? "none" : Ov.Visible ? "shown" : "hidden")}, fade {_vis:0.00}, picture {(_hasTexture ? "yes" : "no")}, " +
         $"capture {(_cap == null ? "none" : _cap.Closed ? "closed" : "live")}";

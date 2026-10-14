@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using Valve.VR;
 
 namespace Orbit;
 
@@ -14,12 +13,14 @@ public interface ITheaterScreen : IPointerTarget
     bool Playable { get; }                // has an overlay and a live capture
     bool HomeInWorld { get; }             // its own place is in the room (not on a hand / the head)
     string TheaterState { get; }          // for the log: is it showing, has it a picture
-    // its own (saved) place, size, bend and opacity, where the screen glides from and back to
+    float TheaterFade { get; }            // how far it has faded in, 0..1
+    void TheaterVanish();                 // gone at once: it fades in again from nothing wherever it shows next
+    // its own (saved) place, size, bend and opacity, where the screen grows from and goes back to
     bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity);
 }
 
 // Where the theater screen is. Place / Size / Bend are the theater's own (grabbing moves and sizes them, in memory
-// only); World / Width / Curvature / Opacity are what the panel draws this frame, gliding between its home and them.
+// only); World / Width / Curvature / Opacity are what the panel draws this frame, on the way in or out.
 public sealed class TheaterView
 {
     public Matrix4x4 Place;
@@ -27,6 +28,7 @@ public sealed class TheaterView
     public Vector3 Head;                  // the headset now: the bend is centred on it
     public Matrix4x4 World;
     public float Width, Curvature, Opacity = 1;
+    public bool Behind;                   // the screen being switched away from: drawn under the new one
     float _scaleFrom;
 
     public void Move(in Matrix4x4 world) { Place = world; Refit(); }
@@ -40,23 +42,35 @@ public sealed class TheaterView
     // curved around you at whatever distance it is: c = w / (2 pi r); r is the straight distance, as the screen faces
     // your head (also when it is up above you, lying back)
     public void Refit() => Bend = DesktopLayout.CurvatureFor(Size, Math.Max(0.5f, Vector3.Distance(Place.Translation, Head)));
+
+    public void Mirror(TheaterView v)
+    {
+        Place = v.Place; Size = v.Size; Bend = v.Bend; Head = v.Head;
+        World = v.World; Width = v.Width; Curvature = v.Curvature; Opacity = v.Opacity;
+    }
 }
 
-// Theater mode: one monitor or window becomes a big curved screen in front of you, the other panels and the keyboard
-// step aside and the world dims behind it. The saved layout is not touched: the screen's place is an override for as
-// long as it lasts, and the next tap glides it back. The size and distance you leave it at are kept for next time.
+// Theater mode: one monitor or window becomes a big curved screen in front of your monitors, the other panels and the
+// keyboard step aside and the world dims behind it. The saved layout is not touched: the screen's place is an override
+// for as long as it lasts, and the next tap puts everything back. The size and distance you leave it at are kept.
+//
+// In and out: a monitor that is about where the big screen goes (the middle one) grows out of its own place and goes
+// back into it; one off to the side fades in / out where the big screen is, with a slight zoom (gliding across from
+// the side looked odd). Switching: the new one fades in over the old one, which stays until it is covered - no dip.
 public sealed class Theater : IDisposable
 {
     public const float MinWidth = 0.8f, MaxWidth = 8f;
-    const float Glide = 0.45f;            // seconds to glide in / out
+    const float Glide = 0.45f, Appear = 0.3f;    // seconds: growing out of its place / fading in where it plays
+    const float GlideAngle = 25;                 // degrees between its own place and the big screen to still grow out of it
 
     readonly Gpu _g;
     readonly Painter _p;
     Surface _black;
     VrOverlay _dim;
-    TheaterView _view;
-    ITheaterScreen _screen;
-    float _t;                             // 0 = the screen at its home, 1 = the theater screen
+    TheaterView _view, _behind;
+    ITheaterScreen _screen, _leaving;
+    float _t, _leaveT;                    // _t: 0 = the screen at its home / faded out, 1 = the theater screen
+    bool _glide, _checked;
     public bool On { get; private set; }
 
     public Theater(Gpu g, Painter p) { _g = g; _p = p; }
@@ -85,43 +99,44 @@ public sealed class Theater : IDisposable
     public ITheaterScreen Screen => On ? _screen : null;
     public TheaterView View => On ? _view : null;
 
-    // the switcher under the screen: another monitor / window takes the same place and size, the two cross-fade there
-    // (a panel that stops showing stays where it was while it fades)
-    public void Switch(ITheaterScreen to)
-    {
-        if (!On || to == null || to == _screen || !to.Playable) return;
-        _screen.Theater = null;
-        _screen.TheaterHidden = true;
-        to.TheaterHidden = false;
-        _screen = to;
-        _screen.Theater = _view;
-        Log.Info("theater: switched to " + to.TheaterLabel);
-    }
-
-    public void Start(ITheaterScreen screen, VrSession vr, TheaterConfig cfg)
+    // anchor: the monitor in the middle of your row (the big screen goes in front of it); null = the screen itself
+    public void Start(ITheaterScreen screen, ITheaterScreen anchor, VrSession vr, TheaterConfig cfg)
     {
         if (On || screen == null || !vr.HmdValid) return;
+        EndLeaving();
         float size = Math.Clamp(cfg.Width, MinWidth, MaxWidth), dist = Math.Clamp(cfg.Distance, 0.6f, 10f);
         _view = new TheaterView { Size = size, Head = vr.Hmd.Translation };
-        _view.Move(Where(screen, vr, dist));
-        if (_screen != null && _screen != screen) _screen.Theater = null;     // still gliding back from the last time
+        _view.Move(Where(anchor ?? screen, vr, dist));
+        bool back = _screen == screen && screen.Theater != null;      // still on its way out: turn around from there
+        if (_screen != null && !back) Release(_screen);
         _screen = screen;
-        _t = _screen.Theater != null ? _t : 0;
-        Blend(vr);
+        if (!back) { _t = 0; _glide = GrowsFromHome(screen); }
+        Blend();
         _screen.Theater = _view;
         On = true;
         _checked = false;
-        Log.Info($"theater: on - {screen.TheaterLabel} ({screen.TheaterState})");
+        Log.Info($"theater: on - {screen.TheaterLabel} ({screen.TheaterState}), {(_glide ? "grows out of its place" : "fades in")}");
     }
 
-    // Where the big screen goes: out along the line from your head through the monitor / window it plays, tilted like
-    // it, at the theater distance - where your screens are. NOT where you look: theater mode is started from the
-    // watch, so at that moment you look at your wrist (lying back with the arm up, that put the screen on the ceiling).
-    // A screen on a hand or the head has no such place: then level in front of you.
-    public static Matrix4x4 Where(ITheaterScreen screen, VrSession vr, float dist)
+    // its own place is about where the big screen goes (seen from your head): it can grow out of it
+    bool GrowsFromHome(ITheaterScreen s)
+    {
+        if (!s.Home(out var home, out _, out _, out _)) return false;
+        var a = home.Translation - _view.Head;
+        var b = _view.Place.Translation - _view.Head;
+        if (a.Length() < 0.2f || b.Length() < 0.2f) return false;
+        float cos = Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b));
+        return cos > MathF.Cos(GlideAngle * MathF.PI / 180);
+    }
+
+    // Where the big screen goes: out along the line from your head through the anchor (the middle of your monitors),
+    // tilted like it, at the theater distance. NOT where you look: theater mode is started from the watch, so at that
+    // moment you look at your wrist (lying back with the arm up, that put the screen on the ceiling). A screen on a
+    // hand or the head has no such place: then level in front of you.
+    public static Matrix4x4 Where(ITheaterScreen anchor, VrSession vr, float dist)
     {
         var head = vr.Hmd.Translation;
-        if (screen.HomeInWorld && screen.Home(out var home, out _, out _, out _))
+        if (anchor.HomeInWorld && anchor.Home(out var home, out _, out _, out _))
         {
             var dir = home.Translation - head;
             if (dir.Length() > 0.2f)
@@ -143,15 +158,50 @@ public sealed class Theater : IDisposable
     }
 
     // Recenter while it plays: the layout has just been brought in front of you, the screen follows it
-    public void Recenter(VrSession vr)
+    public void Recenter(VrSession vr, ITheaterScreen anchor)
     {
         if (!On || !vr.HmdValid || _screen == null) return;
         float dist = Math.Clamp(Vector3.Distance(_view.Place.Translation, _view.Head), 0.6f, 10f);
         _view.Head = vr.Hmd.Translation;
-        _view.Move(Where(_screen, vr, dist));
+        _view.Move(Where(anchor ?? _screen, vr, dist));
     }
 
-    // glides back (vr != null), or snaps back at once; keeps the size and distance for next time
+    // the switcher under the screen: another monitor / window takes the same place and size. It fades in over the one
+    // playing, which stays as it is underneath until it is covered (fading both at once let the world show through).
+    public void Switch(ITheaterScreen to)
+    {
+        if (!On || to == null || to == _screen || !to.Playable) return;
+        EndLeaving();
+        _leaving = _screen;
+        _behind = new TheaterView { Behind = true };
+        _behind.Mirror(_view);
+        _leaving.Theater = _behind;
+        _leaveT = 0;
+        to.TheaterHidden = false;
+        to.TheaterVanish();
+        _screen = to;
+        _screen.Theater = _view;
+        Log.Info("theater: switched to " + to.TheaterLabel);
+    }
+
+    void EndLeaving()
+    {
+        if (_leaving == null) return;
+        _leaving.Theater = null;
+        _leaving.TheaterVanish();         // covered by the new one: it just goes
+        _leaving = null;
+        _behind = null;
+    }
+
+    // the screen is done playing: back to its own panel. One that faded out where it played shows up at home by
+    // fading in there (not popping in at full strength).
+    void Release(ITheaterScreen s)
+    {
+        s.Theater = null;
+        if (!_glide) s.TheaterVanish();
+    }
+
+    // goes back (vr != null), or at once; keeps the size and distance for next time
     public void Stop(VrSession vr, TheaterConfig cfg)
     {
         if (On && cfg != null && _view != null)
@@ -161,29 +211,39 @@ public sealed class Theater : IDisposable
             Log.Info($"theater: off ({cfg.Width:0.00} m wide at {cfg.Distance:0.00} m)");
         }
         On = false;
-        if (vr == null && _screen != null) { _screen.Theater = null; _screen = null; _t = 0; }
+        EndLeaving();
+        if (_screen == null) return;
+        if (vr == null) { _glide = false; Release(_screen); _screen = null; _t = 0; return; }
+        _glide = GrowsFromHome(_screen);  // the one playing now may be another than the one it started with
     }
 
     // before the panels update: where the screen is this frame, who steps aside, how dark the world is
     public void Update(VrSession vr, float dt, float dim, IReadOnlyCollection<ITheaterScreen> live)
     {
+        if (_leaving != null)
+        {
+            _leaveT += dt;
+            if (!Contains(live, _leaving)) { _leaving = null; _behind = null; }
+            else if (_screen == null || (_screen.TheaterFade >= 0.999f && _leaveT > 0.1f) || _leaveT > 1) EndLeaving();
+        }
         if (_screen != null && (!Contains(live, _screen) || !_screen.Playable))
         {
             // its panel was rebuilt (monitors changed) or removed, or its window closed: theater is over
             _screen.Theater = null;
             _screen = null;
+            EndLeaving();
             if (On) { On = false; Log.Info("theater: its screen went away"); }
         }
         // the others step aside while it plays (a window panel added meanwhile too), and come back near the end of
-        // the glide home, so the screen does not pass through them on its way
+        // the way out, so the screen does not pass through them
         bool aside = On || (_screen != null && _t > 0.3f);
-        foreach (var s in live) s.TheaterHidden = aside && s != _screen;
-        _t = Math.Clamp(_t + (On ? dt : -dt) / Glide, 0, 1);
+        foreach (var s in live) s.TheaterHidden = aside && s != _screen && s != _leaving;
+        _t = Math.Clamp(_t + (On ? dt : -dt) / (_glide ? Glide : Appear), 0, 1);
         if (_screen != null)
         {
             if (vr.HmdValid) _view.Head = vr.Hmd.Translation;
-            if (!On && _t <= 0) { _screen.Theater = null; _screen = null; }
-            else Blend(vr);
+            if (!On && _t <= 0) { Release(_screen); _screen = null; }
+            else Blend();
         }
         if (_dim != null)
         {
@@ -199,7 +259,7 @@ public sealed class Theater : IDisposable
                 _dim.Show();
             }
         }
-        // once it has glided in: how the screen is doing (if it does not show up, the log says why)
+        // once it is in: how the screen is doing (if it does not show up, the log says why)
         if (On && _screen != null && _t >= 1 && !_checked)
         {
             _checked = true;
@@ -207,8 +267,6 @@ public sealed class Theater : IDisposable
                      $"{Vector3.Distance(_view.World.Translation, _view.Head):0.00} m away, {_view.Width:0.00} m wide");
         }
     }
-
-    bool _checked;
 
     static bool Contains(IReadOnlyCollection<ITheaterScreen> live, ITheaterScreen s)
     {
@@ -218,17 +276,31 @@ public sealed class Theater : IDisposable
 
     static float Ease(float t) => t * t * (3 - 2 * t);
 
-    void Blend(VrSession vr)
+    void Blend()
     {
-        float e = Ease(_t);
         var v = _view;
-        if (!_screen.Home(out var home, out float hw, out float hc, out float ho)) { home = v.Place; hw = v.Size; hc = v.Bend; ho = 1; }
-        Matrix4x4.Decompose(home, out _, out var qa, out var ta);
-        Matrix4x4.Decompose(v.Place, out _, out var qb, out var tb);
-        v.World = Matrix4x4.CreateFromQuaternion(Quaternion.Slerp(qa, qb, e)) * Matrix4x4.CreateTranslation(Vector3.Lerp(ta, tb, e));
-        v.Width = hw + (v.Size - hw) * e;
-        v.Curvature = DesktopLayout.Flat(hc + (v.Bend - hc) * e);
-        v.Opacity = ho + (1 - ho) * e;
+        if (_glide && _screen.Home(out var home, out float hw, out float hc, out float ho))
+        {
+            // grows out of its own place: position, turn, size, bend and opacity all on one eased curve
+            float e = Ease(_t);
+            Matrix4x4.Decompose(home, out _, out var qa, out var ta);
+            Matrix4x4.Decompose(v.Place, out _, out var qb, out var tb);
+            v.World = Matrix4x4.CreateFromQuaternion(Quaternion.Slerp(qa, qb, e)) * Matrix4x4.CreateTranslation(Vector3.Lerp(ta, tb, e));
+            v.Width = hw + (v.Size - hw) * e;
+            v.Curvature = DesktopLayout.Flat(hc + (v.Bend - hc) * e);
+            v.Opacity = ho + (1 - ho) * e;
+        }
+        else
+        {
+            // fades in where it plays, settling from slightly smaller (the bend scales with it: same radius)
+            float s = 0.9f + 0.1f * (1 - MathF.Pow(1 - _t, 3));
+            v.World = v.Place;
+            v.Width = v.Size * s;
+            v.Curvature = DesktopLayout.Flat(v.Bend * s);
+            v.Opacity = Ease(_t);
+        }
+        _behind?.Mirror(v);
+        if (_behind != null) _behind.Opacity = 1;     // the old one stays solid underneath until it is covered
     }
 
     public void Dispose()

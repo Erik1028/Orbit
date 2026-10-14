@@ -196,12 +196,27 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
-## 1.8.2 – áttűnés váltáskor (2026-10-14)
+## 1.8.2 – mozimód: rendes áttűnés, nincs oldalra úszás (2026-10-14)
 
-Erik élőben váltogatott a mozimódban (napló: 6 váltás 6 s alatt). Az `--ovdump` mutatta: a lecserélt monitor a 0,2 s-os
-áttűnés alatt a vászon helyén visszaugrott a saját méretére (2,80 → 1,07 m, ív 0,188 → 0,145), és úgy halványult el.
-Most halványulás közben a panel megtartja az utolsó szélességét, ívét és átlátszatlanságát (`_opacity`; csak
-`want` mellett állítja őket), így a két vászon ugyanott, ugyanakkorán tűnik át. Monitor- és ablakpanel egyaránt.
+Erik élőben (napló: 6 váltás 6 s alatt): „kicsit blokkosodva vált a monitorok között, valamint az oldalra úszó
+animáció fura”.
+
+- **Hova kerül**: a monitorsor közepe elé (`OrbitApp.TheaterAnchor`: a Recenterrel azonos választás – fő monitor,
+  csoportban a sor közepe), bármelyik monitor játszik. Az 1.8.1 a játszó monitor irányába tette: oldalsónál oldalra.
+- **Be/ki** (`Theater._glide`, induláskor és kilépéskor újra eldöntve): ha a játszó monitor saját helye 25°-on belül
+  van a vászon irányától (a középső), abból nő ki / abba megy vissza (0,45 s). Különben helyben tűnik fel / el
+  (0,3 s, 90 → 100 % nagyítással, az ív a mérettel együtt, ugyanaz a sugár); kilépéskor utána otthon halványan jön
+  vissza (`TheaterVanish` → `_vis = 0`), nem ugrik be teljes erővel. Oldalra úszás nincs.
+- **Váltás = valódi áttűnés**: az új a régi FÖLÖTT halványul be (sort 107 vs 106, `TheaterView.Behind`), a régi
+  szilárdan alatta marad, amíg az új teljesen látszik (`TheaterFade` ≥ 1 és ≥ 0,1 s; max 1 s), aztán eltűnik. Az
+  1.8.0/1.8.1 mindkettőt egyszerre halványította → félúton átlátszott a háttér (fényerő-beesés), és a régi közben a
+  saját méretére ugrott (2,80 → 1,07 m, `--ovdump`-pal látva).
+- **Friss kép váltáskor**: mozimódban a félreállt panelek 3 fps-sel tovább rögzítenek (`warm`), így a választott a
+  mostani képével jön, nem a rejtéskor látottal (az pár pillanat múlva „ugrott” az újra).
+- Halványulás közben a panel megtartja az utolsó szélességét, ívét, átlátszatlanságát (`_opacity`).
+- `VrOverlay.SetSortOrder` csak változáskor hív a SteamVR-be.
+- `--theatertest`: 20 ellenőrzés (középső kinő, oldalsó helyben, váltáskor a régi alul szilárd, majd megy; kilépés
+  oldalsóval helyben; a vászon a középső elé kerül).
 
 ## 1.8.1 – a mozimód vászna megjelenik; simább animációk, gyorsabb rajzolás (2026-10-14)
 

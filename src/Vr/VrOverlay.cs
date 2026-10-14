@@ -98,7 +98,8 @@ public sealed class VrOverlay : IDisposable
     public void SetAlpha(float a) { if (a != _alpha) { _alpha = a; Ov.SetOverlayAlpha(Handle, a); } }
     public void SetCurvature(float c) { if (c != _curv) { _curv = c; Ov.SetOverlayCurvature(Handle, c); } }
     public void SetTexelAspect(float a) { if (a != _aspect) { _aspect = a; Ov.SetOverlayTexelAspect(Handle, a); } }
-    public void SetSortOrder(uint o) => Ov.SetOverlaySortOrder(Handle, o);
+    uint _sort;
+    public void SetSortOrder(uint o) { if (o != _sort) { _sort = o; Ov.SetOverlaySortOrder(Handle, o); } }
     public void SetFlag(VROverlayFlags f, bool on) => Ov.SetOverlayFlag(Handle, f, on);
 
     public void Show() { if (!_visible) { _visible = true; Ov.ShowOverlay(Handle); } }

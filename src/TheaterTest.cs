@@ -20,6 +20,10 @@ static class TheaterTest
         public bool Playable => IsPlayable;
         public bool HomeInWorld => true;
         public string TheaterState => "fake";
+        public float Fade = 1;
+        public int Vanished;
+        public float TheaterFade => Fade;
+        public void TheaterVanish() => Vanished++;
         public bool Home(out Matrix4x4 world, out float width, out float curvature, out float opacity)
         {
             world = HomeWorld; width = 0.6f; curvature = 0.05f; opacity = 0.9f;
@@ -71,59 +75,71 @@ static class TheaterTest
         using var th = new Theater(gpu, painter);
         void Run(float seconds) { for (float t = 0; t < seconds; t += 1 / 90f) th.Update(vr, 1 / 90f, cfg.Dim, live); }
 
-        // started from the watch: looking down at the wrist - the screen must still go where the monitor is
+        // started from the watch: looking down at the wrist - the screen must still go where the monitors are.
+        // b is the middle monitor (the anchor) and plays: it grows out of its own place
         var level = vr.Device[0];
         vr.Device[0] = Matrix4x4.CreateRotationX(-0.9f) * level;
-        th.Start(b, vr, cfg);
+        th.Start(b, b, vr, cfg);
         vr.Device[0] = level;
         th.Update(vr, 0, cfg.Dim, live);
         Ck("start: the screen plays, the others step aside", b.Theater != null && !b.TheaterHidden && a.TheaterHidden && c.TheaterHidden);
-        Ck("start: it begins at its own place", Vector3.Distance(b.Theater.World.Translation, b.HomeWorld.Translation) < 0.01f);
+        Ck("start: the middle monitor grows out of its own place", Vector3.Distance(b.Theater.World.Translation, b.HomeWorld.Translation) < 0.01f);
         Run(0.6f);
         var v = b.Theater;
         var want = head + bDir * 2.5f;
-        Ck($"glided in: 2.5 m out where the monitor is, not where you looked ({v.World.Translation})", Vector3.Distance(v.World.Translation, want) < 0.01f);
-        Ck($"glided in: 2.8 m wide, bent around your head (c {v.Curvature:0.000})", Near(v.Width, 2.8f) && Near(v.Curvature, 2.8f / (2 * MathF.PI * 2.5f), 0.002f) && Near(v.Opacity, 1));
+        Ck($"in: 2.5 m out where the monitors are, not where you looked ({v.World.Translation})", Vector3.Distance(v.World.Translation, want) < 0.01f);
+        Ck($"in: 2.8 m wide, bent around your head (c {v.Curvature:0.000})", Near(v.Width, 2.8f) && Near(v.Curvature, 2.8f / (2 * MathF.PI * 2.5f), 0.002f) && Near(v.Opacity, 1));
         Ck("it faces you", Vector3.Dot(MathUtil.Back(v.World), -bDir) > 0.999f);
         Ck("it keeps the monitor's tilt", Vector3.Dot(MathUtil.Up(v.World), Vector3.Normalize(MathUtil.Up(b.HomeWorld) - Vector3.Dot(MathUtil.Up(b.HomeWorld), bDir) * bDir)) > 0.999f);
 
-        // grab: pull it back to 4 m (level ahead) and make it bigger - only the override moves
-        v.Move(Matrix4x4.CreateTranslation(0, 0, -4) * MathUtil.YawFrame(vr.Hmd));
+        // grab: pull it out to 4 m along the same line and make it bigger - only the override moves
+        v.Move(Theater.Where(b, vr, 4));
         v.ScaleBegin();
         v.Scale(1.5f);
         Run(0.05f);
         Ck($"grab: 4.2 m wide at 4 m, the bend follows (c {v.Curvature:0.000})", Near(v.Width, 4.2f) && Near(v.Curvature, 4.2f / (2 * MathF.PI * 4f), 0.002f));
 
-        // the switcher: another screen takes the same place and size
+        // the switcher: the new one fades in over the old one, which stays solid underneath until it is covered
         th.Switch(c);
         Run(0.05f);
-        Ck("switch: the new one plays at the same place", c.Theater == v && b.Theater == null && b.TheaterHidden && !c.TheaterHidden && a.TheaterHidden);
-        Ck("switch: same size", Near(c.Theater.Width, 4.2f));
+        Ck("switch: the new one plays at the same place and size", c.Theater == v && Near(c.Theater.Width, 4.2f) && !c.TheaterHidden && c.Vanished == 1);
+        Ck("switch: the old one stays under it, solid, at the same place", b.Theater is { Behind: true } bv && Near(bv.Opacity, 1) &&
+            Vector3.Distance(bv.World.Translation, v.World.Translation) < 0.001f && Near(bv.Width, 4.2f) && !b.TheaterHidden && a.TheaterHidden);
+        Run(0.15f);
+        Ck("switch: once covered, the old one goes", b.Theater == null && b.TheaterHidden && b.Vanished == 1);
         th.Switch(a);
         th.Switch(a);
-        Run(0.05f);
+        Run(0.2f);
         Ck("switch again (twice is once)", a.Theater == v && c.Theater == null && c.TheaterHidden);
 
-        // stop: glides home, the others come back, size and distance are kept for next time
+        // stop with a side monitor playing: it fades out where it plays (no glide across the room), then fades in at home
+        int van = a.Vanished;
         th.Stop(vr, cfg);
         th.Update(vr, 0, cfg.Dim, live);
-        Ck("stop: the others wait while the screen is on its way home", !th.On && b.TheaterHidden && c.TheaterHidden && !a.TheaterHidden);
+        Ck("stop: the others wait while it goes", !th.On && b.TheaterHidden && c.TheaterHidden && !a.TheaterHidden);
         Ck($"stop: keeps {cfg.Width:0.00} m wide at {cfg.Distance:0.00} m", Near(cfg.Width, 4.2f) && Near(cfg.Distance, 4f, 0.02f));
-        Run(0.6f);
-        Ck("glided home: no override left, everything is back", a.Theater == null && !a.TheaterHidden && !b.TheaterHidden && !c.TheaterHidden);
+        Run(0.1f);
+        Ck("stop: a side monitor fades out in place", a.Theater != null && Vector3.Distance(a.Theater.World.Translation, v.Place.Translation) < 0.001f && a.Theater.Opacity < 0.9f);
+        Run(0.4f);
+        Ck("gone: no override left, everything is back, it fades in at home", a.Theater == null && a.Vanished > van && !a.TheaterHidden && !b.TheaterHidden && !c.TheaterHidden);
+
+        // a side monitor starts by fading in where the big screen goes: in front of the middle one, not of itself
+        th.Start(a, b, vr, cfg);
+        th.Update(vr, 1 / 90f, cfg.Dim, live);
+        Ck("side start: in front of the middle monitor", Vector3.Distance(a.Theater.World.Translation, head + bDir * 4f) < 0.02f);
+        Ck("side start: from slightly smaller and clear", a.Theater.Width < 4.2f * 0.95f && a.Theater.Opacity < 0.1f);
+        Run(0.4f);
+        Ck("side start: settled at the kept size", Near(a.Theater.Width, 4.2f) && Near(a.Theater.Opacity, 1));
 
         // the screen goes away mid-theater (window closed / monitor rebuilt)
-        th.Start(b, vr, cfg);
-        Run(0.6f);
-        Ck("again at the kept size", Near(b.Theater.Width, 4.2f));
-        b.IsPlayable = false;
+        a.IsPlayable = false;
         Run(0.02f);
-        Ck("its screen went away: theater ends", !th.On && b.Theater == null && !a.TheaterHidden && !c.TheaterHidden);
-        b.IsPlayable = true;
-        live.Remove(a);
-        th.Start(a, vr, cfg);
+        Ck("its screen went away: theater ends", !th.On && a.Theater == null && !b.TheaterHidden && !c.TheaterHidden);
+        a.IsPlayable = true;
+        live.Remove(c);
+        th.Start(c, b, vr, cfg);
         Run(0.02f);
-        Ck("a screen that is not there any more", !th.On && a.Theater == null);
+        Ck("a screen that is not there any more", !th.On && c.Theater == null);
 
         // the switcher, both styles
         var app = new ConfigStore(Path.Combine(dir, "config.json"));

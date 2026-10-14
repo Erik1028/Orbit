@@ -47,7 +47,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
         _vr = vr;
         Ov = new VrOverlay($"erik.orbit.desktop.{n}", $"OrbitOverlay Desktop {Mon.Name}");
         Ov.SetFlag(VROverlayFlags.IgnoreTextureAlpha, true);
-        Ov.SetSortOrder(100);
+        Ov.SetSortOrder(BaseSort);
         try { _cap = new MonitorCapture(_g, winrtDevice, Mon); }
         catch (Exception e) { Error = e.Message; Log.Warn($"capture {Mon}: {e}"); }
     }
@@ -62,6 +62,8 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
         _vr = null;
     }
 
+    const uint BaseSort = 100;
+
     public void Update(VrSession vr, double now, bool globallyVisible, int fps)
     {
         if (Ov == null) return;
@@ -71,6 +73,8 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
         bool want = (globallyVisible || th != null) && !TheaterHidden && Cfg.Enabled && (Cfg.Place.M != null || th != null) && _cap != null && !_cap.Closed;
         if (want)
         {
+            // the theater screen draws over the other panels; while switching, the new one over the old one
+            Ov.SetSortOrder(th == null ? BaseSort : th.Behind ? 106u : 107u);
             if (th != null) Ov.SetAbsolute(th.World);
             else if (!Placement.Apply(Cfg.Place, vr, Ov)) want = false;     // attached to a device that is gone
         }
@@ -92,7 +96,10 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
             Ov.Show();
         }
         _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
-        if (!want || !CaptureDue(ref _nextFrame, now, EffectiveFps(vr, fps))) return;
+        // aside in theater mode it is still captured, slowly: switching to it shows what is on it now, not the
+        // picture from when it was hidden (that jumped to the new one a moment later)
+        bool warm = !want && TheaterHidden && _cap != null && !_cap.Closed;
+        if (!(want || warm) || !CaptureDue(ref _nextFrame, now, want ? EffectiveFps(vr, fps) : 3)) return;
         if (_cap.Poll())
         {
             Ov.SetMouseScale(_cap.Target.W, _cap.Target.H);
@@ -248,6 +255,8 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
     public string TheaterLabel => string.IsNullOrWhiteSpace(Mon.Name) ? Mon.Device.TrimStart('\\', '.') : Mon.Name;
     public bool Playable => Ov != null && _cap != null && !_cap.Closed && Cfg.Enabled;
     public bool HomeInWorld => Placement.IsWorld(Cfg.Place);
+    public float TheaterFade => _vis;
+    public void TheaterVanish() => _vis = 0;
     public string TheaterState =>
         $"overlay {(Ov == null ? "none" : Ov.Visible ? "shown" : "hidden")}, fade {_vis:0.00}, picture {(_hasTexture ? "yes" : "no")}, " +
         $"capture {(_cap == null ? "none" : _cap.Closed ? "closed" : "live")}";

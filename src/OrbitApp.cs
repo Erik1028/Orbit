@@ -869,7 +869,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         var missing = _desktops.Where(d => d.Cfg.Enabled && d.Cfg.Place.M == null).ToList();
         if (missing.Count > 0) PlaceDesktops(missing);
         if (C.Keyboard.Visible) PlaceKeyboard();
-        _theater.Recenter(_vr);
+        _theater.Recenter(_vr, TheaterAnchor());
         _cfg.MarkDirty();
     }
 
@@ -889,7 +889,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         }
         _theaterKb = C.Keyboard.Visible;
         if (_theaterKb) { C.Keyboard.Visible = false; _kbAuto = false; _kbHideAt = -1; }
-        _theater.Start(screen, _vr, C.Theater);
+        _theater.Start(screen, TheaterAnchor(), _vr, C.Theater);
         _cfg.MarkDirty();
         _win.Dirty = true;
     }
@@ -914,6 +914,20 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         foreach (var la in _lasers)
             if (la.Hovered != null && (la.Hovered == _theater.Screen || la.Hovered == _theaterBar)) pointing = true;
         _theaterBar.Update(_vr, now, dt, _theater, _theaterChoices, pointing);
+    }
+
+    // the big screen goes in front of the middle of your monitors, whichever one plays (same pick as Recenter)
+    ITheaterScreen TheaterAnchor()
+    {
+        var placed = _desktops.Where(d => d.Cfg.Enabled && Placement.IsWorld(d.Cfg.Place) && d.Cfg.Place.M != null).ToList();
+        if (placed.Count == 0) return null;
+        var anchor = placed.FirstOrDefault(d => d.Mon.Primary) ?? placed.OrderBy(d => d.Mon.X).ElementAt(placed.Count / 2);
+        if (anchor.Cfg.Group != null)
+        {
+            var row = _layout.Members(anchor.Cfg.Group);
+            if (row.Count > 0) anchor = row[row.Count / 2];
+        }
+        return anchor;
     }
 
     void StopTheater(bool glide)
