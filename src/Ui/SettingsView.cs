@@ -55,7 +55,7 @@ public interface IOrbitHost
 
 // The settings screen. Same code draws the desktop window and the SteamVR dashboard tab.
 // Logical canvas: 1000 x 640.
-public sealed class SettingsView
+public sealed partial class SettingsView
 {
     public const float W = 1000, H = 640;
     static readonly string[] Tabs = { "Desktops", "Windows", "Layouts", "Wrist", "Keyboard", "Look", "General" };
@@ -83,6 +83,46 @@ public sealed class SettingsView
         var p = ui.P;
         p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
         DrawHeader(ui);
+        if (Theme.Classic) DrawNavClassic(ui);
+        else DrawNav(ui);
+
+        switch (Tab)
+        {
+            case TabDesktops: DrawDesktops(ui); break;
+            case TabWindows: DrawWindows(ui); break;
+            case TabLayouts: DrawLayouts(ui); break;
+            case TabWrist: DrawWrist(ui); break;
+            case TabKeyboard: DrawKeyboard(ui); break;
+            case TabLook: DrawLook(ui); break;
+            default: DrawGeneral(ui); break;
+        }
+        if (ui.Changed) _h.Cfg.MarkDirty();
+    }
+
+    // the 95 skin: the tabs as a white list box, the chosen one in navy
+    void DrawNavClassic(Ui ui)
+    {
+        var p = ui.P;
+        var box = new RectangleF(14, 80, 184, Tabs.Length * 40 + 8);
+        p.Fill(box, Theme.W95Window);
+        p.Bevel(box, Painter.Edge.Sunken);
+        for (int i = 0; i < Tabs.Length; i++)
+        {
+            var r = new RectangleF(box.X + 4, box.Y + 4 + i * 40, box.Width - 8, 40);
+            if (ui.Hover(r) && ui.Pressed) Tab = i;
+            bool on = Tab == i;
+            if (on) p.Fill(r, Theme.W95Navy);
+            uint fg = on ? 0xFFFFFFFF : Theme.W95Dark;
+            p.Icon(TabIcons[i], new RectangleF(r.X + 10, r.Y, 24, r.Height), fg, 17);
+            p.Text(Tabs[i], new RectangleF(r.X + 44, r.Y, r.Width - 48, r.Height), fg, 15);
+        }
+        p.Fill(new RectangleF(212, 76, p.Px, H - 92), Theme.W95Shadow);
+        p.Fill(new RectangleF(212 + p.Px, 76, p.Px, H - 92), Theme.W95Hi);
+    }
+
+    void DrawNav(Ui ui)
+    {
+        var p = ui.P;
         // nav: the selection pill slides to the chosen tab
         float ny = ui.Anim("nav", Tab, 14);
         var pill = new RectangleF(16, 84 + ny * 50, 180, 42);
@@ -104,23 +144,12 @@ public sealed class SettingsView
                 on > 0.5f ? FontWeight.SemiBold : FontWeight.Normal);
         }
         p.Line(212, 76, 212, H - 16, Theme.Border, 1);
-
-        switch (Tab)
-        {
-            case TabDesktops: DrawDesktops(ui); break;
-            case TabWindows: DrawWindows(ui); break;
-            case TabLayouts: DrawLayouts(ui); break;
-            case TabWrist: DrawWrist(ui); break;
-            case TabKeyboard: DrawKeyboard(ui); break;
-            case TabLook: DrawLook(ui); break;
-            default: DrawGeneral(ui); break;
-        }
-        if (ui.Changed) _h.Cfg.MarkDirty();
     }
 
     void DrawHeader(Ui ui)
     {
         var p = ui.P;
+        if (Theme.Classic) { DrawHeaderClassic(ui); return; }
         p.Fill(new RectangleF(0, 0, W, 64), Theme.Panel);
         p.Line(0, 64, W, 64, Theme.Border, 1);
         // logo: ring + moon
@@ -151,6 +180,40 @@ public sealed class SettingsView
         x -= 140;
         if (ui.Button("hdr.rc", new RectangleF(x, 14, 132, 36), "Recenter", Theme.IcoRecenter, false, _h.VrConnected, 14))
             _h.Recenter();
+    }
+
+    // the 95 skin: in VR a navy caption with the close box (the desktop window has the real one),
+    // then a toolbar - the SteamVR state in a sunken status field and the three buttons
+    void DrawHeaderClassic(Ui ui)
+    {
+        var p = ui.P;
+        bool caption = OnClose != null;
+        float by = 18;
+        if (caption)
+        {
+            var cap = new RectangleF(4, 4, W - 8, 24);
+            p.Caption(cap, "Orbit Settings", 13);
+            var close = new RectangleF(cap.Right - 22, cap.Y + 3, 19, 18);
+            if (ui.Button("hdr.close", close, null, "\uE8BB", false, true, 7)) OnClose();
+            by = 33;
+        }
+        const float bh = 28;
+        bool on = _h.VrConnected;
+        var st = new RectangleF(16, by, Math.Max(190, ui.P.MeasureWidth(_h.VrStatus, 13) + 36), bh);
+        p.Bevel(st, Painter.Edge.Sunken);
+        p.Fill(new RectangleF(st.X + 10, st.Y + 10, 8, 8), on ? 0xFF00A000 : Theme.W95Shadow);
+        p.Text(_h.VrStatus, new RectangleF(st.X + 26, st.Y, st.Width - 30, st.Height), Theme.W95Dark, 13);
+        float x = W - 16 - 132;
+        if (ui.Button("hdr.desk", new RectangleF(x, by, 132, bh), "Desktops",
+                C.General.DesktopsVisible ? Theme.IcoShow : Theme.IcoHide, C.General.DesktopsVisible, true, 14))
+            _h.ToggleDesktops();
+        x -= 140;
+        if (ui.Button("hdr.kb", new RectangleF(x, by, 132, bh), "Keyboard", Theme.IcoKeyboard, C.Keyboard.Visible, true, 14))
+            _h.ToggleKeyboard();
+        x -= 140;
+        if (ui.Button("hdr.rc", new RectangleF(x, by, 132, bh), "Recenter", Theme.IcoRecenter, false, _h.VrConnected, 14))
+            _h.Recenter();
+        p.EtchedLine(4, W - 4, 68);
     }
 
     // ---------------- Desktops ----------------
@@ -608,10 +671,20 @@ public sealed class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style,
             };
             changed = true;
         }
+        ui.Section(new RectangleF(lx, 488, 360, 20), "Style");
+        int si = a.Style == "classic" ? 1 : 0;
+        if (ui.Segmented("look.style", new RectangleF(lx, 512, 356, 38), new[] { "Modern", "Windows 95" }, ref si))
+        {
+            a.Style = si == 1 ? "classic" : "modern";
+            changed = true;
+        }
+        if (Theme.Classic)
+            ui.Label(new RectangleF(lx, 556, 356, 40), "Windows 95 has its own colours; the ones above are for Modern.",
+                Theme.Dim, 12, FontWeight.Normal, true);
 
         // right: one-click themes, laser
         ui.Section(new RectangleF(rx, 84, 360, 20), "Themes");
@@ -627,7 +700,7 @@ public sealed class SettingsView
         }
 
         ui.Section(new RectangleF(rx, 220, 360, 20), "Laser");
-        if (ui.Swatch("las.acc", rx + 18, 260, 14, Theme.Accent, a.LaserColor == 0, "A")) { a.LaserColor = 0; changed = true; }
+        if (ui.Swatch("las.acc", rx + 18, 260, 14, Theme.Classic ? Theme.ClassicLaser : Theme.Accent, a.LaserColor == 0, "A")) { a.LaserColor = 0; changed = true; }
         for (int i = 0; i < Theme.AccentPresets.Length - 1; i++)
         {
             uint c = Theme.AccentPresets[i];

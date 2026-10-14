@@ -25,7 +25,7 @@ public sealed class PointerState
 // Small immediate-mode widget set drawn with Painter. Layout is in logical units.
 // Widgets ease between states (hover glow, toggle knob, segment highlight...); while anything is
 // still moving, Animating is set and the owner should draw another frame soon.
-public sealed class Ui
+public sealed partial class Ui
 {
     public readonly Painter P;
     public Vector2 Mouse;
@@ -68,12 +68,14 @@ public sealed class Ui
 
     public Ui(Painter p) { P = p; }
 
-    public void Begin(PointerState s, float scale)
+    public void Begin(PointerState s, float scale) => Begin(s, scale, 0, 0);
+
+    public void Begin(PointerState s, float scale, float ox, float oy)
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         _dt = _lastBegin == 0 ? 1 / 60f : (float)Math.Clamp((now - _lastBegin) / (double)System.Diagnostics.Stopwatch.Frequency, 0.001, 0.1);
         _lastBegin = now;
-        Mouse = s.Pos / scale;
+        Mouse = (s.Pos - new Vector2(ox, oy)) / scale;
         Inside = s.Inside;
         Down = s.Down;
         Pressed = s.PressedLatch;
@@ -84,14 +86,17 @@ public sealed class Ui
         Changed = false;
         Animating = false;
         _hot.Clear();
+        BeginPopups95();
     }
 
     // The pointer moved: does the picture change? Only when it gets onto another widget (hover
     // glow) or while something is pressed / dragged - otherwise the last frame is still right.
-    public bool NeedsRedrawForMove(PointerState s, float scale)
+    public bool NeedsRedrawForMove(PointerState s, float scale) => NeedsRedrawForMove(s, scale, 0, 0);
+
+    public bool NeedsRedrawForMove(PointerState s, float scale, float ox, float oy)
     {
         if (_active != null || s.Down) return true;
-        var m = s.Pos / scale;
+        var m = (s.Pos - new Vector2(ox, oy)) / scale;
         int hot = -1;
         if (s.Inside)
             for (int i = _hot.Count - 1; i >= 0; i--)
@@ -122,6 +127,7 @@ public sealed class Ui
     // Eases a value towards 'target' (exponential, ~1/speed seconds). The first call snaps.
     public float Anim(string id, float target, float speed = 16f)
     {
+        if (Theme.Classic) { _anim[id] = target; return target; }
         if (!_anim.TryGetValue(id, out float v)) v = target;
         v += (target - v) * (1 - MathF.Exp(-speed * _dt));
         if (MathF.Abs(v - target) < 0.003f) v = target;
@@ -133,6 +139,7 @@ public sealed class Ui
     public bool Hover(RectangleF r)
     {
         _hot.Add(r);
+        if (_drop != null && !_inPopup && _dropList.Contains(Mouse.X, Mouse.Y)) return false;   // under an open list
         return Inside && r.Contains(Mouse.X, Mouse.Y);
     }
 
@@ -153,6 +160,16 @@ public sealed class Ui
     public bool Button(string id, RectangleF r, string label, string icon = null, bool accent = false, bool enabled = true, float fontSize = 15)
     {
         bool click = Behave(id, r, out bool hover, out bool held) && enabled;
+        if (Theme.Classic)
+        {
+            // a 95 push button: raised, pushed in while held; "accent" (a toggle that is on) stays latched in
+            bool down = (held && enabled) || accent;
+            P.Fill(r, accent && !held ? Theme.W95Light : Theme.W95Face);
+            P.Bevel(r, down ? Painter.Edge.Pressed : Painter.Edge.Raised);
+            float o = down ? P.Px : 0;
+            ClassicContent(new RectangleF(r.X + o, r.Y + o, r.Width, r.Height), label, icon, enabled, fontSize);
+            return click;
+        }
         float h = Anim(K(id, "#h"), hover && enabled ? 1 : 0, 18);
         float p = Anim(K(id, "#p"), held ? 1 : 0, 30);
         float a = Anim(K(id, "#a"), accent ? 1 : 0, 14);
@@ -183,6 +200,30 @@ public sealed class Ui
     {
         bool click = Behave(id, r, out bool hover, out _) && enabled;
         if (click) { value = !value; Changed = true; }
+        if (Theme.Classic)
+        {
+            // a check box: white sunken well with a tick, the label to its right
+            const float bs = 16;
+            var box = new RectangleF(r.X + 10, r.Y + (r.Height - bs) / 2, bs, bs);
+            P.Fill(box, enabled ? Theme.W95Window : Theme.W95Face);
+            P.Bevel(box, Painter.Edge.Sunken);
+            if (value)
+            {
+                uint tick = enabled ? Theme.W95Dark : Theme.W95Shadow;
+                P.Line(box.X + 4, box.Y + 8, box.X + 7, box.Y + 11.5f, tick, 2.2f);
+                P.Line(box.X + 7, box.Y + 11.5f, box.X + 12.5f, box.Y + 4.5f, tick, 2.2f);
+            }
+            float lx = box.Right + 8, lw = r.Right - lx - 4;
+            if (hint == null)
+                ClassicText(label, new RectangleF(lx, r.Y, lw, r.Height), enabled, 15);
+            else
+            {
+                ClassicText(label, new RectangleF(lx, r.Y + 2, lw, r.Height / 2), enabled, 15, FontWeight.Normal, ParagraphAlignment.Far);
+                P.Text(hint, new RectangleF(lx, r.Y + r.Height / 2 + 1, lw, r.Height / 2 - 2), Theme.Dim, 12, FontWeight.Normal,
+                    TextAlignment.Leading, ParagraphAlignment.Near);
+            }
+            return click;
+        }
         float h = Anim(K(id, "#h"), hover && enabled ? 1 : 0, 18);
         float k = Anim(K(id, "#k"), value ? 1 : 0, 14);
         if (h > 0) P.Fill(r, Theme.WithAlpha(0x0FFFFFFF, h), 8);
@@ -221,6 +262,21 @@ public sealed class Ui
             changed = true;
         }
         if (changed) Changed = true;
+        if (Theme.Classic)
+        {
+            // a trackbar: label and value above, a sunken groove, a raised thumb
+            ClassicText(label, new RectangleF(r.X + 10, r.Y, r.Width / 2, r.Height - 22), enabled, 15);
+            P.Text(fmt(value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), enabled ? Theme.Dim : Theme.Faint, 14,
+                FontWeight.Normal, TextAlignment.Trailing);
+            var groove = new RectangleF(track.X, track.Y - 1, track.Width, 8);
+            P.Fill(groove, Theme.W95Window);
+            P.Bevel(groove, Painter.Edge.Sunken);
+            float tx = track.X + track.Width * Math.Clamp((value - min) / (max - min), 0, 1);
+            var thumb = new RectangleF(tx - 6, track.Y + 3 - 11, 12, 22);
+            P.Fill(thumb, Theme.W95Face);
+            P.Bevel(thumb, Painter.Edge.Raised);
+            return changed;
+        }
         float h = Anim(K(id, "#h"), held ? 2 : hover && enabled ? 1 : 0, 18);
         uint fg = enabled ? Theme.Text : Theme.Faint;
         P.Text(label, new RectangleF(r.X + 10, r.Y, r.Width / 2, r.Height - 22), fg, 15);
@@ -239,6 +295,25 @@ public sealed class Ui
     public bool Segmented(string id, RectangleF r, string[] options, ref int index, bool enabled = true)
     {
         bool changed = false;
+        if (Theme.Classic)
+        {
+            // a row of push buttons; the chosen one stays pushed in
+            float cw = r.Width / options.Length;
+            for (int i = 0; i < options.Length; i++)
+            {
+                var cell = new RectangleF(r.X + i * cw, r.Y, cw - (i < options.Length - 1 ? 2 : 0), r.Height);
+                string cid = K(id, Seg[Math.Min(i, Seg.Length - 1)]);
+                bool click = Behave(cid, cell, out _, out bool held) && enabled;
+                if (click && index != i) { index = i; changed = true; Changed = true; }
+                bool on = index == i || (held && enabled);
+                P.Fill(cell, index == i ? Theme.W95Light : Theme.W95Face);
+                P.Bevel(cell, on ? Painter.Edge.Pressed : Painter.Edge.Raised);
+                float o = on ? P.Px : 0;
+                ClassicText(options[i], new RectangleF(cell.X + o, cell.Y + o, cell.Width, cell.Height), enabled, 14,
+                    index == i ? FontWeight.Bold : FontWeight.Normal, ParagraphAlignment.Center, TextAlignment.Center);
+            }
+            return changed;
+        }
         P.Fill(r, Theme.Panel, 9);
         P.Stroke(r, Theme.Border, 1, 9);
         float w = r.Width / options.Length;
@@ -269,6 +344,12 @@ public sealed class Ui
     public bool Card(string id, RectangleF r, bool selected, out bool hover)
     {
         bool click = Behave(id, r, out hover, out _);
+        if (Theme.Classic)
+        {
+            P.Fill(r, selected ? Theme.W95Light : Theme.W95Face);
+            P.Bevel(r, selected ? Painter.Edge.Pressed : Painter.Edge.Raised);
+            return click;
+        }
         float h = Anim(K(id, "#h"), hover ? 1 : 0, 18);
         P.Fill(r, selected ? Theme.Panel3 : Theme.Mix(Theme.Panel2, 0xFFFFFFFF, 0.05f * h), 12);
         P.Stroke(r, selected ? Theme.Accent : Theme.Border, selected ? 2 : 1, 12);
@@ -280,6 +361,17 @@ public sealed class Ui
     {
         var box = new RectangleF(cx - r - 3, cy - r - 3, 2 * r + 6, 2 * r + 6);
         bool click = Behave(id, box, out bool hover, out _);
+        if (Theme.Classic)
+        {
+            // a colour well: a sunken square; the chosen one gets a black frame
+            var well = new RectangleF(cx - r, cy - r, 2 * r, 2 * r);
+            if (selected) P.Stroke(RectangleF.Inflate(well, 3, 3), Theme.W95Dark, 2);
+            P.Fill(well, color);
+            P.Bevel(well, Painter.Edge.Sunken);
+            if (inner != null) P.Text(inner, well, Theme.Luma(color) > 0.55f ? 0xFF000000 : 0xFFFFFFFF, r * 0.9f, FontWeight.Bold, TextAlignment.Center);
+            if (click) Changed = true;
+            return click;
+        }
         float s = Anim(K(id, "#s"), selected ? 1 : 0, 14);
         float h = Anim(K(id, "#h"), hover ? 1 : 0, 18);
         if (s > 0.01f) P.Ring(cx, cy, r + 1 + 3 * s, Theme.WithAlpha(Theme.Text, s), 2.5f);
@@ -295,6 +387,46 @@ public sealed class Ui
     public void Label(RectangleF r, string text, uint color = Theme.Dim, float size = 13, FontWeight w = FontWeight.Normal, bool wrap = false) =>
         P.Text(text, r, color, size, w, TextAlignment.Leading, wrap ? ParagraphAlignment.Near : ParagraphAlignment.Center, null, wrap);
 
-    public void Section(RectangleF r, string title) =>
-        P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold);
+    public void Section(RectangleF r, string title)
+    {
+        if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
+        // a group box title: bold black, an etched line running on after it
+        string t = char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();
+        P.Text(t, r, Theme.W95Dark, 13, FontWeight.Bold);
+        float tw = P.MeasureWidth(t, 13, FontWeight.Bold);
+        if (r.X + tw + 8 < r.Right) P.EtchedLine(r.X + tw + 8, r.Right, r.Y + r.Height / 2);
+    }
+
+    // ---- 95 skin helpers ----
+
+    // black text, or etched grey when disabled
+    void ClassicText(string s, RectangleF r, bool enabled, float size, FontWeight w = FontWeight.Normal,
+        ParagraphAlignment v = ParagraphAlignment.Center, TextAlignment h = TextAlignment.Leading)
+    {
+        if (string.IsNullOrEmpty(s)) return;
+        if (enabled) P.Text(s, r, Theme.W95Dark, size, w, h, v);
+        else P.DisabledText(s, r, size, w, h, v);
+    }
+
+    // a button's icon and / or label, centred (black; etched grey when disabled)
+    void ClassicContent(RectangleF r, string label, string icon, bool enabled, float fontSize)
+    {
+        uint fg = enabled ? Theme.W95Dark : Theme.W95Shadow;
+        if (icon != null && !string.IsNullOrEmpty(label))
+        {
+            float tw = P.MeasureWidth(label, fontSize);
+            float total = fontSize + 8 + tw;
+            float x = r.X + (r.Width - total) / 2;
+            if (!enabled) P.Icon(icon, new RectangleF(x + P.Px, r.Y + P.Px, fontSize, r.Height), Theme.W95Hi, fontSize);
+            P.Icon(icon, new RectangleF(x, r.Y, fontSize, r.Height), fg, fontSize);
+            ClassicText(label, new RectangleF(x + fontSize + 8, r.Y, tw + 6, r.Height), enabled, fontSize);
+        }
+        else if (icon != null)
+        {
+            if (!enabled) P.Icon(icon, new RectangleF(r.X + P.Px, r.Y + P.Px, r.Width, r.Height), Theme.W95Hi, fontSize + 3);
+            P.Icon(icon, r, fg, fontSize + 3);
+        }
+        else
+            ClassicText(label, r, enabled, fontSize, FontWeight.Normal, ParagraphAlignment.Center, TextAlignment.Center);
+    }
 }

@@ -25,7 +25,7 @@ public sealed class PanelData
 
 // Watch on the wrist: clock, frame timing, GPU, batteries and four quick buttons.
 // Fades in when the wrist is turned towards the face; the other hand's laser can click it or grab it.
-public sealed class WristPanel : IPointerTarget, IDisposable
+public sealed partial class WristPanel : IPointerTarget, IDisposable
 {
     public const int TW = 640, TH = 440;
     readonly Painter _p;
@@ -96,6 +96,12 @@ public sealed class WristPanel : IPointerTarget, IDisposable
             float look = Vector3.Dot(Vector3.Normalize(MathUtil.Forward(vr.Hmd)), -toEye);
             target = MathUtil.Smoothstep(0.45f, 0.75f, facing) * MathUtil.Smoothstep(0.55f, 0.8f, look);
         }
+        if (_dismissReq) { _dismissReq = false; _dismissed = true; _dismissUntil = now + (C.AlwaysVisible ? 8 : 30); }
+        if (_dismissed)
+        {
+            if (now >= _dismissUntil || (!C.AlwaysVisible && target < 0.05f)) _dismissed = false;
+            else target = 0;
+        }
         Alpha += (target - Alpha) * Math.Min(1, dt * 10);
         if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); return; }
         Ov.SetAlpha(Math.Min(1, Alpha));
@@ -108,6 +114,8 @@ public sealed class WristPanel : IPointerTarget, IDisposable
             Ov.SetTexture(Surf.Tex);
             _dirty = false;
             _nextDraw = now + (C.ShowPerformance && C.PerfGraph && C.Face is "full" or "analog" ? 0.1 : 0.5);
+            if (Theme.Classic)      // the 95 clock shows seconds: draw again just after the next one starts
+                _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
         }
     }
 
@@ -115,6 +123,7 @@ public sealed class WristPanel : IPointerTarget, IDisposable
     // buttons), "time" (only the time on a small card, nothing to press).
     public void Draw(PanelData d)
     {
+        if (Theme.Classic) { Draw95(d); return; }
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         string face = C.Face ?? "full";
@@ -123,7 +132,8 @@ public sealed class WristPanel : IPointerTarget, IDisposable
 
         var all = new RectangleF(0, 0, TW, TH);
         _p.Fill(all, Theme.OverlayBg, 30);
-        _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        if (Theme.Classic) _p.Bevel(all, Painter.Edge.Window);            // a 95 window
+        else _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
 
         if (face == "minimal")
         {
@@ -164,7 +174,8 @@ public sealed class WristPanel : IPointerTarget, IDisposable
         }
 
         // performance strip: numbers or the frame-time graph
-        _p.Line(28, 172, TW - 28, 172, 0x26FFFFFF, 1.5f);
+        if (Theme.Classic) _p.EtchedLine(28, TW - 28, 171);
+        else _p.Line(28, 172, TW - 28, 172, 0x26FFFFFF, 1.5f);
         if (C.ShowPerformance)
         {
             if (C.PerfGraph) Graph(d.Vr, new RectangleF(28, 180, TW - 56, 76));
@@ -187,10 +198,10 @@ public sealed class WristPanel : IPointerTarget, IDisposable
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         string time = now.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture);
-        _p.Text(time, r, Theme.Text, size, FontWeight.SemiBold, align, ParagraphAlignment.Center, Theme.DisplayFont);
+        _p.Text(time, r, Theme.Text, size, FontWeight.SemiBold, align, ParagraphAlignment.Center, Theme.Display);
         if (!h24)
         {
-            float tw = _p.MeasureWidth(time, size, FontWeight.SemiBold, Theme.DisplayFont);
+            float tw = _p.MeasureWidth(time, size, FontWeight.SemiBold, Theme.Display);
             float x = align == TextAlignment.Center ? r.X + (r.Width + tw) / 2 + 6 : r.X + tw + 6;
             _p.Text(now.Hour < 12 ? "AM" : "PM", new RectangleF(x, r.Y + r.Height * 0.55f, 70, size * 0.3f), Theme.Dim, size * 0.2f, FontWeight.SemiBold);
         }
@@ -199,8 +210,16 @@ public sealed class WristPanel : IPointerTarget, IDisposable
     // analog dial: ticks, hour and minute hands, accent centre
     void Dial(DateTime now, float cx, float cy, float r)
     {
-        _p.Circle(cx, cy, r, Theme.Mix(Theme.Panel2, 0xFF000000, 0.15f));
-        _p.Ring(cx, cy, r, Theme.WithAlpha(Theme.Accent, 0.55f), 3);
+        if (Theme.Classic)
+        {
+            _p.Circle(cx, cy, r, Theme.W95Window);
+            _p.Ring(cx, cy, r, Theme.W95Dark, 2);
+        }
+        else
+        {
+            _p.Circle(cx, cy, r, Theme.Mix(Theme.Panel2, 0xFF000000, 0.15f));
+            _p.Ring(cx, cy, r, Theme.WithAlpha(Theme.Accent, 0.55f), 3);
+        }
         for (int i = 0; i < 60; i++)
         {
             bool hour = i % 5 == 0;
@@ -225,7 +244,8 @@ public sealed class WristPanel : IPointerTarget, IDisposable
     {
         var card = new RectangleF(70, 130, TW - 140, 190);
         _p.Fill(card, Theme.OverlayBg, 34);
-        _p.Stroke(RectangleF.Inflate(card, -1, -1), 0x40FFFFFF, 2, 33);
+        if (Theme.Classic) _p.Bevel(card, Painter.Edge.Window);
+        else _p.Stroke(RectangleF.Inflate(card, -1, -1), 0x40FFFFFF, 2, 33);
         BigTime(now, new RectangleF(card.X, card.Y + 6, card.Width, 128), 112, TextAlignment.Center);
         _p.Text(DateText(now), new RectangleF(card.X, card.Y + 132, card.Width, 40), Theme.Dim, 24, FontWeight.Normal, TextAlignment.Center);
     }
@@ -252,6 +272,7 @@ public sealed class WristPanel : IPointerTarget, IDisposable
     // amber = over budget / reprojected, red = dropped
     void Graph(VrStats v, RectangleF r)
     {
+        if (Theme.Classic) { GraphClassic(v, r); return; }
         _p.Fill(r, Theme.WithAlpha(0xFF000000, 0.25f), 10);
         float budget = 1000f / Math.Max(1, v.DisplayHz);
         float top = budget * 2;
@@ -273,6 +294,37 @@ public sealed class WristPanel : IPointerTarget, IDisposable
             $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms GPU · {Math.Max(0, v.ReprojPct):0}% reprojected";
         _p.Text(label, new RectangleF(r.X + 10, r.Y + 4, r.Width - 20, 24), Theme.Text, 16, FontWeight.SemiBold);
         _p.Text($"{budget:0.0} ms", new RectangleF(r.Right - 80, by - 22, 72, 20), Theme.Dim, 13, FontWeight.Normal, TextAlignment.Trailing);
+    }
+
+    // the 95 skin's graph: a sunken black box, green grid, green bars - the performance window of the era
+    void GraphClassic(VrStats v, RectangleF r)
+    {
+        const uint green = 0xFF00FF00, dim = 0xFF008000, warn = 0xFFFFFF00, bad = 0xFFFF0000;
+        _p.Fill(r, 0xFF000000);
+        _p.Bevel(r, Painter.Edge.Sunken);
+        var inner = RectangleF.Inflate(r, -4, -4);
+        for (float gx = inner.X + 12; gx < inner.Right; gx += 24) _p.Fill(new RectangleF(gx, inner.Y, 1, inner.Height), dim);
+        for (float gy = inner.Y + 12; gy < inner.Bottom; gy += 12) _p.Fill(new RectangleF(inner.X, gy, inner.Width, 1), dim);
+        float budget = 1000f / Math.Max(1, v.DisplayHz);
+        float top = budget * 2;
+        int n = v.FrameCount;
+        float step = inner.Width / VrStats.FrameHistory;
+        float by = inner.Bottom - inner.Height * (budget / top);
+        for (int i = 0; i < n; i++)
+        {
+            int idx = (v.FrameHead - n + i + VrStats.FrameHistory) % VrStats.FrameHistory;
+            float ms = v.FrameMs[idx];
+            byte flag = v.FrameFlag[idx];
+            float h = Math.Clamp(ms / top, 0.02f, 1) * inner.Height;
+            uint col = flag == 2 ? bad : flag == 1 || ms > budget ? warn : green;
+            float x = inner.Right - (n - i) * step;
+            _p.Fill(new RectangleF(x, inner.Bottom - h, Math.Max(1, step - 0.3f), h), col);
+        }
+        _p.Fill(new RectangleF(inner.X, by, inner.Width, 1), 0xFFFFFFFF);
+        string label = v.AppFps < 0 ? "waiting for frames" :
+            $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms GPU · {Math.Max(0, v.ReprojPct):0}% reprojected";
+        _p.Text(label, new RectangleF(inner.X + 6, inner.Y + 2, inner.Width - 12, 22), green, 15, FontWeight.Bold);
+        _p.Text($"{budget:0.0} ms", new RectangleF(inner.Right - 80, by - 20, 74, 18), green, 13, FontWeight.Normal, TextAlignment.Trailing);
     }
 
     // keyboard, monitors, recenter, layout profile (shows its name), night mode, settings
@@ -317,6 +369,7 @@ public sealed class WristPanel : IPointerTarget, IDisposable
             _p.Fill(cover, Theme.Panel3, 10);
             _p.Icon("\uE8D6", cover, Theme.Dim, 26);
         }
+        if (Theme.Classic) _p.Bevel(RectangleF.Inflate(cover, 2, 2), Painter.Edge.Sunken);   // a 95 picture box
         float bx = TW - 28 - 3 * 58 + 4;
         var text = new RectangleF(104, 268, bx - 104 - 10, 68);
         if (has)
@@ -337,9 +390,11 @@ public sealed class WristPanel : IPointerTarget, IDisposable
 
     void Stat(int i, float cw, string value, string caption, uint color)
     {
+        if (Theme.Classic && color == Theme.Warn) color = 0xFF806000;      // amber that reads on the grey face
+        else if (Theme.Classic && color == Theme.Bad) color = 0xFF800000;
         float x = 28 + i * cw;
         _p.Text(value, new RectangleF(x, 180, cw - 6, 52), color, 40, FontWeight.SemiBold, TextAlignment.Leading,
-            ParagraphAlignment.Center, Theme.DisplayFont);
+            ParagraphAlignment.Center, Theme.Display);
         _p.Text(caption, new RectangleF(x + 2, 230, cw, 26), Theme.Dim, 16);
     }
 
@@ -348,8 +403,21 @@ public sealed class WristPanel : IPointerTarget, IDisposable
         uint col = pct > 0.5f ? Theme.Good : pct > 0.2f ? Theme.Warn : Theme.Bad;
         _p.Text(label, new RectangleF(r.X, r.Y, 74, r.Height), Theme.Dim, 18, FontWeight.SemiBold, TextAlignment.Trailing);
         var bar = new RectangleF(r.X + 84, r.Y + 8, 70, r.Height - 16);
-        _p.Fill(bar, 0x30FFFFFF, 4);
-        _p.Fill(new RectangleF(bar.X, bar.Y, bar.Width * Math.Clamp(pct, 0, 1), bar.Height), col, 4);
+        if (Theme.Classic)
+        {
+            var well = RectangleF.Inflate(bar, 0, 2);
+            _p.Bevel(well, Painter.Edge.Sunken);
+            var inner = RectangleF.Inflate(well, -3, -3);
+            uint block = pct > 0.2f ? Theme.W95Navy : 0xFF800000;
+            int blocks = (int)MathF.Round(Math.Clamp(pct, 0, 1) * 8);
+            float bw = (inner.Width - 7 * 2) / 8;
+            for (int i = 0; i < blocks; i++) _p.Fill(new RectangleF(inner.X + i * (bw + 2), inner.Y, bw, inner.Height), block);
+        }
+        else
+        {
+            _p.Fill(bar, 0x30FFFFFF, 4);
+            _p.Fill(new RectangleF(bar.X, bar.Y, bar.Width * Math.Clamp(pct, 0, 1), bar.Height), col, 4);
+        }
         _p.Text((charging ? "⚡" : "") + $"{pct * 100:0}%", new RectangleF(bar.Right + 4, r.Y, r.Right - bar.Right - 4, r.Height),
             Theme.Text, 18, FontWeight.SemiBold, TextAlignment.Trailing);
     }
@@ -393,5 +461,5 @@ public sealed class WristPanel : IPointerTarget, IDisposable
 
     public void GrabEnd() { _grabbing = false; }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); }
 }

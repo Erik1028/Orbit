@@ -106,8 +106,16 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
         Ov.Show();
     }
 
+    float InputScale => Theme.Classic ? TW / SettingsView.W95W : Scale;
+
     void DrawFrame(PointerState ptr)
     {
+        if (Theme.Classic)
+        {
+            // the 95 property sheet at 1995 size, every pixel 2 x 2 (its window frame is part of it)
+            _view.Render95(_ui, ptr, Surf.Bitmap, TW / SettingsView.W95W, 0, 0, 0x00000000);
+            return;
+        }
         _ui.Begin(ptr, Scale);
         _p.Begin(Surf.Bitmap, 0x00000000, Scale);
         var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
@@ -150,7 +158,7 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
         _owner ??= h;
         if (_owner != h) return;
         _ptr.Move(px.X, px.Y);
-        if (_ui.NeedsRedrawForMove(_ptr, Scale)) _dirty = true;
+        if (_ui.NeedsRedrawForMove(_ptr, InputScale)) _dirty = true;
     }
 
     public void PointerLeave(Hand h)
@@ -198,5 +206,5 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
     public bool GrabSnapPreview => false;
     public void GrabEnd() { }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); _view.Dispose95(); }
 }

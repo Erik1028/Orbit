@@ -220,8 +220,29 @@ public sealed class NotificationPanel : IDisposable
         _ov.Show();
     }
 
+    Surface _canvas95;
+
+    // the 95 style: every card a little 95 window at 1995 size; it pops up and goes away, no fading
+    void Draw95()
+    {
+        _canvas95 ??= new Surface(_p.Gpu, TW / 2, TH / 2);
+        _p.BeginPixel(_canvas95.Bitmap, 0x00000000);
+        float y = 0;
+        foreach (var c in _cards)
+        {
+            if (c.Vis >= 0.5f) DrawClassicCard(c, y);
+            y += (CardH + CardGap) / 2;
+            if (y > (TH - CardH) / 2) break;
+        }
+        _p.End();
+        _p.Begin(_surf.Bitmap, 0x00000000);
+        _p.ImageNearest(_canvas95.Bitmap, new RectangleF(0, 0, TW, TH));
+        _p.End();
+    }
+
     public void Draw()
     {
+        if (Theme.Classic) { Draw95(); return; }
         _p.Begin(_surf.Bitmap, 0x00000000);
         float y = 0;
         foreach (var c in _cards)
@@ -254,9 +275,34 @@ public sealed class NotificationPanel : IDisposable
         _p.End();
     }
 
+    // a 95 message window: navy caption with the sender, the information icon (or the app's own),
+    // the title in bold and the text, all in 8 pt MS Sans Serif
+    void DrawClassicCard(Notification c, float y)
+    {
+        var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
+        _p.Fill(r, Theme.W95Face);
+        _p.Bevel(r, Painter.Edge.Window);
+        var cap = new RectangleF(r.X + 3, r.Y + 3, r.Width - 6, 18);
+        _p.Fill(cap, Theme.W95Navy);
+        _p.Text(string.IsNullOrEmpty(c.Source) ? "Notification" : c.Source, new RectangleF(cap.X + 3, cap.Y, cap.Width - 6, cap.Height),
+            Theme.W95Hi, Ui.F95, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.ClassicFont);
+        var icon = new RectangleF(r.X + 14, cap.Bottom + 12, 32, 32);
+        if (c.Icon != null)
+        {
+            c.Bitmap ??= _p.CreateBitmap(c.Icon, NotificationListener.IconSize, NotificationListener.IconSize);
+            _p.Image(c.Bitmap, icon, 1);
+        }
+        else W95Icons.Draw(_p, W95Icons.Id.Info32, icon.X, icon.Y);
+        float tx = icon.Right + 14, tw = r.Right - tx - 12;
+        _p.Text(c.Title, new RectangleF(tx, cap.Bottom + 10, tw, 15), Theme.W95Dark, Ui.F95, FontWeight.Bold,
+            TextAlignment.Leading, ParagraphAlignment.Center, Theme.ClassicFont);
+        _p.Text(c.Content, new RectangleF(tx, cap.Bottom + 27, tw, r.Bottom - cap.Bottom - 31), Theme.W95Dark, Ui.F95, FontWeight.Normal,
+            TextAlignment.Leading, ParagraphAlignment.Near, Theme.ClassicFont, true);
+    }
+
     // snapshot tool: draw a sample card
     public void AddForPreview(Notification n) { n.Vis = 1; n.Shown = 0; _cards.Add(n); }
     public Surface Surface => _surf;
 
-    public void Dispose() { DestroyOverlay(); _surf.Dispose(); _sound.Dispose(); }
+    public void Dispose() { DestroyOverlay(); _surf.Dispose(); _sound.Dispose(); _canvas95?.Dispose(); }
 }

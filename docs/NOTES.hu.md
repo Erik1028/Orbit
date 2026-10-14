@@ -51,6 +51,9 @@ Windows Graphics Capture. A felülete angol, ez a leírás magyar.
 - **Színezés (Look fül)**: 6 kész téma egy kattintással (Classic, Ocean, Sakura, Forest, Ember, Mono),
   kiemelőszín a 10 alapszínből vagy **bármilyen árnyalat** (Custom colour csúszka, szivárvány-sáv alatta),
   panelszín (Charcoal/Midnight/Plum/Forest/Mocha/Black), panel-átlátszóság.
+- **Windows 95 stílus** (Look → *Style*): a beállítások, az óra, a billentyűzet és az értesítések igazi
+  1995-ös Windowsként – „Orbit Properties” tulajdonságlap, Date/Time ablak a csuklón, MS Sans Serif,
+  3D keretek, lenyíló listák –, eredeti pixelméretben rajzolva és simítás nélkül nagyítva. A Modern a régi marad.
 - **Lézer** (Look fül): szín, **vastagság** (1,5–8 mm), és hogy **mindig látszódjon** (1 m-es sugár akkor
   is, ha nem mutatsz panelre) vagy csak panelre mutatáskor.
 - **Számlapok** (Wrist fül → Watch face): Full (minden), Analog (mutatós óra + akkuk + teljesítmény),
@@ -192,6 +195,47 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.4.0 – Windows 95 stílus (2026-10-14)
+
+Erik kérése: választható Win95-ös kinézet „mint a Mixtape-nél”; az első, csak átszínezett változatra:
+„ez még nem az igazi, lehetne igazán autentikus, a stílus, a betűtípus, a layoutok, minden”. Mintának
+a Regional Settings Properties lapot és egy Date/Time órát küldte.
+
+- **Elv**: Win95 módban minden kis, valódi 1995-ös méretű vásznon készül (`Painter.BeginPixel`: aliasolt
+  alakzatok, aliasolt monokróm szöveg, GDI-classic mérés, Microsoft Sans Serif 11 px = 8 pt), utána
+  `ImageNearest` egész szorzóval nagyítja. Vásznak: beállítások 750×480 (VR-panel és dashboard ×2 =
+  1500×960), óra 320×220 ×2, billentyűzet 740×338 ×2, értesítés 480×320 ×2.
+- **Vezérlők** (`Ui/Ui95.cs`): Button95 (alapértelmezett fekete keret, benyomva, „latched” raszterezve),
+  Check95, Radio95, Combo95 (+ `Popups95`: a nyitott lista mindenek fölött, alatta minden vezérlő vak; a
+  listán kívüli kattintás CSAK bezár), Track95, Tabs95 (a kijelölt fül egybeolvad a lappal), List95
+  görgetősávval, Group95, Edit95, Progress95 (blokkok), Pane95, Caption95 + ? / X / _ / □ gombok.
+  Gyorsbillentyű-aláhúzás: `Label95("&Size:")`; adat (ablakcím, dal) `Text95`-tel megy, így a `&` nem tűnik el.
+- **Beállítások** (`Ui/SettingsView95.cs`): „Orbit Properties” 7 füllel; csoportkeretek, „Címke: [vezérlő]”
+  sorok, lenyíló listák (Attached to, Hand, Face, Laser on, Smoothing, Style...). Lent balra Recenter /
+  Show keyboard / Show desktops, jobbra **OK / Close / Apply**: minden azonnal érvényes (mint egy 95-ös
+  lap PSM_CANCELTOCLOSE után, ezért „Close” és nem visszavonni nem tudó Cancel); az Apply addig aktív,
+  amíg a változás nincs lemezen (`ConfigStore.Dirty`), megnyomva azonnal ment. A ? a General fülre visz.
+- **Asztali ablak** Win95 módban keret nélküli, maga a 95-ös ablak: a kék címsor húzza
+  (WM_NCHITTEST → HTCAPTION, a ? és X fölött nem), szögletes sarok (DWMWCP_DONOTROUND), méret 750×480 × k
+  (k = DPI kerekítve: 100–125 % → 1, vagyis 1080p-n valódi 1995-ös méret). Stílusváltáskor átáll oda-vissza.
+- **Óra** (`Panels/WristPanel95.cs`): „Date/Time” ablak – nagy idő másodperccel, hosszú dátum a Windows
+  területi beállítása szerint, analóg számlap pöttyökkel és domború türkiz mutatókkal (`Painter.Polygon`),
+  CD Player-sor (borító, cím, |<< > >>|), Power Meter-akkuk, eszköztár (bekapcsolt gomb raszterezve),
+  állapotsor vagy fekete-zöld grafikon. A _ és X elrejti, amíg el nem fordítod a csuklód (mindig látható
+  módban 8 mp-re); a □ szürke. Az ablak magassága a bekapcsolt részekhez igazodik.
+- **Billentyűzet** (`Panels/KeyboardPanel95.cs`): 95-ös gombok, nyomva benyomódik, rögzített módosító
+  raszteres, egyszeri módosító fekete keretes; pixel-nyilak (←, ↵, kurzornyilak); a találati téglalapok
+  nem változtak. **Értesítés**: 95-ös ablak navy címsorral és az Info ikonnal.
+- **Ellenőrizve**: a Modern pixelre azonos az 1.3.3-mal (snapshot-diff; csak az óra számjegyei, mert telt
+  az idő); `--snapshot`: lista-választás (Smoothing → High) és a listán kívüli kattintás (a Haptic ticks
+  nem vált); `--wintest`: keret nélküli ablak, HTCAPTION a címsoron, 750×480 96 DPI-n, váltás oda-vissza.
+- **Kiadás előtti átnézés** (4 szempont + 4 cáfoló ellenőr): 12 megerősített, mind javítva – egy 95-ben nyitva
+  hagyott lenyíló lista Modernre váltás után is elnyelte a kattintásokat (`BeginPopups95` Modernben eldobja);
+  ablakválasztó a sor helyett az ablak handle-jét jegyzi meg; a „Display:” választás nem jelöl változást;
+  induláskor nincs Win11-keretes villanás (`OnLoad` → `ApplyStyle`), stílusváltáskor az ablak a képernyőn
+  marad; a félkövér dalcím félkövérként mérve; a 95-ös billentyűzet felső gombjai is benyomódnak; a Modern
+  szöveg ismét Grayscale (ahogy a `Gpu` beállítja, nem Default); Volume elengedésekor hangminta.
+
 ## Fejlesztői kapcsolók
 
 - `--snapshot <mappa>` – VR nélkül PNG-be rajzol minden panelt + egy-egy képet minden monitorról (saját,
@@ -203,6 +247,8 @@ dotnet publish -c Release -o dist
 - `--filtertest` – a lézer-simítás remegése / késése szintenként.
 - `--raytest` – a saját lézer-találatszámítás a futó SteamVR-rel szemben (alpha 0 tesztpanel, pár mp).
 - `--leaktest <gpu|media|idle> [mp]` – egy háttér-összetevő privát memóriája egyedül futtatva, a végén GC-vel.
+- `--wintest <mappa>` – az asztali beállításablak mindkét stílusban (saját config a mappában): kép, méret,
+  és mit felel a 95-ös címsor a WM_NCHITTEST-re.
 - `--focustest` – a szövegmező-felismerés egy képernyőn kívüli tesztablakon (szövegmező, csak olvasható mező,
   gomb, RichEdit), közvetlenül és a fókusz-hookon át.
 

@@ -577,12 +577,17 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dashDirty = false;
         _dashNext = now + 0.5;
         PreparePreviews(_dashView);
-        float s = DashW / SettingsView.W;
-        _dashUi.Begin(_dashPtr, s);
-        _painter.Begin(_dashSurf.Bitmap, Theme.Bg, s);
-        _dashView.Draw(_dashUi);
-        _painter.End();
-        _dashUi.End();
+        if (Theme.Classic)
+            _dashView.Render95(_dashUi, _dashPtr, _dashSurf.Bitmap, DashW / SettingsView.W95W, 0, 0, Theme.W95Teal);
+        else
+        {
+            float s = DashW / SettingsView.W;
+            _dashUi.Begin(_dashPtr, s);
+            _painter.Begin(_dashSurf.Bitmap, Theme.Bg, s);
+            _dashView.Draw(_dashUi);
+            _painter.End();
+            _dashUi.End();
+        }
         if (_dashUi.Interacting || _dashUi.Changed || _dashUi.Animating) _dashDirty = true;
         _dash.SetTexture(_dashSurf.Tex);
     }

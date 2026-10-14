@@ -14,7 +14,7 @@ namespace Orbit;
 // Top bar: Chatbox mode switch + shortcut buttons (select all / copy / paste / cut / undo / redo).
 // In Chatbox mode the keys type into a local line instead of Windows; Enter sends it to the
 // VRChat chatbox over OSC.
-public sealed class KeyboardPanel : IPointerTarget, IDisposable
+public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
 {
     public const int TW = 1480, TH = 676;
     const float U = 96, Gap = 8, Pad = 20, Bar = 84;
@@ -373,9 +373,11 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
             if (BuiltIn) { _hkl = (IntPtr)(-1); ApplyBuiltInLabels(); }
             else RefreshLabels(Native.ForegroundLayout());
         }
+        if (Theme.Classic) { Draw95(); return; }
         _p.Begin(Surf.Bitmap, 0x00000000);
         _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 26);
-        _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
+        if (Theme.Classic) _p.Bevel(new RectangleF(0, 0, TW, TH), Painter.Edge.Window);
+        else _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
         bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
         // press glow fades out after the key is let go
         foreach (var key in new System.Collections.Generic.List<Key>(_flash.Keys))
@@ -387,8 +389,16 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
         if (_chat)
         {
             var f = _chatField;
-            _p.Fill(f, Theme.Mix(Theme.Panel, 0xFF000000, 0.25f), 12);
-            _p.Stroke(f, Theme.Accent, 2, 12);
+            if (Theme.Classic)
+            {
+                _p.Fill(f, Theme.W95Window);              // a 95 text box
+                _p.Bevel(f, Painter.Edge.Sunken);
+            }
+            else
+            {
+                _p.Fill(f, Theme.Mix(Theme.Panel, 0xFF000000, 0.25f), 12);
+                _p.Stroke(f, Theme.Accent, 2, 12);
+            }
             string text = _chatText.ToString();
             var tr = new RectangleF(f.X + 18, f.Y, f.Width - 130, f.Height);
             if (text.Length == 0)
@@ -419,12 +429,27 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
             _flash.TryGetValue(k, out float glow);
             int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && Caps ? 2
                          : k.Action == "chat" && _chat ? 2 : 0;
-            uint bg = down || modState == 2 ? Theme.Accent : hover ? Theme.Panel3 : Theme.Panel2;
-            if (!down && glow > 0) bg = Theme.Mix(bg, Theme.Accent, glow);
-            var kr = down ? RectangleF.Inflate(k.R, -3, -3) : k.R;     // pressed keys sink a little
-            _p.Fill(kr, bg, 12);
-            if (modState == 1) _p.Stroke(kr, Theme.Accent, 3, 12);
-            uint fg = down || modState == 2 ? Theme.OnAccent : Theme.Text;
+            RectangleF kr;
+            uint fg;
+            if (Theme.Classic)
+            {
+                // 95 keys: raised; held down (and locked modifiers) pushed in; a one-shot modifier gets a black frame
+                bool inKey = down || modState == 2;
+                kr = inKey ? new RectangleF(k.R.X + _p.Px, k.R.Y + _p.Px, k.R.Width, k.R.Height) : k.R;
+                _p.Fill(k.R, modState == 2 && !down ? Theme.W95Light : Theme.W95Face);
+                _p.Bevel(k.R, inKey ? Painter.Edge.Pressed : Painter.Edge.Raised);
+                if (modState == 1) _p.Stroke(RectangleF.Inflate(k.R, -5, -5), Theme.W95Dark, 1.5f);
+                fg = Theme.W95Dark;
+            }
+            else
+            {
+                uint bg = down || modState == 2 ? Theme.Accent : hover ? Theme.Panel3 : Theme.Panel2;
+                if (!down && glow > 0) bg = Theme.Mix(bg, Theme.Accent, glow);
+                kr = down ? RectangleF.Inflate(k.R, -3, -3) : k.R;     // pressed keys sink a little
+                _p.Fill(kr, bg, 12);
+                if (modState == 1) _p.Stroke(kr, Theme.Accent, 3, 12);
+                fg = down || modState == 2 ? Theme.OnAccent : Theme.Text;
+            }
             if (k.Kind == Kind.Action)
             {
                 // icon + label, centred
@@ -544,6 +569,7 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
         _dirty = true;
         PlayClick(k.R.Width > U * 1.6f);
         _flash[k] = 1;
+        _held95[slot] = k;
         if (k.Kind == Kind.Modifier)
         {
             _mods[k.Mod] = (_mods[k.Mod] + 1) % 3;
@@ -614,6 +640,7 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
 
     public void Release(int slot)
     {
+        if (_held95[slot] != null) { _held95[slot] = null; _dirty = true; }
         var k = _down[slot];
         if (k == null) return;
         if (_downChat[slot] || _downUnicode[slot])
@@ -679,5 +706,5 @@ public sealed class KeyboardPanel : IPointerTarget, IDisposable
     public bool GrabSnapPreview => false;
     public void GrabEnd() { }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); _sounds.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); _sounds.Dispose(); _canvas95?.Dispose(); }
 }

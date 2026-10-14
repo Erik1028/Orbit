@@ -45,12 +45,17 @@ laser mouse, a full VR keyboard, and its own settings panel you can grab and mov
   lying in bed, the screens come above you
 - **Night mode**: dims every panel, one tap on the watch
 - Themes and any accent colour, panel colour and opacity, laser colour / thickness
+- **Windows 95 style** (Settings > Look > Style): the settings, the watch, the keyboard and the notifications
+  as real 1995 Windows - an "Orbit Properties" property sheet, a Date/Time window on your wrist, MS Sans Serif,
+  3D bevels, drop-down lists - drawn at their original pixel size and enlarged without smoothing
 - **Notifications** in XSOverlay's format (UDP 42069) - e.g. from VRCX
 - **VRChat avatar parameters** compatible with XSOverlay (works with DXOverlay and similar avatar add-ons)
 - Double-tap both grips to hide / show everything (OVR Toolkit style)
 - Starts and stops with SteamVR; runs as administrator so the laser mouse also works in admin windows
 - Settings as a floating panel in VR (open it from the watch) and as a desktop window (tray icon)
 - **Check for updates** button (Settings > General): an installed copy updates itself from GitHub releases
+
+![Windows 95 style](docs/img/windows95.png)
 
 ## Download
 

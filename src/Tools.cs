@@ -291,7 +291,127 @@ static class Tools
             cur.Surf.SavePng(gpu, Path.Combine(dir, "cursor.png"));
             Log.Info($"cursor hotspot {cur.Hotspot}");
         }
+        // the Windows 95 skin: every screen once more
+        cfg.Data.Appearance = new AppearanceConfig { Style = "classic", Clock24h = true };
+        Theme.Apply(cfg.Data.Appearance);
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        for (int t = 0; t < SettingsView.TabCount; t++)
+        {
+            view.Tab = t;
+            ui.ResetAnimations();
+            if (view.ShowsWristPreview) wrist.Draw(data);
+            if (view.ShowsKeyboardPreview) kb.Draw();
+            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            surf.SavePng(gpu, Path.Combine(dir, $"settings{t}_95.png"));
+        }
+        // a drop-down list opened by a click (General: Smoothing), then the panel version
+        view.Tab = SettingsView.TabGeneral;
+        var combo = new System.Numerics.Vector2(170 * 2, 114 * 2);
+        ptr.Move(combo.X, combo.Y);
+        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+        ptr.Press();
+        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+        ptr.Release();
+        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+        ptr.Move(combo.X, combo.Y + 13 * 2 * 3);
+        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+        surf.SavePng(gpu, Path.Combine(dir, "settings_combo_95.png"));
+        void Frame95() => view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+        void Click95(float x, float y) { ptr.Move(x * 2, y * 2); Frame95(); ptr.Press(); Frame95(); ptr.Release(); Frame95(); Frame95(); }
+        // pick "High" (item 3) in the open list
+        int smooth0 = cfg.Data.General.LaserSmoothing;
+        Click95(170, 126 + 3 * 13 + 6);
+        Log.Info($"95 drop-down: picked smoothing {cfg.Data.General.LaserSmoothing} (want 3, was {smooth0})");
+        // a click outside an open list only closes it: the check box under the pointer must not change
+        bool hap0 = cfg.Data.General.Haptics;
+        Click95(170, 114);                  // open again
+        Click95(34, 140);                   // "Haptic ticks", outside the list
+        bool hap1 = cfg.Data.General.Haptics;
+        Click95(34, 140);                   // now it is a real click
+        Log.Info($"95 drop-down: outside click kept haptics {hap0}->{hap1} (want same), next click {cfg.Data.General.Haptics} (want {!hap0})");
+        cfg.Data.General.LaserSmoothing = smooth0;
+        cfg.Data.General.Haptics = hap0;
+        ptr.Leave();
+        ui.ResetAnimations();
+        panelView.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, 0x00000000);
+        surf.SavePng(gpu, Path.Combine(dir, "settings_panel_95.png"));
+        foreach (var face in new[] { "full", "analog", "minimal", "time" })
+        {
+            cfg.Data.Wrist.Face = face;
+            cfg.Data.Wrist.PerfGraph = face == "analog";
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}_95.png"));
+        }
+        cfg.Data.Wrist.Face = "full";
+        cfg.Data.Wrist.PerfGraph = false;
+        kb.Draw();
+        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_95.png"));
+        using (var np = new NotificationPanel(gpu, painter, cfg))
+        {
+            np.AddForPreview(new Notification { Source = "VRCX", Title = "Friend online", Content = "Sam has joined The Black Cat (Friends+)" });
+            np.Draw();
+            np.Surface.SavePng(gpu, Path.Combine(dir, "notifications_95.png"));
+        }
+        System.Globalization.CultureInfo.CurrentCulture = culture;
         Log.Info("snapshot written to " + dir);
+        return 0;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
+
+    // --wintest DIR: the desktop settings window in both styles (with its own config in DIR), on screen
+    // for a moment each: a screenshot, its size at this DPI, and what the 95 caption answers to
+    // WM_NCHITTEST (it must drag the window, but not over its ? and X boxes).
+    public static int WinTest(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+        var data = new PanelData { VrConnected = true };
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        using var kb = new KeyboardPanel(gpu, painter, cfg);
+        var mons = Monitors.Enumerate();
+        foreach (var m in mons)
+            if (cfg.Data.Desktops.All(d => d.Id != m.Id))
+                cfg.Data.Desktops.Add(new DesktopConfig { Id = m.Id, Name = m.Name, Enabled = !m.Virtual });
+        var host = new FakeHost { Cfg = cfg, GpuName = gpu.AdapterName, MonitorList = mons, Data = data, Wrist = wrist, Keyboard = kb };
+        var view = new SettingsView(host);
+        using var win = new SettingsWindow(gpu, painter, view, () =>
+        {
+            if (view.ShowsWristPreview) wrist.Draw(data);
+            if (view.ShowsKeyboardPreview) kb.Draw();
+        }, System.Drawing.SystemIcons.Application);
+        void Pump(double seconds)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.Elapsed.TotalSeconds < seconds) { System.Windows.Forms.Application.DoEvents(); win.Tick(Clock.Now); Thread.Sleep(15); }
+        }
+        int Hit(float cx, float cy)
+        {
+            var p = win.PointToScreen(new System.Drawing.Point((int)cx, (int)cy));
+            return (int)SendMessage(win.Handle, 0x84, IntPtr.Zero, (IntPtr)((p.Y << 16) | (p.X & 0xFFFF)));
+        }
+        int step = 0;
+        foreach (var style in new[] { "classic", "modern", "classic" })
+        {
+            cfg.Data.Appearance.Style = style;
+            Theme.Apply(cfg.Data.Appearance);
+            win.ShowAndFocus();
+            win.TopMost = true;
+            Pump(1.5);
+            float k = win.ClientSize.Width / (float)SettingsView.W95W;
+            Log.Info($"{style}: border {win.FormBorderStyle}, client {win.ClientSize.Width}x{win.ClientSize.Height}, dpi {win.DeviceDpi}, " +
+                     $"hit caption={Hit(100 * k, 10 * k)} help={Hit(720 * k, 12 * k)} close={Hit(737 * k, 12 * k)} page={Hit(100 * k, 100 * k)}");
+            var r = win.RectangleToScreen(win.ClientRectangle);
+            using var bmp = new System.Drawing.Bitmap(r.Width, r.Height);
+            using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(r.Location, System.Drawing.Point.Empty, r.Size);
+            bmp.Save(Path.Combine(dir, $"window{++step}_{style}.png"), System.Drawing.Imaging.ImageFormat.Png);
+        }
+        win.AllowClose = true;
+        win.Close();
         return 0;
     }
 

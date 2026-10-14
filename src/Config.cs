@@ -110,6 +110,7 @@ public sealed class AppearanceConfig
     public float LaserThickness { get; set; } = 3.5f;  // mm
     public bool LaserAlways { get; set; } = false;     // beam also when not pointing at a panel
     public bool NightMode { get; set; } = false;       // every panel in VR dimmed
+    public string Style { get; set; } = "modern";      // modern | classic (Windows 95)
     public float NightBrightness { get; set; } = 0.45f;
 }
 
@@ -235,6 +236,8 @@ public sealed class ConfigStore
     // a change worth keeping but not worth a disk write of its own (a mirrored window's title changes
     // all the time): saved together with the next real change, or when Orbit closes
     public void MarkSoftDirty() => _soft = true;
+
+    public bool Dirty => _dirty;      // a change not on disk yet (the 95 sheet's Apply button)
 
     public void MarkDirty()
     {

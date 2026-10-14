@@ -26,6 +26,7 @@ public sealed class SettingsWindow : Form
     {
         _g = g; _p = p; View = view; _beforeDraw = beforeDraw;
         _ui = new Ui(p);
+        View.OnClose95 = Hide;
         Text = "Orbit";
         Icon = icon;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -39,6 +40,71 @@ public sealed class SettingsWindow : Form
 
     float DpiScale => DeviceDpi / 96f;
 
+    // ---- the Windows 95 style: no Windows 11 frame; the sheet draws its own caption, which drags the window ----
+    bool _classic;      // the style the window is laid out for
+    int _k = 1;         // whole-pixel enlargement of the 750 x 480 sheet
+
+    int Scale95()
+    {
+        var wa = Screen.FromControl(this).WorkingArea;
+        int k = Math.Max(1, (int)MathF.Floor(DpiScale + 0.5f));    // 100-125 %: 1995 size; 150-225 %: 2 x ...
+        while (k > 1 && (SettingsView.W95W * k > wa.Width || SettingsView.W95H * k > wa.Height)) k--;
+        return k;
+    }
+
+    void ApplyStyle()
+    {
+        _classic = Theme.Classic;
+        var centre = new Point(Left + Width / 2, Top + Height / 2);
+        if (_classic)
+        {
+            _k = Scale95();
+            FormBorderStyle = FormBorderStyle.None;
+            ClientSize = new Size(SettingsView.W95W * _k, SettingsView.H95() * _k);
+            int round = 1;      // DWMWCP_DONOTROUND: 1995 had square corners
+            Native.DwmSetWindowAttribute(Handle, 33, ref round, 4);
+        }
+        else
+        {
+            FormBorderStyle = FormBorderStyle.FixedSingle;
+            ClientSize = new Size((int)(SettingsView.W * DpiScale), (int)(SettingsView.H * DpiScale));
+            int round = 0;      // back to the default
+            Native.DwmSetWindowAttribute(Handle, 33, ref round, 4);
+        }
+        if (Visible && WindowState == FormWindowState.Normal)
+        {
+            // same centre, but never past the screen's edges (a taller Modern frame could hide its title bar)
+            var wa = Screen.FromPoint(centre).WorkingArea;
+            int x = Math.Clamp(centre.X - Width / 2, wa.Left, Math.Max(wa.Left, wa.Right - Width));
+            int y = Math.Clamp(centre.Y - Height / 2, wa.Top, Math.Max(wa.Top, wa.Bottom - Height));
+            Location = new Point(x, y);
+        }
+        Dirty = true;
+    }
+
+    float InputScale => _classic ? _k : DpiScale;
+
+    // runs inside the first Show, before anything is on screen: start with the right frame and size
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        if (_classic != Theme.Classic) ApplyStyle();
+    }
+
+    const int WM_NCHITTEST = 0x84, HTCLIENT = 1, HTCAPTION = 2;
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        // the 95 caption bar moves the window like a real one (but not over its ? and X boxes)
+        if (m.Msg == WM_NCHITTEST && _classic && (int)m.Result == HTCLIENT)
+        {
+            var pt = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF)));
+            float x = pt.X / (float)_k, y = pt.Y / (float)_k;
+            if (y >= 3 && y < 21 && x >= 3 && x < SettingsView.W95W - 5 - 16 - 2 - 16) m.Result = HTCAPTION;
+        }
+    }
+
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
@@ -47,8 +113,18 @@ public sealed class SettingsWindow : Form
         CreateSwapChain();
     }
 
+    // a style change can make WinForms re-create the window: its swap chain goes with it
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        _target?.Dispose(); _target = null;
+        _swap?.Dispose(); _swap = null;
+        base.OnHandleDestroyed(e);
+    }
+
     void CreateSwapChain()
     {
+        _target?.Dispose(); _target = null;
+        _swap?.Dispose(); _swap = null;
         var desc = new SwapChainDescription1
         {
             Width = (uint)Math.Max(1, ClientSize.Width), Height = (uint)Math.Max(1, ClientSize.Height),
@@ -70,7 +146,8 @@ public sealed class SettingsWindow : Form
     protected override void OnDpiChanged(DpiChangedEventArgs e)
     {
         base.OnDpiChanged(e);
-        ClientSize = new Size((int)(SettingsView.W * DpiScale), (int)(SettingsView.H * DpiScale));
+        if (_classic) ApplyStyle();
+        else ClientSize = new Size((int)(SettingsView.W * DpiScale), (int)(SettingsView.H * DpiScale));
     }
 
     protected override void OnResize(EventArgs e)
@@ -89,7 +166,7 @@ public sealed class SettingsWindow : Form
     {
         if (_ptr.Down && (e.Button & MouseButtons.Left) == 0) CancelDrag();     // the up was never delivered
         _ptr.Move(e.X, e.Y);
-        if (_ui.NeedsRedrawForMove(_ptr, DpiScale)) Dirty = true;
+        if (_ui.NeedsRedrawForMove(_ptr, InputScale)) Dirty = true;
     }
 
     // Alt+Tab / another window taking the mouse mid-drag: no MouseUp comes, so the slider would stay
@@ -138,6 +215,7 @@ public sealed class SettingsWindow : Form
 
     public void ShowAndFocus()
     {
+        if (_classic != Theme.Classic) ApplyStyle();      // the right frame before it appears
         if (!Visible) Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Activate();
@@ -148,23 +226,28 @@ public sealed class SettingsWindow : Form
     public void Tick(double now)
     {
         if (!Visible || WindowState == FormWindowState.Minimized || _swap == null) return;
+        if (_classic != Theme.Classic) ApplyStyle();
         if (!Dirty && now < _nextRefresh) return;
         Dirty = false;
         _nextRefresh = now + 0.5;
         _beforeDraw?.Invoke();
         EnsureTarget();
-        _ui.Begin(_ptr, DpiScale);
-        _p.Begin(_target, Theme.Bg, DpiScale);
-        View.Draw(_ui);
-        _p.End();
-        _ui.End();
+        if (_classic) View.Render95(_ui, _ptr, _target, _k, 0, 0, Theme.W95Teal);
+        else
+        {
+            _ui.Begin(_ptr, DpiScale);
+            _p.Begin(_target, Theme.Bg, DpiScale);
+            View.Draw(_ui);
+            _p.End();
+            _ui.End();
+        }
         _swap.Present(0, PresentFlags.None);
         if (_ui.Interacting || _ui.Changed || _ui.Animating || _ui.Pressed || _ui.Released) Dirty = true;
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _target?.Dispose(); _swap?.Dispose(); }
+        if (disposing) { _target?.Dispose(); _swap?.Dispose(); View.Dispose95(); }
         base.Dispose(disposing);
     }
 }

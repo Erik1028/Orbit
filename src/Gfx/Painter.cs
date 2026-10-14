@@ -29,6 +29,30 @@ static class Theme
     public const uint Bad = 0xFFF87171;
     public static int Version;                   // bumped on every appearance change
 
+    // ---- the Windows 95 skin (Look > Style) ----
+    // Like Mixtape's: it swaps the whole token layer at once - surfaces, text, accent, corners, typeface -
+    // so the call sites need no branch; only the places that draw a SHAPE 1995 drew differently (a raised
+    // button, a sunken field, a navy caption, a checkbox) ask Classic. The modern look is untouched.
+    public static bool Classic { get; private set; }
+    public const uint ClassicLaser = 0xFF1084D0;   // "same as accent" in the 95 skin: navy would vanish in a dark world
+    public const uint W95Face = 0xFFC0C0C0, W95Light = 0xFFDFDFDF, W95Hi = 0xFFFFFFFF, W95Shadow = 0xFF808080,
+                      W95Dark = 0xFF000000, W95Navy = 0xFF000080, W95Teal = 0xFF008080, W95Window = 0xFFFFFFFF;
+
+    // the modern text colours are constants (used as default arguments); under the skin they are drawn as
+    // the 1995 ones - RGB swapped, alpha kept
+    public static uint Skin(uint c)
+    {
+        if (!Classic) return c;
+        uint rgb = c & 0xFFFFFF, a = c & 0xFF000000;
+        return rgb switch
+        {
+            Text & 0xFFFFFF => a | 0x000000,
+            Dim & 0xFFFFFF => a | 0x404040,
+            Faint & 0xFFFFFF => a | 0x808080,
+            _ => c,          // only the text greys: Good / Warn / Bad are also colours people pick (swatches)
+        };
+    }
+
     public static readonly uint[] AccentPresets =
         { 0xFF45C1FF, 0xFF4F8BFF, 0xFF8B5CF6, 0xFFF472B6, 0xFFF87171, 0xFFFB923C, 0xFFFBBF24, 0xFF4ADE80, 0xFF2DD4BF, 0xFFE5E7EB };
     public static readonly uint[] PanelPresets =
@@ -37,6 +61,20 @@ static class Theme
 
     public static void Apply(AppearanceConfig a)
     {
+        Classic = a.Style == "classic";
+        if (Classic)
+        {
+            // one grey window face for every piece of chrome, white wells, black text, navy selection
+            Bg = Panel = Panel2 = W95Face;
+            Panel3 = W95Light;
+            Border = W95Shadow;
+            OverlayBg = W95Face;
+            Accent = W95Navy;
+            OnAccent = 0xFFFFFFFF;
+            Laser = a.LaserColor == 0 ? ClassicLaser : 0xFF000000 | (a.LaserColor & 0xFFFFFF);
+            Version++;
+            return;
+        }
         uint pc = 0xFF000000 | (a.PanelColor & 0xFFFFFF);
         Bg = pc;
         Panel = Mix(pc, 0xFFFFFFFF, 0.035f);
@@ -92,6 +130,8 @@ static class Theme
     public const string IcoDownload = "\uE896";
     public const string IcoDelete = "\uE74D";
 
+    public static string ClassicFont = "Microsoft Sans Serif";   // the TrueType twin of MS Sans Serif
+
     public static void ResolveFonts(Vortice.DirectWrite.IDWriteFactory dw)
     {
         try
@@ -101,9 +141,14 @@ static class Theme
             if (!has(UiFont)) UiFont = "Segoe UI";
             if (!has(DisplayFont)) DisplayFont = "Segoe UI";
             if (!has(IconFont)) IconFont = "Segoe MDL2 Assets";
+            if (!has(ClassicFont)) ClassicFont = "Tahoma";
         }
         catch { }
     }
+
+    // the typeface for UI text and big numbers in the current skin
+    public static string Font => Classic ? ClassicFont : UiFont;
+    public static string Display => Classic ? ClassicFont : DisplayFont;
 
     // Segoe Fluent Icons code points
     public const string IcoKeyboard = "";
@@ -154,6 +199,56 @@ public sealed class Painter : IDisposable
 
     public Painter(Gpu g) { _g = g; }
 
+    public Gpu Gpu => _g;
+
+    // ---- pixel mode: the Windows 95 look, drawn at real 1995 pixel size ----
+    // Aliased shapes, monochrome hinted glyphs measured like GDI's - text the way MS Sans Serif sat on a
+    // 640 x 480 screen. The canvas is then blown up with whole pixels (ImageNearest).
+    public bool PixelMode { get; private set; }
+    IDWriteRenderingParams _aliasedText;
+
+    public void BeginPixel(ID2D1Image target, uint clear)
+    {
+        Begin(target, clear, 1);
+        PixelMode = true;
+        Dc.AntialiasMode = AntialiasMode.Aliased;
+        Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Aliased;
+        _aliasedText ??= _g.DWrite.CreateCustomRenderingParams(1.8f, 0f, 0f, PixelGeometry.Flat, RenderingMode.Aliased);
+        Dc.TextRenderingParams = _aliasedText;
+    }
+
+    // the 50 % dither of 1995 (a latched toolbar button, a scroll bar's track): alternate pixels of two colours
+    ID2D1BitmapBrush _checker;
+    (uint, uint) _checkerColors;
+
+    public void FillChecker(RectangleF r, uint a = 0xFFFFFFFF, uint b = 0xFFC0C0C0)
+    {
+        if (_checker == null || _checkerColors != (a, b))
+        {
+            _checker?.Dispose();
+            using var bmp = CreateBitmap(new[] { a, b, b, a }, 2, 2);
+            _checker = Dc.CreateBitmapBrush(bmp, new BitmapBrushProperties
+            {
+                ExtendModeX = ExtendMode.Wrap, ExtendModeY = ExtendMode.Wrap,
+                InterpolationMode = Vortice.Direct2D1.BitmapInterpolationMode.NearestNeighbor,
+            });
+            _checkerColors = (a, b);
+        }
+        Dc.FillRectangle(Raw(r), _checker);
+    }
+
+    // a little pixel pattern ('k' = a pixel in colour c) - the check mark, the caption buttons' glyphs
+    public void Pixels(string[] map, float x, float y, uint c)
+    {
+        for (int row = 0; row < map.Length; row++)
+            for (int col = 0; col < map[row].Length; col++)
+                if (map[row][col] == 'k') Fill(new RectangleF(x + col, y + row, 1, 1), c);
+    }
+
+    // a bitmap at whole-pixel magnification, no smoothing
+    public void ImageNearest(ID2D1Bitmap bmp, RectangleF dst) =>
+        Dc.DrawBitmap(bmp, Raw(dst), 1, Vortice.Direct2D1.BitmapInterpolationMode.NearestNeighbor, null);
+
     public void Begin(ID2D1Image target, uint clear, float scale = 1)
     {
         if (_drawing) End();        // a previous frame threw half-way: close it before starting another
@@ -162,6 +257,11 @@ public sealed class Painter : IDisposable
         Dc.Target = target;
         Dc.BeginDraw();
         Dc.Transform = Matrix3x2.CreateScale(scale);
+        // 1995 had no anti-aliasing: the skin's bevels and squares stay pixel-sharp
+        Dc.AntialiasMode = Theme.Classic ? AntialiasMode.Aliased : AntialiasMode.PerPrimitive;
+        PixelMode = false;
+        Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;     // what Gpu sets up (1.3.3)
+        Dc.TextRenderingParams = null;
         Dc.Clear(ToColor(clear));
     }
 
@@ -179,6 +279,7 @@ public sealed class Painter : IDisposable
 
     ID2D1SolidColorBrush Brush(uint c)
     {
+        c = Theme.Skin(c);
         if (_brush == null) { _brush = Dc.CreateSolidColorBrush(ToColor(c)); _brushColor = c; }
         else if (c != _brushColor) { _brush.Color = ToColor(c); _brushColor = c; }
         return _brush;
@@ -202,14 +303,105 @@ public sealed class Painter : IDisposable
 
     public void Fill(RectangleF r, uint c, float radius = 0)
     {
+        if (Theme.Classic) radius = 0;        // square corners in the 95 skin
         if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c));
         else Dc.FillRectangle(Raw(r), Brush(c));
     }
 
     public void Stroke(RectangleF r, uint c, float width = 1, float radius = 0)
     {
+        if (Theme.Classic) radius = 0;
         if (radius > 0) Dc.DrawRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c), width);
         else Dc.DrawRectangle(Raw(r), Brush(c), width);
+    }
+
+    // ---- Windows 95 shapes ----
+
+    // one device pixel - two from 1.5x up - so the 3D edges stay crisp at any scale
+    public float Px => MathF.Max(1, MathF.Round(Scale)) / Scale;
+
+    public enum Edge { Raised, Window, Pressed, Sunken, Etched }
+
+    // the two-pixel 3D edges of the era: Raised = a button, Window = a window frame,
+    // Pressed = a button held down, Sunken = a text box / list / colour well, Etched = a group box line
+    public void Bevel(RectangleF r, Edge e)
+    {
+        float p = Px;
+        var (tl1, br1, tl2, br2) = e switch
+        {
+            Edge.Raised => (Theme.W95Hi, Theme.W95Dark, Theme.W95Light, Theme.W95Shadow),
+            Edge.Window => (Theme.W95Light, Theme.W95Dark, Theme.W95Hi, Theme.W95Shadow),
+            Edge.Pressed => (Theme.W95Dark, Theme.W95Hi, Theme.W95Shadow, Theme.W95Light),
+            Edge.Sunken => (Theme.W95Shadow, Theme.W95Hi, Theme.W95Dark, Theme.W95Light),
+            _ => (Theme.W95Shadow, Theme.W95Hi, Theme.W95Hi, Theme.W95Shadow),
+        };
+        Frame(r, tl1, br1, p);
+        Frame(RectangleF.Inflate(r, -p, -p), tl2, br2, p);
+    }
+
+    void Frame(RectangleF r, uint tl, uint br, float p)
+    {
+        Fill(new RectangleF(r.X, r.Y, r.Width, p), tl);
+        Fill(new RectangleF(r.X, r.Y, p, r.Height), tl);
+        Fill(new RectangleF(r.X, r.Bottom - p, r.Width, p), br);
+        Fill(new RectangleF(r.Right - p, r.Y, p, r.Height), br);
+    }
+
+    // a 95 push button: raised; held = black frame + flat grey edge; latched (a toggle that is in) =
+    // dithered + pushed in; isDefault = the black frame of a dialog's default button. Returns the face.
+    public RectangleF ButtonFace95(RectangleF r, bool isDefault, bool down, bool latched)
+    {
+        var b = r;
+        if (isDefault || down)
+        {
+            Stroke(new RectangleF(r.X + 0.5f, r.Y + 0.5f, r.Width - 1, r.Height - 1), Theme.W95Dark, 1);
+            b = RectangleF.Inflate(r, -1, -1);
+        }
+        if (latched && !down) FillChecker(b);
+        else Fill(b, Theme.W95Face);
+        if (down)
+            Stroke(new RectangleF(b.X + 0.5f, b.Y + 0.5f, b.Width - 1, b.Height - 1), Theme.W95Shadow, 1);
+        else
+            Bevel(b, latched ? Edge.Pressed : Edge.Raised);
+        return b;
+    }
+
+    // a groove across: the line between sections of a 95 dialog
+    public void EtchedLine(float x1, float x2, float y)
+    {
+        float p = Px;
+        Fill(new RectangleF(x1, y, x2 - x1, p), Theme.W95Shadow);
+        Fill(new RectangleF(x1, y + p, x2 - x1, p), Theme.W95Hi);
+    }
+
+    // an active window's navy title bar
+    public void Caption(RectangleF r, string text, float size = 13)
+    {
+        Fill(r, Theme.W95Navy);
+        Text(text, new RectangleF(r.X + 6, r.Y, r.Width - 12, r.Height), 0xFFFFFFFF, size, FontWeight.Bold);
+    }
+
+    // greyed-out text the 95 way: etched - white, then grey on top one pixel up-left
+    public void DisabledText(string s, RectangleF r, float size, FontWeight w = FontWeight.Normal,
+        TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center)
+    {
+        float p = Px;
+        Text(s, new RectangleF(r.X + p, r.Y + p, r.Width, r.Height), Theme.W95Hi, size, w, h, v);
+        Text(s, r, Theme.W95Shadow, size, w, h, v);
+    }
+
+    // a filled polygon (the 95 clock's hands)
+    public void Polygon(Vector2[] pts, uint c)
+    {
+        using var geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            sink.BeginFigure(pts[0], FigureBegin.Filled);
+            for (int i = 1; i < pts.Length; i++) sink.AddLine(pts[i]);
+            sink.EndFigure(FigureEnd.Closed);
+            sink.Close();
+        }
+        Dc.FillGeometry(geo, Brush(c));
     }
 
     public void Line(float x1, float y1, float x2, float y2, uint c, float width = 1) =>
@@ -226,8 +418,11 @@ public sealed class Painter : IDisposable
         string family = null, bool wrap = false)
     {
         if (string.IsNullOrEmpty(s)) return;
-        var f = Format(family ?? Theme.UiFont, size, w, h, v, wrap);
-        Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip);
+        var f = Format(family ?? Theme.Font, size, w, h, v, wrap);
+        if (PixelMode)
+            Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip, Vortice.DCommon.MeasuringMode.GdiClassic);
+        else
+            Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip);
     }
 
     public void Icon(string glyph, RectangleF r, uint c, float size) =>
@@ -236,11 +431,13 @@ public sealed class Painter : IDisposable
     public float MeasureWidth(string s, float size, FontWeight w = FontWeight.Normal, string family = null)
     {
         if (string.IsNullOrEmpty(s)) return 0;
-        family ??= Theme.UiFont;
-        var key = (s, size, w, family);
+        family ??= Theme.Font;
+        var key = (s, size, w, PixelMode ? family + "\u0001px" : family);
         if (_widths.TryGetValue(key, out float cached)) return cached;
         var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, false);
-        using var layout = _g.DWrite.CreateTextLayout(s, f, 10000, 1000);
+        using var layout = PixelMode
+            ? _g.DWrite.CreateGdiCompatibleTextLayout(s, (uint)s.Length, f, 10000, 1000, 1f, null, false)
+            : _g.DWrite.CreateTextLayout(s, f, 10000, 1000);
         float width = layout.Metrics.WidthIncludingTrailingWhitespace;
         if (_widths.Count > 2000) _widths.Clear();     // chat text etc. would grow it forever
         _widths[key] = width;

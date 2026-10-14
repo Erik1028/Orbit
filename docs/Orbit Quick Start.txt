@@ -44,7 +44,7 @@ SETTINGS
 - Tabs: Desktops (which monitors, size, curve, join/separate, smart frame rate),
   Windows (mirror single app windows), Layouts (Desk / Bed / Couch profiles),
   Wrist (watch face, 24-hour clock, frame-time graph), Keyboard (sounds, size,
-  pop-up for text fields), Look (themes, any accent colour, panel colour, laser
+  pop-up for text fields), Look (Modern or Windows 95 style, themes, any accent colour, panel colour, laser
   colour / thickness / always visible, night mode), General (laser smoothing,
   haptics, SteamVR start, admin, VRChat OSC, pause when the headset is off).
 

@@ -1,0 +1,606 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using Vortice.Direct2D1;
+using Vortice.DirectWrite;
+
+namespace Orbit;
+
+// The settings in the Windows 95 style: an "Orbit Properties" property sheet at real 1995 pixel size
+// (750 x 480, enlarged with whole pixels by the host). Tabs, group boxes, "Label:  [control]" rows,
+// drop-down lists, access keys, OK / Close / Apply. Same settings and actions as the modern screen.
+public sealed partial class SettingsView
+{
+    public const int W95W = 750, W95H = 480;
+    public Action OnClose95;      // the desktop window's own "close" (the VR panel uses OnClose)
+
+    const uint K95 = 0xFF000000, W95 = 0xFFFFFFFF, Grey95 = 0xFF808080;
+    const float RowH = 21;        // a drop-down list / text box row
+
+    Surface _canvas95;
+
+    // Draws the sheet at 1995 size, then blows it up k times into 'target' at (ox, oy).
+    public void Render95(Ui ui, PointerState ptr, ID2D1Image target, int k, float ox, float oy, uint backdrop)
+    {
+        var p = ui.P;
+        _canvas95 ??= new Surface(p.Gpu, W95W, W95H);
+        ui.Begin(ptr, k, ox, oy);
+        ui.Canvas95 = new SizeF(W95W, W95H);
+        p.BeginPixel(_canvas95.Bitmap, Theme.W95Face);
+        Draw95(ui);
+        ui.Popups95();
+        p.End();
+        p.Begin(target, backdrop);
+        p.ImageNearest(_canvas95.Bitmap, new RectangleF(ox, oy, W95W * k, W95H * k));
+        p.End();
+        ui.End();
+    }
+
+    public void Dispose95() { _canvas95?.Dispose(); _canvas95 = null; }
+
+    public static int H95() => W95H;
+
+    public void Draw95(Ui ui)
+    {
+        var p = ui.P;
+        var all = new RectangleF(0, 0, W95W, W95H);
+        p.Fill(all, Theme.W95Face);
+        p.Bevel(all, Painter.Edge.Window);
+        var close = OnClose ?? OnClose95;
+        ui.Caption95(new RectangleF(3, 3, W95W - 6, 18), "Orbit Properties");
+        if (ui.CaptionHelp95("p95.help", W95W - 5 - 16 - 2 - 16, 5)) Tab = TabGeneral;   // "What's this?" -> About
+        if (ui.CaptionClose95("p95.close", W95W - 5 - 16, 5, close != null)) close?.Invoke();
+
+        // the page first, then the tabs over its top edge
+        var page = new RectangleF(6, 46, W95W - 12, 394);
+        p.Fill(page, Theme.W95Face);
+        p.Bevel(page, Painter.Edge.Window);
+        int t = Tab;
+        if (ui.Tabs95("p95.tabs", 8, 28, Tabs, ref t)) Tab = t;
+
+        switch (Tab)
+        {
+            case TabDesktops: Desktops95(ui); break;
+            case TabWindows: Windows95(ui); break;
+            case TabLayouts: Layouts95(ui); break;
+            case TabWrist: Wrist95(ui); break;
+            case TabKeyboard: Keyboard95(ui); break;
+            case TabLook: Look95(ui); break;
+            default: General95(ui); break;
+        }
+
+        // bottom row: quick actions on the left, OK / Close / Apply on the right. Everything applies at once
+        // (like a 95 sheet after PSM_CANCELTOCLOSE, so "Close", not a Cancel that could not undo);
+        // Apply lights up until the change is saved to disk.
+        const float by = 448;
+        if (ui.Button95("p95.rc", new RectangleF(9, by, 75, 23), "Re&center", _h.VrConnected)) _h.Recenter();
+        if (ui.Button95("p95.kb", new RectangleF(90, by, 95, 23), C.Keyboard.Visible ? "Hide &keyboard" : "Show &keyboard"))
+            _h.ToggleKeyboard();
+        if (ui.Button95("p95.desk", new RectangleF(191, by, 95, 23), C.General.DesktopsVisible ? "Hide &desktops" : "Show &desktops"))
+            _h.ToggleDesktops();
+        float x = W95W - 9 - 75;
+        if (ui.Button95("p95.apply", new RectangleF(x, by, 75, 23), "&Apply", _h.Cfg.Dirty)) _h.Cfg.SaveIfDue(force: true);
+        x -= 6 + 75;
+        if (ui.Button95("p95.cl", new RectangleF(x, by, 75, 23), "Close", close != null)) close?.Invoke();
+        x -= 6 + 75;
+        if (ui.Button95("p95.ok", new RectangleF(x, by, 75, 23), "OK", true, isDefault: true))
+        {
+            _h.Cfg.SaveIfDue(force: true);
+            close?.Invoke();
+        }
+        if (ui.Changed) _h.Cfg.MarkDirty();
+    }
+
+    // ---- rows ----
+
+    void Lbl(Ui ui, float x, float y, string text, bool enabled = true) => ui.Label95(text, new RectangleF(x, y, 200, RowH), enabled);
+
+    bool ComboRow(Ui ui, string id, float x, float y, float cx, float cw, string label, string[] items, ref int index, bool enabled = true)
+    {
+        Lbl(ui, x, y, label, enabled);
+        return ui.Combo95(id, new RectangleF(cx, y, cw, RowH), items, ref index, enabled);
+    }
+
+    // label, trackbar, value - 30 px high
+    bool TrackRow(Ui ui, string id, float x, float y, float cx, float tw, float vw, string label, ref float v, float min, float max,
+        string value, bool enabled = true)
+    {
+        ui.Label95(label, new RectangleF(x, y + 3, cx - x, 15), enabled);
+        bool ch = ui.Track95(id, new RectangleF(cx - 6, y, tw + 12, 30), ref v, min, max, enabled);
+        ui.Text95(Fit95(ui, value, vw), new RectangleF(cx + tw + 10, y + 3, vw, 15), K95, false, TextAlignment.Leading, enabled);
+        return ch;
+    }
+
+    void Hint(Ui ui, float x, float y, float w, string text, float h = 13) =>
+        ui.Text95(text, new RectangleF(x, y, w, h), K95, wrap: h > 13);
+
+    static readonly string[] Attach4 = { "World", "Left hand", "Right hand", "Head" };
+
+    string Fit95(Ui ui, string s, float w)
+    {
+        if (string.IsNullOrEmpty(s) || ui.Width95(s) <= w) return s;
+        int lo = 0, hi = s.Length - 1;
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (ui.Width95(s[..mid] + "...") <= w) lo = mid; else hi = mid - 1;
+        }
+        if (lo > 0 && char.IsHighSurrogate(s[lo - 1])) lo--;
+        return s[..lo].TrimEnd() + "...";
+    }
+
+    static string Radius(float width, float curve) => curve < 0.005f ? "flat" : $"radius {width / (2 * MathF.PI * curve):0.00} m";
+
+    // ---------------- Desktops (Display Properties' Settings tab) ----------------
+
+    void Desktops95(Ui ui)
+    {
+        var p = ui.P;
+        var mons = _h.MonitorList;
+        var box = new RectangleF(16, 56, 718, 100);
+        p.Fill(box, Theme.W95Face);
+        p.Bevel(box, Painter.Edge.Sunken);
+        if (mons.Count == 0) { ui.Text95("No monitors found.", new RectangleF(28, 98, 300, 13)); return; }
+        if (_selected == null || !mons.Any(m => m.Id == _selected)) _selected = mons.FirstOrDefault(m => !m.Virtual)?.Id ?? mons[0].Id;
+
+        // the arrangement: little numbered monitors, teal when they are shown in VR
+        var map = RectangleF.Inflate(box, -10, -8);
+        int minX = mons.Min(m => m.X), minY = mons.Min(m => m.Y), maxX = mons.Max(m => m.X + m.W), maxY = mons.Max(m => m.Y + m.H);
+        float s = Math.Min(map.Width / (maxX - minX), map.Height / (maxY - minY));
+        float ox = map.X + MathF.Round((map.Width - (maxX - minX) * s) / 2), oy = map.Y + MathF.Round((map.Height - (maxY - minY) * s) / 2);
+        var names = new string[mons.Count];
+        int sel = 0;
+        for (int i = 0; i < mons.Count; i++)
+        {
+            var m = mons[i];
+            var dc = C.Desktops.FirstOrDefault(d => d.Id == m.Id);
+            var r = new RectangleF(MathF.Round(ox + (m.X - minX) * s) + 2, MathF.Round(oy + (m.Y - minY) * s) + 2,
+                MathF.Round(m.W * s) - 4, MathF.Round(m.H * s) - 4);
+            bool on = m.Id == _selected, en = dc?.Enabled ?? false;
+            if (on) sel = i;
+            p.Fill(r, Theme.W95Face);
+            p.Bevel(r, Painter.Edge.Raised);
+            var screen = RectangleF.Inflate(r, -4, -4);
+            p.Fill(screen, en ? Theme.W95Teal : Grey95);
+            p.Bevel(RectangleF.Inflate(screen, 1, 1), Painter.Edge.Sunken);
+            ui.Text95((i + 1).ToString(), screen, W95, true, TextAlignment.Center, size: 16);
+            if (on) p.Stroke(new RectangleF(r.X - 1.5f, r.Y - 1.5f, r.Width + 3, r.Height + 3), K95, 1);
+            if (ui.Hover(r) && ui.Pressed) _selected = m.Id;
+            names[i] = $"{i + 1}. {m.Name} ({m.W} x {m.H}){(m.Primary ? ", primary" : "")}";
+        }
+        bool changedBefore = ui.Changed;
+        if (ComboRow(ui, "d95.disp", 16, 164, 70, 664, "&Display:", names, ref sel))
+        {
+            _selected = mons[sel].Id;
+            ui.Changed = changedBefore;         // only a selection, not a setting
+        }
+        var mon = mons.First(m => m.Id == _selected);
+        var cfg = C.Desktops.FirstOrDefault(d => d.Id == mon.Id);
+        if (cfg == null) return;
+
+        int gs = _h.GroupSize(cfg);
+        ui.Group95(new RectangleF(16, 192, 350, 238), gs > 1 ? $"This monitor (in a row of {gs})" : "This monitor");
+        bool en2 = cfg.Enabled;
+        if (ui.Check95("d95.en", 28, 212, "&Show in VR", ref en2)) _h.SetDesktopEnabled(cfg, en2);
+        int ai = Math.Max(0, Array.IndexOf(AttachIds, cfg.Place.Attach ?? "world")), a2 = ai;
+        if (ComboRow(ui, "d95.att", 28, 234, 108, 120, "Attached &to:", Attach4, ref a2, cfg.Enabled)) _h.SetDesktopAttach(cfg, AttachIds[a2]);
+        bool mouse = cfg.Mouse;
+        if (ui.Check95("d95.m", 28, 264, "&Mouse control (the laser moves the cursor)", ref mouse, cfg.Enabled)) cfg.Mouse = mouse;
+        float v = cfg.Width;
+        if (TrackRow(ui, "d95.w", 28, 286, 108, 150, 90, "Si&ze:", ref v, 0.3f, 3f, $"{cfg.Width:0.00} m wide", cfg.Enabled))
+        { cfg.Width = v; _h.DesktopEdited(cfg); }
+        v = cfg.Opacity;
+        if (TrackRow(ui, "d95.o", 28, 318, 108, 150, 90, "&Opacity:", ref v, 0.2f, 1f, $"{cfg.Opacity * 100:0}%", cfg.Enabled)) cfg.Opacity = v;
+        v = cfg.Curvature;
+        if (TrackRow(ui, "d95.c", 28, 350, 108, 150, 90, "C&urvature:", ref v, 0f, 0.5f, Radius(cfg.Width, cfg.Curvature), cfg.Enabled))
+        { cfg.Curvature = v < 0.005f ? 0 : v; _h.DesktopEdited(cfg); }
+        bool live = _h.VrConnected && cfg.Enabled;
+        if (ui.Button95("d95.reset", new RectangleF(28, 396, 100, 23), "&Reset position", live)) _h.ResetDesktop(cfg);
+        if (ui.Button95("d95.fit", new RectangleF(134, 396, 110, 23), "Curve &around me", live && (cfg.Place.Attach ?? "world") == "world"))
+            _h.FitCurve(cfg);
+
+        ui.Group95(new RectangleF(376, 192, 358, 238), "All monitors");
+        bool smart = C.General.SmartCapture;
+        ui.Check95("d95.smart", 388, 212, "Smart &frame rate", ref smart);
+        C.General.SmartCapture = smart;
+        Hint(ui, 407, 230, 315, "Where you look or point: headset rate. At the edge of your view 15 fps, behind you 4 fps.", 28);
+        float fps = C.General.CaptureFps;
+        TrackRow(ui, "d95.fps", 388, 266, 476, 150, 90, "Ca&pture rate:", ref fps, 15, 90, $"{Math.Round(fps):0} fps", !smart);
+        C.General.CaptureFps = (int)Math.Round(fps);
+        if (ui.Button95("d95.join", new RectangleF(388, 312, 170, 23), "&Join into one curved screen", _h.VrConnected)) _h.JoinAllDesktops();
+        if (ui.Button95("d95.sep", new RectangleF(564, 312, 75, 23), "S&eparate")) _h.SeparateDesktops();
+        Hint(ui, 388, 344, 334, "Drop a monitor next to another one in VR and it snaps into the row. Click a monitor above to set it up.", 28);
+    }
+
+    // ---------------- Windows ----------------
+
+    void Windows95(Ui ui)
+    {
+        var p = ui.P;
+        var list = C.Windows;
+        if (_selWin != null && !list.Any(w => w.Id == _selWin)) _selWin = null;
+        if (_selWin == null && list.Count > 0) _selWin = list[0].Id;
+
+        ui.Group95(new RectangleF(16, 56, 350, 374), "Mirrored windows");
+        int sel = list.FindIndex(w => w.Id == _selWin);
+        int hit = ui.List95("w95.list", new RectangleF(28, 76, 326, 260), list.Count, Picking ? -1 : sel, (i, r, on) =>
+        {
+            var wc = list[i];
+            W95Icons.Draw(p, W95Icons.Id.Window, r.X + 1, r.Y);
+            string title = string.IsNullOrEmpty(wc.Title) ? wc.Process : wc.Title;
+            ui.Text95(Fit95(ui, title, r.Width - 24), new RectangleF(r.X + 20, r.Y, r.Width - 22, r.Height), on ? W95 : wc.Enabled ? K95 : Grey95);
+        });
+        if (hit >= 0) { _selWin = list[hit].Id; Picking = false; _pickHwnd = IntPtr.Zero; }
+        if (list.Count == 0) ui.Text95("(none)", new RectangleF(32, 80, 300, 13), Grey95);
+        var cur = list.FirstOrDefault(w => w.Id == _selWin);
+        if (ui.Button95("w95.add", new RectangleF(28, 344, 75, 23), "&Add...", list.Count > 0 && list.Count < MaxWindows && !Picking))
+        {
+            Picking = true;
+            _pickHwnd = IntPtr.Zero;
+        }
+        if (ui.Button95("w95.rm", new RectangleF(109, 344, 75, 23), "&Remove", cur != null && !Picking))
+        {
+            _h.RemoveWindow(cur);
+            _selWin = null;
+            return;
+        }
+        Hint(ui, 28, 376, 326, "Mirror one app window instead of a whole monitor. Clicking it in VR brings it to the front on your PC.", 40);
+
+        if (Picking || list.Count == 0) { Picker95(ui, list.Count > 0); return; }
+        if (cur == null) return;
+
+        ui.Group95(new RectangleF(376, 56, 358, 374), "This window");
+        W95Icons.Draw(p, W95Icons.Id.Window, 388, 76);
+        ui.Text95(Fit95(ui, string.IsNullOrEmpty(cur.Title) ? cur.Process : cur.Title, 310), new RectangleF(410, 76, 312, 16), K95, true);
+        ui.Text95(Fit95(ui, $"{cur.Process} - {_h.WindowStatus(cur)}", 310), new RectangleF(410, 92, 312, 13), Grey95);
+        bool en = cur.Enabled;
+        if (ui.Check95("wn95.en", 388, 118, "&Show in VR", ref en)) _h.SetWindowEnabled(cur, en);
+        int ai = Math.Max(0, Array.IndexOf(AttachIds, cur.Place.Attach ?? "world")), a2 = ai;
+        if (ComboRow(ui, "wn95.att", 388, 140, 468, 120, "Attached &to:", Attach4, ref a2, cur.Enabled)) _h.SetWindowAttach(cur, AttachIds[a2]);
+        bool mouse = cur.Mouse;
+        if (ui.Check95("wn95.m", 388, 170, "&Mouse control (the laser moves the cursor)", ref mouse, cur.Enabled)) cur.Mouse = mouse;
+        float v = cur.Width;
+        if (TrackRow(ui, "wn95.w", 388, 192, 468, 150, 90, "Si&ze:", ref v, 0.15f, 3f, $"{cur.Width:0.00} m wide", cur.Enabled)) cur.Width = v;
+        v = cur.Opacity;
+        if (TrackRow(ui, "wn95.o", 388, 224, 468, 150, 90, "&Opacity:", ref v, 0.2f, 1f, $"{cur.Opacity * 100:0}%", cur.Enabled)) cur.Opacity = v;
+        v = cur.Curvature;
+        if (TrackRow(ui, "wn95.c", 388, 256, 468, 150, 90, "C&urvature:", ref v, 0f, 0.5f, Radius(cur.Width, cur.Curvature), cur.Enabled))
+            cur.Curvature = v < 0.005f ? 0 : v;
+        if (ui.Button95("wn95.reset", new RectangleF(388, 300, 100, 23), "R&eset position", _h.VrConnected && cur.Enabled)) _h.ResetWindow(cur);
+    }
+
+    IntPtr _pickHwnd;      // the window chosen in the picker (by handle: the list re-reads itself every second)
+
+    void Picker95(Ui ui, bool canCancel)
+    {
+        var p = ui.P;
+        ui.Group95(new RectangleF(376, 56, 358, 374), "Add a window");
+        var open = _pickOpen != null && (ui.Pressed || ui.Down || ui.Released || ui.Interacting) ? _pickOpen : (_pickOpen = _h.OpenWindows());
+        int sel = -1;
+        for (int i = 0; i < open.Count; i++) if (open[i].Hwnd == _pickHwnd) { sel = i; break; }
+        Lbl(ui, 388, 70, "&Choose the window to mirror:");
+        int hit = ui.List95("pk95.list", new RectangleF(388, 92, 334, 292), open.Count, sel, (i, r, on) =>
+        {
+            var w = open[i];
+            bool mirrored = _h.IsMirrored(w.Hwnd);
+            W95Icons.Draw(p, W95Icons.Id.Window, r.X + 1, r.Y);
+            ui.Text95(Fit95(ui, w.Title, r.Width - 112), new RectangleF(r.X + 20, r.Y, r.Width - 110, r.Height), on ? W95 : mirrored ? Grey95 : K95);
+            ui.Text95(Fit95(ui, mirrored ? "(mirrored)" : w.Process, 84), new RectangleF(r.Right - 88, r.Y, 86, r.Height), on ? W95 : Grey95);
+        });
+        if (hit >= 0) { sel = hit; _pickHwnd = open[hit].Hwnd; }
+        bool can = sel >= 0 && !_h.IsMirrored(open[sel].Hwnd) && C.Windows.Count < MaxWindows;
+        float bx = 734 - 12 - 75;
+        if (canCancel && ui.Button95("pk95.cancel", new RectangleF(bx, 396, 75, 23), "Cancel"))
+        {
+            Picking = false;
+            _pickHwnd = IntPtr.Zero;
+        }
+        if (canCancel) bx -= 81;
+        if (ui.Button95("pk95.ok", new RectangleF(bx, 396, 75, 23), "&Mirror", can, isDefault: true))
+        {
+            _selWin = _h.AddWindow(open[sel]).Id;
+            Picking = false;
+            _pickHwnd = IntPtr.Zero;
+        }
+    }
+
+    // ---------------- Layouts ----------------
+
+    void Layouts95(Ui ui)
+    {
+        var list = C.Layouts;
+        if (_selLayout == null || !list.Any(l => l.Name == _selLayout)) _selLayout = C.ActiveLayout;
+        ui.Group95(new RectangleF(16, 56, 350, 374), "Layout profiles");
+        int sel = list.FindIndex(l => l.Name == _selLayout);
+        int hit = ui.List95("l95.list", new RectangleF(28, 76, 326, 4 + 6 * 18), list.Count, sel, (i, r, on) =>
+        {
+            var l = list[i];
+            W95Icons.Draw(ui.P, W95Icons.Id.Layouts, r.X + 1, r.Y + 1);
+            ui.Text95(l.Name + (l.Name == C.ActiveLayout ? "  (in use)" : ""), new RectangleF(r.X + 20, r.Y, r.Width - 22, r.Height), on ? W95 : K95);
+        }, 18);
+        if (hit >= 0) _selLayout = list[hit].Name;
+        var s = list.First(l => l.Name == _selLayout);
+        ui.Text95(LayoutSummary(s), new RectangleF(28, 192, 326, 13));
+        Hint(ui, 28, 214, 326, "Each profile remembers where your monitors, windows and keyboard are, their size and curve, and night mode. " +
+                               "What you change is kept in the profile you are in when you switch away.", 60);
+
+        bool active = s.Name == C.ActiveLayout;
+        ui.Group95(new RectangleF(376, 56, 358, 374), Ui.Esc95(s.Name));
+        W95Icons.Draw(ui.P, W95Icons.Id.Layouts, 388, 76);
+        ui.Text95(active ? "In use now." : s.Saved is { } t ? $"Last used {t:MMM d, HH:mm}." : "Not used yet.", new RectangleF(410, 77, 312, 15));
+        if (ui.Button95("l95.use", new RectangleF(388, 102, 150, 23), active ? "In use" : "&Switch to " + Ui.Esc95(s.Name), !active, isDefault: !active))
+            _h.SwitchLayout(s.Name);
+        bool onWrist = s.OnWrist;
+        if (ui.Check95("l95.wrist", 388, 138, "On the &watch (its button cycles through these)", ref onWrist)) s.OnWrist = onWrist;
+        if (ui.Button95("l95.forget", new RectangleF(388, 162, 150, 23), "&Forget this layout", s.Saved != null && !active))
+            _h.ForgetLayout(s.Name);
+        Hint(ui, 388, 198, 334, active
+                ? "You are using this one now: move, resize and bend things as you like - the profile keeps it when you switch to another one."
+                : s.Saved == null
+                ? "The first time you switch to it, everything comes to where you are looking - lying in bed, that is above you."
+                : "Switching puts every panel back where it was in this profile. Recenter still brings everything in front of you.", 60);
+    }
+
+    // ---------------- Wrist ----------------
+
+    void Wrist95(Ui ui)
+    {
+        var p = ui.P;
+        var w = C.Wrist;
+        ui.Group95(new RectangleF(16, 56, 350, 218), "Watch");
+        bool b = w.Enabled;
+        ui.Check95("w95.en", 28, 76, "&Show the watch", ref b);
+        w.Enabled = b;
+        int hi = w.Hand == "right" ? 1 : 0;
+        if (ComboRow(ui, "w95.hand", 28, 98, 108, 100, "&Hand:", new[] { "Left", "Right" }, ref hi, w.Enabled))
+        { w.Hand = hi == 1 ? "right" : "left"; w.Offset = null; }
+        string[] faces = { "full", "analog", "minimal", "time" };
+        int fi = Math.Max(0, Array.IndexOf(faces, w.Face ?? "full"));
+        if (ComboRow(ui, "w95.face", 28, 126, 108, 100, "&Face:", new[] { "Full", "Analog", "Minimal", "Time only" }, ref fi, w.Enabled))
+            w.Face = faces[fi];
+        b = w.AlwaysVisible;
+        ui.Check95("w95.always", 28, 156, "Always &visible (or only when you look at it)", ref b, w.Enabled);
+        w.AlwaysVisible = b;
+        float v = w.Width;
+        TrackRow(ui, "w95.size", 28, 178, 108, 150, 90, "Si&ze:", ref v, 0.07f, 0.25f, $"{w.Width * 100:0} cm", w.Enabled);
+        w.Width = v;
+        b = w.Locked;
+        ui.Check95("w95.lock", 28, 216, "&Lock position (the grip won't move it)", ref b, w.Enabled);
+        w.Locked = b;
+        if (ui.Button95("w95.reset", new RectangleF(28, 240, 100, 23), "&Reset position", w.Enabled)) _h.ResetWrist();
+
+        ui.Group95(new RectangleF(16, 282, 350, 148), "Show on the watch");
+        b = w.ShowBatteries;
+        ui.Check95("w95.bat", 28, 302, "&Batteries", ref b, w.Enabled);
+        w.ShowBatteries = b;
+        b = w.ShowMedia;
+        ui.Check95("w95.media", 28, 322, "&Now playing", ref b, w.Enabled);
+        w.ShowMedia = b;
+        b = w.ShowPerformance;
+        ui.Check95("w95.perf", 28, 342, "Frame &timing && GPU", ref b, w.Enabled);
+        w.ShowPerformance = b;
+        int pg = w.PerfGraph ? 1 : 0;
+        if (ComboRow(ui, "w95.graph", 47, 362, 128, 100, "Sh&own as:", new[] { "Numbers", "Graph" }, ref pg, w.Enabled && w.ShowPerformance))
+            w.PerfGraph = pg == 1;
+        b = C.Appearance.Clock24h;
+        ui.Check95("w95.24h", 28, 396, "24-hour &clock", ref b, w.Enabled);
+        C.Appearance.Clock24h = b;
+
+        // the watch itself, pixel for pixel, on the 95 desktop
+        ui.Group95(new RectangleF(376, 56, 358, 374), "Preview");
+        var desk = new RectangleF(388, 76, 334, 256);
+        p.Fill(desk, Theme.W95Teal);
+        p.Bevel(desk, Painter.Edge.Sunken);
+        var c95 = _h.Wrist.Canvas95;
+        if (c95 != null)
+            p.ImageNearest(c95.Bitmap, new RectangleF(desk.X + (desk.Width - c95.W) / 2, desk.Y + (desk.Height - c95.H) / 2, c95.W, c95.H));
+        Hint(ui, 388, 342, 334, "Turn your wrist towards you to see it; point at it with the other hand to use its buttons. " +
+                                "Hold the grip on it to move it.", 60);
+    }
+
+    // ---------------- Keyboard ----------------
+
+    void Keyboard95(Ui ui)
+    {
+        var k = C.Keyboard;
+        ui.Group95(new RectangleF(16, 56, 350, 190), "Keyboard");
+        bool b = k.Visible;
+        if (ui.Check95("k95.vis", 28, 76, "&Show the keyboard", ref b)) _h.ToggleKeyboard();
+        b = k.AutoShow;
+        ui.Check95("k95.auto", 28, 98, "&Pop up for text fields", ref b);
+        k.AutoShow = b;
+        Hint(ui, 47, 115, 300, "when a click in VR lands in one; hides again after");
+        float v = k.Width;
+        TrackRow(ui, "k95.size", 28, 136, 108, 150, 90, "Si&ze:", ref v, 0.3f, 1.2f, $"{k.Width * 100:0} cm wide");
+        k.Width = v;
+        int ai = Math.Max(0, Array.IndexOf(AttachIds, k.Place.Attach ?? "world"));
+        if (ai == 3) ai = 0;
+        int a2 = ai;
+        if (ComboRow(ui, "k95.att", 28, 172, 108, 120, "Attached &to:", Attach4[..3], ref a2) && a2 != ai) _h.SetKeyboardAttach(AttachIds[a2]);
+        if (ui.Button95("k95.reset", new RectangleF(28, 208, 100, 23), "&Reset position", _h.VrConnected)) _h.ResetKeyboard();
+
+        ui.Group95(new RectangleF(376, 56, 358, 190), "Sounds");
+        b = k.Sounds;
+        ui.Check95("k95.snd", 388, 76, "&Key sounds", ref b);
+        k.Sounds = b;
+        int si = k.SoundStyle == "muted" ? 1 : 0;
+        if (ComboRow(ui, "k95.style", 388, 98, 468, 100, "S&ound:", new[] { "Click", "Muted" }, ref si, k.Sounds))
+        {
+            k.SoundStyle = si == 1 ? "muted" : "click";
+            _h.Keyboard.PlayClick(false);
+        }
+        v = k.SoundVolume;
+        if (TrackRow(ui, "k95.vol", 388, 130, 468, 150, 90, "&Volume:", ref v, 0.05f, 1f, $"{k.SoundVolume * 100:0}%", k.Sounds))
+            k.SoundVolume = v;
+        if (k.Sounds && ui.Released && ui.Hover(new RectangleF(462, 130, 162, 30))) _h.Keyboard.PlayClick(false);   // hear the new volume
+        if (ui.Button95("k95.test", new RectangleF(388, 172, 90, 23), "&Test sound", k.Sounds)) _h.Keyboard.PlayClick(false);
+
+        ui.Group95(new RectangleF(16, 254, 718, 176), "Using it");
+        W95Icons.Draw(ui.P, W95Icons.Id.Keyboard, 28, 274);
+        ui.Text95("The keys follow the active Windows layout; the globe key switches layouts (and to a built-in English one).",
+            new RectangleF(52, 274, 670, 30), K95, wrap: true);
+        ui.Text95("Shift, Ctrl, Alt, AltGr and Win: press once for the next key, twice to lock.",
+            new RectangleF(52, 302, 670, 30), K95, wrap: true);
+        ui.Text95("Typing goes to the focused window. Chatbox mode types into the VRChat chatbox instead; Enter sends it.",
+            new RectangleF(52, 330, 670, 30), K95, wrap: true);
+    }
+
+    // ---------------- Look (Display Properties' Appearance tab) ----------------
+
+    void Look95(Ui ui)
+    {
+        var p = ui.P;
+        var a = C.Appearance;
+        bool changed = false;
+        ui.Group95(new RectangleF(16, 56, 350, 150), "Style");
+        int si = a.Style == "classic" ? 1 : 0;
+        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", new[] { "Modern", "Windows 95" }, ref si))
+        {
+            a.Style = si == 1 ? "classic" : "modern";
+            changed = true;
+        }
+        Hint(ui, 28, 108, 326, "Windows 95 draws these settings, the watch, the keyboard and the notifications at their real 1995 " +
+                               "pixel size, enlarged without smoothing.", 60);
+
+        ui.Group95(new RectangleF(16, 214, 350, 216), "Modern colours");
+        Hint(ui, 28, 234, 326, "The accent colour, the panel colour, the themes and the opacity belong to the Modern style; switch to it " +
+                               "to change them.", 46);
+        if (ui.Button95("lk95.reset", new RectangleF(28, 286, 100, 23), "&Default look"))
+        {
+            C.Appearance = a = new AppearanceConfig
+            {
+                LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style,
+            };
+            changed = true;
+        }
+
+        ui.Group95(new RectangleF(376, 56, 358, 190), "Laser");
+        Lbl(ui, 388, 76, "Colour:");
+        // colour wells: "same as the style", then the presets
+        var wells = new List<uint> { 0 };
+        wells.AddRange(Theme.AccentPresets.Take(Theme.AccentPresets.Length - 1));
+        for (int i = 0; i < wells.Count; i++)
+        {
+            var r = new RectangleF(468 + i * 26, 76, 20, 20);
+            uint c = wells[i] == 0 ? Theme.ClassicLaser : wells[i];
+            bool on = wells[i] == 0 ? a.LaserColor == 0 : a.LaserColor != 0 && (a.LaserColor & 0xFFFFFF) == (c & 0xFFFFFF);
+            if (on) p.Stroke(new RectangleF(r.X - 2.5f, r.Y - 2.5f, r.Width + 5, r.Height + 5), K95, 1);
+            p.Fill(r, c);
+            p.Bevel(r, Painter.Edge.Sunken);
+            if (ui.Hover(r) && ui.Pressed) { a.LaserColor = wells[i]; changed = true; }
+        }
+        float th = a.LaserThickness;
+        if (TrackRow(ui, "lk95.th", 388, 108, 468, 150, 90, "&Thickness:", ref th, 1.5f, 8f, $"{a.LaserThickness:0.0} mm"))
+        { a.LaserThickness = MathF.Round(th * 2) / 2; changed = true; }
+        bool always = a.LaserAlways;
+        ui.Check95("lk95.always", 388, 150, "&Always show the beam", ref always);
+        Hint(ui, 407, 167, 315, "otherwise only while pointing at a panel");
+        if (always != a.LaserAlways) { a.LaserAlways = always; changed = true; }
+
+        ui.Group95(new RectangleF(376, 254, 358, 176), "Night mode");
+        bool night = a.NightMode;
+        ui.Check95("lk95.night", 388, 274, "&Night mode", ref night);
+        Hint(ui, 407, 291, 315, "dims every panel in VR - the watch has a button for it too");
+        if (night != a.NightMode) { a.NightMode = night; changed = true; }
+        float nb = a.NightBrightness;
+        if (TrackRow(ui, "lk95.nb", 388, 314, 468, 150, 90, "&Brightness:", ref nb, 0.15f, 0.9f, $"{a.NightBrightness * 100:0}%"))
+        { a.NightBrightness = nb; changed = true; }
+        if (changed) { ui.Changed = true; _h.AppearanceChanged(); }
+    }
+
+    // ---------------- General ----------------
+
+    void General95(Ui ui)
+    {
+        var g = C.General;
+        ui.Group95(new RectangleF(16, 56, 350, 122), "Laser");
+        int li = g.LaserHand == "left" ? 1 : g.LaserHand == "right" ? 2 : 0;
+        if (ComboRow(ui, "g95.laser", 28, 76, 108, 120, "Laser &on:", new[] { "Both hands", "Left hand", "Right hand" }, ref li))
+            g.LaserHand = li == 1 ? "left" : li == 2 ? "right" : "both";
+        int sm = Math.Clamp(g.LaserSmoothing, 0, 3);
+        if (ComboRow(ui, "g95.smooth", 28, 104, 108, 120, "S&moothing:", new[] { "Off", "Low", "Medium", "High" }, ref sm))
+            g.LaserSmoothing = sm;
+        bool b = g.Haptics;
+        ui.Check95("g95.hap", 28, 134, "&Haptic ticks", ref b);
+        g.Haptics = b;
+        b = g.QuickToggle;
+        ui.Check95("g95.quick", 28, 154, "Double-tap both &grips: hide / show the panels", ref b);
+        g.QuickToggle = b;
+
+        ui.Group95(new RectangleF(16, 186, 350, 244), "Startup and system");
+        b = g.AutoStart;
+        ui.Check95("g95.auto", 28, 206, "Start with Steam&VR", ref b);
+        Hint(ui, 47, 223, 300, Fit95(ui, b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start Orbit yourself", 300));
+        if (b != g.AutoStart) _h.SetAutoStart(b);
+        b = g.RunAsAdmin;
+        ui.Check95("g95.admin", 28, 244, "Run as &administrator", ref b);
+        Hint(ui, 47, 261, 300, _h.IsElevated ? "running as admin: works in admin windows too"
+            : g.RunAsAdmin ? "not elevated right now - restart to apply" : "admin windows (e.g. Task Manager) ignore the VR mouse");
+        if (b != g.RunAsAdmin) _h.SetRunAsAdmin(b);
+        b = g.PauseWhenOff;
+        ui.Check95("g95.pause", 28, 282, "&Pause when the headset is off", ref b);
+        g.PauseWhenOff = b;
+        b = g.Osc;
+        ui.Check95("g95.osc", 28, 304, "VRChat avatar parameters (OS&C)", ref b);
+        Hint(ui, 47, 321, 300, $"XSOverlay-style, for DXOverlay - 127.0.0.1:{g.OscPort}");
+        g.Osc = b;
+        float bx = 28;
+        if (g.RunAsAdmin && !_h.IsElevated)
+        {
+            if (ui.Button95("g95.elevate", new RectangleF(bx, 346, 110, 23), "R&estart as admin")) _h.RestartElevated();
+            bx += 116;
+        }
+        if (ui.Button95("g95.folder", new RectangleF(bx, 346, 130, 23), "Open con&fig folder", true, false, false, W95Icons.Id.Folder))
+            _h.OpenConfigFolder();
+
+        // System Properties' General tab: the logo, the name, the version, the machine
+        ui.Group95(new RectangleF(376, 56, 358, 178), "About Orbit");
+        W95Icons.Draw(ui.P, W95Icons.Id.Orbit, 388, 74, 2);
+        ui.Text95("Orbit", new RectangleF(430, 74, 200, 15), K95, true);
+        ui.Text95($"Version {Updater.Current.ToString(3)}", new RectangleF(430, 90, 200, 15));
+        float ry = 116;
+        void Row(string key, string val)
+        {
+            ui.Text95(key, new RectangleF(388, ry, 64, 13), Grey95);
+            ui.Text95(Fit95(ui, val, 266), new RectangleF(454, ry, 268, 13));
+            ry += 16;
+        }
+        Row("SteamVR:", _h.VrStatus);
+        Row("Input:", _h.InputStatus);
+        Row("Graphics:", _h.GpuName);
+        Row("Monitors:", string.Join(", ", _h.MonitorList.Select(m => m.Name)));
+        var (us, umsg, uprog, ulatest) = _h.Updates.Snapshot();
+        bool avail = us == Updater.State.Available;
+        string ulabel = us switch
+        {
+            Updater.State.Checking => "Checking...",
+            Updater.State.Downloading => $"Downloading {uprog * 100:0}%",
+            Updater.State.Starting => "Installing...",
+            Updater.State.Available => $"&Update to {ulatest}",
+            _ => "Check for &updates",
+        };
+        if (ui.Button95("g95.upd", new RectangleF(388, 186, 130, 23), ulabel, !_h.Updates.Busy, avail, false,
+                avail ? W95Icons.Id.Download : null))
+        {
+            if (avail) _h.Updates.Apply();
+            else _h.Updates.Check();
+        }
+        if (!string.IsNullOrEmpty(umsg))
+            ui.Text95(Fit95(ui, umsg, 196), new RectangleF(524, 191, 200, 13), us == Updater.State.Failed ? 0xFF800000 : Grey95);
+
+        ui.Group95(new RectangleF(376, 242, 358, 188), "Notifications");
+        b = g.Notifications;
+        ui.Check95("g95.notif", 388, 262, "Show &notifications", ref b);
+        Hint(ui, 407, 279, 315, Fit95(ui, g.Notifications ? _h.NotificationStatus : "XSOverlay format (VRCX, Discord plugins...)", 315));
+        g.Notifications = b;
+        b = g.NotificationSound;
+        ui.Check95("g95.nsnd", 388, 302, "C&hime", ref b, g.Notifications);
+        g.NotificationSound = b;
+        if (ui.Button95("g95.ntest", new RectangleF(647, 298, 75, 23), "&Test", g.Notifications && _h.VrConnected)) _h.TestNotification();
+        float na = g.NotificationAngle;
+        TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, $"{Math.Round(na):0}° below eyes", g.Notifications);
+        g.NotificationAngle = MathF.Round(na);
+    }
+}
