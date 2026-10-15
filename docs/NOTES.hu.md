@@ -196,6 +196,21 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.9.2 – a hangerő widget a VR hangeszközét állítja (2026-10-15)
+
+Erik: „valamiért a hangerő widgetek nem működnek” – „csak VR-ban a Virtual Desktop Audio driver a fő driver, azt
+valamiért nem állította”.
+
+- Mérve (csak olvasva): VR nélkül az alapértelmezett eszköz „NGENUITY - 8 Channel Spatial (HyperX Virtual Audio
+  Device)” 50% – a widget ugyanezt mutatta; egy 1%-os próba (50 → 49, visszaolvasva 0,3 és 1 s múlva, majd vissza
+  50-re) szerint az állítás meg is marad. A „Speakers (Virtual Desktop Audio)” eszköz VR nélkül inaktív.
+- **Ok**: `SystemVolume` az eMultimedia szerepkör alapértelmezett eszközét kérte, és csak 5 s-onként nézett rá újra; ha
+  a Virtual Desktop csak a fő (eConsole) szerepkört állítja át, az Orbit tovább a HyperX-et tekerte. Most: eConsole
+  (amit a Windows hangerő-ikonja is), másodpercenként összeveti az eszköz-azonosítót (`IMMDevice.GetId`), váltáskor
+  azonnal átveszi. A naplóba írja, melyiket kezeli (`volume: now controlling '<név>'`, a név a registryből, csak
+  olvasva), és ha az eszköz elutasítja (HRESULT) vagy nem veszi át a szintet (visszaolvasva > 2% eltérés), azt is –
+  eszközönként egyszer.
+
 ## 1.9.1 – az overlay a headset ütemében frissül, nem a játékéban (2026-10-14)
 
 Erik: „bármi ötlet hogy az overlay még reszponzívabb legyen és több fps-el rendereljen?”, majd az ajánlott 1-esre:

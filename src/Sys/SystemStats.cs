@@ -55,7 +55,9 @@ public sealed class SystemStats
 }
 
 // The default output device's master volume and mute (Core Audio), for the watch's volume widget.
-// The endpoint is looked up again every few seconds (the default device can change) and released.
+// "Default" = the console role, the device the Windows volume icon controls. In VR, Virtual Desktop makes its own
+// "Virtual Desktop Audio" device the default: the device is checked every second and followed at once (1.9.1 asked
+// for the multimedia role every 5 s and kept turning the HyperX headset's volume instead).
 public sealed class SystemVolume : IDisposable
 {
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
@@ -72,6 +74,8 @@ public sealed class SystemVolume : IDisposable
     interface IMMDevice
     {
         [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+        [PreserveSig] int OpenPropertyStore(int access, out IntPtr store);
+        [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
     }
 
     [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -92,14 +96,18 @@ public sealed class SystemVolume : IDisposable
         [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
     }
 
-    const int eRender = 0, eMultimedia = 1, CLSCTX_ALL = 23;
+    const int eRender = 0, eConsole = 0, CLSCTX_ALL = 23;
     static Guid _ctx = Guid.Empty;
     IMMDeviceEnumerator _en;
     IMMDevice _dev;
     IAudioEndpointVolume _vol;
+    string _devId, _devName = "";
     double _next, _nextDevice;
+    float _asked = -1;                // the level we last set, checked against what the device reads back
+    bool _warned;                     // one warning per device
     public float Level = -1;          // 0..1, -1 = no output device
     public bool Muted;
+    public string DeviceName => _devName;
 
     public void Sample(double now)
     {
@@ -107,8 +115,13 @@ public sealed class SystemVolume : IDisposable
         _next = now + 0.25;
         try
         {
-            if (_vol == null || now >= _nextDevice) { Acquire(); _nextDevice = now + 5; }
+            if (_vol == null || now >= _nextDevice) { _nextDevice = now + 1; if (DefaultChanged()) Acquire(); }
             if (_vol == null || _vol.GetMasterVolumeLevelScalar(out float l) != 0) { Level = -1; return; }
+            if (_asked >= 0)
+            {
+                if (MathF.Abs(l - _asked) > 0.02f) Warn($"did not take the new level (asked {_asked * 100:0}%, reads {l * 100:0}%)");
+                _asked = -1;
+            }
             Level = l;
             Muted = _vol.GetMute(out bool m) == 0 && m;
         }
@@ -125,15 +138,8 @@ public sealed class SystemVolume : IDisposable
     public void Step(float delta)
     {
         if (_vol == null || Level < 0) return;
-        try
-        {
-            float l = Math.Clamp(Level + delta, 0, 1);
-            _vol.SetMasterVolumeLevelScalar(l, ref _ctx);
-            if (delta > 0 && Muted) _vol.SetMute(false, ref _ctx);
-            Level = l;
-            _next = 0;
-        }
-        catch (Exception e) { Log.Warn("volume: " + e.Message); }
+        Set(Level + delta);
+        if (delta > 0 && Muted) ToggleMute();
     }
 
     public void Set(float level)
@@ -142,8 +148,10 @@ public sealed class SystemVolume : IDisposable
         try
         {
             level = Math.Clamp(level, 0, 1);
-            _vol.SetMasterVolumeLevelScalar(level, ref _ctx);
+            int hr = _vol.SetMasterVolumeLevelScalar(level, ref _ctx);
+            if (hr != 0) { Warn($"refused the new level (0x{hr:X8})"); return; }
             Level = level;
+            _asked = level;
             _next = 0;
         }
         catch (Exception e) { Log.Warn("volume: " + e.Message); }
@@ -152,17 +160,60 @@ public sealed class SystemVolume : IDisposable
     public void ToggleMute()
     {
         if (_vol == null) return;
-        try { _vol.SetMute(!Muted, ref _ctx); Muted = !Muted; _next = 0; }
+        try
+        {
+            int hr = _vol.SetMute(!Muted, ref _ctx);
+            if (hr != 0) { Warn($"refused mute (0x{hr:X8})"); return; }
+            Muted = !Muted;
+            _next = 0;
+        }
         catch (Exception e) { Log.Warn("volume: " + e.Message); }
+    }
+
+    void Warn(string what)
+    {
+        if (_warned) return;
+        _warned = true;
+        Log.Warn($"volume: '{_devName}' {what}");
+    }
+
+    // is the default device another one than the one held (or none held yet)?
+    bool DefaultChanged()
+    {
+        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        if (_en.GetDefaultAudioEndpoint(eRender, eConsole, out var d) != 0 || d == null) { Release(); _devId = null; return false; }
+        string id = d.GetId(out string s) == 0 ? s : null;
+        Marshal.ReleaseComObject(d);
+        return _vol == null || id != _devId;
     }
 
     void Acquire()
     {
         Release();
         _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
-        if (_en.GetDefaultAudioEndpoint(eRender, eMultimedia, out _dev) != 0 || _dev == null) return;
+        if (_en.GetDefaultAudioEndpoint(eRender, eConsole, out _dev) != 0 || _dev == null) return;
+        _devId = _dev.GetId(out string id) == 0 ? id : null;
         var iid = typeof(IAudioEndpointVolume).GUID;
         if (_dev.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out object o) == 0) _vol = (IAudioEndpointVolume)o;
+        _devName = FriendlyName(_devId);
+        _warned = false;
+        _asked = -1;
+        Log.Info($"volume: now controlling '{_devName}'{(_vol == null ? " (no volume control)" : "")}");
+    }
+
+    // "Speakers (Virtual Desktop Audio)": the device's name as the Sound settings show it (registry, read only)
+    static string FriendlyName(string id)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(id)) return "?";
+            string g = id[id.LastIndexOf('{')..];
+            using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{g}\Properties");
+            string dev = k?.GetValue("{a45c254e-df1c-4efd-8020-67d146a850e0},2") as string;
+            string iface = k?.GetValue("{b3f8fa53-0004-438e-9003-51a46e139bfc},6") as string;
+            return dev == null ? id : string.IsNullOrEmpty(iface) ? dev : $"{dev} ({iface})";
+        }
+        catch { return id ?? "?"; }
     }
 
     void Release()
