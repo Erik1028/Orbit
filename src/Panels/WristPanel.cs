@@ -474,7 +474,22 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         else { SwipeEnd(px); _ptr.Release(); }
         _dirty = true;
     }
-    public void PointerScroll(Hand h, float n, Vector2 px) { }
+    // the stick scrolls the opened room's list (nothing else on the watch scrolls); the 95 list moves 3 rows a notch (a wheel's),
+    // so it gets whole notches, a third as many
+    float _wheel95;
+    public void PointerScroll(Hand h, float n, Vector2 px)
+    {
+        if (!DetailIs("room") || _closing) return;
+        if (Theme.Classic)
+        {
+            _wheel95 += n / 3;
+            if (MathF.Abs(_wheel95) < 1) return;
+            n = MathF.Truncate(_wheel95);
+            _wheel95 -= n;
+        }
+        _ptr.Wheel += n;
+        _dirty = true;
+    }
     public bool Grabbable => !C.Locked;
 
     public Matrix4x4 WorldTransform =>

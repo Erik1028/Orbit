@@ -10,6 +10,7 @@ namespace Orbit;
 // Who is in the VRChat instance with you: starred people and friends first, then everyone else (newest first), and who
 // left lately. A star beside each name marks someone to be told about when they come and go. A floating panel like the
 // dock: grab it, the stick scrolls the list. Data: RoomWatcher (VRChat's log; friends from VRCX when it is installed).
+// Opened from Settings; the watch's room widget opens the watch's own view of the same list instead (WristRoom.cs).
 public sealed class RoomPanel : IPointerTarget, IDisposable
 {
     public const int TW = 800, TH = 480, W95 = TW / 2, H95 = TH / 2;
@@ -170,12 +171,18 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
     List<RoomWatcher.Person> Ordered()
     {
         var l = new List<RoomWatcher.Person>(_s.Here);
-        int Rank(RoomWatcher.Person p) => Starred(p) ? 0 : p.Friend ? 1 : 2;
-        l.Sort((a, b) => Rank(a) != Rank(b) ? Rank(a).CompareTo(Rank(b)) : b.Joined.CompareTo(a.Joined));
+        Order(l, C.Starred);
         return l;
     }
 
-    static string Ago(DateTime t, DateTime now)
+    // (the watch's opened room view lists them the same way: WristRoom.cs)
+    internal static void Order(List<RoomWatcher.Person> l, List<string> starred)
+    {
+        int Rank(RoomWatcher.Person p) => starred.Contains(p.Key) ? 0 : p.Friend ? 1 : 2;
+        l.Sort((a, b) => Rank(a) != Rank(b) ? Rank(a).CompareTo(Rank(b)) : b.Joined.CompareTo(a.Joined));
+    }
+
+    internal static string Ago(DateTime t, DateTime now)
     {
         var d = now - t;
         if (d.TotalMinutes < 1) return "just now";
@@ -183,7 +190,10 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
         return $"{(int)d.TotalHours} h {d.Minutes:00} min";
     }
 
-    string Empty() => !_s.LogFound ? "No VRChat log found" : !_s.InRoom ? "Not in a world" : _s.Arriving ? "Arriving..." : "Nobody else is here";
+    string Empty() => EmptyText(_s);
+
+    internal static string EmptyText(RoomWatcher.Snapshot s) =>
+        !s.LogFound ? "No VRChat log found" : !s.InRoom ? "Not in a world" : s.Arriving ? "Arriving..." : "Nobody else is here";
 
     public void DrawFor(RoomWatcher.Snapshot s, DateTime now) { _s = s; Draw(now); }
 

@@ -576,7 +576,7 @@ public sealed partial class WristPanel
                 break;
             case "dock": DockOrbit(r, w, d, id); break;
             case "room":
-                if (w.W >= 3) RoomM43(r, d, id);                 // the world big, its people as initials
+                if (w.W >= 3) RoomM43(r, w, d, id);              // the world big, its people as initials
                 else RoomOrbit(r, w, d, id);
                 break;
             case "volume": VolumeOrbit(r, w, id); break;
@@ -1753,7 +1753,7 @@ public sealed partial class WristPanel
         Meter(new RectangleF(tr.X, tr.Bottom + gap, tr.Width, lt), b.pct, Bento.Level(lv, Bento.Ok), key);
     }
 
-    // who is in the VRChat instance: how many, and the friends among them; a tap opens the Room panel
+    // who is in the VRChat instance: how many, and the friends among them; a tap grows it into the watch's opened view (WristRoom.cs)
     static (int people, int friends, string names) RoomCount(PanelData d)
     {
         var s = d.Room;
@@ -1792,7 +1792,7 @@ public sealed partial class WristPanel
     {
         bool click = _ui.Clickable(Ui.Id("wrm", id), r, out _, out bool held);
         if (held) _p.Fill(r, Theme.WithAlpha(Bento.Accent, 0.12f), CardRadius);
-        if (click) OnAction?.Invoke("room");
+        if (click) OpenDetail(w);
         RoomNow(d);
         int n = _roomPeople, f = _roomFriends;
         string value = _roomValue;
@@ -1828,7 +1828,7 @@ public sealed partial class WristPanel
 
     void Room95Widget(RectangleF r, RectangleF c, PanelData d, WatchWidget w, int id)
     {
-        if (_ui.Clickable(Ui.Id("wrm", id), r, out _, out _)) OnAction?.Invoke("room");
+        if (_ui.Clickable(Ui.Id("wrm", id), r, out _, out _)) OpenDetail(w);
         var (n, f, names) = RoomCount(d);
         if (w.W >= 2)
         {

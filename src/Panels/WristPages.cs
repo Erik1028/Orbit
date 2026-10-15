@@ -213,7 +213,7 @@ public sealed partial class WristPanel
         bool s = w.W == 1 && w.H == 1;
         switch (k.Id)
         {
-            case "room" when w.W >= 2: RoomM43(r, d, id); return true;
+            case "room" when w.W >= 2: RoomM43(r, w, d, id); return true;
             case "media" when CoverCard(k, w, Styled(w)): MediaCover(r, w, d, id); return true;
             case "graph": GraphLine(r, w, d); return true;
             case "battery" when s: BatteryBars(r, d); return true;
@@ -292,11 +292,11 @@ public sealed partial class WristPanel
         _roomLine = string.Join(", ", names) + (rest > 0 ? $" + {rest}" : "");
     }
 
-    void RoomM43(RectangleF r, PanelData d, int id)
+    void RoomM43(RectangleF r, WatchWidget w, PanelData d, int id)
     {
         bool click = _ui.Clickable(Ui.Id("wrm", id), r, out _, out bool held);
         if (held) _p.Fill(r, Theme.WithAlpha(Bento.Accent, 0.12f), CardRadius);
-        if (click) OnAction?.Invoke("room");
+        if (click) OpenDetail(w);
         Room43Now(d);
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         CaptionRow(r, _roomMeta, CapRoomWide);

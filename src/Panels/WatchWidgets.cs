@@ -62,7 +62,7 @@ public static class WatchWidgets
         new("status", "Status line", "Status", "\uE8BD", W95Icons.Id.Chat, Btn, 1, true, 1),
         // one monitor / window as a big curved screen, the rest steps aside and the world dims
         new("theater", "Theater", "Theater", "\uE8B2", W95Icons.Id.Theater, Btn, 1, true, 1),
-        // VRChat: who is in the instance; a tap opens the Room panel
+        // VRChat: who is in the instance; a tap grows it into the watch's opened view, the people there (WristRoom.cs)
         new("room", "Room", "Room", "\uE716", W95Icons.Id.People, new[] { (1, 1), (2, 1), (3, 1) }, 1, false, 2),
         // the stream dock (Hexpad): its keys live; a tap opens it as a panel. Offered only while Hexpad runs.
         new("dock", "Hexpad", "Hexpad", "\uE80A", W95Icons.Id.Dock, new[] { (1, 1), (2, 1), (2, 2) }, 1, false, 1),
