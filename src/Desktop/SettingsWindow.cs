@@ -92,9 +92,22 @@ public sealed class SettingsWindow : Form
     }
 
     const int WM_NCHITTEST = 0x84, HTCLIENT = 1, HTCAPTION = 2;
+    const int WM_TIMER = 0x113, WM_ENTERMENULOOP = 0x211, WM_EXITMENULOOP = 0x212, WM_ENTERSIZEMOVE = 0x231, WM_EXITSIZEMOVE = 0x232;
+    static readonly IntPtr ModalTimer = 0x4F52;
+
+    // One frame of the app's loop. Moving this window by its title bar (or its system menu) runs Windows' own modal loop,
+    // and the app's loop stops until the button is let go - in VR the laser lets it go from that loop, so everything froze
+    // for good. A timer keeps the frames coming meanwhile.
+    public Action ModalTick;
 
     protected override void WndProc(ref Message m)
     {
+        switch (m.Msg)
+        {
+            case WM_ENTERSIZEMOVE or WM_ENTERMENULOOP: Native.SetTimer(Handle, ModalTimer, 10, IntPtr.Zero); break;
+            case WM_EXITSIZEMOVE or WM_EXITMENULOOP: Native.KillTimer(Handle, ModalTimer); break;
+            case WM_TIMER when m.WParam == ModalTimer: ModalTick?.Invoke(); return;
+        }
         base.WndProc(ref m);
         // the 95 caption bar moves the window like a real one (but not over its ? and X boxes)
         if (m.Msg == WM_NCHITTEST && _classic && (int)m.Result == HTCLIENT)

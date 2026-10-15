@@ -32,6 +32,8 @@ static class Native
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern IntPtr SetTimer(IntPtr hWnd, IntPtr id, uint ms, IntPtr proc);
+    [DllImport("user32.dll")] public static extern bool KillTimer(IntPtr hWnd, IntPtr id);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
 

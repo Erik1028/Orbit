@@ -150,7 +150,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
         _tray = new Tray(ShowSettings, Recenter, ToggleDesktops, ToggleKeyboard, () => _quit = true);
         var view = new SettingsView(this);
-        _win = new SettingsWindow(_gpu, _painter, view, () => PreparePreviews(view), _tray.AppIcon);
+        _win = new SettingsWindow(_gpu, _painter, view, () => PreparePreviews(view), _tray.AppIcon) { ModalTick = ModalTick };
         if (!_startHidden) _win.Show();
 
         if (_vr.Connected) OnVrConnected();
@@ -368,8 +368,13 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
     // A frame that throws is logged and skipped instead of ending the app in the middle of VR.
     // A lost GPU device (driver reset / update) can't recover in place, so Orbit restarts itself.
+    // frames from inside Windows' modal loop while the settings window is moved (SettingsWindow.ModalTick); never one inside another
+    bool _inTick;
+    void ModalTick() { if (!_inTick) SafeTick(); }
+
     void SafeTick()
     {
+        _inTick = true;
         try
         {
             Tick();
@@ -391,6 +396,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 RestartSelf();
             }
         }
+        finally { _inTick = false; }
     }
 
     void RestartSelf()
