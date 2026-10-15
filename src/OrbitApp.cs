@@ -1666,6 +1666,12 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = "Timer", Content = "Time is up.", Timeout = 6 });
                 break;
             case "media.next": _media.Command("next"); break;
+            case "mines.flag":
+            case "mines.boom":
+                // Minesweeper: a held square got (or lost) its flag - a tick in the hand with the laser; a mine went off - a jolt
+                if (_vr.Connected && C.General.Haptics)
+                    _vr.Haptic(C.Wrist.Hand == "right" ? Hand.Left : Hand.Right, id == "mines.boom" ? 0.9f : 0.5f, id == "mines.boom" ? 0.12f : 0.02f);
+                break;
             case "settings":
                 _settingsPanel.Toggle();        // floating panel; the dashboard tab still exists too
                 break;

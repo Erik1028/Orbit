@@ -65,6 +65,9 @@ public static class WatchWidgets
         new("room", "Room", "Room", "\uE716", W95Icons.Id.People, new[] { (1, 1), (2, 1) }, 1, false, 2),
         // the stream dock (Hexpad): its keys live; a tap opens it as a panel. Offered only while Hexpad runs.
         new("dock", "Hexpad", "Hexpad", "\uE80A", W95Icons.Id.Dock, new[] { (1, 1), (2, 1), (2, 2) }, 1, false, 1),
+        // a game: Minesweeper - small first (the face, the mines left, the time, a hint of the board); a tap grows it into the
+        // game (WristMines.cs)
+        new("minesweeper", "Minesweeper", "Minesweeper", "\uE7C1", W95Icons.Id.Mine, new[] { (1, 1), (2, 2), (3, 2) }, 0, false, 0),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)

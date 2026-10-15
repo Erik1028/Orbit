@@ -31,6 +31,7 @@ public sealed partial class WristPanel
         "perf" or "graph" or "fps" or "reproj" or "gpu" or "vram" => "perf",
         "cpu" or "ram" => "system",
         "volume" => "volume",
+        "minesweeper" => "mines",
         _ => null,
     };
 
@@ -48,7 +49,9 @@ public sealed partial class WristPanel
 
     void CloseDetail()
     {
-        if (Theme.Classic) _open = null;      // a 95 dialog just goes away
+        // Minesweeper shrinks back into its tile in both styles (95: the zoom outline the other way round)
+        if (Theme.Classic && DetailIs("mines")) { _closing = true; _openStart = Clock.Now; }
+        else if (Theme.Classic) _open = null;      // a 95 dialog just goes away
         else _closing = true;
         _dirty = true;
     }
@@ -101,7 +104,10 @@ public sealed partial class WristPanel
         _p.Fill(r, Bento.Card, CardRadius);
         _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), Bento.Edge, Bento.EdgeWidth, CardRadius - 0.6f);
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
-        float ca = Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
+        // Minesweeper grows out of its tile: its game is in the card from the start, scaled with it (and back on closing) - the
+        // same widget getting bigger; playable once it is big
+        bool grow = kind == "mines";
+        float ca = grow ? Math.Clamp(e * 3, 0, 1) : Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
         if (ca <= 0.01f) return;
         _halo = Bento.Card;                    // the opened card is flat
         _haloCard = RectangleF.Empty;
@@ -110,9 +116,19 @@ public sealed partial class WristPanel
         if (own) Bento.Use(LookOf(0, _open.Color.Value | 0xFF000000, 0, true, false, false));
         if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
+        float gs = grow ? MathF.Min(r.Width / target.Width, r.Height / target.Height) : 1;
+        bool zoom = MathF.Abs(gs - 1) > 0.002f, inert = _ui.Inert;
+        if (zoom)
+        {
+            // the scale that puts the target's centre on the card's: about the point c with c + gs (target centre - c) = card centre
+            float tx = target.X + target.Width / 2, ty = target.Y + target.Height / 2, rx = r.X + r.Width / 2, ry = r.Y + r.Height / 2;
+            _p.PushScale(gs, (rx - gs * tx) / (1 - gs), (ry - gs * ty) / (1 - gs));
+        }
+        if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
-        _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
-            FontWeight.SemiBold);
+        if (kind != "mines")          // Minesweeper's board takes the left: its name is over its own column
+            _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
+                FontWeight.SemiBold);
         if (Press("wclose", new RectangleF(E.Right - 22 - 46, E.Y + 14, 46, 46), "\uE711", null, false, !_closing, 18, true))
             CloseDetail();
         var c = new RectangleF(E.X + 24, E.Y + 74, E.Width - 48, E.Height - 96);
@@ -128,7 +144,10 @@ public sealed partial class WristPanel
             case "perf": PerfDetail(c, d); break;
             case "system": SystemDetail(c, d); break;
             case "volume": VolumeDetail(c); break;
+            case "mines": MinesDetail(E); break;
         }
+        _ui.Inert = inert;
+        if (zoom) _p.PopScale();
         if (ca < 0.999f) _p.PopFade();
         if (!LayoutTest) _p.PopClip();
         if (own) Bento.Reset();
@@ -495,6 +514,15 @@ public sealed partial class WristPanel
         if (kind == null) { _open = null; return; }
         var win = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, true);
         double t = (Clock.Now - _openStart) / 0.22;
+        if (_closing)
+        {
+            // (Minesweeper only) the zoom outline back into its tile, then it is gone
+            if (t >= 1) { _open = null; _closing = false; return; }
+            var zc = Lerp(win, WatchWidgets.Rect(_open, true), (float)t);
+            _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
+            _ui.Animating = true;
+            return;
+        }
         if (t < 1)
         {
             // the 1995 window zoom: an outline growing from the widget to the window
@@ -503,6 +531,7 @@ public sealed partial class WristPanel
             _ui.Animating = true;
             return;
         }
+        if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it
         _p.Fill(win, Theme.W95Face);
         _p.Bevel(win, Painter.Edge.Window);
         _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), k.Title95);

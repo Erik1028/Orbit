@@ -31,6 +31,8 @@ public sealed class WristConfig
     public bool Locked { get; set; }      // the grip can't move or resize the watch (no accidental nudges)
     public List<WatchWidget> Widgets { get; set; }      // the custom face: widgets on a 6 x 4 grid (null = never set up)
     public string Background { get; set; } = "panel";   // custom face: panel (one watch panel) | cards (each widget its own card)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int[] MinesBest { get; set; }                // Minesweeper's best times in seconds: 9 x 9, 16 x 16 (0 = none; null until a win)
 }
 
 // One widget of the custom watch face, in grid cells (see WatchWidgets).
