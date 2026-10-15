@@ -261,7 +261,13 @@ public sealed partial class SettingsView
             if (ui.Button("we.larger", new RectangleF(rx + bw + 8, 138, bw, 34), "Larger", null, false, WatchWidgets.Step(list, sel, +1) != null, 13))
                 StepSize(ui, list, sel, +1);
             if (ui.Button("we.remove", new RectangleF(rx + 2 * (bw + 8), 138, bw, 34), "Remove", Theme.IcoDelete, false, true, 13)) RemoveSelected(ui, list);
-            if (sel != null && list.Contains(sel)) WidgetLook(ui, list, sel, rx, 182, rw);
+            if (sel != null && list.Contains(sel))
+            {
+                // a clock: its designs first, then its look - both as one row of chips, so it all fits above Done
+                bool clock = WatchWidgets.VariantsOf(sel.Type) != null;
+                if (clock) ClockDesigns(ui, sel, rx, 180, rw);
+                WidgetLook(ui, list, sel, rx, clock ? 250 : 182, rw, clock);
+            }
         }
         if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) EditingWatch = false;
     }
@@ -269,29 +275,55 @@ public sealed partial class SettingsView
     // The selected widget's own look (the modern watch only; the 95 face stays as 1995 drew it): its style as chips, each with a
     // small picture of it in the widget's colour; its colour (Auto: the accent, or purple / blue for the CPU and memory); a two-tone's
     // second colour; and the same look on every widget of the face. Every target 34 px or more (the settings also show in VR).
-    void WidgetLook(Ui ui, List<WatchWidget> list, WatchWidget sel, float x, float y, float w)
+    // compact: one row of chips without names (the style's name in the section's title: the one under the pointer, else the one
+    // it has) - a clock's look, under its designs
+    void WidgetLook(Ui ui, List<WatchWidget> list, WatchWidget sel, float x, float y, float w, bool compact = false)
     {
         var p = ui.P;
         int style = Bento.StyleIndex(sel.Style);
         uint auto = WristPanel.NaturalColor(sel.Type), c = sel.Color ?? auto;
-        ui.Section(new RectangleF(x, y, w, 22), "Style");
-        y += 24;
-        const float cw = 59.5f, ch = 46, gap = 7;
-        for (int i = 0; i < Bento.Styles.Length; i++)
+        if (compact)
         {
-            var r = new RectangleF(x + i % 4 * (cw + gap), y + i / 4 * (ch + 6), cw, ch);
-            if (ui.Card(Ui.Id("wsty", i), r, i == style, out _) && i != style)
+            string title = null;
+            float cw1 = (w - 6 * 3.3f) / 7;
+            for (int i = 0; i < Bento.Styles.Length; i++)
             {
-                sel.Style = Bento.Styles[i];
-                style = i;
-                ui.Changed = true;
+                var r = new RectangleF(x + i * (cw1 + 3.3f), y + 22, cw1, 40);
+                if (ui.Card(Ui.Id("wsty", i), r, i == style, out bool hover) && i != style)
+                {
+                    sel.Style = Bento.Styles[i];
+                    style = i;
+                    ui.Changed = true;
+                }
+                if (hover) title = Bento.StyleNames[i];
+                var look = Bento.Make(i, c, i == 3 ? sel.Color2 ?? 0 : 0, sel.Color.HasValue, false, false);
+                Bento.Sample(p, RectangleF.Inflate(r, -5, -7), look, 4);
             }
-            var look = Bento.Make(i, c, i == 3 ? sel.Color2 ?? 0 : 0, sel.Color.HasValue, false, false);
-            Bento.Sample(p, new RectangleF(r.X + 7, r.Y + 6, r.Width - 14, 20), look, 5);
-            p.Text(Bento.StyleNames[i], new RectangleF(r.X, r.Y + 27, r.Width, 17), i == style ? Theme.Text : Theme.Dim, 11.5f, FontWeight.SemiBold,
-                TextAlignment.Center);
+            ui.Section(new RectangleF(x, y, w, 22), "Style");
+            p.Text(title ?? Bento.StyleNames[style], new RectangleF(x, y, w, 22), Theme.Text, 12, FontWeight.SemiBold, TextAlignment.Trailing);
+            y += 22 + 40 + 8;
         }
-        y += 2 * ch + 6 + 10;
+        else
+        {
+            ui.Section(new RectangleF(x, y, w, 22), "Style");
+            y += 24;
+            const float cw = 59.5f, ch = 46, gap = 7;
+            for (int i = 0; i < Bento.Styles.Length; i++)
+            {
+                var r = new RectangleF(x + i % 4 * (cw + gap), y + i / 4 * (ch + 6), cw, ch);
+                if (ui.Card(Ui.Id("wsty", i), r, i == style, out _) && i != style)
+                {
+                    sel.Style = Bento.Styles[i];
+                    style = i;
+                    ui.Changed = true;
+                }
+                var look = Bento.Make(i, c, i == 3 ? sel.Color2 ?? 0 : 0, sel.Color.HasValue, false, false);
+                Bento.Sample(p, new RectangleF(r.X + 7, r.Y + 6, r.Width - 14, 20), look, 5);
+                p.Text(Bento.StyleNames[i], new RectangleF(r.X, r.Y + 27, r.Width, 17), i == style ? Theme.Text : Theme.Dim, 11.5f, FontWeight.SemiBold,
+                    TextAlignment.Center);
+            }
+            y += 2 * ch + 6 + 10;
+        }
         ui.Section(new RectangleF(x, y, w, 22), "Colour");
         y += 24;
         if (Swatches(ui, "wcol", x, y, sel.Color, auto, out var picked)) { sel.Color = picked; c = picked ?? auto; }
@@ -308,6 +340,42 @@ public sealed partial class SettingsView
             foreach (var o in list) { o.Style = sel.Style; o.Color = sel.Color; o.Color2 = sel.Color2; }
             ui.Changed = true;
         }
+        LookBottom = y + 34;
+    }
+
+    public float LookBottom;            // --snapshot: where the selected widget's look ends (Done is at 574)
+
+    // A clock's designs (WatchWidget.Variant), each a chip with a small picture of it in the widget's look - only the ones its size
+    // takes (a design it has that does not fit draws its size's default, which is the one marked). The name in the section's title.
+    public static RectangleF ClockChip(int i, int n, float x = 724, float y = 202, float w = 260)
+    {
+        float cw = (w - 4 * (n - 1)) / n;
+        return new RectangleF(x + i * (cw + 4), y, cw, 40);
+    }
+
+    void ClockDesigns(Ui ui, WatchWidget sel, float x, float y, float w)
+    {
+        var p = ui.P;
+        var all = WatchWidgets.VariantsOf(sel.Type);
+        var offered = all.Where(v => v.Fits(sel.W, sel.H)).ToArray();
+        string cur = WatchWidgets.VariantOf(sel), title = null;
+        int style = Bento.StyleIndex(sel.Style);
+        var look = Bento.Make(style, sel.Color ?? WristPanel.NaturalColor(sel.Type), style == 3 ? sel.Color2 ?? 0 : 0, sel.Color.HasValue, false, false);
+        for (int i = 0; i < offered.Length; i++)
+        {
+            var v = offered[i];
+            var r = ClockChip(i, offered.Length, x, y + 22, w);
+            if (ui.Card(Ui.Id("wvar", i), r, v.Id == cur, out bool hover) && v.Id != cur)
+            {
+                sel.Variant = WatchWidgets.StoreVariant(sel, v.Id);
+                cur = v.Id;
+                ui.Changed = true;
+            }
+            if (hover) title = v.Name;
+            ClockArt.Preview(p, RectangleF.Inflate(r, -5, -5), sel.Type, v.Id, look, look.Accent);
+        }
+        ui.Section(new RectangleF(x, y, w, 22), "Clock");
+        p.Text(title ?? Array.Find(all, v => v.Id == cur)?.Name, new RectangleF(x, y, w, 22), Theme.Text, 12, FontWeight.SemiBold, TextAlignment.Trailing);
     }
 
     // Auto, then the palette: 7 a row, 34 px each

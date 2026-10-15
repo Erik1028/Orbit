@@ -12,9 +12,10 @@ namespace Orbit;
 // warm, then every widget opened. CPU = drawing + hand-over; GPU = until the GPU has finished it.
 // --bench-style <look>: every widget of that face in a look of its own (tint, solid, twotone, header, outline, glass, or mixed: all
 // of them in turn), each in another colour - what a fully styled face costs.
+// --bench-variant <design>: every clock of the face that has that design (WatchWidgets.Variants) drawn in it - flip, segment, ...
 static class PerfBench
 {
-    public static int Run(string dir, string style = null)
+    public static int Run(string dir, string style = null, string variant = null)
     {
         dir = Path.GetFullPath(dir);
         Directory.CreateDirectory(dir);
@@ -41,10 +42,13 @@ static class PerfBench
                 ws[i].Color = Bento.Palette[i % Bento.Palette.Length].c;
             }
         }
+        if (variant != null)
+            foreach (var w in cfg.Data.Wrist.Widgets ?? new List<WatchWidget>())
+                if (Array.Exists(WatchWidgets.VariantsOf(w.Type) ?? Array.Empty<WatchWidgets.Variant>(), v => v.Id == variant)) w.Variant = variant;
         using var wrist = new WristPanel(gpu, painter, cfg);
         using var query = gpu.Device.CreateQuery(new Vortice.Direct3D11.QueryDescription(Vortice.Direct3D11.QueryType.Event));
         Log.Info($"perfbench: style {cfg.Data.Appearance.Style}, face {cfg.Data.Wrist.Face}, widgets " +
-                 string.Join(" ", cfg.Data.Wrist.Widgets?.Select(w => $"{w.Type}{w.W}x{w.H}{(w.Style != null ? ":" + w.Style : "")}") ?? Array.Empty<string>()));
+                 string.Join(" ", cfg.Data.Wrist.Widgets?.Select(w => $"{w.Type}{w.W}x{w.H}{(w.Style != null ? ":" + w.Style : "")}{(w.Variant != null ? "/" + w.Variant : "")}") ?? Array.Empty<string>()));
 
         void Phase(string name, double seconds, Action start)
         {

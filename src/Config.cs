@@ -48,6 +48,8 @@ public sealed class WatchWidget
     public uint? Color { get; set; }                    // null = automatic (the accent; purple / blue for CPU and memory)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public uint? Color2 { get; set; }                   // two-tone's second colour (null = made from Color)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Variant { get; set; }                 // a clock's design (WatchWidgets.Variants); null = its size's default
 }
 
 public sealed class DesktopConfig
