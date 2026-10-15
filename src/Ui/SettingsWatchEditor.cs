@@ -20,7 +20,7 @@ public sealed partial class SettingsView
     string _wmsg;
     int _wpal, _wpreset;
     bool _wadd;                         // the "new page" choices are open (modern)
-    int _waddPreset, _waddGrid = 1;     // their preset (PagePresets) and grid (0: 6x4, 1: 4x3)
+    int _waddPreset, _waddGrid;         // their preset (PagePresets) and grid (0: 6x4, the default; 1: 4x3)
     double _wremoveArmed = -10;         // "Remove page" clicked once: a second click within 4 s removes it
     (int page, string grid, List<WatchWidget> list) _gridUndo = (-1, null, null);   // the page before its grid changed (switching straight back)
 
@@ -559,8 +559,7 @@ public sealed partial class SettingsView
         ui.Changed = before;                    // looking at another page is not a change
         var presets = StartPresets();
         string from = presets[Math.Clamp(_wpreset, 0, presets.Length - 1)];
-        if (ui.Button95("we95.newpage", new RectangleF(188, 326, 88, 23), "&New page", n < 8))
-            AddPage(ui, from, Array.IndexOf(WatchWidgets.Presets, from) >= 0 ? "6x4" : "4x3");
+        if (ui.Button95("we95.newpage", new RectangleF(188, 326, 88, 23), "&New page", n < 8)) AddPage(ui, from, "6x4");
         if (ui.Button95("we95.rmpage", new RectangleF(280, 326, 86, 23), RemoveArmed ? "Sure?" : "Remove page", n > 1)) RemovePage(ui);
 
         ui.Group95(new RectangleF(16, 362, 350, 68), "Start over");

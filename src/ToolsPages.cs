@@ -46,6 +46,8 @@ static partial class Tools
 
     // the pages' made-up data: a room of 12 (3 friends) in a world with a long name, three notifications, a song with its cover and
     // where in it, the last 30 s of frames with a spike over budget (and a dropped frame at its top)
+    static int Cells(List<WatchWidget> l) => l?.Sum(w => w.W * w.H) ?? 0;
+
     internal static void PagesData(PanelData data, bool notes = true)
     {
         var room = new RoomWatcher.Snapshot { Version = 7, LogFound = true, InRoom = true, World = "The Black Cat \u2013 Midnight Rooftop Lounge (Extended)", VrcxFound = true, Friends = 120 };
@@ -100,6 +102,8 @@ static partial class Tools
         st.Cpu = 0.1f;
         st.RamUsedGB = 15.9f;
         st.RamTotalGB = 32f;
+        bool hold0 = st.Hold;
+        st.Hold = true;
         wrist.Mic.Peak = 0.2f;
         var actions = new List<string>();
         var onAction0 = wrist.OnAction;
@@ -166,19 +170,19 @@ static partial class Tools
         {
             Style(classic);
             string tag = classic ? "_95" : "";
-            SetPages(P("vrchat", "4x3"), P("performance", "4x3"), P("everyday", "4x3"));
+            SetPages(P("vrchat", "6x4"), P("performance", "6x4"), P("everyday", "6x4"));
             string[] names = { "vrchat", "performance", "everyday" };
             for (int i = 0; i < 3; i++) { wcfg.Page = i; Shot($"pages_{names[i]}{tag}.png"); }
-            SetPages(P("vrchat", "6x4"), P("performance", "6x4"), P("everyday", "6x4"));
-            for (int i = 0; i < 3; i++) { wcfg.Page = i; Shot($"pages_{names[i]}_6x4{tag}.png"); }
+            SetPages(P("vrchat", "4x3"), P("performance", "4x3"), P("everyday", "4x3"));
+            for (int i = 0; i < 3; i++) { wcfg.Page = i; Shot($"pages_{names[i]}_4x3{tag}.png"); }
             // a busy face as page 1 with the two new pages after it: the dots (95: the taskbar)
-            SetPages(new WatchPage { Widgets = BusyFace(), Grid = "6x4" }, P("vrchat", "4x3"), P("performance", "4x3"));
+            SetPages(new WatchPage { Widgets = BusyFace(), Grid = "6x4" }, P("vrchat", "6x4"), P("performance", "6x4"));
             Shot($"pages_dots{tag}.png");
             data.FakeMedia = (false, null, null, false);
             data.FakeArt = null;
             data.Notes = new NotificationHistory();
             data.Room = new RoomWatcher.Snapshot { LogFound = true };
-            SetPages(P("vrchat", "4x3"), P("performance", "4x3"));
+            SetPages(P("vrchat", "6x4"), P("performance", "6x4"));
             Shot($"pages_vrchat_empty{tag}.png");
             PagesData(data);
         }
@@ -228,9 +232,20 @@ static partial class Tools
                 One("buttons", grid, w, h, "on", () => { data.NightMode = true; data.DesktopsVisible = true; }, new List<string> { "desktops", "theater", "night" });
                 One("buttons", grid, w, h, "six", null, six);
             }
+            One("room", "6x4", 3, 1, "12");
+            One("room", "6x4", 3, 1, "out", () => data.Room = new RoomWatcher.Snapshot { LogFound = true });
             One("room", "4x3", 2, 1, "12");
             One("room", "4x3", 2, 1, "out", () => data.Room = new RoomWatcher.Snapshot { LogFound = true });
             One("room", "4x3", 1, 1, "12");
+            foreach (var (w, h) in WatchWidgets.Find("media").Sizes)
+            {
+                One("media", "6x4", w, h, "art");
+                One("media", "6x4", w, h, "noart", () => { data.FakeArt = null; data.FakeTimeline = null; data.FakeMedia = (true, "A Very Long Song Title That Goes On And On (Extended Club Remix)", "Somebody Featuring Somebody Else", false); });
+                One("media", "6x4", w, h, "nothing", () => { data.FakeArt = null; data.FakeMedia = (false, null, null, false); });
+            }
+            foreach (var (w, h) in WatchWidgets.Find("graph").Sizes) One("graph", "6x4", w, h, "spike");
+            One("cpu", "6x4", 1, 1, "a");
+            One("battery", "6x4", 2, 1, "4");
             foreach (var (w, h) in new[] { (1, 1), (2, 1), (2, 2), (4, 1) })
             {
                 One("media", "4x3", w, h, "art");
@@ -269,7 +284,7 @@ static partial class Tools
             int baks = Directory.GetFiles(md, "config.json.bak-pages-*").Length;
             string pn = string.Join(", ", s2.Data.Wrist.Pages?.Select(p => $"{p.Name} {p.Grid}") ?? Array.Empty<string>());
             Log.Info($"pages: migration of a config with its own face: migrated {m1} (want True), pages after page 1: {s2.Data.Wrist.Pages?.Count ?? 0} = {pn} " +
-                     $"(want 2 = VRChat 4x3, Performance 4x3), again at the next start {m2} (want False), page 1 byte-identical {w0 == w1} (want True), " +
+                     $"(want 2 = VRChat 6x4, Performance 6x4), again at the next start {m2} (want False), page 1 byte-identical {w0 == w1} (want True), " +
                      $"copies of the config {baks} (want 1), face {s2.Data.Wrist.Face} (want custom), page 1's grid {s2.Data.Wrist.Grid ?? "6x4"} (want 6x4)");
             s2.Data.Wrist.Pages = null;
             s2.MarkDirty();
@@ -290,9 +305,9 @@ static partial class Tools
             var s5 = new ConfigStore(np);
             WatchPages.Migrate(s5);
             var w5 = s5.Data.Wrist;
-            Log.Info($"pages: a new install: face {w5.Face} (want custom), page 1 '{WatchPages.Name(w5, 0)}' on {w5.Grid} (want 'VRChat' on 4x3), " +
-                     $"then {string.Join(", ", w5.Pages?.Select(p => $"'{p.Name}' on {p.Grid}") ?? Array.Empty<string>())} (want 'Performance' on 4x3), " +
-                     $"widgets {w5.Widgets?.Count} + {w5.Pages?[0].Widgets.Count} (want 6 + 6)");
+            Log.Info($"pages: a new install: face {w5.Face} (want custom), page 1 '{WatchPages.Name(w5, 0)}' on {WatchPages.GridId(w5, 0)} (want 'VRChat' on 6x4), " +
+                     $"then {string.Join(", ", w5.Pages?.Select(p => $"'{p.Name}' on {p.Grid}") ?? Array.Empty<string>())} (want 'Performance' on 6x4), " +
+                     $"widgets {w5.Widgets?.Count} + {w5.Pages?[0].Widgets.Count} (want 7 + 10), every cell used {Cells(w5.Widgets)} + {Cells(w5.Pages?[0].Widgets)} (want 24 + 24)");
         }
         {
             // the 4 x 3 grid's rules
@@ -325,7 +340,7 @@ static partial class Tools
         {
             Style(classic);
             string tag = classic ? "_95" : "";
-            SetPages(new WatchPage { Widgets = BusyFace(), Grid = "6x4" }, P("vrchat", "4x3"), P("performance", "4x3"));
+            SetPages(new WatchPage { Widgets = BusyFace(), Grid = "6x4" }, P("vrchat", "6x4"), P("performance", "6x4"));
             wrist.Settle();
             wrist.Draw(data);
             float y = 160 * (classic ? 1 : 1);
@@ -371,7 +386,7 @@ static partial class Tools
         {
             Style(classic);
             string tag = classic ? "_95" : "";
-            SetPages(P("vrchat", "4x3"), P("performance", "4x3"));
+            SetPages(P("vrchat", "6x4"), P("performance", "6x4"));
             wrist.Settle();
             wrist.Draw(data);
             wrist.Mic.Muted = false;
@@ -405,6 +420,7 @@ static partial class Tools
         if (view != null) PagesEditorShots(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
 
         wrist.OnAction = onAction0;
+        st.Hold = hold0;
         (wcfg.Face, wcfg.Widgets, wcfg.Grid, wcfg.Name, wcfg.Pages, wcfg.Page, wcfg.Background) = keep;
         (data.FakeMedia, data.FakeTimeline, data.FakeArt, data.Room, data.Notes, data.NightMode, data.DesktopsVisible) = media0;
         data.VramTotalGB = vramTotal0;
@@ -465,7 +481,7 @@ static partial class Tools
             wcfg.Widgets = BusyFace();
             wcfg.Grid = null;
             wcfg.Name = null;
-            wcfg.Pages = new List<WatchPage> { WatchPages.Make("vrchat", "4x3"), WatchPages.Make("performance", "4x3") };
+            wcfg.Pages = new List<WatchPage> { WatchPages.Make("vrchat", "6x4"), WatchPages.Make("performance", "6x4") };
             wcfg.Page = 1;
         }
         string Names() => string.Join(", ", Enumerable.Range(0, WatchPages.Count(wcfg)).Select(i => $"{WatchPages.Name(wcfg, i)} {WatchPages.GridId(wcfg, i)}"));
@@ -494,15 +510,43 @@ static partial class Tools
             surf.SavePng(gpu, Path.Combine(dir, file));
         }
         var pv = SettingsView.EditorPrev;
-        Vector2 Cell43(int cx, int cy)
+        Vector2 Cell64(int cx, int cy)
         {
-            var c = WatchWidgets.CellRect(cx, cy, 1, 1, false, GridSpec.G43);
+            var c = WatchWidgets.CellRect(cx, cy, 1, 1, false, GridSpec.G64Paged);
             return new(pv.X + (c.X + c.Width / 2) * pv.Width / WristPanel.TW, pv.Y + (c.Y + c.Height / 2) * pv.Height / WristPanel.TH);
         }
+        void ClickV(Vector2 v) => ClickM(v.X, v.Y);
         wrist.Settle();
         ui.ResetAnimations();
         FrameM();
         Settled("settings_wrist_pages.png");
+        // the editing tools on the VRChat page (page 2): the room smaller, its style; the microphone moved, removed, added again
+        var vrl = wcfg.Pages[0].Widgets;
+        var room = vrl.First(w => w.Type == "room");
+        ClickV(Cell64(4, 0));
+        ClickM(724 + 40, 138 + 17);               // Smaller
+        string roomSize = $"{room.W}x{room.H}";
+        ClickM(724 + 2 * 66.5f + 29.75f, 206 + 23);      // the style chips: Solid
+        string roomStyle = room.Style;
+        var mic = vrl.First(w => w.Type == "mic");
+        var m0 = Cell64(3, 1);
+        var m1 = Cell64(5, 0);
+        ptr.Move(m0.X * 1.5f, m0.Y * 1.5f); FrameM(); ptr.Press(); FrameM();
+        ptr.Move(m1.X * 1.5f, m1.Y * 1.5f); FrameM(); ptr.Release(); FrameM();
+        string micAt = $"{mic.X},{mic.Y}";
+        ClickV(Cell64(5, 0));
+        ClickM(724 + 2 * (244 / 3f + 8) + 40, 138 + 17);  // Remove
+        bool micGone = !vrl.Contains(mic);
+        int pi = Array.IndexOf(WatchWidgets.Palette, WatchWidgets.Find("mic"));
+        ClickM(222 + pi % 6 * 81 + 38, SettingsView.PaletteY + pi / 6 * SettingsView.PalettePitch + 13);
+        var mic2 = vrl.FirstOrDefault(w => w.Type == "mic");
+        Log.Info($"editor pages: on the VRChat page the room Smaller -> {roomSize} (want 2x1), its style {roomStyle} (want solid); the microphone " +
+                 $"moved to {micAt} (want 5,0), removed {micGone} (want True), added back from the palette at {(mic2 == null ? "none" : $"{mic2.X},{mic2.Y}")} (want 5,0)");
+        Settled("settings_wrist_pages_edited.png");
+        room.Style = null;
+        room.W = 3;
+        if (mic2 != null) { mic2.X = 3; mic2.Y = 1; }
+        ClickM(1060, 600);                        // beside everything: nothing selected
         // the first tab: page 1 shown (and edited)
         ClickM(222 + 40, 92);
         int tabbed = wrist.PageNow;
@@ -513,7 +557,7 @@ static partial class Tools
         ClickM(724 + 195, 257);                   // 4 x 3
         ClickM(854, 312);                         // Add page
         Log.Info($"editor pages: the first tab showed page {tabbed + 1} (want 1); added Everyday on 4x3: {Names()} " +
-                 $"(want Page 1 6x4, VRChat 4x3, Performance 4x3, Everyday 4x3), shown {wrist.PageNow + 1} (want 4)");
+                 $"(want Page 1 6x4, VRChat 6x4, Performance 6x4, Everyday 4x3), shown {wrist.PageNow + 1} (want 4)");
         Settled("settings_wrist_pages_added.png");
         // remove it: the first click only asks
         ClickM(854, 167);
@@ -521,15 +565,15 @@ static partial class Tools
         Settled("settings_wrist_removepage.png");
         ClickM(854, 167);
         Log.Info($"editor pages: Remove once -> {afterOne} pages (want 4), twice -> {WatchPages.Count(wcfg)} (want 3), shown {wrist.PageNow + 1} (want 3)");
-        // the Performance page to 6 x 4 and straight back: as it was
+        // the Performance page on 4 x 3 and straight back: as it was
         string before = JsonSerializer.Serialize(wcfg.Pages[1].Widgets);
-        ClickM(724 + 65, 125);
-        string mid = $"{WatchPages.GridId(wcfg, 2)} {wcfg.Pages[1].Widgets.Count} widgets";
-        Settled("settings_wrist_grid64.png");
         ClickM(724 + 195, 125);
-        Log.Info($"editor pages: Performance on 6x4 -> {mid} (want 6x4 6 widgets), back on 4x3 as it was {JsonSerializer.Serialize(wcfg.Pages[1].Widgets) == before} (want True)");
+        string mid = WatchPages.GridId(wcfg, 2);
+        Settled("settings_wrist_grid43.png");
+        ClickM(724 + 65, 125);
+        Log.Info($"editor pages: Performance on 4x3 -> {mid} (want 4x3), back on 6x4 as it was {JsonSerializer.Serialize(wcfg.Pages[1].Widgets) == before} (want True)");
         // its button group selected: the buttons under the watch; Keyboard added
-        ClickM(Cell43(2, 2).X, Cell43(2, 2).Y);
+        ClickV(Cell64(0, 3));
         var grp = wcfg.Pages[1].Widgets.First(w => w.Type == "buttons");
         ClickM(222 + 58, SettingsView.PaletteY + 2 + 17);
         Log.Info($"editor pages: the button group's buttons {string.Join(" ", grp.Items)} (want desktops theater night keyboard)");
