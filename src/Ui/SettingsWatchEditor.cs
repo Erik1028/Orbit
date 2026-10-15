@@ -144,8 +144,8 @@ public sealed partial class SettingsView
                 }
                 else
                 {
-                    if (picked) p.Fill(cr, Theme.WithAlpha(Theme.Accent, 0.22f), 12 * sx);
-                    p.Stroke(RectangleF.Inflate(cr, -1, -1), picked ? Theme.Accent : 0x38FFFFFF, picked ? 2 : 1.2f, 12 * sx);
+                    if (picked) p.Fill(cr, Theme.WithAlpha(Theme.Accent, 0.22f), Bento.CardRadius * sx);
+                    p.Stroke(RectangleF.Inflate(cr, -1, -1), picked ? Theme.Accent : 0x38FFFFFF, picked ? 2 : 1.2f, Bento.CardRadius * sx);
                 }
             }
 
@@ -169,8 +169,8 @@ public sealed partial class SettingsView
                 if (classic) p.Stroke(new RectangleF(gr.X + 1, gr.Y + 1, gr.Width - 2, gr.Height - 2), ok ? 0xFF000000 : 0xFFFF0000, 2);
                 else
                 {
-                    p.Fill(gr, ok ? Theme.WithAlpha(Theme.Accent, 0.3f) : 0x55F87171, 14 * sx);
-                    p.Stroke(RectangleF.Inflate(gr, -1, -1), ok ? Theme.Accent : Theme.Bad, 2, 14 * sx);
+                    p.Fill(gr, ok ? Theme.WithAlpha(Theme.Accent, 0.3f) : 0x55F87171, Bento.CardRadius * sx);
+                    p.Stroke(RectangleF.Inflate(gr, -1, -1), ok ? Theme.Accent : Theme.Bad, 2, Bento.CardRadius * sx);
                 }
             }
             if (!ui.Down)       // let go (also when it happened outside the preview)
@@ -197,7 +197,7 @@ public sealed partial class SettingsView
             }
             else
             {
-                p.Stroke(RectangleF.Inflate(sr, 1, 1), Theme.Accent, 3, 16 * sx);
+                p.Stroke(RectangleF.Inflate(sr, 1, 1), Theme.Accent, 3, (Bento.CardRadius + 1) * sx);
                 p.Fill(Handle(sel), Theme.Accent, 4);
             }
         }

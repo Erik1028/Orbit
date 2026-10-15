@@ -11,9 +11,9 @@ public static class WatchWidgets
 {
     public const int Cols = 6, Rows = 4;
 
-    // Sizes are in cells, smallest first; Default is the index of the size a new one gets. Tone = its colour
-    // in the modern style, from the user's palette: 0 = the Look tab's accent, 1 = the logo's indigo,
-    // 2 = between the two, 3 = Orbit's green (see WristPanel.ToneColor).
+    // Sizes are in cells, smallest first; Default is the index of the size a new one gets. Tone was its colour
+    // in the modern style before the Bento look (0 = the accent, 1 = the logo's indigo, 2 = between the two,
+    // 3 = Orbit's green); the watch now colours by role (WristPanel.RoleColor) and no longer reads it.
     public sealed record Kind(string Id, string Name, string Title95, string Icon, W95Icons.Id Icon95, (int W, int H)[] Sizes,
         int Default = 0, bool Button = false, int Tone = 0);
 

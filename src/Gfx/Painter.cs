@@ -10,7 +10,8 @@ namespace Orbit;
 
 static class Theme
 {
-    // Surface tones follow the chosen panel colour (Look tab); text colours are fixed.
+    // Surface tones follow the chosen panel colour (Look tab); text colours are fixed. The modern watch draws with its
+    // own tokens on top of these (Bento, derived in Apply).
     public static uint Bg = 0xFF15171C;
     public static uint Panel = 0xFF1D2027;
     public static uint Panel2 = 0xFF262A33;
@@ -20,7 +21,7 @@ static class Theme
     public const uint Text = 0xFFE9EBEF;
     public const uint Dim = 0xFF9AA2AE;
     public const uint Faint = 0xFF5D6573;
-    public static uint Accent = 0xFF45C1FF;      // cyan by default
+    public static uint Accent = 0xFF45C1FF;      // the config's (Apply; the static constructor applies the default look)
     public static uint OnAccent = 0xFF0B1220;    // text on an accent fill
     public static uint Laser = 0xFF45C1FF;
     public const uint Accent2 = 0xFF6D5CFF;      // indigo (logo)
@@ -85,12 +86,16 @@ static class Theme
         Accent = 0xFF000000 | (a.Accent & 0xFFFFFF);
         OnAccent = Luma(Accent) > 0.55f ? 0xFF0B1220 : 0xFFFFFFFF;
         Laser = a.LaserColor == 0 ? Accent : 0xFF000000 | (a.LaserColor & 0xFFFFFF);
+        Bento.Derive(pc, Accent);          // the watch's cards, tiles and tracks (modern only)
         Version++;
     }
 
+    // the default look until the config is applied (tools that never apply one draw in it too)
+    static Theme() => Apply(new AppearanceConfig());
+
     public static readonly (string name, uint accent, uint panel)[] ThemePresets =
     {
-        ("Classic", 0xFF45C1FF, 0xFF15171C), ("Ocean", 0xFF38BDF8, 0xFF0F172A), ("Sakura", 0xFFF472B6, 0xFF1E1A2E),
+        ("Classic", 0xFF45C1FF, 0xFF15171C), ("Ocean", 0xFF38BDF8, 0xFF0F172A), ("Bento", 0xFFFF5D93, 0xFF0A0B10),
         ("Forest", 0xFF4ADE80, 0xFF10201B), ("Ember", 0xFFFB923C, 0xFF26201A), ("Mono", 0xFFE5E7EB, 0xFF050506),
     };
 
@@ -114,6 +119,14 @@ static class Theme
         if (d < 1e-4f) return 0;
         float h = max == r ? (g - b) / d % 6 : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
         return (h * 60 + 360) % 360;
+    }
+
+    // HSV saturation, 0..1
+    public static float Sat(uint col)
+    {
+        float r = ((col >> 16) & 0xFF) / 255f, g = ((col >> 8) & 0xFF) / 255f, b = (col & 0xFF) / 255f;
+        float max = MathF.Max(r, MathF.Max(g, b)), min = MathF.Min(r, MathF.Min(g, b));
+        return max < 1e-4f ? 0 : (max - min) / max;
     }
 
     public static float Luma(uint c) =>
@@ -530,6 +543,54 @@ public sealed class Painter : IDisposable
     {
         foreach (var l in _layouts.Values) l.Dispose();
         _layouts.Clear();
+        foreach (var l in _tracked.Values) l.Dispose();
+        _tracked.Clear();
+    }
+
+    // ---- letter-spaced text (the modern watch's UPPERCASE captions) ----
+    readonly Dictionary<(string, IDWriteTextFormat, float, float, float), IDWriteTextLayout> _tracked = new();
+
+    // text with 'tracking' px after every letter but the last (so centred and right-aligned text stays where it belongs);
+    // the 95 skin's pixel text has none
+    public void TrackedText(string s, RectangleF r, uint c, float size, FontWeight w, float tracking,
+        TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center, string family = null)
+    {
+        if (string.IsNullOrEmpty(s)) return;
+        if (PixelMode || tracking == 0 || s.Length < 2) { Text(s, r, c, size, w, h, v, family); return; }
+        var f = Format(family ?? Theme.Font, size, w, h, v, false);
+        float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
+        var key = (s, f, lw, lh, tracking);
+        if (!_tracked.TryGetValue(key, out var lay))
+        {
+            if (_tracked.Count >= 300) { foreach (var l in _tracked.Values) l.Dispose(); _tracked.Clear(); }
+            lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            using (var l1 = lay.QueryInterface<IDWriteTextLayout1>())
+                l1.SetCharacterSpacing(0, tracking, 0, new TextRange(0, (uint)(s.Length - 1)));
+            _tracked[key] = lay;
+        }
+        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), DrawTextOptions.Clip);
+    }
+
+    public float MeasureTracked(string s, float size, FontWeight w, float tracking, string family = null) =>
+        string.IsNullOrEmpty(s) ? 0 : MeasureWidth(s, size, w, family) + (PixelMode ? 0 : tracking * (s.Length - 1));
+
+    // ---- line metrics: where the baseline sits, so a value and its unit share one ----
+    readonly Dictionary<(float, FontWeight, string), (float baseline, float height)> _lines = new();
+
+    // from the top of a line of this text to its baseline, and the line's height (text drawn ParagraphAlignment.Near)
+    public (float baseline, float height) TextLine(float size, FontWeight w = FontWeight.Normal, string family = null)
+    {
+        family ??= Theme.Font;
+        var key = (size, w, family);
+        if (_lines.TryGetValue(key, out var m)) return m;
+        var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, false);
+        using var layout = _g.DWrite.CreateTextLayout("0", f, 1000, 1000);
+        var lm = new LineMetrics[1];
+        layout.GetLineMetrics(lm, out _);
+        m = (lm[0].Baseline, lm[0].Height);
+        if (_lines.Count > 400) _lines.Clear();
+        _lines[key] = m;
+        return m;
     }
 
     public void Icon(string glyph, RectangleF r, uint c, float size) =>

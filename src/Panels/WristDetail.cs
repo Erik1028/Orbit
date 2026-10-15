@@ -91,16 +91,16 @@ public sealed partial class WristPanel
         if (_closing && e < 0.03f) { _open = null; _closing = false; return; }
         float ec = Math.Clamp(e, 0, 1);
         var all = new RectangleF(0, 0, TW, TH);
-        if (!LayoutTest) _p.Fill(all, Theme.WithAlpha(0xFF000000, 0.62f * ec), 34);
+        if (!LayoutTest) _p.Fill(all, Theme.WithAlpha(0xFF000000, 0.62f * ec), Bento.PageRadius);
         if (_ui.Clickable("wscrim", all, out _, out _) && !_closing) CloseDetail();        // a tap beside it
         var target = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, false);
         var r = Lerp(WatchWidgets.Rect(_open, false), target, e);
-        _p.Fill(r, Theme.Panel, CardRadius);
-        _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), Theme.Border, 1.2f, CardRadius);
+        _p.Fill(r, Bento.Card, CardRadius);
+        _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), Bento.Edge, Bento.EdgeWidth, CardRadius - 0.6f);
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
         float ca = Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
         if (ca <= 0.01f) return;
-        _halo = Theme.Panel;
+        _halo = Bento.Card;
         if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
         var E = target;
@@ -372,7 +372,7 @@ public sealed partial class WristPanel
                 TextAlignment.Center);
         }
         var g = new RectangleF(c.X - 10, c.Y + 150, c.Width + 20, c.Height - 150);
-        GraphOrbit(d.Vr, g, Theme.Accent);
+        GraphPlain(d.Vr, g, Theme.Accent);
         // the frames behind the graph: average, worst, how many dropped
         var v = d.Vr;
         int n = v.FrameCount, dropped = 0;
