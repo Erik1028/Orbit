@@ -186,8 +186,11 @@ public sealed class SystemVolume : IDisposable
         {
             Log.Warn("volume: " + e.Message);
             Release();
+            // the device list too: a broken one kept failing for good (the microphone in 1.12.3) - a fresh one in 5 s
+            if (_en != null) { try { Marshal.ReleaseComObject(_en); } catch { } _en = null; }
+            _devId = null;
             Level = -1;
-            _next = now + 5;
+            _next = _nextDevice = now + 5;
         }
     }
 
@@ -436,6 +439,9 @@ public sealed class SystemMic : IDisposable
         {
             Warn($"{e.Message} ({e.StackTrace?.Split('\n')[0].Trim()})");      // where: the cast that failed in 1.12.0
             Release();
+            // 1.12.3 failed in DefaultChanged and never recovered: the device list goes too, a fresh one in 5 s
+            if (_en != null) { try { Marshal.ReleaseComObject(_en); } catch { } _en = null; }
+            _devId = null;
             Present = false;
             Peak = -1;
             _next = _nextState = now + 5;
