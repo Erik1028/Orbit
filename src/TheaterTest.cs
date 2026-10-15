@@ -9,7 +9,7 @@ namespace Orbit;
 // switch and stop (the saved layout must not change), and pictures of the switcher in both styles.
 static class TheaterTest
 {
-    sealed class FakeScreen : ITheaterScreen
+    internal sealed class FakeScreen : ITheaterScreen        // --snapshot draws the bar with these too
     {
         public string Name;
         public bool IsPlayable = true;

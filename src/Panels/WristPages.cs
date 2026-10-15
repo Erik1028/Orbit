@@ -185,6 +185,7 @@ public sealed partial class WristPanel
     // button is on the real one
     void Taskbar95(int count, int cur)
     {
+        if (SkinTaskbar(count, cur)) return;      // a style's own taskbar (ScreenHooks.cs)
         float y = TH95 - WatchWidgets.Taskbar95 - 2;
         _p.Fill(new RectangleF(0, y, TW95, TH95 - y), Theme.W95Face);
         _p.Fill(new RectangleF(0, y, TW95, 1), Theme.W95Light);

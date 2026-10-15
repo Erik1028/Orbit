@@ -387,7 +387,7 @@ static class MinesTools
         Settle(wrist, data);
         wrist.PointerLeave(Hand.Left);
         wrist.CloseForTest();
-        if (Theme.Classic) RealSideBySide(dir, tag);
+        if (Theme.Retro == RetroStyle.Win95) RealSideBySide(dir, tag);      // winmine's own pixels: the 95 style's promise
         Sheet(Path.Combine(dir, $"mines_sheet{tag}.png"), sheet);
     }
 
@@ -491,7 +491,7 @@ static class MinesTools
                 "on the left - and the title bar and menu go beside it: the name and X, New game, Flag mode (VR: one trigger), how the game is, the best time.";
             gr.DrawString(notes, font, System.Drawing.Brushes.White, new System.Drawing.RectangleF(M, Head + Math.Max(wh * 2, watch.Height) + 8, W - 2 * M, Notes - 10));
         }
-        sheet.Save(Path.Combine(dir, $"mines_95_vs_real.png"), System.Drawing.Imaging.ImageFormat.Png);
+        sheet.Save(Path.Combine(dir, $"mines{tag}_vs_real.png"), System.Drawing.Imaging.ImageFormat.Png);
     }
 
     // what a frame of it costs (the watch draws at 10 fps while a game is open, every frame while a square is held)

@@ -539,6 +539,7 @@ public sealed partial class WristPanel
             _ui.Animating = true;
             return;
         }
+        if (SkinDetail(d, k, kind, win)) return;                  // a style's own window (ScreenHooks.cs)
         if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it
         if (kind == "room") { Room95Detail(win, d); return; }     // the Room window: a details list and a status bar
         if (kind == "dock") { Dock95Detail(win, d); return; }     // the Hexpad window

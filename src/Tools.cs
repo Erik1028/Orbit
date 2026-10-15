@@ -10,7 +10,9 @@ using Valve.VR;
 
 namespace Orbit;
 
-// Developer tools: --snapshot renders every panel to PNG without VR; --selftest checks the SteamVR side.
+// Developer tools: --snapshot renders every panel to PNG without VR (every retro style too: *_95, *_xp, *_aero, *_mac, *_term;
+// --snapshot <dir> --only-style xp - or ORBIT_SNAP_STYLE=xp - renders one style's screens alone in seconds); --selftest checks the
+// SteamVR side.
 static partial class Tools
 {
     sealed class FakeHost : IOrbitHost
@@ -73,10 +75,20 @@ static partial class Tools
         public void ForgetLayout(string name) { }
     }
 
-    public static int Snapshot(string dir)
+    // onlyStyle (--only-style 95 | xp | aero | mac | term, or ORBIT_SNAP_STYLE): that retro style's screens alone, in seconds - the
+    // modern pictures, the other styles, the fonts and the pages left out (for working on a style; its layout check runs too)
+    public static int Snapshot(string dir, string onlyStyle = null)
     {
         dir = Path.GetFullPath(dir);
         Directory.CreateDirectory(dir);
+        onlyStyle ??= Environment.GetEnvironmentVariable("ORBIT_SNAP_STYLE");
+        RetroSkin only = null;
+        if (!string.IsNullOrEmpty(onlyStyle))
+        {
+            only = Array.Find(Skins.All, k => k.Tag == onlyStyle || k.Id == onlyStyle);
+            if (only == null) { Log.Error($"snapshot: no style '{onlyStyle}' (95, xp, aero, mac, term)"); return 1; }
+        }
+        bool everything = only == null;
         // separate config: a snapshot never touches the real one
         var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
         using var gpu = new Gpu(-1);
@@ -102,40 +114,46 @@ static partial class Tools
         wrist.Mic.Fake = true;                          // never the real microphone: a tap flips a made-up one
         wrist.Mic.Present = true;
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "pages") return PagesRun(wrist, data, cfg, painter, gpu, dir, null, null, null);
-        var sw0 = System.Diagnostics.Stopwatch.StartNew();
-        wrist.Draw(data);
-        gpu.Ctx.Flush();
-        Log.Info($"first wrist draw {sw0.Elapsed.TotalMilliseconds:0.0} ms");
-        sw0.Restart(); wrist.Draw(data); gpu.Ctx.Flush();
-        Log.Info($"second wrist draw {sw0.Elapsed.TotalMilliseconds:0.0} ms");
-        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist.png"));
-        foreach (var face in new[] { "analog", "minimal", "time" })
+        if (everything)
         {
-            cfg.Data.Wrist.Face = face;
-            cfg.Data.Wrist.PerfGraph = face == "analog";
+            var sw0 = System.Diagnostics.Stopwatch.StartNew();
             wrist.Draw(data);
-            wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}.png"));
+            gpu.Ctx.Flush();
+            Log.Info($"first wrist draw {sw0.Elapsed.TotalMilliseconds:0.0} ms");
+            sw0.Restart(); wrist.Draw(data); gpu.Ctx.Flush();
+            Log.Info($"second wrist draw {sw0.Elapsed.TotalMilliseconds:0.0} ms");
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist.png"));
+            foreach (var face in new[] { "analog", "minimal", "time" })
+            {
+                cfg.Data.Wrist.Face = face;
+                cfg.Data.Wrist.PerfGraph = face == "analog";
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}.png"));
+            }
+            cfg.Data.Wrist.Face = "full";
+            cfg.Data.Wrist.PerfGraph = true;
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_graph.png"));
+            cfg.Data.Wrist.PerfGraph = false;
         }
-        cfg.Data.Wrist.Face = "full";
-        cfg.Data.Wrist.PerfGraph = true;
-        wrist.Draw(data);
-        wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_graph.png"));
-        cfg.Data.Wrist.PerfGraph = false;
 
         using var kb = new KeyboardPanel(gpu, painter, cfg);
-        kb.Draw();
-        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard.png"));
-        cfg.Data.Keyboard.Language = "en-US";
-        kb.ReloadLayout();
-        kb.Draw();
-        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_en.png"));
-        cfg.Data.Keyboard.Language = "windows";
-        kb.ReloadLayout();
-        kb.PreviewChat("Szia! Mindjárt jövök, csak befejezem ezt :)");
-        kb.Draw();
-        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_chat.png"));
-        kb.PreviewChat("");
-        typeof(KeyboardPanel).GetField("_chat", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(kb, false);
+        if (everything)
+        {
+            kb.Draw();
+            kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard.png"));
+            cfg.Data.Keyboard.Language = "en-US";
+            kb.ReloadLayout();
+            kb.Draw();
+            kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_en.png"));
+            cfg.Data.Keyboard.Language = "windows";
+            kb.ReloadLayout();
+            kb.PreviewChat("Szia! Mindjárt jövök, csak befejezem ezt :)");
+            kb.Draw();
+            kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_chat.png"));
+            kb.PreviewChat("");
+            typeof(KeyboardPanel).GetField("_chat", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(kb, false);
+        }
         var parsed = NotificationListener.Parse(System.Text.Encoding.UTF8.GetBytes(
             "{\"messageType\":1,\"index\":0,\"timeout\":5.0,\"height\":110.0,\"opacity\":1.0,\"volume\":0.7,\"audioPath\":\"\",\"title\":\"<b>Friend online</b>\",\"content\":\"Sam is in The Black Cat\",\"useBase64Icon\":false,\"icon\":\"default\",\"sourceApp\":\"VRCX\"}"));
         Log.Info($"notification parse: title='{parsed?.Title}' content='{parsed?.Content}' source={parsed?.Source} timeout={parsed?.Timeout}");
@@ -151,7 +169,7 @@ static partial class Tools
         // capture each monitor once
         var dev = MonitorCapture.CreateWinRtDevice(gpu);
         int n = 0;
-        foreach (var m in mons)
+        foreach (var m in everything ? mons : new List<MonitorInfo>())
         {
             try
             {
@@ -246,6 +264,15 @@ static partial class Tools
         wrist.Draw(data);
         wrist.Surf.SavePng(gpu, Path.Combine(dir, "wrist_buttons.png"));
         data.NightMode = false;
+        var wcfg = cfg.Data.Wrist;
+        string face0 = wcfg.Face;
+        var panelView = new SettingsView(host) { OnClose = () => { }, Tab = SettingsView.TabGeneral };
+        if (only != null)
+        {
+            RetroShots(only);
+            Log.Info($"snapshot ({only.Name} only) written to " + dir);
+            return 0;
+        }
         for (int t = 0; t < SettingsView.TabCount; t++)
         {
             view.Tab = t;
@@ -298,7 +325,6 @@ static partial class Tools
             catch (Exception e) { Log.Error($"window capture {w}: {e.Message}"); }
             break;
         }
-        var panelView = new SettingsView(host) { OnClose = () => { }, Tab = SettingsView.TabGeneral };
         for (int frame = 0; frame < 2; frame++)      // 2nd frame: animations settled
         {
             ui.Begin(ptr, 1.5f);
@@ -359,6 +385,28 @@ static partial class Tools
         painter.End();
         ui.End();
         surf.SavePng(gpu, Path.Combine(dir, "settings_alt.png"));
+        // Look > Style: its list opened over the page (every style with its little window), Windows XP picked - it applies at once -,
+        // then Modern again from the XP sheet's Style box
+        {
+            void FrameL() { ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End(); }
+            void ClickL(float x, float y) { ptr.Move(x * 1.5f, y * 1.5f); FrameL(); ptr.Press(); FrameL(); ptr.Release(); FrameL(); }
+            void FrameS() => view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            void ClickS(float x, float y) { ptr.Move(x * 2, y * 2); FrameS(); ptr.Press(); FrameS(); ptr.Release(); FrameS(); FrameS(); }
+            ui.ResetAnimations();
+            ClickL(410, 531);                                     // the Style field
+            ptr.Move(410 * 1.5f, (254 + 6 + 2 * 40 + 20) * 1.5f);  // over Windows XP in the list
+            FrameL(); FrameL();
+            surf.SavePng(gpu, Path.Combine(dir, "settings_look_styles.png"));
+            ClickL(410, 254 + 6 + 2 * 40 + 20);
+            bool xp = cfg.Data.Appearance.Style == "xp" && Theme.Retro == RetroStyle.XP && Theme.Classic;
+            ptr.Leave();
+            ClickS(180, 86);                                      // the XP sheet's Style box: its list opens
+            ClickS(180, 98 + Theme.RetroSkin.DropRowH / 2);       // Modern (the first)
+            Log.Info($"look: Windows XP picked from the Style list applies at once {xp} (want True); Modern again from the sheet's Style box " +
+                     $"{cfg.Data.Appearance.Style == "modern" && !Theme.Classic} (want True)");
+            ptr.Leave();
+            ui.ResetAnimations();
+        }
         KeySounds.Export(dir);
         using (var np = new NotificationPanel(gpu, painter, cfg))
         {
@@ -378,8 +426,6 @@ static partial class Tools
         // a new watch has; the 12-hour clock of the look above is kept (AM / PM is the tighter fit).
         cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
         Theme.Apply(cfg.Data.Appearance);
-        var wcfg = cfg.Data.Wrist;
-        string face0 = wcfg.Face;
         List<WatchWidget> Gallery(int n)
         {
             var l = new List<WatchWidget>();
@@ -668,114 +714,174 @@ static partial class Tools
         wcfg.Widgets = null;
         view.Tab = 0;
 
-        // the Windows 95 skin: every screen once more
-        cfg.Data.Appearance = new AppearanceConfig { Style = "classic", Clock24h = true };
-        Theme.Apply(cfg.Data.Appearance);
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
-        for (int t = 0; t < SettingsView.TabCount; t++)
-        {
-            view.Tab = t;
-            ui.ResetAnimations();
-            if (view.ShowsWristPreview) wrist.Draw(data);
-            if (view.ShowsKeyboardPreview) kb.Draw();
-            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-            surf.SavePng(gpu, Path.Combine(dir, $"settings{t}_95.png"));
-        }
-        WhatsNewShots("_95");
-        // a drop-down list opened by a click (General: Smoothing), then the panel version
-        view.Tab = SettingsView.TabGeneral;
-        var combo = new System.Numerics.Vector2(170 * 2, 114 * 2);
-        ptr.Move(combo.X, combo.Y);
-        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-        ptr.Press();
-        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-        ptr.Release();
-        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-        ptr.Move(combo.X, combo.Y + 13 * 2 * 3);
-        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-        surf.SavePng(gpu, Path.Combine(dir, "settings_combo_95.png"));
-        void Frame95() => view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-        void Click95(float x, float y) { ptr.Move(x * 2, y * 2); Frame95(); ptr.Press(); Frame95(); ptr.Release(); Frame95(); Frame95(); }
-        // pick "High" (item 3) in the open list
-        int smooth0 = cfg.Data.General.LaserSmoothing;
-        Click95(170, 126 + 3 * 13 + 6);
-        Log.Info($"95 drop-down: picked smoothing {cfg.Data.General.LaserSmoothing} (want 3, was {smooth0})");
-        // a click outside an open list only closes it: the check box under the pointer must not change
-        bool hap0 = cfg.Data.General.Haptics;
-        Click95(170, 114);                  // open again
-        Click95(34, 140);                   // "Haptic ticks", outside the list
-        bool hap1 = cfg.Data.General.Haptics;
-        Click95(34, 140);                   // now it is a real click
-        Log.Info($"95 drop-down: outside click kept haptics {hap0}->{hap1} (want same), next click {cfg.Data.General.Haptics} (want {!hap0})");
-        cfg.Data.General.LaserSmoothing = smooth0;
-        cfg.Data.General.Haptics = hap0;
-        ptr.Leave();
-        ui.ResetAnimations();
-        panelView.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, 0x00000000);
-        surf.SavePng(gpu, Path.Combine(dir, "settings_panel_95.png"));
-        foreach (var face in new[] { "full", "analog", "minimal", "time" })
-        {
-            cfg.Data.Wrist.Face = face;
-            cfg.Data.Wrist.PerfGraph = face == "analog";
-            wrist.Draw(data);
-            wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}_95.png"));
-        }
-        cfg.Data.Wrist.Face = "full";
-        cfg.Data.Wrist.PerfGraph = false;
-        kb.Draw();
-        kb.Surf.SavePng(gpu, Path.Combine(dir, "keyboard_95.png"));
-        using (var np = new NotificationPanel(gpu, painter, cfg))
-        {
-            np.AddForPreview(new Notification { Source = "VRCX", Title = "Friend online", Content = "Sam has joined The Black Cat (Friends+)" });
-            np.Draw();
-            np.Surface.SavePng(gpu, Path.Combine(dir, "notifications_95.png"));
-        }
-        SaveOpened("_95");
-        LayoutCheck("95");
-        // the custom face in the 95 style: the watch, the Wrist page and its editor with a selection
-        wcfg.Face = "custom";
-        SaveCustom("_95");
-        wcfg.Face = "custom";
-        wcfg.Widgets = Gallery(0);
-        view.Tab = SettingsView.TabWrist;
-        ui.ResetAnimations();
-        wrist.Draw(data);
-        view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
-        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_custom_95.png"));
-        view.EditingWatch = true;
-        void Frame95W() { wrist.Draw(data); view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal); }
-        // click the battery window (cells 4-5, rows 0-1): 95 cell 4 starts at 4 + 4 * 52.67
-        ptr.Move((31 + 4 + 4 * 52.67f + 40) * 2, (82 + 4 + 30) * 2);
-        Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W();
-        ptr.Leave(); Frame95W();
-        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_95.png"));
-        // a face made in the modern style: its 1x1 time selected in the 95 editor (the size box has no 95 size to show: empty),
-        // then 2 x 1 picked from the box
-        wcfg.Widgets = Gallery(0);
-        wcfg.Widgets.RemoveAll(x => x.Type is "fps" or "reproj");
-        var t11 = new WatchWidget { Type = "time", X = 0, Y = 3, W = 1, H = 1 };
-        wcfg.Widgets.Add(t11);
-        ptr.Move((31 + 4 + 24) * 2, (82 + 4 + 3 * 54 + 25) * 2);
-        Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W();
-        ptr.Leave(); Frame95W();
-        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_95_extra.png"));
-        string was = $"{t11.W}x{t11.H}";
-        void Click95W(float x, float y) { ptr.Move(x * 2, y * 2); Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W(); Frame95W(); }
-        Click95W(518, 332);                       // the size box: its list opens
-        Click95W(518, 344 + 6);                   // "2 x 1" (the first)
-        ptr.Leave(); Frame95W();
-        Log.Info($"95 editor: a 1x1 time (modern-only) selected, still {was} (want 1x1); picked 2 x 1 in the size box: {t11.W}x{t11.H} (want 2x1)");
-        view.EditingWatch = false;
-        TapFamily("_95");
-        MinesTools.Run(wrist, data, cfg, gpu, dir, "_95");
-        wcfg.Face = face0;
-        wcfg.Widgets = null;
-        System.Globalization.CultureInfo.CurrentCulture = culture;
+        // the retro styles: every screen once more in each, Windows 95 first (its pictures keep their *_95 names)
+        foreach (var sk in Skins.All) RetroShots(sk);
         FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
         PagesRun(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
         Log.Info("snapshot written to " + dir);
         return 0;
+
+        void RetroShots(RetroSkin sk)
+        {
+            // a retro style: every screen once more, its pictures named *_<tag> (*_95, *_xp, *_aero, *_mac, *_term)
+            string tag = "_" + sk.Tag;
+            float rowH = sk.DropRowH;
+            cfg.Data.Appearance = new AppearanceConfig { Style = sk.Id, Clock24h = true };
+            Theme.Apply(cfg.Data.Appearance);
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+            for (int t = 0; t < SettingsView.TabCount; t++)
+            {
+                view.Tab = t;
+                ui.ResetAnimations();
+                if (view.ShowsWristPreview) wrist.Draw(data);
+                if (view.ShowsKeyboardPreview) kb.Draw();
+                view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+                surf.SavePng(gpu, Path.Combine(dir, $"settings{t}{tag}.png"));
+            }
+            WhatsNewShots(tag);
+            // a drop-down list opened by a click (General: Smoothing), then the panel version
+            view.Tab = SettingsView.TabGeneral;
+            var combo = new System.Numerics.Vector2(170 * 2, 114 * 2);
+            ptr.Move(combo.X, combo.Y);
+            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            ptr.Press();
+            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            ptr.Release();
+            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            ptr.Move(combo.X, combo.Y + rowH * 2 * 3);
+            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_combo{tag}.png"));
+            void Frame95() => view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            void Click95(float x, float y) { ptr.Move(x * 2, y * 2); Frame95(); ptr.Press(); Frame95(); ptr.Release(); Frame95(); Frame95(); }
+            // pick "High" (item 3) in the open list
+            int smooth0 = cfg.Data.General.LaserSmoothing;
+            Click95(170, 126 + 3 * rowH + 6);
+            Log.Info($"{sk.Tag} drop-down: picked smoothing {cfg.Data.General.LaserSmoothing} (want 3, was {smooth0})");
+            // a click outside an open list only closes it: the check box under the pointer must not change
+            bool hap0 = cfg.Data.General.Haptics;
+            Click95(170, 114);                  // open again
+            Click95(34, 140);                   // "Haptic ticks", outside the list
+            bool hap1 = cfg.Data.General.Haptics;
+            Click95(34, 140);                   // now it is a real click
+            Log.Info($"{sk.Tag} drop-down: outside click kept haptics {hap0}->{hap1} (want same), next click {cfg.Data.General.Haptics} (want {!hap0})");
+            cfg.Data.General.LaserSmoothing = smooth0;
+            cfg.Data.General.Haptics = hap0;
+            ptr.Leave();
+            ui.ResetAnimations();
+            panelView.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, 0x00000000);
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_panel{tag}.png"));
+            foreach (var face in new[] { "full", "analog", "minimal", "time" })
+            {
+                cfg.Data.Wrist.Face = face;
+                cfg.Data.Wrist.PerfGraph = face == "analog";
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}{tag}.png"));
+            }
+            cfg.Data.Wrist.Face = "full";
+            cfg.Data.Wrist.PerfGraph = false;
+            kb.Draw();
+            kb.Surf.SavePng(gpu, Path.Combine(dir, $"keyboard{tag}.png"));
+            using (var np = new NotificationPanel(gpu, painter, cfg))
+            {
+                np.AddForPreview(new Notification { Source = "VRCX", Title = "Friend online", Content = "Sam has joined The Black Cat (Friends+)" });
+                np.Draw();
+                np.Surface.SavePng(gpu, Path.Combine(dir, $"notifications{tag}.png"));
+            }
+            SaveOpened(tag);
+            LayoutCheck(sk.Tag);
+            // the custom face in the 95 style: the watch, the Wrist page and its editor with a selection
+            wcfg.Face = "custom";
+            SaveCustom(tag);
+            wcfg.Face = "custom";
+            wcfg.Widgets = Gallery(0);
+            view.Tab = SettingsView.TabWrist;
+            ui.ResetAnimations();
+            wrist.Draw(data);
+            view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_wrist_custom{tag}.png"));
+            view.EditingWatch = true;
+            void Frame95W() { wrist.Draw(data); view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal); }
+            // click the battery window (cells 4-5, rows 0-1): 95 cell 4 starts at 4 + 4 * 52.67
+            ptr.Move((31 + 4 + 4 * 52.67f + 40) * 2, (82 + 4 + 30) * 2);
+            Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W();
+            ptr.Leave(); Frame95W();
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_wrist_editor{tag}.png"));
+            // a face made in the modern style: its 1x1 time selected in the 95 editor (the size box has no 95 size to show: empty),
+            // then 2 x 1 picked from the box
+            wcfg.Widgets = Gallery(0);
+            wcfg.Widgets.RemoveAll(x => x.Type is "fps" or "reproj");
+            var t11 = new WatchWidget { Type = "time", X = 0, Y = 3, W = 1, H = 1 };
+            wcfg.Widgets.Add(t11);
+            ptr.Move((31 + 4 + 24) * 2, (82 + 4 + 3 * 54 + 25) * 2);
+            Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W();
+            ptr.Leave(); Frame95W();
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_wrist_editor{tag}_extra.png"));
+            string was = $"{t11.W}x{t11.H}";
+            void Click95W(float x, float y) { ptr.Move(x * 2, y * 2); Frame95W(); ptr.Press(); Frame95W(); ptr.Release(); Frame95W(); Frame95W(); }
+            Click95W(518, 332);                       // the size box: its list opens
+            Click95W(518, 344 + MathF.Floor(rowH / 2));   // "2 x 1" (the first)
+            ptr.Leave(); Frame95W();
+            Log.Info($"{sk.Tag} editor: a 1x1 time (modern-only) selected, still {was} (want 1x1); picked 2 x 1 in the size box: {t11.W}x{t11.H} (want 2x1)");
+            view.EditingWatch = false;
+            TheaterShots(tag);
+            PanelShots(tag);
+            TapFamily(tag);
+            MinesTools.Run(wrist, data, cfg, gpu, dir, tag);
+            PageShots(tag);
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+
+        // the custom face with three pages (the last on the 4 x 3 grid): the taskbar along the bottom, each page once
+        void PageShots(string tag)
+        {
+            var keep = (wcfg.Face, wcfg.Widgets, wcfg.Grid, wcfg.Name, wcfg.Pages, wcfg.Page, wcfg.Background);
+            var pages = new[] { WatchPages.Make("vrchat", "6x4"), WatchPages.Make("performance", "6x4"), WatchPages.Make("everyday", "4x3") };
+            wcfg.Face = "custom";
+            wcfg.Background = "panel";
+            wcfg.Widgets = pages[0].Widgets;
+            wcfg.Grid = null;
+            wcfg.Name = pages[0].Name;
+            wcfg.Pages = pages.Skip(1).ToList();
+            for (int i = 0; i < pages.Length; i++)
+            {
+                wcfg.Page = i;
+                wrist.Settle();
+                wrist.Draw(data);
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_pages{i + 1}{tag}.png"));
+            }
+            (wcfg.Face, wcfg.Widgets, wcfg.Grid, wcfg.Name, wcfg.Pages, wcfg.Page, wcfg.Background) = keep;
+        }
+
+        // the floating Room and Hexpad panels, on made-up data (no VRChat log; never the real Hexpad: the panel has no link)
+        void PanelShots(string tag)
+        {
+            using (var room = new RoomPanel(gpu, painter, cfg))
+            {
+                room.DrawFor(RoomViewTools.Room(12, 2), DateTime.Now);
+                room.Surf.SavePng(gpu, Path.Combine(dir, $"room_panel{tag}.png"));
+            }
+            using var faces = new HexpadFaces();
+            var fake = DockViewTools.Fake();
+            faces.Update(painter, fake);
+            using var dock = new DockPanel(gpu, painter, cfg, null, faces);
+            dock.DrawFor(fake, Clock.Now);
+            dock.Surf.SavePng(gpu, Path.Combine(dir, $"dock_panel{tag}.png"));
+        }
+
+        // the theater bar under a screen, with its settings, and in theater mode (the switcher); made-up screens, no VR
+        void TheaterShots(string tag)
+        {
+            using var bar = new TheaterBar(gpu, painter, cfg);
+            var a = new TheaterTest.FakeScreen { Name = "DELL U2723QE" };
+            var b = new TheaterTest.FakeScreen { Name = "LG ULTRAGEAR" };
+            var choices = new List<ITheaterScreen> { a, b, new TheaterTest.FakeScreen { Name = "YouTube - Lofi hip hop radio - beats to relax/study to - Mozilla Firefox" } };
+            bar.DrawFor(choices, b, new TheaterView { Size = 2.8f }).SavePng(gpu, Path.Combine(dir, $"theater_bar{tag}.png"));
+            bar.DrawFor(new List<ITheaterScreen>(), null).SavePng(gpu, Path.Combine(dir, $"theater_bar_screen{tag}.png"));
+        }
     }
 
     // ---- Look > Font: the modern style in every font offered (the 95 one keeps its own pixel font). First the list itself: opened by

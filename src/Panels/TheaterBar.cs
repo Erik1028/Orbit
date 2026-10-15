@@ -16,7 +16,7 @@ namespace Orbit;
 //   and Exit.
 // - Both: a keyboard button (lit while the keyboard is shown).
 // It fades away when you are not using it, so nothing sits under the picture. Turned off: Settings > Monitors.
-public sealed class TheaterBar : IPointerTarget, IDisposable
+public sealed partial class TheaterBar : IPointerTarget, IDisposable
 {
     // modern: pills on a rounded bar; 95: push buttons, trackbars and a check box on a strip, half-size canvas drawn 2x
     const int H = 84, Pad = 10, ChipW = 230, Gap = 8, GoW = 196, SliderW = 210, CurveW = 168;
@@ -131,7 +131,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
             _current = theater.Screen;
             _dirty = true;
         }
-        int key = (th ? 1000 + _choices.Count * 2 : 0) + (Theme.Classic ? 1 : 0);
+        int key = (th ? 1000 + _choices.Count * 8 : 0) + (int)Theme.Retro;      // another style: another width
         if (key != _layoutKey && !held) Relayout(key);
         // changed elsewhere (grabbing the big screen, the settings window): the sliders follow
         if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved || KbOn != _drawnKb) _dirty = true;
@@ -188,6 +188,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         if (Theme.Classic)
         {
             _w95 = (int)MathF.Ceiling(4 + (_theater ? n * (Btn95W + 3) : Go95W + 3) + SettingsWidth95() + Kb95W + 3 + (_theater ? Exit95W + 3 : 0) + 4);
+            SkinTheaterWidth(ref _w95);     // a style laying the bar out its own way (ScreenHooks.cs)
             _tw = _w95 * 2; _th = H95 * 2;
         }
         else
@@ -310,6 +311,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
 
     void Draw95()
     {
+        if (SkinTheater()) return;          // a style's own bar (ScreenHooks.cs)
         _canvas95 ??= new Surface(_p.Gpu, _w95, H95);
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(_w95, H95);

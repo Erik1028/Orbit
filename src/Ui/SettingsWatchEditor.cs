@@ -605,6 +605,7 @@ public sealed partial class SettingsView
 
     void Wrist95Editor(Ui ui)
     {
+        if (SkinWatchEditor(ui)) return;          // a style's own editor (ScreenHooks.cs)
         var p = ui.P;
         var w = C.Wrist;
         var list = WatchLayout();

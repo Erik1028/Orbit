@@ -132,7 +132,7 @@ public sealed class NotificationListener : IDisposable
 }
 
 // Shows notifications as cards in the lower part of the view (head-locked), up to three stacked.
-public sealed class NotificationPanel : IDisposable
+public sealed partial class NotificationPanel : IDisposable
 {
     public const int TW = 960, TH = 640;
     const float CardH = 190, CardGap = 14;
@@ -281,13 +281,14 @@ public sealed class NotificationPanel : IDisposable
     // the title in bold and the text, all in 8 pt MS Sans Serif
     void DrawClassicCard(Notification c, float y)
     {
+        if (SkinCard(c, y)) return;         // a style's own card (ScreenHooks.cs)
         var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
         _p.Fill(r, Theme.W95Face);
         _p.Bevel(r, Painter.Edge.Window);
         var cap = new RectangleF(r.X + 3, r.Y + 3, r.Width - 6, 18);
         _p.Fill(cap, Theme.W95Navy);
         _p.Text(string.IsNullOrEmpty(c.Source) ? "Notification" : c.Source, new RectangleF(cap.X + 3, cap.Y, cap.Width - 6, cap.Height),
-            Theme.W95Hi, Ui.F95, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.ClassicFont);
+            Theme.W95Hi, Ui.F95, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.RetroFont);
         var icon = new RectangleF(r.X + 14, cap.Bottom + 12, 32, 32);
         if (c.Icon != null)
         {
@@ -297,9 +298,9 @@ public sealed class NotificationPanel : IDisposable
         else W95Icons.Draw(_p, W95Icons.Id.Info32, icon.X, icon.Y);
         float tx = icon.Right + 14, tw = r.Right - tx - 12;
         _p.Text(c.Title, new RectangleF(tx, cap.Bottom + 10, tw, 15), Theme.W95Dark, Ui.F95, FontWeight.Bold,
-            TextAlignment.Leading, ParagraphAlignment.Center, Theme.ClassicFont);
+            TextAlignment.Leading, ParagraphAlignment.Center, Theme.RetroFont);
         _p.Text(c.Content, new RectangleF(tx, cap.Bottom + 27, tw, r.Bottom - cap.Bottom - 31), Theme.W95Dark, Ui.F95, FontWeight.Normal,
-            TextAlignment.Leading, ParagraphAlignment.Near, Theme.ClassicFont, true);
+            TextAlignment.Leading, ParagraphAlignment.Near, Theme.RetroFont, true);
     }
 
     // snapshot tool: draw a sample card

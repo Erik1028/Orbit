@@ -149,8 +149,8 @@ static class Program
         {
             if (args.Contains("--snapshot"))
             {
-                int i = Array.IndexOf(args, "--snapshot");
-                return Tools.Snapshot(i + 1 < args.Length ? args[i + 1] : "snapshot");
+                int i = Array.IndexOf(args, "--snapshot"), o = Array.IndexOf(args, "--only-style");    // --only-style 95|xp|aero|mac|term
+                return Tools.Snapshot(i + 1 < args.Length ? args[i + 1] : "snapshot", o >= 0 && o + 1 < args.Length ? args[o + 1] : null);
             }
             if (args.Contains("--clockshot"))
             {

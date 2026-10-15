@@ -11,7 +11,7 @@ namespace Orbit;
 // left lately. A star beside each name marks someone to be told about when they come and go. A floating panel like the
 // dock: grab it, the stick scrolls the list. Data: RoomWatcher (VRChat's log; friends from VRCX when it is installed).
 // Opened from Settings; the watch's room widget opens the watch's own view of the same list instead (WristRoom.cs).
-public sealed class RoomPanel : IPointerTarget, IDisposable
+public sealed partial class RoomPanel : IPointerTarget, IDisposable
 {
     public const int TW = 800, TH = 480, W95 = TW / 2, H95 = TH / 2;
 
@@ -323,6 +323,7 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
 
     void Draw95(DateTime now)
     {
+        if (SkinRoom(now)) return;          // a style's own panel (ScreenHooks.cs)
         _canvas95 ??= new Surface(_p.Gpu, W95, H95);
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(W95, H95);

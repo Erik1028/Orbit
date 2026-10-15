@@ -43,6 +43,7 @@ public sealed partial class SettingsView
 
     public void Draw95(Ui ui)
     {
+        if (SkinSettings(ui)) { if (ui.Changed) _h.Cfg.MarkDirty(); return; }      // a style's own settings screen (ScreenHooks.cs)
         var p = ui.P;
         // "What's new" over the sheet (after an update until OK, or from General): the sheet is only a picture
         var wn = WhatsNewShown;
@@ -59,7 +60,7 @@ public sealed partial class SettingsView
         // the page first, then the tabs over its top edge
         var page = new RectangleF(6, 46, W95W - 12, 394);
         p.Fill(page, Theme.W95Face);
-        p.Bevel(page, Painter.Edge.Window);
+        p.Bevel(page, Painter.Edge.Page);
         int t = Tab;
         if (ui.Tabs95("p95.tabs", 8, 28, Tabs, ref t)) Tab = t;
 
@@ -425,7 +426,7 @@ public sealed partial class SettingsView
         // the watch itself, pixel for pixel, on the 95 desktop
         ui.Group95(new RectangleF(376, 56, 358, 374), "Preview");
         var desk = new RectangleF(388, 76, 334, 256);
-        p.Fill(desk, Theme.W95Teal);
+        Theme.RetroSkin.FillDesktop(p, desk);
         p.Bevel(desk, Painter.Edge.Sunken);
         var c95 = _h.Wrist.Canvas95;
         if (c95 != null)
@@ -489,14 +490,15 @@ public sealed partial class SettingsView
         var a = C.Appearance;
         bool changed = false;
         ui.Group95(new RectangleF(16, 56, 350, 150), "Style");
-        int si = a.Style == "classic" ? 1 : 0;
-        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", new[] { "Modern", "Windows 95" }, ref si))
+        int si = Skins.IndexOf(a.Style);
+        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", Skins.StyleNames, ref si))
         {
-            a.Style = si == 1 ? "classic" : "modern";
+            a.Style = Skins.StyleIds[si];
             changed = true;
         }
-        Hint(ui, 28, 108, 326, "Windows 95 draws these settings, the watch, the keyboard and the notifications at their real 1995 " +
-                               "pixel size, enlarged without smoothing.", 60);
+        string era = Theme.Retro == RetroStyle.Win95 ? "their real 1995 pixel size" : "the real pixel size of its day";
+        Hint(ui, 28, 108, 326, $"{Theme.RetroSkin.Name} draws these settings, the watch, the keyboard and the notifications at {era}, " +
+                               "enlarged without smoothing.", 60);
 
         ui.Group95(new RectangleF(16, 214, 350, 216), "Modern colours");
         Hint(ui, 28, 234, 326, "The accent colour, the panel colour, the themes and the opacity belong to the Modern style; switch to it " +

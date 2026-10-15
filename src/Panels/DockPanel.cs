@@ -60,7 +60,7 @@ public sealed class HexpadFaces : IDisposable
 // beside each slider pushes the knob. The laser presses keys and buttons (press and release, so Hexpad's hold and
 // double tap work); what could end the VR session (lock, sleep, empty the bin) asks first. Grab it once onto the
 // real dock on your desk; it stays there.
-public sealed class DockPanel : IPointerTarget, IDisposable
+public sealed partial class DockPanel : IPointerTarget, IDisposable
 {
     public const int TW = 800, TH = 480, W95 = TW / 2, H95 = TH / 2;
 
@@ -520,6 +520,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
 
     void Draw95(double now)
     {
+        if (SkinDock(now)) return;          // a style's own panel (ScreenHooks.cs)
         _canvas95 ??= new Surface(_p.Gpu, W95, H95);
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(W95, H95);

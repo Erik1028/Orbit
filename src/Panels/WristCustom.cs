@@ -2133,13 +2133,14 @@ public sealed partial class WristPanel
 
     void Custom95(PanelData d)
     {
+        if (SkinCustom(d)) return;                // a style's own custom face (ScreenHooks.cs)
         int count = WatchPages.Count(C), cur = CurPage;
         var list = Layout;
         var grid = WatchPages.Grid(C, cur);
         _grid = grid;
         _big = false;
         SampleSources();
-        if (C.Background != "cards") _p.Fill(new RectangleF(0, 0, TW95, TH95), Theme.W95Teal);     // the desktop
+        if (C.Background != "cards") Theme.RetroSkin.FillDesktop(_p, new RectangleF(0, 0, TW95, TH95));     // the desktop
         var now = DateTime.Now;
         _ui.Inert = _open != null;
         for (int i = 0; i < list.Count; i++)
@@ -2150,18 +2151,10 @@ public sealed partial class WristPanel
             int id = Wid(w);
             var r = WatchWidgets.Rect(w, true, grid);
             CardTap(id, w, k, r);
+            if (SkinWidget(w, k, r, d, id)) continue;        // a style's own widget (ScreenHooks.cs)
             if (k.Button) { Button95Widget(id, w, k, r, d); continue; }
-            // a little 95 window: with a caption when it is tall enough, a plain raised panel when not
-            _p.Fill(r, Theme.W95Face);
-            _p.Bevel(r, Painter.Edge.Window);
-            var c = RectangleF.Inflate(r, -3, -3);
-            if (w.H >= 2)
-            {
-                var cap = new RectangleF(c.X, c.Y, c.Width, 18);
-                _p.Fill(cap, Theme.W95Navy);
-                _ui.Text95(Fit(k.Title95, cap.Width - 6, Ui.F95, true), new RectangleF(cap.X + 3, cap.Y, cap.Width - 4, cap.Height), Wht95, true);
-                c = new RectangleF(c.X + 1, c.Y + 19, c.Width - 2, c.Height - 20);
-            }
+            // a little 95 window: with a caption when it is tall enough, a plain raised panel when not (the style's skin)
+            var c = Theme.RetroSkin.WidgetFrame(_p, r, w.H >= 2 ? k.Title95 : null);
             switch (k.Id)
             {
                 case "time" when w.W == 1: Time95Small(c, now); break;

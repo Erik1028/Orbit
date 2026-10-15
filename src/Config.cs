@@ -202,7 +202,7 @@ public sealed class AppearanceConfig
     public float LaserThickness { get; set; } = 3.5f;  // mm
     public bool LaserAlways { get; set; } = false;     // beam also when not pointing at a panel
     public bool NightMode { get; set; } = false;       // every panel in VR dimmed
-    public string Style { get; set; } = "modern";      // modern | classic (Windows 95)
+    public string Style { get; set; } = "modern";      // modern | classic (Windows 95) | xp | aero (Windows 7) | mac | terminal (Skins)
     public float NightBrightness { get; set; } = 0.45f;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string Font { get; set; }                   // Look > Font (modern only): one of Theme.FontChoices; null = Segoe UI Variable

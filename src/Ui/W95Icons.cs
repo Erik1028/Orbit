@@ -474,6 +474,7 @@ public static class W95Icons
     // at its own size (or a whole multiple), top-left at x, y
     public static void Draw(Painter p, Id id, float x, float y, int scale = 1)
     {
+        if (Theme.Classic && Theme.RetroSkin.Icon(p, id, x, y, scale)) return;      // the style's own picture
         int n = Size(id) * scale;
         p.ImageNearest(Get(p, id), new System.Drawing.RectangleF(x, y, n, n));
     }
