@@ -46,7 +46,7 @@ static partial class Tools
 
     // the pages' made-up data: a room of 12 (3 friends) in a world with a long name, three notifications, a song with its cover and
     // where in it, the last 30 s of frames with a spike over budget (and a dropped frame at its top)
-    static void PagesData(PanelData data, bool notes = true)
+    internal static void PagesData(PanelData data, bool notes = true)
     {
         var room = new RoomWatcher.Snapshot { Version = 7, LogFound = true, InRoom = true, World = "The Black Cat \u2013 Midnight Rooftop Lounge (Extended)", VrcxFound = true, Friends = 120 };
         string[] names = { "Nova", "Mira", "Pixel Fox", "Tobi", "Moss", "Juniper", "Static", "Kite", "Orbit Fan 2000", "Lumen", "Quill", "Sable" };
@@ -94,7 +94,7 @@ static partial class Tools
         var vramTotal0 = data.VramTotalGB;
         // the CPU's last minute and the microphone's level, made up (the pictures do not depend on this PC)
         var st = wrist.Stats;
-        for (int i = 0; i < SystemStats.History; i++) st.CpuHistory[i] = 0.08f + 0.06f * MathF.Sin(i / 3f) + (i % 17 == 0 ? 0.7f : 0);
+        for (int i = 0; i < SystemStats.History; i++) st.CpuHistory[i] = 0.1f + 0.05f * MathF.Sin(i / 2.3f) + 0.03f * MathF.Sin(i * 1.7f) + (i % 23 == 5 ? 0.12f : 0);
         st.CpuCount = SystemStats.History;
         st.CpuHead = 0;
         st.Cpu = 0.1f;

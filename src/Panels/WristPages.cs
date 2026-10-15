@@ -666,7 +666,8 @@ public sealed partial class WristPanel
 
     // ---- CPU and memory as 4 x 3 S ----
 
-    // the load big, the last 30 seconds as bars along the bottom (purple; amber over 75 %, red over 90 %)
+    // the load big, the last 30 seconds as bars along the bottom (purple; amber over 75 %, red over 90 %) - as tall as the window's
+    // busiest second (a quarter at least), so a PC idling at 10 % still shows its ups and downs
     void CpuS43(RectangleF r, PanelData d)
     {
         var (_, value, _, _, lv) = Reading("cpu", d);
@@ -675,12 +676,14 @@ public sealed partial class WristPanel
         Caption(r, iw, CapCpu, lv);
         ValueText(x, r.Y + 78, value, MathF.Max(24, FitSize(value, iw, Hero, FontWeight.Bold, Theme.Display)), none ? Bento.Faint : Bento.Level(lv, Bento.Text), null);
         int n = Math.Min(30, Stats.CpuCount);
-        float pitch = iw / 30f, bw = MathF.Max(2, pitch - 1.6f), hmax = 24, bottom = r.Bottom - 12;
+        float pitch = iw / 30f, bw = MathF.Max(2, pitch - 1.4f), hmax = 24, bottom = r.Bottom - 12;
         uint role = RoleColor("cpu");
+        float top = 0.25f;
+        for (int i = 0; i < n; i++) top = MathF.Max(top, Stats.CpuHistory[(Stats.CpuHead - n + i + SystemStats.History) % SystemStats.History]);
         for (int i = 0; i < n; i++)
         {
             float v = Stats.CpuHistory[(Stats.CpuHead - n + i + SystemStats.History) % SystemStats.History];
-            float h = MathF.Max(2, v * hmax);
+            float h = MathF.Max(3, v / top * hmax);
             uint c = v > 0.9f ? Bento.Level(StatLevel.Bad, role) : v > 0.75f ? Bento.Level(StatLevel.Warn, role) : role;
             _p.Fill(new RectangleF(x + iw - (n - i) * pitch + (pitch - bw) / 2, bottom - h, bw, h), c, 1);
         }

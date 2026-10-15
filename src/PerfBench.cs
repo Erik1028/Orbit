@@ -42,6 +42,8 @@ static class PerfBench
             }
         }
         using var wrist = new WristPanel(gpu, painter, cfg);
+        wrist.Mic.Fake = true;                          // never the real microphone
+        wrist.Mic.Present = true;
         using var query = gpu.Device.CreateQuery(new Vortice.Direct3D11.QueryDescription(Vortice.Direct3D11.QueryType.Event));
         Log.Info($"perfbench: style {cfg.Data.Appearance.Style}, face {cfg.Data.Wrist.Face}, widgets " +
                  string.Join(" ", cfg.Data.Wrist.Widgets?.Select(w => $"{w.Type}{w.W}x{w.H}{(w.Style != null ? ":" + w.Style : "")}") ?? Array.Empty<string>()));
@@ -88,6 +90,25 @@ static class PerfBench
             if (!wrist.OpenForTest(w.Type)) continue;
             Phase("open " + w.Type, 0.6, () => { });
             wrist.CloseForTest();
+        }
+        // 1.12: the pages the first start adds (on the copy) - each at rest (the Performance page: its 30 s graph), and a slide
+        var wc = cfg.Data.Wrist;
+        if (wc.Face == "custom")
+        {
+            WatchPages.Migrate(cfg);
+            Tools.PagesData(data);
+            for (int i = 1; i < WatchPages.Count(wc); i++)
+            {
+                wc.Page = i;
+                wrist.Settle();
+                wrist.Draw(data);
+                Phase($"page {i + 1} ({WatchPages.Name(wc, i)}) at rest", 1.0, () => { });
+            }
+            wc.Page = 1;
+            wrist.Settle();
+            wrist.Draw(data);
+            Phase("slide to the next page", 0.6, () => wrist.GoToPage(2, animate: true));
+            wc.Page = 0;
         }
         Log.Info($"perfbench: text formats {painter.FormatCount}, widths {painter.WidthCount}, layouts {painter.LayoutCount}, gradients {painter.GradientCount}");
         return 0;

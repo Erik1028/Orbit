@@ -773,6 +773,8 @@ static partial class Tools
         data.DockFaces = faces;
 
         using var wrist = new WristPanel(gpu, painter, cfg);
+        wrist.Mic.Fake = true;                          // never the real microphone
+        wrist.Mic.Present = true;
         var a = cfg.Data.Appearance;
         var wc = cfg.Data.Wrist;
         Log.Info($"faceshot: style {a.Style}, accent {a.Accent:X8}, panel {a.PanelColor:X8} at {a.PanelOpacity:0.00}, face {wc.Face}, background {wc.Background}, " +
@@ -808,6 +810,36 @@ static partial class Tools
                     wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_look_{look ?? "default"}{(colours ? "_colours" : "")}.png"));
                 }
             for (int i = 0; i < ws.Count; i++) (ws[i].Style, ws[i].Color, ws[i].Color2) = keep[i];
+        }
+        // What the first start of 1.12 makes of this config (the copy: its own copy of it lands next to it, the real one is untouched):
+        // the face as page 1, unchanged, then the VRChat and Performance pages - drawn in this look, with the dots, and in 95
+        {
+            var jo = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            string w0 = System.Text.Json.JsonSerializer.Serialize(wc.Widgets, jo);
+            int pages0 = WatchPages.Count(wc);
+            bool migrated = WatchPages.Migrate(cfg);
+            string w1 = System.Text.Json.JsonSerializer.Serialize(wc.Widgets, jo);
+            string pnames = string.Join(", ", Enumerable.Range(0, WatchPages.Count(wc)).Select(i => $"{WatchPages.Name(wc, i)} ({WatchPages.GridId(wc, i)}, {WatchPages.Widgets(wc, i)?.Count ?? 0} widgets)"));
+            Log.Info($"faceshot: the pages' first start on the copy: migrated {migrated} (want True), pages {pages0} -> {WatchPages.Count(wc)} (want 1 -> 3): {pnames}; " +
+                     $"page 1 byte-identical {w0 == w1} (want True), face {wc.Face}");
+            PagesData(data);
+            a.Accent = accent0;
+            a.PanelColor = panel0;
+            foreach (bool classic in new[] { false, true })
+            {
+                a.Style = classic ? "classic" : "modern";
+                Theme.Apply(a);
+                for (int i = 0; i < WatchPages.Count(wc); i++)
+                {
+                    wc.Page = i;
+                    wrist.Settle();
+                    for (int f = 0; f < 8; f++) { wrist.Draw(data); Thread.Sleep(50); }      // a new cover fades in
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{(classic ? "_95" : "")}.png"));
+                }
+            }
+            a.Style = "modern";
+            Theme.Apply(a);
+            wc.Page = 0;
         }
         Log.Info("faceshot written to " + dir);
         return 0;
