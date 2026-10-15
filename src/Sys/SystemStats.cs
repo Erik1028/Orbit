@@ -228,3 +228,156 @@ public sealed class SystemVolume : IDisposable
         if (_en != null) { Marshal.ReleaseComObject(_en); _en = null; }
     }
 }
+
+// The default recording device's mute and input level (Core Audio), for the watch's microphone widget. "Default" = the console
+// role, the device Windows' Sound settings call the default input (what VRChat's "Default" microphone follows). The device and its
+// mute are checked about once a second, the level four times; a failure is logged once. Fake: --snapshot's own microphone - it
+// never opens a device, a tap only flips its state.
+public sealed class SystemMic : IDisposable
+{
+    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
+    class MMDeviceEnumeratorCom { }
+
+    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDeviceEnumerator
+    {
+        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+        [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
+    }
+
+    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDevice
+    {
+        [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+        [PreserveSig] int OpenPropertyStore(int access, out IntPtr store);
+        [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
+    }
+
+    [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioEndpointVolume
+    {
+        [PreserveSig] int RegisterControlChangeNotify(IntPtr notify);
+        [PreserveSig] int UnregisterControlChangeNotify(IntPtr notify);
+        [PreserveSig] int GetChannelCount(out uint count);
+        [PreserveSig] int SetMasterVolumeLevel(float db, ref Guid context);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid context);
+        [PreserveSig] int GetMasterVolumeLevel(out float db);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
+        [PreserveSig] int SetChannelVolumeLevel(uint channel, float db, ref Guid context);
+        [PreserveSig] int SetChannelVolumeLevelScalar(uint channel, float level, ref Guid context);
+        [PreserveSig] int GetChannelVolumeLevel(uint channel, out float db);
+        [PreserveSig] int GetChannelVolumeLevelScalar(uint channel, out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+    }
+
+    [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioMeterInformation
+    {
+        [PreserveSig] int GetPeakValue(out float peak);
+    }
+
+    const int eCapture = 1, eConsole = 0, CLSCTX_ALL = 23;
+    static Guid _ctx = Guid.Empty;
+    IMMDeviceEnumerator _en;
+    IMMDevice _dev;
+    IAudioEndpointVolume _vol;
+    IAudioMeterInformation _meter;
+    string _devId;
+    double _next, _nextState;
+    bool _warned;
+    public bool Fake;                 // a made-up microphone (the tools): no device, a tap flips Muted
+    public bool Present;              // there is a recording device
+    public bool Muted;
+    public float Peak = -1;           // its input level now, 0..1 (-1: unknown)
+    public int Version;               // moves when the device, its mute or (a step of) its level changes
+
+    public void Sample(double now)
+    {
+        if (Fake || now < _next) return;
+        _next = now + 0.25;
+        try
+        {
+            if (_vol == null || now >= _nextState)
+            {
+                _nextState = now + 1;
+                if (DefaultChanged()) Acquire();
+                bool m = _vol != null && _vol.GetMute(out bool mm) == 0 && mm;
+                bool p = _vol != null;
+                if (m != Muted || p != Present) { Muted = m; Present = p; Version++; }
+            }
+            float pk = -1;
+            if (_meter != null && _meter.GetPeakValue(out float v) == 0) pk = Math.Clamp(v, 0, 1);
+            if ((int)(pk * 20) != (int)(Peak * 20)) Version++;
+            Peak = pk;
+        }
+        catch (Exception e)
+        {
+            Warn(e.Message);
+            Release();
+            Present = false;
+            Peak = -1;
+            _next = _nextState = now + 5;
+        }
+    }
+
+    public void ToggleMute()
+    {
+        if (Fake) { Muted = !Muted; Present = true; Version++; return; }
+        if (_vol == null) return;
+        try
+        {
+            int hr = _vol.SetMute(!Muted, ref _ctx);
+            if (hr != 0) { Warn($"refused mute (0x{hr:X8})"); return; }
+            Muted = !Muted;
+            Version++;
+            Log.Info($"microphone: {(Muted ? "muted" : "live")}");
+            _nextState = 0;
+        }
+        catch (Exception e) { Warn(e.Message); }
+    }
+
+    void Warn(string what)
+    {
+        if (_warned) return;
+        _warned = true;
+        Log.Warn("microphone: " + what);
+    }
+
+    bool DefaultChanged()
+    {
+        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        if (_en.GetDefaultAudioEndpoint(eCapture, eConsole, out var d) != 0 || d == null) { Release(); _devId = null; return false; }
+        string id = d.GetId(out string s) == 0 ? s : null;
+        Marshal.ReleaseComObject(d);
+        return _vol == null || id != _devId;
+    }
+
+    void Acquire()
+    {
+        Release();
+        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        if (_en.GetDefaultAudioEndpoint(eCapture, eConsole, out _dev) != 0 || _dev == null) return;
+        _devId = _dev.GetId(out string id) == 0 ? id : null;
+        var iid = typeof(IAudioEndpointVolume).GUID;
+        if (_dev.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out object o) == 0) _vol = (IAudioEndpointVolume)o;
+        var mid = typeof(IAudioMeterInformation).GUID;
+        if (_dev.Activate(ref mid, CLSCTX_ALL, IntPtr.Zero, out object mo) == 0) _meter = (IAudioMeterInformation)mo;
+        _warned = false;
+        Version++;
+        Log.Info($"microphone: following the default recording device{(_vol == null ? " (no mute control)" : "")}");
+    }
+
+    void Release()
+    {
+        if (_meter != null) { Marshal.ReleaseComObject(_meter); _meter = null; }
+        if (_vol != null) { Marshal.ReleaseComObject(_vol); _vol = null; }
+        if (_dev != null) { Marshal.ReleaseComObject(_dev); _dev = null; }
+    }
+
+    public void Dispose()
+    {
+        Release();
+        if (_en != null) { Marshal.ReleaseComObject(_en); _en = null; }
+    }
+}

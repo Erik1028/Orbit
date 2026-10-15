@@ -11,7 +11,7 @@ using Valve.VR;
 namespace Orbit;
 
 // Developer tools: --snapshot renders every panel to PNG without VR; --selftest checks the SteamVR side.
-static class Tools
+static partial class Tools
 {
     sealed class FakeHost : IOrbitHost
     {
@@ -99,6 +99,9 @@ static class Tools
         data.Vr.FrameHead = 0; data.Vr.FrameCount = VrStats.FrameHistory;
 
         using var wrist = new WristPanel(gpu, painter, cfg);
+        wrist.Mic.Fake = true;                          // never the real microphone: a tap flips a made-up one
+        wrist.Mic.Present = true;
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "pages") return PagesRun(wrist, data, cfg, painter, gpu, dir, null, null, null);
         var sw0 = System.Diagnostics.Stopwatch.StartNew();
         wrist.Draw(data);
         gpu.Ctx.Flush();
@@ -541,8 +544,12 @@ static class Tools
         ptr.Leave();
         FrameM();
         // remove the fps widget, move gpu into its place, stretch gpu to 2 x 1 by its corner
-        static System.Numerics.Vector2 CellM(int cx, int cy) =>
-            new(222 + (16 + cx * (94.6667f + 8) + 47.33f) * 0.75f, 84 + (16 + cy * 104 + 48) * 0.75f);
+        static System.Numerics.Vector2 CellM(int cx, int cy)
+        {
+            var pv = SettingsView.EditorPrev;
+            var c = WatchWidgets.CellRect(cx, cy, 1, 1, false);
+            return new(pv.X + (c.X + c.Width / 2) * pv.Width / WristPanel.TW, pv.Y + (c.Y + c.Height / 2) * pv.Height / WristPanel.TH);
+        }
         var c42 = CellM(4, 2);
         ClickM(c42.X, c42.Y);
         ClickM(724 + 2 * (244 / 3f + 8) + 40, 138 + 17);     // Remove (the third button under the name)
@@ -553,13 +560,15 @@ static class Tools
         surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_drag.png"));
         ptr.Release(); FrameM();
         Log.Info($"editor: fps removed {wcfg.Widgets.All(w => w.Type != "fps")}, gpu moved to {gpuW?.X},{gpuW?.Y} (want 4,2)");
-        var hnd = new System.Numerics.Vector2(222 + (16 + 5 * 102.6667f - 8) * 0.75f - 2, 84 + (16 + 3 * 104 - 8) * 0.75f - 2);
+        var hc = WatchWidgets.CellRect(4, 2, 1, 1, false);
+        var hnd = new System.Numerics.Vector2(SettingsView.EditorPrev.X + hc.Right * SettingsView.EditorPrev.Width / WristPanel.TW - 2,
+            SettingsView.EditorPrev.Y + hc.Bottom * SettingsView.EditorPrev.Height / WristPanel.TH - 2);
         ptr.Move(hnd.X * 1.5f, hnd.Y * 1.5f); FrameM(); ptr.Press(); FrameM();
         ptr.Move(c52.X * 1.5f, c52.Y * 1.5f); FrameM(); ptr.Release(); FrameM();
         Log.Info($"editor: gpu size {gpuW?.W}x{gpuW?.H} (want 2x1); layout now {Dump()}");
         // no room: every cell is taken, so adding must say so and change nothing
         int before = wcfg.Widgets.Count;
-        ClickM(222 + 58, 452 + 15);               // palette: Time
+        ClickM(222 + 58, SettingsView.PaletteY + 14);     // palette: Time
         Log.Info($"editor: add with a full grid kept {wcfg.Widgets.Count == before} ({wcfg.Widgets.Count} widgets)");
         ptr.Leave();
         FrameM();
@@ -694,6 +703,7 @@ static class Tools
         wcfg.Face = face0;
         wcfg.Widgets = null;
         System.Globalization.CultureInfo.CurrentCulture = culture;
+        PagesRun(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
         Log.Info("snapshot written to " + dir);
         return 0;
     }
@@ -905,6 +915,42 @@ static class Tools
                 Log.Warn($"layout {style}: {kind.Id} {w}x{h}: {(o > 0 ? $"{o} px outside the card, first at {ow}" : "")}{(o > 0 && cl > 0 ? "; " : "")}{(cl > 0 ? $"{cl} px within 8 px of its edge, first at {cw}" : "")}");
             }
         }
+        // the 4 x 3 page's sizes of every kind; the 95 face's on a face with pages (its taskbar along the bottom is not the widget's)
+        foreach (var kind in WatchWidgets.Kinds)
+            foreach (var (w, h) in WatchWidgets.Sizes43(kind))
+            {
+                wcfg.Grid = "4x3";
+                wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
+                wcfg.Pages = classic ? new List<WatchPage> { new() { Grid = "4x3" } } : null;
+                wcfg.Page = 0;
+                var grid = WatchPages.Grid(wcfg, 0);
+                wrist.Settle();
+                wrist.Draw(data);
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}43_{kind.Id}_{w}x{h}.png"));
+                var px = Read();
+                uint[] cardOnly = null;
+                if (!classic && !kind.Button)
+                {
+                    wrist.Backgrounds = true;
+                    wrist.Draw(data);
+                    wrist.Backgrounds = false;
+                    cardOnly = Read();
+                }
+                var r = WatchWidgets.CellRect(0, 0, w, h, classic, grid);
+                r = new System.Drawing.RectangleF(r.X * k, r.Y * k, r.Width * k, r.Height * k);
+                System.Drawing.RectangleF? bar = classic ? new System.Drawing.RectangleF(0, (WristPanel.TH95 - WatchWidgets.Taskbar95 - 2) * k, WristPanel.TW, WristPanel.TH) : null;
+                var (o, ow) = Outside(px, r, classic ? 0 : 1.5f, bar);
+                var (cl, cw) = classic || kind.Button ? (0, null) : TooClose(px, r, 3, 8, cardOnly);
+                if (o > 0 || cl > 0)
+                {
+                    problems++;
+                    Log.Warn($"layout {style}: {kind.Id} 4x3 {w}x{h}: {(o > 0 ? $"{o} px outside the card, first at {ow}" : "")}{(o > 0 && cl > 0 ? "; " : "")}{(cl > 0 ? $"{cl} px within 8 px of its edge, first at {cw}" : "")}");
+                }
+            }
+        wcfg.Grid = null;
+        wcfg.Pages = null;
+        wcfg.Page = 0;
         // the opened views: a 2x2 (or the smallest) widget of each, opened, without clip / dimming
         wrist.LayoutTest = true;
         foreach (var kind in WatchWidgets.Kinds)
@@ -1162,7 +1208,7 @@ static class Tools
             {
                 var k = WatchWidgets.Find(w.Type);
                 if (k == null) continue;
-                var r = WatchWidgets.Rect(w, false);
+                var r = WatchWidgets.Rect(w, false, WatchPages.Grid(wcfg, 0));
                 rects.Add(r);
                 if (k.Button) continue;          // a button is its card: drawn in its look, nothing near its edge
                 int close = 0; string where = null;
@@ -1364,6 +1410,17 @@ static class Tools
                         { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} {w}x{h}", null);
                 }
+        // the same on a 4 x 3 page
+        wcfg.Grid = "4x3";
+        foreach (var look in looks)
+            foreach (var kind in WatchWidgets.Kinds)
+                foreach (var (w, h) in WatchWidgets.Sizes43(kind))
+                {
+                    wcfg.Widgets = new List<WatchWidget>
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = turns[turn++ % turns.Length] } };
+                    Check(look, $"{look} {kind.Id} 4x3 {w}x{h}", null);
+                }
+        wcfg.Grid = null;
         // the time family's cases (both languages and clocks, SteamVR on and off) in four looks
         foreach (var look in new[] { "default", "solid", "header", "glass" })
             foreach (var fc in FamilyCases())

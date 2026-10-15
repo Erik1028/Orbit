@@ -16,30 +16,33 @@ public sealed partial class WristPanel
     public readonly SystemStats Stats = new();
     public readonly SystemVolume Volume = new();
 
-    List<WatchWidget> Layout
-    {
-        get
-        {
-            if (C.Widgets == null) { C.Widgets = WatchWidgets.Seed(C, "full"); _cfg.MarkDirty(); }
-            else if (!_layoutChecked) C.Widgets = WatchWidgets.Clean(C.Widgets);     // a hand-edited config
-            _layoutChecked = true;
-            return C.Widgets;
-        }
-    }
+    // the page in view (pages: WristPages.cs)
+    List<WatchWidget> Layout => PageList(CurPage);
 
     // --snapshot's time-family pictures: a fixed moment (the longest month and day names, the widest digits); null = the clock
     public DateTime? TestNow;
     DateTime Now => TestNow ?? DateTime.Now;
 
+    // on the page in view (and the one sliding in beside it)
     bool HasWidget(string type)
     {
-        if (C.Widgets == null) return false;
-        foreach (var w in C.Widgets) if (w?.Type == type) return true;      // a hand-edited list can hold a null
+        if (Has(WatchPages.Widgets(C, CurPage), type)) return true;
+        return _slideOther >= 0 && _slideOther < WatchPages.Count(C) && Has(WatchPages.Widgets(C, _slideOther), type);
+    }
+
+    static bool Has(List<WatchWidget> list, string type)
+    {
+        if (list == null) return false;
+        foreach (var w in list) if (w?.Type == type) return true;      // a hand-edited list can hold a null
         return false;
     }
 
-    // the frame-time samples are only collected while something shows them
-    public bool WantsFrames => C.Face == "custom" ? HasWidget("graph") || DetailIs("perf") : C.ShowPerformance && C.PerfGraph && C.Face is "full" or "analog";
+    // the frame-time samples are only collected while something shows them - a graph on any page (its 30 s are ready when you
+    // swipe to it)
+    public bool WantsFrames => C.Face == "custom" ? WatchPages.Any(C, "graph") || DetailIs("perf") : C.ShowPerformance && C.PerfGraph && C.Face is "full" or "analog";
+
+    // something on the page in view moves with the frames (redrawn 10 times a second)
+    bool FramesShown => HasWidget("graph") || DetailIs("perf");
 
     // stable ids for a widget's animations (the list order changes while editing)
     readonly Dictionary<WatchWidget, int> _wid = new();
@@ -89,7 +92,7 @@ public sealed partial class WristPanel
     (bool has, string title, string artist, bool playing) MediaNow(PanelData d)
     {
         bool has; string title, artist; bool playing; uint[] art = null; int ver = -2;
-        if (d.FakeMedia is { } f) (has, title, artist, playing) = f;
+        if (d.FakeMedia is { } f) { (has, title, artist, playing) = f; if (d.FakeArt != null) (art, ver) = (d.FakeArt, -3); }
         else if (d.Media != null) (has, title, artist, playing, art, ver) = d.Media.Snapshot();
         else { has = false; title = artist = null; playing = false; }
         if (ver != _artVersion)
@@ -121,6 +124,7 @@ public sealed partial class WristPanel
         double now = Clock.Now;
         if (HasWidget("cpu") || HasWidget("ram")) Stats.Sample(now);
         if (HasWidget("volume")) Volume.Sample(now);
+        if (HasWidget("mic")) Mic.Sample(now);
     }
 
     // ---- timer and stopwatch: one of each, shared by their widgets; they keep running while the watch is hidden ----
@@ -215,8 +219,13 @@ public sealed partial class WristPanel
     const float CapSize = 15, CapTrack = 1;    // captions: UPPERCASE, SemiBold, 1 px between the letters
     const float CapBase = 25;                  // the caption row's baseline, from the card's top
     const float SmallText = 17;                // the smallest mixed-case text (units, notes, names)
-    const float SBase = 64, MBase = 66;        // the value's baseline on a 1x1 / on a one-row wide card
-    const float Hero = 30;                     // a 1x1's value: every one this big (a long one shrinks only when it alone cannot fit)
+    // The value's baseline on a 1x1 / on a one-row wide card, and a 1x1's value: every one this big (a long one shrinks only when it
+    // alone cannot fit). On a 4 x 3 page the cards are taller (133 px): lower and bigger there.
+    bool _big;                                 // the widget being drawn is on a 4 x 3 page
+    float SBase => _big ? 86 : 64;
+    float MBase => _big ? 94 : 66;
+    float Hero => _big ? 40 : 30;
+    float NoteBase => _big ? 112 : 85;         // a 1x1's note under its value
     const float DigitH = 0.7f;                 // how tall digits are, in em (Segoe UI Variable Display)
     const float DigitTop = 0.72f, DigitSpan = 0.735f;   // the digits' real top (the 1's flag) and top to the round ones' overshoot, in em
     const string PlayFill = "\uF5B0", PauseFill = "\uF8AE";   // the play disc's glyphs: Segoe Fluent's filled play / pause
@@ -402,7 +411,7 @@ public sealed partial class WristPanel
     // over a card without a caption (the dial, the dock's keys) or whose caption row holds more (the cover, round buttons
     // from 31 px down: a band would run into them)
     bool StripBand(WatchWidgets.Kind k, WatchWidget w) =>
-        k.Id is "analog" or "media" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" && w.W >= 2);
+        k.Id is "analog" or "media" or "buttons" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" && w.W >= 2);
 
     float BandHeight(WatchWidgets.Kind k, WatchWidget w, RectangleF r)
     {
@@ -420,7 +429,7 @@ public sealed partial class WristPanel
     public float BandOf(WatchWidget w)
     {
         var k = WatchWidgets.Find(w.Type);
-        return k == null || k.Button || Bento.StyleIndex(w.Style) != 4 ? 0 : BandHeight(k, w, WatchWidgets.Rect(w, false));
+        return k == null || k.Button || Bento.StyleIndex(w.Style) != 4 ? 0 : BandHeight(k, w, WatchWidgets.Rect(w, false, WatchPages.Grid(C, CurPage)));
     }
 
     // The card behind a satellite or a knob (a gap around it): its own fill there - the card's gradient laid over the card, so
@@ -438,6 +447,7 @@ public sealed partial class WristPanel
 
     void DrawCustomFace(PanelData d)
     {
+        int count = WatchPages.Count(C), cur = CurPage;
         var list = Layout;
         SampleSources();
         Bento.Reset();
@@ -452,29 +462,61 @@ public sealed partial class WristPanel
         var now = Now;
         double t = Clock.Now - _introStart;
         _rolling = false;
-        if (_wid.Count > list.Count + 32)
+        if (_wid.Count > WidgetTotal() + 32)
         {
             // forget only the widgets that are gone: a live widget must keep its id (and so its animation state),
             // or it would pop in again
-            var live = new HashSet<WatchWidget>(list);
+            var live = new HashSet<WatchWidget>();
+            for (int i = 0; i < count; i++) if (WatchPages.Widgets(C, i) is { } l) live.UnionWith(l);
             foreach (var gone in new List<WatchWidget>(_wid.Keys)) if (!live.Contains(gone)) _wid.Remove(gone);
         }
-        _ui.Inert = _open != null;            // behind an opened widget the watch is only a picture
+        // the page in view: between two while it slides (a swipe follows the laser, then springs to its page); both drawn then
+        float pos = PagePosition(count, cur);
+        bool sliding = pos != cur;
+        _slideOther = !sliding ? -1 : pos < cur ? (int)MathF.Floor(pos) : (int)MathF.Ceiling(pos);
+        _ui.Inert = _open != null || sliding || _swiping;      // behind an opened widget (or while it slides) the watch is only a picture
+        if (sliding && !cards) _p.PushRoundedClip(new RectangleF(1, 1, TW - 2, TH - 2), Bento.PageRadius - 1);
+        int p0 = (int)MathF.Floor(pos);
+        for (int pi = p0; pi <= p0 + 1; pi++)
+        {
+            if (pi < 0 || pi >= count) continue;
+            float ox = MathF.Round((pi - pos) * TW);
+            if (MathF.Abs(ox) >= TW) continue;
+            DrawPage(pi == cur ? list : PageList(pi), WatchPages.Grid(C, pi), ox, d, cards, muted, now, t, pi == cur && !sliding && _seenPage == cur);
+        }
+        if (sliding && !cards) _p.PopRoundedClip();
+        _ui.Inert = false;
+        _big = false;
+        if (count > 1) PageDots(count, pos, cards);
+        _grid = WatchPages.Grid(C, cur);
+        DrawDetail(d, list);
+        _layoutSeen = true;
+        _seenPage = cur;
+        if (t < 1.2) _ui.Animating = true;
+    }
+
+    // One page's widgets, moved ox px sideways (a page sliding in). popIn: a widget new on it pops in (the editor added it) - not
+    // on a page that slides into view
+    void DrawPage(List<WatchWidget> list, GridSpec grid, float ox, PanelData d, bool cards, bool muted, DateTime now, double t, bool popIn)
+    {
+        _grid = grid;
+        _big = grid.Is43;
+        bool micMuted = Mic.Present && Mic.Muted;
         for (int i = 0; i < list.Count; i++)
         {
             var w = list[i];
             var k = WatchWidgets.Find(w.Type);
             if (k == null) continue;
             int id = Wid(w);
-            var target = WatchWidgets.Rect(w, false);
+            var target = WatchWidgets.Rect(w, false, grid);
             // spring to a new place (the editor moved / resized it); a new one pops in
             string kx = Ui.Id("wax", id), ky = Ui.Id("way", id), kw = Ui.Id("waw", id), kh = Ui.Id("wah", id), ks = Ui.Id("was", id);
-            if (_layoutSeen && !_ui.HasSpring(ks)) _ui.SpringFrom(ks, 0.4f);
-            var r = new RectangleF(_ui.Spring(kx, target.X, 260, 26), _ui.Spring(ky, target.Y, 260, 26),
+            if (popIn && _layoutSeen && !_ui.HasSpring(ks)) _ui.SpringFrom(ks, 0.4f);
+            var r = new RectangleF(_ui.Spring(kx, target.X, 260, 26) + ox, _ui.Spring(ky, target.Y, 260, 26),
                 _ui.Spring(kw, target.Width, 260, 26), _ui.Spring(kh, target.Height, 260, 26));
             float pop = _ui.Spring(ks, 1, 300, 18);
             // the cascade when the watch comes into view: row by row, a little spring each
-            float delay = (w.Y * WatchWidgets.Cols + w.X) * 0.018f;
+            float delay = (w.Y * grid.Cols + w.X) * 0.018f;
             float p = (float)Math.Clamp((t - delay) / 0.42, 0, 1);
             float scale = pop * (0.82f + 0.18f * EaseOutBack(p));
             float alpha = MathF.Min(1, p * 1.6f);
@@ -485,8 +527,8 @@ public sealed partial class WristPanel
                 _p.PushScale(scale, cx, cy);
                 if (alpha < 0.999f) _p.PushFade(alpha);
             }
-            // its look while it draws (a muted volume is the danger card, in the default look)
-            bool danger = muted && k.Id == "volume", styled = Styled(w) && !danger;
+            // its look while it draws (a muted volume or microphone is the danger card, in the default look)
+            bool danger = (muted && k.Id == "volume") || (micMuted && k.Id == "mic"), styled = Styled(w) && !danger;
             if (styled)
             {
                 var look = LookOf(w, k.Id, d.NightMode, cards);
@@ -494,8 +536,10 @@ public sealed partial class WristPanel
             }
             _halo = Bento.Halo;
             _haloCard = RectangleF.Empty;
-            // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card
-            if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
+            // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card; the
+            // 4 x 3 now playing is its cover's colours
+            if (CoverCard(k, w, styled)) CoverBack(r, d);
+            else if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
             if (!Backgrounds)
             {
                 CardTap(id, w, k, r);
@@ -508,14 +552,11 @@ public sealed partial class WristPanel
                 _p.PopScale();
             }
         }
-        _ui.Inert = false;
-        DrawDetail(d, list);
-        _layoutSeen = true;
-        if (t < 1.2) _ui.Animating = true;
     }
 
     void Widget(int i, int id, WatchWidget w, WatchWidgets.Kind k, RectangleF r, PanelData d, DateTime now)
     {
+        if (_big && Widget43(id, w, k, r, d)) return;          // the designs made for the 4 x 3 page's bigger cards
         switch (k.Id)
         {
             case "time": TimeOrbit(r, w, now, d, id); break;
@@ -531,6 +572,9 @@ public sealed partial class WristPanel
             case "room": RoomOrbit(r, w, d, id); break;
             case "volume": VolumeOrbit(r, w, id); break;
             case "graph": GraphOrbit(d.Vr, r, Bento.Accent); break;
+            case "mic": MicOrbit(r, w, id); break;
+            case "notifications": NotesOrbit(r, w, d, id); break;
+            case "buttons": GroupOrbit(r, w, d, id); break;
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -778,7 +822,7 @@ public sealed partial class WristPanel
     {
         float pad = PadX(r), iw = r.Width - 2 * pad;
         CaptionRow(r, note, caption, lv);
-        ValueUnit(r.X + pad, r.Y + MBase, iw, value, unit, 40, 24, vc, roll);
+        ValueUnit(r.X + pad, r.Y + MBase, iw, value, unit, _big ? 52 : 40, 24, vc, roll);
         if (meter != null) Meter(new RectangleF(r.X + pad, r.Bottom - 17, iw, 6), frac, bar, meter);
     }
 
@@ -1069,7 +1113,7 @@ public sealed partial class WristPanel
         string sec = now.ToString("ss", CultureInfo.CurrentCulture);
         float aw = ampm == null ? 0 : _p.MeasureTracked(ampm, CapSize, FontWeight.SemiBold, CapTrack);
         float sw = MathF.Max(_p.MeasureWidth("00", SmallText, FontWeight.SemiBold), aw) + 6;
-        float size = MathF.Max(24, FitSize(h24 ? "00:00" : "12:00", iw - sw, 44, FontWeight.Bold, Theme.Display));
+        float size = MathF.Max(24, FitSize(h24 ? "00:00" : "12:00", iw - sw, _big ? 64 : 44, FontWeight.Bold, Theme.Display));
         float by = top + size * DigitTop + (bottom - top - size * DigitSpan) / 2;
         float tw = ValueText(x, by, t, size, Bento.Text, Ui.Id("wtt", id));
         TextAt(sec, x + tw + 6, by, sw, Sub, SmallText, FontWeight.SemiBold);
@@ -1146,8 +1190,8 @@ public sealed partial class WristPanel
     {
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         Caption(r, iw, _capWeekday, color: Bento.Cur.Band != 0 || Bento.Cur.Sheen != 0 ? Bento.CapText : Bento.Cur.AccentText);
-        ValueText(x, r.Y + 66, _dayNum, 38, Bento.Text, null);
-        Note(x, r.Y + 85, iw, _monthNames);
+        ValueText(x, r.Y + (_big ? 88 : 66), _dayNum, _big ? 48 : 38, Bento.Text, null);
+        Note(x, r.Y + NoteBase, iw, _monthNames);
     }
 
     // A 1x1's note under its value ("September", "since 17:16"): 15 px, down to 14 for a long one, else its next form. Under
@@ -1408,7 +1452,7 @@ public sealed partial class WristPanel
             return;
         }
         Small(r, CapSession, val, unit, 0, 0, vc, null, Ui.Id("wse", id));
-        if (!off) Note(x, r.Y + 85, iw, SinceNote(d.VrSince.Value));      // a 12-hour start drops its AM / PM before it is cut
+        if (!off) Note(x, r.Y + NoteBase, iw, SinceNote(d.VrSince.Value));      // a 12-hour start drops its AM / PM before it is cut
     }
 
     // "since 7:08 AM" and a shorter "since 7:08", made when the start or the clock style changes
@@ -1800,6 +1844,7 @@ public sealed partial class WristPanel
         {
             const float m = 12;
             float s = tall ? MathF.Min(r.Height - 2 * m, r.Width * 0.45f) : r.Height - 2 * m;
+            if (tall) s = MathF.Min(s, r.Width - 2 * m - 14 - 170);      // a narrow tall card (the 4 x 3 L): room for its three buttons
             var cover = new RectangleF(r.X + m, r.Y + (r.Height - s) / 2, s, s);
             string fk = Ui.Id("wma", id);
             if (Clock.Now - _artChanged < 0.05) _ui.SpringFrom(fk, 0);      // a new cover fades in
@@ -1919,7 +1964,7 @@ public sealed partial class WristPanel
     // a muted volume's value: the crossed speaker as big as a value, red, and the level it comes back to grey after it (when it fits)
     void MutedValue(float x, float by, float maxW, string pct)
     {
-        const float gs = Hero;
+        float gs = Hero;
         _p.Icon(MuteGlyph, new RectangleF(x - 3, by - Hero * DigitH / 2 - gs / 2 - 1, gs + 6, gs + 2), Bento.Bad, gs);
         float tx = x + gs + 6;
         if (tx + _p.MeasureWidth(pct, SmallText, FontWeight.SemiBold) <= x + maxW) TextAt(pct, tx, by, maxW - (tx - x) + 2, Sub, SmallText, FontWeight.SemiBold);
@@ -1993,7 +2038,11 @@ public sealed partial class WristPanel
 
     void Custom95(PanelData d)
     {
+        int count = WatchPages.Count(C), cur = CurPage;
         var list = Layout;
+        var grid = WatchPages.Grid(C, cur);
+        _grid = grid;
+        _big = false;
         SampleSources();
         if (C.Background != "cards") _p.Fill(new RectangleF(0, 0, TW95, TH95), Theme.W95Teal);     // the desktop
         var now = DateTime.Now;
@@ -2004,7 +2053,7 @@ public sealed partial class WristPanel
             var k = WatchWidgets.Find(w.Type);
             if (k == null) continue;
             int id = Wid(w);
-            var r = WatchWidgets.Rect(w, true);
+            var r = WatchWidgets.Rect(w, true, grid);
             CardTap(id, w, k, r);
             if (k.Button) { Button95Widget(id, w, k, r, d); continue; }
             // a little 95 window: with a caption when it is tall enough, a plain raised panel when not
@@ -2041,6 +2090,9 @@ public sealed partial class WristPanel
                 case "room": Room95Widget(r, c, d, w, id); break;
                 case "volume": Volume95(c, w, id); break;
                 case "graph": Graph95(d.Vr, c); break;
+                case "mic": Mic95(r, c, w, id); break;
+                case "notifications": Notes95(c, d); break;
+                case "buttons": Group95(c, w, d, id); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);
@@ -2062,6 +2114,7 @@ public sealed partial class WristPanel
             }
         }
         _ui.Inert = false;
+        if (count > 1) Taskbar95(count, cur);
         DrawDetail95(d, list);
     }
 

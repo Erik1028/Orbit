@@ -6,8 +6,9 @@ using Vortice.DirectWrite;
 
 namespace Orbit;
 
-// The watch layout editor (Wrist tab, custom face): the live watch with its 6 x 4 grid. Click a widget to
-// select it, drag it to move it, drag its corner to resize it; a palette adds new ones. Both styles.
+// The watch layout editor (Wrist tab, custom face): the live watch with its grid (6 x 4, or 4 x 3 on a page that has it). Click a
+// widget to select it, drag it to move it, drag its corner to resize it; a palette adds new ones. Its pages along the top: the one
+// edited is the one the watch shows; add one (from a preset, on either grid), remove one (a second click confirms). Both styles.
 public sealed partial class SettingsView
 {
     public bool EditingWatch;           // the Wrist tab shows the layout editor
@@ -18,12 +19,126 @@ public sealed partial class SettingsView
     int _wgrabX, _wgrabY, _wgrabW, _wgrabH;
     string _wmsg;
     int _wpal, _wpreset;
+    bool _wadd;                         // the "new page" choices are open (modern)
+    int _waddPreset, _waddGrid = 1;     // their preset (PagePresets) and grid (0: 6x4, 1: 4x3)
+    double _wremoveArmed = -10;         // "Remove page" clicked once: a second click within 4 s removes it
+    (int page, string grid, List<WatchWidget> list) _gridUndo = (-1, null, null);   // the page before its grid changed (switching straight back)
+
+    // the modern editor's watch picture (the page strip above it, the palette under it)
+    public static readonly RectangleF EditorPrev = new(245, 118, 440, 302.5f);
+    public const float PaletteY = 456, PalettePitch = 30;
+
+    // the page being edited: the one the watch shows
+    int EditPage => _h.Wrist.PageNow;
+    GridSpec EditGridSpec => WatchPages.Grid(C.Wrist, EditPage);
 
     List<WatchWidget> WatchLayout()
     {
         var w = C.Wrist;
-        w.Widgets ??= WatchWidgets.Seed(w, "full");
+        int p = EditPage;
+        if (p > 0) return w.Pages[p - 1].Widgets ??= new List<WatchWidget>();
+        w.Widgets ??= WatchPages.Grid(w, 0).Is43 ? WatchWidgets.PagePreset("everyday", GridSpec.G43) : WatchWidgets.Seed(w, "full");
         return w.Widgets;
+    }
+
+    // page p's widgets and grid (page 1: its grid null when 6x4, as a face from before pages had it)
+    void SetPage(int p, List<WatchWidget> list, string grid)
+    {
+        var w = C.Wrist;
+        if (p <= 0) { w.Widgets = list; w.Grid = grid == "6x4" ? null : grid; }
+        else { w.Pages[p - 1].Widgets = list; w.Pages[p - 1].Grid = grid; }
+    }
+
+    void ShowPage(int i)
+    {
+        _h.Wrist.GoToPage(i);
+        _wselW = null;
+        _wcell = (-1, -1);
+        _wmsg = null;
+        _wadd = false;
+        _wremoveArmed = -10;
+    }
+
+    // a new page after the others (Empty: no name - it shows as "Page n"), shown at once
+    void AddPage(Ui ui, string preset, string grid)
+    {
+        var w = C.Wrist;
+        if (w.Widgets == null) WatchLayout();          // page 1 set up first (a face that never had one)
+        // one of the faces of before pages: on the 6 x 4 grid, as it was
+        bool old = Array.IndexOf(WatchWidgets.Presets, preset) >= 0;
+        var page = old ? new WatchPage { Name = WatchWidgets.PresetName2(preset), Grid = "6x4", Widgets = WatchWidgets.Seed(w, preset) }
+            : WatchPages.Make(preset, grid);
+        if (preset == "empty") page.Name = null;
+        (w.Pages ??= new List<WatchPage>()).Add(page);
+        ShowPage(WatchPages.Count(w) - 1);
+        ui.Changed = true;
+    }
+
+    // the page shown goes (page 1 too, when there is another: the next one becomes page 1); only by a second click
+    bool RemovePage(Ui ui)
+    {
+        var w = C.Wrist;
+        int n = WatchPages.Count(w), p = EditPage;
+        if (n <= 1) return false;
+        if (Clock.Now - _wremoveArmed > 4) { _wremoveArmed = Clock.Now; return false; }
+        _wremoveArmed = -10;
+        if (p == 0)
+        {
+            var next = w.Pages[0];
+            w.Widgets = next.Widgets;
+            w.Grid = next.Grid == "6x4" ? null : next.Grid;
+            w.Name = next.Name;
+            w.Pages.RemoveAt(0);
+        }
+        else w.Pages.RemoveAt(p - 1);
+        if (w.Pages.Count == 0) w.Pages = null;
+        w.Page = Math.Min(p, WatchPages.Count(w) - 1);
+        _wselW = null;
+        _wcell = (-1, -1);
+        _wmsg = null;
+        ui.Changed = true;
+        return true;
+    }
+
+    bool RemoveArmed => Clock.Now - _wremoveArmed <= 4;
+
+    // The page on the other grid: every widget where it was (scaled), in the nearest size there, else where there is room; what does
+    // not fit is left out and said. Switching straight back gives the page as it was.
+    void ChangeGrid(Ui ui, string grid)
+    {
+        int p = EditPage;
+        string from = WatchPages.GridId(C.Wrist, p);
+        if (from == grid) return;
+        var list = WatchLayout();
+        int dropped = 0;
+        var next = _gridUndo.page == p && _gridUndo.grid == grid && _gridUndo.list != null ? _gridUndo.list
+            : Relay(list, GridSpec.Of(from), GridSpec.Of(grid), out dropped);
+        _gridUndo = (p, from, list);
+        SetPage(p, next, grid);
+        _wselW = null;
+        _wcell = (-1, -1);
+        _wmsg = dropped > 0 ? $"{dropped} widget{(dropped == 1 ? "" : "s")} did not fit on the {grid.Replace("x", " × ")} grid (switch back to keep {(dropped == 1 ? "it" : "them")})." : null;
+        ui.Changed = true;
+    }
+
+    static List<WatchWidget> Relay(List<WatchWidget> list, GridSpec from, GridSpec to, out int dropped)
+    {
+        var res = new List<WatchWidget>();
+        dropped = 0;
+        foreach (var w in list.OrderBy(w => w.Y).ThenBy(w => w.X))
+        {
+            var k = WatchWidgets.Find(w.Type);
+            if (k == null) { dropped++; continue; }
+            int px = (int)MathF.Floor(w.X * (float)to.Cols / from.Cols), py = (int)MathF.Floor(w.Y * (float)to.Rows / from.Rows);
+            int ww = Math.Max(1, (int)MathF.Round(w.W * (float)to.Cols / from.Cols)), hh = Math.Max(1, (int)MathF.Round(w.H * (float)to.Rows / from.Rows));
+            var s = WatchWidgets.SnapSize(k, ww, hh, false, to);
+            var n = new WatchWidget { Type = w.Type, X = px, Y = py, W = s.W, H = s.H, Style = w.Style, Color = w.Color, Color2 = w.Color2, Items = w.Items };
+            if (WatchWidgets.Free(res, null, px, py, s.W, s.H, to)) { res.Add(n); continue; }
+            var a = WatchWidgets.Add(res, k, Math.Min(px, to.Cols - 1), Math.Min(py, to.Rows - 1), false, to);
+            if (a == null) { dropped++; continue; }
+            (a.Style, a.Color, a.Color2, a.Items) = (w.Style, w.Color, w.Color2, w.Items);
+        }
+        return res;
     }
 
     WatchWidget SelWidget(List<WatchWidget> list)
@@ -45,7 +160,7 @@ public sealed partial class SettingsView
     // classic: the 95 editor (only the sizes the 95 face has; the modern one offers the Bento S and L too)
     void AddWidget(Ui ui, List<WatchWidget> list, WatchWidgets.Kind k, bool classic)
     {
-        var n = WatchWidgets.Add(list, k, _wcell.x, _wcell.y, classic);
+        var n = WatchWidgets.Add(list, k, _wcell.x, _wcell.y, classic, EditGridSpec);
         if (n == null) { _wmsg = "No room left: remove or shrink a widget first."; return; }
         _wselW = n;
         _wcell = (-1, -1);
@@ -55,7 +170,7 @@ public sealed partial class SettingsView
 
     void StepSize(Ui ui, List<WatchWidget> list, WatchWidget w, int dir)
     {
-        if (WatchWidgets.Step(list, w, dir) is { } s) { w.W = s.W; w.H = s.H; ui.Changed = true; _wmsg = null; }
+        if (WatchWidgets.Step(list, w, dir, false, EditGridSpec) is { } s) { w.W = s.W; w.H = s.H; ui.Changed = true; _wmsg = null; }
     }
 
     void RemoveSelected(Ui ui, List<WatchWidget> list)
@@ -78,9 +193,13 @@ public sealed partial class SettingsView
         ui.Changed = true;
     }
 
+    // the page shown starts over: from one of the faces of before pages (on the 6 x 4 grid), or a page preset on its own grid
     void StartOver(Ui ui, string preset)
     {
-        C.Wrist.Widgets = WatchWidgets.Seed(C.Wrist, preset);
+        int p = EditPage;
+        bool old = Array.IndexOf(WatchWidgets.Presets, preset) >= 0;
+        string grid = old ? "6x4" : WatchPages.GridId(C.Wrist, p);
+        SetPage(p, old ? WatchWidgets.Seed(C.Wrist, preset) : WatchWidgets.PagePreset(preset, GridSpec.Of(grid)), grid);
         _wselW = null;
         _wcell = (-1, -1);
         _wmsg = null;
@@ -95,11 +214,12 @@ public sealed partial class SettingsView
         float sx = prev.Width / (classic ? WristPanel.TW95 : WristPanel.TW), sy = prev.Height / (classic ? WristPanel.TH95 : WristPanel.TH);
         RectangleF View(RectangleF r) => new(prev.X + r.X * sx, prev.Y + r.Y * sy, r.Width * sx, r.Height * sy);
         var m = ui.Mouse;
-        var (cx, cy) = WatchWidgets.CellAt((m.X - prev.X) / sx, (m.Y - prev.Y) / sy, classic);
+        var grid = EditGridSpec;
+        var (cx, cy) = WatchWidgets.CellAt((m.X - prev.X) / sx, (m.Y - prev.Y) / sy, classic, grid);
         float hs = classic ? 5 : 14;
         RectangleF Handle(WatchWidget w)
         {
-            var r = View(WatchWidgets.Rect(w, classic));
+            var r = View(WatchWidgets.Rect(w, classic, grid));
             return classic ? new RectangleF(r.Right - 4, r.Bottom - 4, hs, hs) : new RectangleF(r.Right - hs / 2 - 2, r.Bottom - hs / 2 - 2, hs, hs);
         }
         if (_wcell.x >= 0 && WatchWidgets.At(list, _wcell.x, _wcell.y) != null) _wcell = (-1, -1);     // something took the marked cell
@@ -132,11 +252,11 @@ public sealed partial class SettingsView
         }
 
         // the empty cells (the one picked for the next widget marked)
-        for (int y = 0; y < WatchWidgets.Rows; y++)
-            for (int x = 0; x < WatchWidgets.Cols; x++)
+        for (int y = 0; y < grid.Rows; y++)
+            for (int x = 0; x < grid.Cols; x++)
             {
                 if (WatchWidgets.At(list, x, y) != null) continue;
-                var cr = View(WatchWidgets.CellRect(x, y, 1, 1, classic));
+                var cr = View(WatchWidgets.CellRect(x, y, 1, 1, classic, grid));
                 bool picked = _wcell == (x, y);
                 if (classic)
                 {
@@ -156,17 +276,17 @@ public sealed partial class SettingsView
             var k = WatchWidgets.Find(_wdrag.Type);
             int nx = _wdrag.X, ny = _wdrag.Y, nw = _wdrag.W, nh = _wdrag.H;
             if (_wresize && k != null) (nw, nh) = cx == _wgrabX && cy == _wgrabY ? (_wgrabW, _wgrabH)
-                : WatchWidgets.SnapSize(k, _wgrabW + cx - _wgrabX, _wgrabH + cy - _wgrabY, classic);
+                : WatchWidgets.SnapSize(k, _wgrabW + cx - _wgrabX, _wgrabH + cy - _wgrabY, classic, grid);
             else if (!_wresize)
             {
-                nx = Math.Clamp(cx - _wgrabX, 0, WatchWidgets.Cols - nw);
-                ny = Math.Clamp(cy - _wgrabY, 0, WatchWidgets.Rows - nh);
+                nx = Math.Clamp(cx - _wgrabX, 0, Math.Max(0, grid.Cols - nw));
+                ny = Math.Clamp(cy - _wgrabY, 0, Math.Max(0, grid.Rows - nh));
             }
             bool changed = nx != _wdrag.X || ny != _wdrag.Y || nw != _wdrag.W || nh != _wdrag.H;
-            bool ok = WatchWidgets.Free(list, _wdrag, nx, ny, nw, nh);
+            bool ok = WatchWidgets.Free(list, _wdrag, nx, ny, nw, nh, grid);
             if (changed)
             {
-                var gr = View(WatchWidgets.CellRect(nx, ny, nw, nh, classic));
+                var gr = View(WatchWidgets.CellRect(nx, ny, nw, nh, classic, grid));
                 if (classic) p.Stroke(new RectangleF(gr.X + 1, gr.Y + 1, gr.Width - 2, gr.Height - 2), ok ? 0xFF000000 : 0xFFFF0000, 2);
                 else
                 {
@@ -190,7 +310,7 @@ public sealed partial class SettingsView
         sel = SelWidget(list);
         if (sel != null)
         {
-            var sr = View(WatchWidgets.Rect(sel, classic));
+            var sr = View(WatchWidgets.Rect(sel, classic, grid));
             if (classic)
             {
                 p.Stroke(new RectangleF(sr.X - 0.5f, sr.Y - 0.5f, sr.Width + 1, sr.Height + 1), 0xFF000000, 1);
@@ -211,43 +331,59 @@ public sealed partial class SettingsView
         var p = ui.P;
         var w = C.Wrist;
         var list = WatchLayout();
-        var prev = new RectangleF(222, 84, 480, 330);
+        PageStrip(ui, 222, 76, 486, 32);
+        var prev = EditorPrev;
         p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
         p.Image(_h.Wrist.Surf.Bitmap, prev);
         if (_h.Wrist.Animating) ui.Animating = true;          // the preview springs / rolls: keep drawing
         EditGrid(ui, prev, false, list);
 
-        // the palette: click one to put it in the marked cell or the first free spot
-        // what went wrong (no room, it does not fit) where it happened: over the palette, under the watch
-        if (_wmsg != null) ui.Label(new RectangleF(222, 428, 480, 20), _wmsg, Theme.Warn, 13);
-        else ui.Label(new RectangleF(222, 428, 480, 20), _wcell.x >= 0 ? "Add a widget to the marked cell" : "Add a widget");
-        for (int i = 0; i < WatchWidgets.Palette.Length; i++)
-        {
-            var k = WatchWidgets.Palette[i];
-            var r = new RectangleF(222 + i % 6 * 81, 450 + i / 6 * 34, 77, 30);
-            // the icon only when it fits with the name and a margin on both sides
-            string icon = 11 + 8 + p.MeasureWidth(k.Name, 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
-            if (ui.Button(Ui.Id("wpal", i), r, k.Name, icon, false, true, 11)) AddWidget(ui, list, k, false);
-        }
-
         float rx = 724, rw = 260;
         var sel = SelWidget(list);
-        ui.Section(new RectangleF(rx, 84, rw, 22), "Selected");
-        if (sel == null)
+        // under the watch: a button group's buttons when one is selected, else the palette (click one to put it in the marked cell or
+        // the first free spot); what went wrong (no room, it does not fit) over it
+        if (sel?.Type == "buttons") GroupPicker(ui, sel, 222, PaletteY - 20);
+        else
         {
-            ui.Label(new RectangleF(rx, 108, rw, 90), "Click a widget on the watch to select it. Drag it to move it, drag its corner to resize it. " +
-                     "Click an empty cell to choose where the next one goes.", Theme.Dim, 13, FontWeight.Normal, true);
+            if (_wmsg != null) ui.Label(new RectangleF(222, PaletteY - 20, 486, 18), _wmsg, Theme.Warn, 13);
+            else ui.Label(new RectangleF(222, PaletteY - 20, 486, 18), _wcell.x >= 0 ? "Add a widget to the marked cell" : "Add a widget");
+            for (int i = 0; i < WatchWidgets.Palette.Length; i++)
+            {
+                var k = WatchWidgets.Palette[i];
+                var r = new RectangleF(222 + i % 6 * 81, PaletteY + i / 6 * PalettePitch, 77, PalettePitch - 3);
+                // the icon only when it fits with the name and a margin on both sides
+                string icon = 11 + 8 + p.MeasureWidth(k.Name, 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
+                if (ui.Button(Ui.Id("wpal", i), r, k.Name, icon, false, true, 11)) AddWidget(ui, list, k, false);
+            }
+        }
 
-            ui.Section(new RectangleF(rx, 274, rw, 22), "Background");
+        if (_wadd) NewPagePanel(ui, rx, rw);
+        else if (sel == null)
+        {
+            // the page shown: its grid, remove it; the background (all pages); start this page over
+            int n = WatchPages.Count(w), ep = EditPage;
+            ui.Section(new RectangleF(rx, 84, rw, 22), n > 1 ? $"Page {ep + 1} of {n}" : "This page");
+            int gi = EditGridSpec.Is43 ? 1 : 0;
+            if (ui.Segmented("we.grid", new RectangleF(rx, 108, rw, 34), new[] { "6 × 4 grid", "4 × 3 grid" }, ref gi))
+                ChangeGrid(ui, gi == 1 ? "4x3" : "6x4");
+            if (ui.Button("we.rmpage", new RectangleF(rx, 150, rw, 34), RemoveArmed ? "Click again to remove this page" : "Remove this page",
+                    Theme.IcoDelete, RemoveArmed, n > 1, 13))
+                RemovePage(ui);
+
+            ui.Section(new RectangleF(rx, 196, rw, 22), "Background");
             int bg = w.Background == "cards" ? 1 : 0;
-            if (ui.Segmented("we.bg", new RectangleF(rx, 298, rw, 36), new[] { "Watch panel", "Cards only" }, ref bg))
+            if (ui.Segmented("we.bg", new RectangleF(rx, 220, rw, 34), new[] { "Watch panel", "Cards only" }, ref bg))
                 w.Background = bg == 1 ? "cards" : "panel";
 
-            ui.Section(new RectangleF(rx, 346, rw, 22), "Start over from");
-            for (int i = 0; i < WatchWidgets.Presets.Length; i++)
-                if (ui.Button(Ui.Id("wpre", i), new RectangleF(rx + i % 2 * 134, 370 + i / 2 * 40, 126, 34), WatchWidgets.PresetNames[i], null, false, true, 14))
-                    StartOver(ui, WatchWidgets.Presets[i]);
-            if (ui.Button("we.empty", new RectangleF(rx + 134, 450, 126, 34), "Empty", null, false, list.Count > 0, 14)) ClearWatch(ui, list);
+            ui.Section(new RectangleF(rx, 266, rw, 22), "Start this page over from");
+            var presets = StartPresets();
+            for (int i = 0; i < presets.Length; i++)
+                if (ui.Button(Ui.Id("wpre", i), new RectangleF(rx + i % 2 * 134, 290 + i / 2 * 38, 126, 34), WatchWidgets.PresetName2(presets[i]), null, false, true, 14))
+                    StartOver(ui, presets[i]);
+            int ei = presets.Length;
+            if (ui.Button("we.empty", new RectangleF(rx + ei % 2 * 134, 290 + ei / 2 * 38, 126, 34), "Empty", null, false, list.Count > 0, 14)) ClearWatch(ui, list);
+            ui.Label(new RectangleF(rx, 486, rw, 80), "Click a widget to select it, drag it to move it, drag its corner to resize it. Click an empty cell " +
+                     "to choose where the next one goes. On the watch, swipe sideways to change the page.", Theme.Dim, 13, FontWeight.Normal, true);
         }
         else
         {
@@ -263,7 +399,76 @@ public sealed partial class SettingsView
             if (ui.Button("we.remove", new RectangleF(rx + 2 * (bw + 8), 138, bw, 34), "Remove", Theme.IcoDelete, false, true, 13)) RemoveSelected(ui, list);
             if (sel != null && list.Contains(sel)) WidgetLook(ui, list, sel, rx, 182, rw);
         }
-        if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) EditingWatch = false;
+        if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) { EditingWatch = false; _wadd = false; }
+    }
+
+    // the presets "start over" offers: the faces of before pages (6 x 4), then the page presets (on the page's own grid)
+    static readonly string[] _startPresets = WatchWidgets.Presets.Concat(new[] { "everyday", "vrchat", "performance" }).ToArray();
+    static string[] StartPresets() => _startPresets;
+
+    // The pages as tabs over the watch (the one edited is the one the watch shows), "Add page" at the end
+    void PageStrip(Ui ui, float x, float y, float w, float h)
+    {
+        var p = ui.P;
+        var wc = C.Wrist;
+        int n = WatchPages.Count(wc), cur = EditPage;
+        const float addW = 118, gap = 6;
+        float tw = MathF.Min(150, (w - addW - gap * n) / n);
+        for (int i = 0; i < n; i++)
+        {
+            var r = new RectangleF(x + i * (tw + gap), y, tw, h);
+            string name = WatchPages.Name(wc, i);
+            string label = Cut(p, name, tw - 16, 13);
+            if (ui.Button(Ui.Id("wpg", i), r, label, null, i == cur, true, 13) && i != cur) ShowPage(i);
+        }
+        if (ui.Button("we.addpage", new RectangleF(x + w - addW, y, addW, h), "Add page", Theme.IcoAdd, _wadd, n < 8, 13))
+        {
+            _wadd = !_wadd;
+            _wselW = null;
+        }
+    }
+
+    static string Cut(Painter p, string s, float maxW, float size)
+    {
+        if (p.MeasureWidth(s, size, FontWeight.SemiBold) <= maxW) return s;
+        int n = s.Length;
+        while (n > 1 && p.MeasureWidth(s[..n] + "…", size, FontWeight.SemiBold) > maxW) n--;
+        return s[..n].TrimEnd() + "…";
+    }
+
+    // The new page's choices (in place of the selection): what it starts from, its grid; Add page / Cancel
+    void NewPagePanel(Ui ui, float rx, float rw)
+    {
+        ui.Section(new RectangleF(rx, 84, rw, 22), "New page");
+        ui.Label(new RectangleF(rx, 106, rw, 20), "Start from", Theme.Dim, 13);
+        for (int i = 0; i < WatchWidgets.PagePresets.Length; i++)
+            if (ui.Button(Ui.Id("wnp", i), new RectangleF(rx + i % 2 * 134, 130 + i / 2 * 40, 126, 34), WatchWidgets.PagePresetNames[i], null, i == _waddPreset, true, 14))
+                _waddPreset = i;
+        ui.Section(new RectangleF(rx, 216, rw, 22), "Grid");
+        ui.Segmented("we.npgrid", new RectangleF(rx, 240, rw, 34), new[] { "6 × 4 (small cards)", "4 × 3 (big cards)" }, ref _waddGrid);
+        if (ui.Button("we.npadd", new RectangleF(rx, 292, rw, 40), "Add page", Theme.IcoAdd, true, true, 15))
+            AddPage(ui, WatchWidgets.PagePresets[Math.Clamp(_waddPreset, 0, WatchWidgets.PagePresets.Length - 1)], _waddGrid == 1 ? "4x3" : "6x4");
+        if (ui.Button("we.npcancel", new RectangleF(rx, 340, rw, 34), "Cancel", null, false, true, 14)) _wadd = false;
+    }
+
+    // A button group's buttons: every button kind as a chip, the ones in the group lit (2 to 6 of them)
+    void GroupPicker(Ui ui, WatchWidget sel, float x, float y)
+    {
+        var items = sel.Items ??= new List<string>(WatchWidgets.GroupDefault);
+        items.RemoveAll(s => Array.IndexOf(WatchWidgets.GroupKinds, s) < 0);
+        ui.Label(new RectangleF(x, y, 486, 18), $"Buttons in this group: {items.Count} (2 to 6)", Theme.Dim, 13);
+        for (int i = 0; i < WatchWidgets.GroupKinds.Length; i++)
+        {
+            string id = WatchWidgets.GroupKinds[i];
+            var k = WatchWidgets.Find(id);
+            bool on = items.Contains(id);
+            var r = new RectangleF(x + i % 4 * 122, y + 22 + i / 4 * 38, 116, 34);
+            if (ui.Button(Ui.Id("wgk", i), r, k.Name, k.Icon, on, on ? items.Count > 2 : items.Count < 6, 12))
+            {
+                if (on) items.Remove(id); else items.Add(id);
+                ui.Changed = true;
+            }
+        }
     }
 
     // The selected widget's own look (the modern watch only; the 95 face stays as 1995 drew it): its style as chips, each with a
@@ -342,17 +547,33 @@ public sealed partial class SettingsView
         var prev = new RectangleF(31, 82, WristPanel.TW95, WristPanel.TH95);
         if (_h.Wrist.Canvas95 != null) p.ImageNearest(_h.Wrist.Canvas95.Bitmap, prev);
         EditGrid(ui, prev, true, list);
-        ui.Text95("Click a widget to select it, drag it to move it, drag its black corner to resize it. Click an empty cell " +
-                  "to choose where the next one goes.", new RectangleF(16, 324, 350, 40), 0xFF000000, wrap: true);
+
+        // the pages: the one edited (the watch shows it), a new one from "From", remove it (a second click confirms)
+        int n = WatchPages.Count(w), ep = EditPage;
+        var pageNames = new string[n];
+        for (int i = 0; i < n; i++) pageNames[i] = $"{i + 1}  {WatchPages.Name(w, i)}";
+        Lbl(ui, 16, 327, "Pa&ge:");
+        bool before = ui.Changed;
+        int pi = ep;
+        if (ui.Combo95("we95.page", new RectangleF(54, 327, 128, RowH), pageNames, ref pi) && pi != ep) ShowPage(pi);
+        ui.Changed = before;                    // looking at another page is not a change
+        var presets = StartPresets();
+        string from = presets[Math.Clamp(_wpreset, 0, presets.Length - 1)];
+        if (ui.Button95("we95.newpage", new RectangleF(188, 326, 88, 23), "&New page", n < 8))
+            AddPage(ui, from, Array.IndexOf(WatchWidgets.Presets, from) >= 0 ? "6x4" : "4x3");
+        if (ui.Button95("we95.rmpage", new RectangleF(280, 326, 86, 23), RemoveArmed ? "Sure?" : "Remove page", n > 1)) RemovePage(ui);
 
         ui.Group95(new RectangleF(16, 362, 350, 68), "Start over");
         Lbl(ui, 28, 382, "&From:");
-        bool before = ui.Changed;
-        ui.Combo95("we95.preset", new RectangleF(108, 382, 120, RowH), WatchWidgets.PresetNames, ref _wpreset);
+        before = ui.Changed;
+        var presetNames = presets.Select(WatchWidgets.PresetName2).ToArray();
+        ui.Combo95("we95.preset", new RectangleF(84, 382, 144, RowH), presetNames, ref _wpreset);
         ui.Changed = before;                    // choosing in the list is not a change yet
-        if (ui.Button95("we95.reset", new RectangleF(236, 380, 75, 23), "&Reset"))
-            StartOver(ui, WatchWidgets.Presets[Math.Clamp(_wpreset, 0, WatchWidgets.Presets.Length - 1)]);
+        if (ui.Button95("we95.reset", new RectangleF(236, 380, 75, 23), "&Reset")) StartOver(ui, from);
         if (ui.Button95("we95.empty", new RectangleF(236, 405, 75, 22), "&Empty", list.Count > 0)) ClearWatch(ui, list);
+        Lbl(ui, 28, 406, "&Grid:");
+        int gi = EditGridSpec.Is43 ? 1 : 0, gi0 = gi;
+        if (ui.Combo95("we95.grid", new RectangleF(84, 406, 144, RowH), new[] { "6 x 4", "4 x 3" }, ref gi) && gi != gi0) ChangeGrid(ui, gi == 1 ? "4x3" : "6x4");
 
         ui.Group95(new RectangleF(376, 56, 358, 218), "Widgets");
         int hit = ui.List95("we95.pal", new RectangleF(388, 76, 214, 188), WatchWidgets.Palette.Length, _wpal, (i, r, on) =>
@@ -376,16 +597,34 @@ public sealed partial class SettingsView
             ui.Text95(KindName(sel), new RectangleF(410, 299, 300, 15), 0xFF000000, true);
             if (k != null)
             {
-                // the 95 face's sizes; a size only the modern face has selects none (the box shows empty) until one is picked
-                var sizes = k.Sizes.Select(s => $"{s.W} x {s.H}").ToArray();
-                int si = Array.FindIndex(k.Sizes, s => s.W == sel.W && s.H == sel.H);
+                // the 95 face's sizes (a 4 x 3 page: its own); a size only the modern face has selects none (the box shows empty) until
+                // one is picked
+                var grid = EditGridSpec;
+                var ks = grid.Is43 ? WatchWidgets.Sizes43(k) : k.Sizes;
+                var sizes = ks.Select(s => $"{s.W} x {s.H}").ToArray();
+                int si = Array.FindIndex(ks, s => s.W == sel.W && s.H == sel.H);
                 int si2 = si;
                 bool before2 = ui.Changed;
                 if (ComboRow(ui, "we95.size", 388, 322, 468, 100, "&Size:", sizes, ref si2) && si2 != si)
                 {
-                    var s = k.Sizes[si2];
-                    if (WatchWidgets.Free(list, sel, sel.X, sel.Y, s.W, s.H)) { sel.W = s.W; sel.H = s.H; _wmsg = null; }
+                    var s = ks[si2];
+                    if (WatchWidgets.Free(list, sel, sel.X, sel.Y, s.W, s.H, grid)) { sel.W = s.W; sel.H = s.H; _wmsg = null; }
                     else { _wmsg = "That size doesn't fit there."; ui.Changed = before2; }
+                }
+                if (sel.Type == "buttons")
+                {
+                    // its buttons: a check box each (2 to 6)
+                    var items = sel.Items ??= new List<string>(WatchWidgets.GroupDefault);
+                    for (int i = 0; i < WatchWidgets.GroupKinds.Length; i++)
+                    {
+                        string id = WatchWidgets.GroupKinds[i];
+                        bool on = items.Contains(id), v = on;
+                        if (ui.Check95(Ui.Id("we95.gk", i), 388 + i % 4 * 84, 348 + i / 4 * 16, WatchWidgets.Find(id).Title95, ref v,
+                                on ? items.Count > 2 : items.Count < 6) && v != on)
+                        {
+                            if (v) items.Add(id); else items.Remove(id);
+                        }
+                    }
                 }
             }
             if (ui.Button95("we95.rm", new RectangleF(647, 321, 75, 23), "Re&move")) RemoveSelected(ui, list);

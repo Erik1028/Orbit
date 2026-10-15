@@ -65,6 +65,10 @@ public static class WatchWidgets
         new("room", "Room", "Room", "\uE716", W95Icons.Id.People, new[] { (1, 1), (2, 1) }, 1, false, 2),
         // the stream dock (Hexpad): its keys live; a tap opens it as a panel. Offered only while Hexpad runs.
         new("dock", "Hexpad", "Hexpad", "\uE80A", W95Icons.Id.Dock, new[] { (1, 1), (2, 1), (2, 2) }, 1, false, 1),
+        // 1.12, the watch pages: the Windows microphone (a tap mutes it), the last notifications, a group of buttons in one card
+        new("mic", "Microphone", "Microphone", "\uE720", W95Icons.Id.Note, new[] { (1, 1), (2, 1) }, 0),
+        new("notifications", "Notifications", "Notifications", "\uEA8F", W95Icons.Id.Chat, new[] { (2, 1), (3, 1), (2, 2) }, 0),
+        new("buttons", "Button group", "Buttons", "\uECA5", W95Icons.Id.Layouts, new[] { (2, 1), (3, 1), (2, 2), (6, 1) }, 0),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -79,39 +83,52 @@ public static class WatchWidgets
     // watch's 34 px corners the cards' 24 px corners are concentric; 95: 4 px). Edges on whole pixels, so
     // every gap is exactly that wide (a cell may be a pixel wider than its neighbour instead).
 
-    static (float m, float g, float w, float h) Metrics(bool classic) =>
-        classic ? (4f, 4f, WristPanel.TW95, WristPanel.TH95) : (10f, 10f, WristPanel.TW, WristPanel.TH);
+    // margin, gap, size; mb: the bottom margin (a 95 face with pages has its little taskbar there)
+    static (float m, float g, float w, float h, float mb) Metrics(bool classic, GridSpec grid = null) =>
+        classic ? (4f, 4f, WristPanel.TW95, WristPanel.TH95, grid is { Paged: true } ? 4f + Taskbar95 : 4f)
+                : (10f, 10f, WristPanel.TW, WristPanel.TH, 10f);
 
-    public static RectangleF CellRect(int x, int y, int w, int h, bool classic)
+    // the 95 face's page buttons along the bottom of its 320 x 220 canvas (a face with pages only)
+    public const float Taskbar95 = 22;
+
+    // grid: the page's (null = 6 x 4, the only grid before pages)
+    public static RectangleF CellRect(int x, int y, int w, int h, bool classic, GridSpec grid = null)
     {
-        var (m, g, W, H) = Metrics(classic);
-        float cw = (W - 2 * m - (Cols - 1) * g) / Cols, ch = (H - 2 * m - (Rows - 1) * g) / Rows;
+        grid ??= GridSpec.G64;
+        var (m, g, W, H, mb) = Metrics(classic, grid);
+        int cols = grid.Cols, rows = grid.Rows;
+        float cw = (W - 2 * m - (cols - 1) * g) / cols, ch = (H - m - mb - (rows - 1) * g) / rows;
         float x0 = m + x * (cw + g), y0 = m + y * (ch + g);
         float x1 = m + (x + w) * (cw + g) - g, y1 = m + (y + h) * (ch + g) - g;
         return RectangleF.FromLTRB(MathF.Round(x0), MathF.Round(y0), MathF.Round(x1), MathF.Round(y1));
     }
 
-    public static RectangleF Rect(WatchWidget w, bool classic) => CellRect(w.X, w.Y, w.W, w.H, classic);
+    public static RectangleF Rect(WatchWidget w, bool classic, GridSpec grid = null) => CellRect(w.X, w.Y, w.W, w.H, classic, grid);
 
     // the cell under a point of the texture / canvas, clamped to the grid
-    public static (int x, int y) CellAt(float px, float py, bool classic)
+    public static (int x, int y) CellAt(float px, float py, bool classic, GridSpec grid = null)
     {
-        var (m, g, W, H) = Metrics(classic);
-        float cw = (W - 2 * m - (Cols - 1) * g) / Cols, ch = (H - 2 * m - (Rows - 1) * g) / Rows;
+        grid ??= GridSpec.G64;
+        var (m, g, W, H, mb) = Metrics(classic, grid);
+        int cols = grid.Cols, rows = grid.Rows;
+        float cw = (W - 2 * m - (cols - 1) * g) / cols, ch = (H - m - mb - (rows - 1) * g) / rows;
         int cx = (int)MathF.Floor((px - m + g / 2) / (cw + g)), cy = (int)MathF.Floor((py - m + g / 2) / (ch + g));
-        return (Math.Clamp(cx, 0, Cols - 1), Math.Clamp(cy, 0, Rows - 1));
+        return (Math.Clamp(cx, 0, cols - 1), Math.Clamp(cy, 0, rows - 1));
     }
 
     // ---- layout rules ----
 
     // overflow-safe: a hand-edited config can hold int.MaxValue
-    public static bool InGrid(int x, int y, int w, int h) =>
-        x >= 0 && y >= 0 && w >= 1 && h >= 1 && w <= Cols && h <= Rows && x <= Cols - w && y <= Rows - h;
+    public static bool InGrid(int x, int y, int w, int h, GridSpec grid = null)
+    {
+        int cols = grid?.Cols ?? Cols, rows = grid?.Rows ?? Rows;
+        return x >= 0 && y >= 0 && w >= 1 && h >= 1 && w <= cols && h <= rows && x <= cols - w && y <= rows - h;
+    }
 
     // is this area inside the grid and free (ignoring 'skip', the widget being moved)?
-    public static bool Free(IReadOnlyList<WatchWidget> list, WatchWidget skip, int x, int y, int w, int h)
+    public static bool Free(IReadOnlyList<WatchWidget> list, WatchWidget skip, int x, int y, int w, int h, GridSpec grid = null)
     {
-        if (!InGrid(x, y, w, h)) return false;
+        if (!InGrid(x, y, w, h, grid)) return false;
         foreach (var o in list)
             if (o != skip && x < o.X + o.W && o.X < x + w && y < o.Y + o.H && o.Y < y + h) return false;
         return true;
@@ -129,42 +146,45 @@ public static class WatchWidgets
 
     // A new widget where it fits: in the preferred cell (any size that fits there), else its default size
     // anywhere, then any other size from the smallest (classic: only the sizes the 95 face has). Null when there is no room.
-    public static WatchWidget Add(List<WatchWidget> list, Kind k, int prefX = -1, int prefY = -1, bool classic = false)
+    public static WatchWidget Add(List<WatchWidget> list, Kind k, int prefX = -1, int prefY = -1, bool classic = false, GridSpec grid = null)
     {
-        var sizes = new List<(int W, int H)> { k.Sizes[k.Default] };
-        sizes.AddRange(k.SizesFor(classic).Where((s, i) => i != k.Default));
+        grid ??= GridSpec.G64;
+        var sizes = new List<(int W, int H)>();
+        if (grid.Cols == Cols) { sizes.Add(k.Sizes[k.Default]); sizes.AddRange(k.SizesFor(classic).Where((s, i) => i != k.Default)); }
+        else sizes.AddRange(SizesOn(k, grid, classic));      // 4x3: its first size is the one a new one gets
         if (prefX >= 0)
             foreach (var (w, h) in sizes)
-                if (Free(list, null, prefX, prefY, w, h)) return Place(list, k, prefX, prefY, w, h);
+                if (Free(list, null, prefX, prefY, w, h, grid)) return Place(list, k, prefX, prefY, w, h);
         foreach (var (w, h) in sizes)
-            for (int y = 0; y < Rows; y++)
-                for (int x = 0; x < Cols; x++)
-                    if (Free(list, null, x, y, w, h)) return Place(list, k, x, y, w, h);
+            for (int y = 0; y < grid.Rows; y++)
+                for (int x = 0; x < grid.Cols; x++)
+                    if (Free(list, null, x, y, w, h, grid)) return Place(list, k, x, y, w, h);
         return null;
     }
 
     static WatchWidget Place(List<WatchWidget> list, Kind k, int x, int y, int w, int h)
     {
         var n = new WatchWidget { Type = k.Id, X = x, Y = y, W = w, H = h };
+        if (k.Id == "buttons") n.Items = new List<string>(GroupDefault);
         list.Add(n);
         return n;
     }
 
     // the allowed size (in that style) closest to what the pointer asks for (a corner drag)
-    public static (int W, int H) SnapSize(Kind k, int wantW, int wantH, bool classic = false)
+    public static (int W, int H) SnapSize(Kind k, int wantW, int wantH, bool classic = false, GridSpec grid = null)
     {
         wantW = Math.Max(1, wantW);
         wantH = Math.Max(1, wantH);
-        return k.SizesFor(classic).OrderBy(s => Math.Abs(s.W - wantW) + Math.Abs(s.H - wantH)).ThenBy(s => s.W * s.H).First();
+        return SizesOn(k, grid, classic).OrderBy(s => Math.Abs(s.W - wantW) + Math.Abs(s.H - wantH)).ThenBy(s => s.W * s.H).First();
     }
 
     // the next smaller (-1) or larger (+1) allowed size (in that style) that fits where the widget is, or null
-    public static (int W, int H)? Step(IReadOnlyList<WatchWidget> list, WatchWidget w, int dir, bool classic = false)
+    public static (int W, int H)? Step(IReadOnlyList<WatchWidget> list, WatchWidget w, int dir, bool classic = false, GridSpec grid = null)
     {
         var k = Find(w.Type);
         if (k == null) return null;
         int area = w.W * w.H;
-        var order = k.SizesFor(classic).OrderBy(s => s.W * s.H).ThenBy(s => s.W).ToList();
+        var order = SizesOn(k, grid, classic).OrderBy(s => s.W * s.H).ThenBy(s => s.W).ToList();
         int at = order.FindIndex(s => s.W == w.W && s.H == w.H);
         if (at < 0)
         {
@@ -173,7 +193,7 @@ public static class WatchWidgets
             else { at = order.FindIndex(s => s.W * s.H >= area); if (at < 0) at = order.Count; }
         }
         for (int i = at + dir; i >= 0 && i < order.Count; i += dir)
-            if (Free(list, w, w.X, w.Y, order[i].W, order[i].H)) return order[i];
+            if (Free(list, w, w.X, w.Y, order[i].W, order[i].H, grid)) return order[i];
         return null;
     }
 
@@ -236,23 +256,221 @@ public static class WatchWidgets
     // version doesn't offer = the largest offered size inside its box (or the nearest, if that fits).
     // Unknown types are KEPT (a newer Orbit's widgets survive a round trip; they draw as nothing here).
     // Both styles' sizes count (the face is one list): a modern-only size survives a switch to 95 and back.
-    public static List<WatchWidget> Clean(List<WatchWidget> list)
+    // grid: the page's - a 4x3 page is checked against the 4x3 sizes, a 6x4 one against the 6x4 ones (never one by the other's)
+    public static List<WatchWidget> Clean(List<WatchWidget> list, GridSpec grid = null)
     {
         var ok = new List<WatchWidget>();
         foreach (var w in list ?? new List<WatchWidget>())
         {
-            if (w == null || string.IsNullOrEmpty(w.Type) || !InGrid(w.X, w.Y, w.W, w.H)) continue;
+            if (w == null || string.IsNullOrEmpty(w.Type) || !InGrid(w.X, w.Y, w.W, w.H, grid)) continue;
             var k = Find(w.Type);
-            if (k != null && !k.Union.Contains((w.W, w.H)))
+            var union = k == null ? null : grid == null || grid.Cols == Cols ? k.Union : SizesOn(k, grid, false);
+            if (k != null && !union.Contains((w.W, w.H)))
             {
-                var inside = k.Union.Where(s => s.W <= w.W && s.H <= w.H).OrderByDescending(s => s.W * s.H).ToList();
-                var s = inside.Count > 0 ? inside[0] : SnapSize(k, w.W, w.H);
-                if (!Free(ok, null, w.X, w.Y, s.W, s.H)) continue;
+                var inside = union.Where(s => s.W <= w.W && s.H <= w.H).OrderByDescending(s => s.W * s.H).ToList();
+                var s = inside.Count > 0 ? inside[0] : SnapSize(k, w.W, w.H, false, grid);
+                if (!Free(ok, null, w.X, w.Y, s.W, s.H, grid)) continue;
                 w.W = s.W;
                 w.H = s.H;
             }
-            if (Free(ok, null, w.X, w.Y, w.W, w.H)) ok.Add(w);
+            if (Free(ok, null, w.X, w.Y, w.W, w.H, grid)) ok.Add(w);
         }
         return ok;
+    }
+
+    // ================= 1.12: the 4 x 3 grid and the pages =================
+
+    // The sizes on the 4 x 3 grid (the Bento grid: S 1x1, M 2x1, L 2x2, Wide 4x1), the same in both styles - the 95 face draws each
+    // with its nearest 95 picture. The first is the one a new widget gets. A kind not listed (a newer one) gets them from its 6 x 4 sizes.
+    static readonly (int, int) S = (1, 1), M = (2, 1), L = (2, 2), Wd = (4, 1);
+    static readonly Dictionary<string, (int W, int H)[]> Sizes43Table = new()
+    {
+        ["time"] = new[] { L, S, M }, ["date"] = new[] { M, S }, ["calendar"] = new[] { S, M, L }, ["analog"] = new[] { L, S },
+        ["timer"] = new[] { S, M, L }, ["stopwatch"] = new[] { M, S }, ["session"] = new[] { S, M },
+        ["battery"] = new[] { S, M, L }, ["media"] = new[] { M, S, L, Wd }, ["volume"] = new[] { S, M },
+        ["perf"] = new[] { Wd, M }, ["graph"] = new[] { L, M, Wd },
+        ["fps"] = new[] { S, M }, ["reproj"] = new[] { S, M }, ["gpu"] = new[] { S, M }, ["vram"] = new[] { S, M },
+        ["cpu"] = new[] { S, M }, ["ram"] = new[] { S, M },
+        ["room"] = new[] { M, S }, ["dock"] = new[] { M, L },
+        ["mic"] = new[] { S, M }, ["notifications"] = new[] { M, L }, ["buttons"] = new[] { M, L },
+    };
+    static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
+
+    public static (int W, int H)[] Sizes43(Kind k)
+    {
+        if (Sizes43Table.TryGetValue(k.Id, out var s)) return s;
+        if (k.Button) return Sizes43Table["fps"];
+        if (_derived43.TryGetValue(k.Id, out s)) return s;
+        var l = new List<(int W, int H)>();
+        foreach (var (w, h) in k.Sizes)
+        {
+            var u = h >= 2 ? L : w >= 4 ? Wd : w >= 2 ? M : S;
+            if (!l.Contains(u)) l.Add(u);
+        }
+        return _derived43[k.Id] = l.ToArray();
+    }
+
+    // what the editor offers on a page of this grid (null = 6 x 4)
+    public static (int W, int H)[] SizesOn(Kind k, GridSpec grid, bool classic) =>
+        grid == null || grid.Cols == Cols ? k.SizesFor(classic) : Sizes43(k);
+
+    // the button kinds a button group can hold, and a new group's
+    public static readonly string[] GroupKinds = { "keyboard", "desktops", "recenter", "layout", "night", "settings", "status", "theater" };
+    public static readonly string[] GroupDefault = { "desktops", "theater", "night" };
+
+    // its buttons as it draws them: known button kinds only, at most 6 (none = the default three)
+    public static List<string> GroupItems(WatchWidget w)
+    {
+        var l = new List<string>();
+        if (w.Items != null)
+            foreach (var id in w.Items)
+                if (id != null && Array.IndexOf(GroupKinds, id) >= 0 && !l.Contains(id) && l.Count < 6) l.Add(id);
+        if (l.Count == 0) l.AddRange(GroupDefault);
+        return l;
+    }
+
+    // ---- the pages' presets: on either grid ("empty" too) ----
+    public static readonly string[] PagePresets = { "empty", "everyday", "vrchat", "performance" };
+    public static readonly string[] PagePresetNames = { "Empty", "Everyday", "VRChat", "Performance" };
+
+    public static List<WatchWidget> PagePreset(string preset, GridSpec grid)
+    {
+        var l = new List<WatchWidget>();
+        void Put(string t, int x, int y, int w = 1, int h = 1, params string[] items) =>
+            l.Add(new WatchWidget { Type = t, X = x, Y = y, W = w, H = h, Items = items.Length > 0 ? new List<string>(items) : null });
+        string[] six = { "keyboard", "desktops", "recenter", "layout", "night", "settings" };
+        bool g43 = grid != null && grid.Cols == 4;
+        switch (preset)
+        {
+            case "everyday" when g43:
+                Put("time", 0, 0, 2, 2); Put("media", 2, 0, 2, 1); Put("battery", 2, 1); Put("fps", 3, 1);
+                Put("timer", 0, 2); Put("volume", 1, 2); Put("buttons", 2, 2, 2, 1, six);
+                break;
+            case "vrchat" when g43:
+                Put("time", 0, 0, 2, 2); Put("room", 2, 0, 2, 1); Put("mic", 2, 1); Put("battery", 3, 1);
+                Put("notifications", 0, 2, 2, 1); Put("media", 2, 2, 2, 1);
+                break;
+            case "performance" when g43:
+                Put("graph", 0, 0, 2, 2); Put("time", 2, 0, 2, 1); Put("cpu", 2, 1); Put("vram", 3, 1);
+                Put("battery", 0, 2, 2, 1); Put("buttons", 2, 2, 2, 1, "desktops", "theater", "night");
+                break;
+            case "everyday":
+                Put("time", 0, 0, 3, 2); Put("media", 3, 0, 3, 1); Put("battery", 3, 1); Put("fps", 4, 1); Put("volume", 5, 1);
+                Put("timer", 0, 2, 2, 1); Put("calendar", 2, 2); Put("session", 3, 2); Put("cpu", 4, 2); Put("ram", 5, 2);
+                for (int i = 0; i < six.Length; i++) Put(six[i], i, 3);
+                break;
+            case "vrchat":
+                Put("time", 0, 0, 3, 2); Put("room", 3, 0, 2, 1); Put("battery", 5, 0); Put("mic", 3, 1); Put("session", 4, 1); Put("status", 5, 1);
+                Put("media", 0, 2, 3, 1); Put("notifications", 3, 2, 2, 1); Put("theater", 5, 2);
+                for (int i = 0; i < six.Length; i++) Put(six[i], i, 3);
+                break;
+            case "performance":
+                Put("graph", 0, 0, 4, 2); Put("time", 4, 0, 2, 1); Put("fps", 4, 1); Put("gpu", 5, 1);
+                Put("cpu", 0, 2); Put("ram", 1, 2); Put("vram", 2, 2); Put("reproj", 3, 2); Put("battery", 4, 2, 2, 1);
+                for (int i = 0; i < six.Length; i++) Put(six[i], i, 3);
+                break;
+        }
+        return l;
+    }
+
+    public static string PresetName(string preset) => PagePresetNames[Math.Max(0, Array.IndexOf(PagePresets, preset))];
+
+    // any preset's name: the old faces' and the pages'
+    public static string PresetName2(string preset)
+    {
+        int i = Array.IndexOf(Presets, preset);
+        return i >= 0 ? PresetNames[i] : PresetName(preset);
+    }
+}
+
+// A grid of the custom face: 6 x 4 (page 1 of every face from before pages) or 4 x 3 (the Bento grid: fewer, bigger cards).
+// Paged: the face has more than one page - only the 95 face's geometry changes then (its taskbar of pages at the bottom).
+public sealed class GridSpec
+{
+    public readonly int Cols, Rows;
+    public readonly string Id;
+    public readonly bool Paged;
+
+    GridSpec(int cols, int rows, string id, bool paged) { Cols = cols; Rows = rows; Id = id; Paged = paged; }
+
+    public static readonly GridSpec G64 = new(6, 4, "6x4", false), G43 = new(4, 3, "4x3", false),
+        G64Paged = new(6, 4, "6x4", true), G43Paged = new(4, 3, "4x3", true);
+
+    public static GridSpec Of(string id, bool paged = false) =>
+        id == "4x3" ? (paged ? G43Paged : G43) : (paged ? G64Paged : G64);
+
+    public bool Is43 => Cols == 4;
+}
+
+// The custom face's pages: page 1 is WristConfig.Widgets (with Grid and Name), the others WristConfig.Pages.
+public static class WatchPages
+{
+    public static int Count(WristConfig c) => 1 + (c.Pages?.Count ?? 0);
+
+    public static string GridId(WristConfig c, int i) => i <= 0 ? c.Grid ?? "6x4" : c.Pages[i - 1].Grid ?? "6x4";
+
+    public static GridSpec Grid(WristConfig c, int i) => GridSpec.Of(GridId(c, i), Count(c) > 1);
+
+    public static string Name(WristConfig c, int i)
+    {
+        string n = i <= 0 ? c.Name : c.Pages[i - 1].Name;
+        return string.IsNullOrWhiteSpace(n) ? $"Page {i + 1}" : n;
+    }
+
+    // a page's list (null: page 1 never set up)
+    public static List<WatchWidget> Widgets(WristConfig c, int i) => i <= 0 ? c.Widgets : c.Pages[i - 1].Widgets;
+
+    // is this kind on any page (the dock's faces, the frame samples: ready before you swipe to it)
+    public static bool Any(WristConfig c, string type)
+    {
+        for (int i = 0; i < Count(c); i++)
+        {
+            var l = Widgets(c, i);
+            if (l == null) continue;
+            foreach (var w in l) if (w?.Type == type) return true;
+        }
+        return false;
+    }
+
+    public static WatchPage Make(string preset, string grid) =>
+        new() { Name = WatchWidgets.PresetName(preset), Grid = grid, Widgets = WatchWidgets.PagePreset(preset, GridSpec.Of(grid)) };
+
+    // The first start of 1.12. A new install (no config yet): the custom face, its pages VRChat and Performance on the 4 x 3 grid.
+    // A config from before: a copy of config.json first (config.json.bak-pages-<time>, next to it), then the VRChat and Performance
+    // pages after the pages it has - page 1, its own face, is not touched. Once: PagesVersion remembers it, so pages deleted later
+    // stay deleted. Only the config: this runs in the app's constructor (no window yet).
+    public static bool Migrate(ConfigStore store)
+    {
+        var w = store.Data.Wrist;
+        if (w.PagesVersion >= 1) return false;
+        if (store.Fresh)
+        {
+            w.Face = "custom";
+            w.Grid = "4x3";
+            w.Name = "VRChat";
+            w.Widgets = WatchWidgets.PagePreset("vrchat", GridSpec.G43);
+            w.Pages = new List<WatchPage> { Make("performance", "4x3") };
+            Log.Info("pages: a new install - the VRChat and Performance pages");
+        }
+        else
+        {
+            string bak = store.Path + $".bak-pages-{DateTime.Now:yyyyMMdd-HHmmss}";
+            try
+            {
+                if (System.IO.File.Exists(store.Path)) System.IO.File.Copy(store.Path, bak, false);
+            }
+            catch (Exception e)
+            {
+                Log.Warn($"pages: no copy of the config ({e.Message}) - the new pages wait for the next start");
+                return false;
+            }
+            w.Pages ??= new List<WatchPage>();
+            w.Pages.Add(Make("vrchat", "4x3"));
+            w.Pages.Add(Make("performance", "4x3"));
+            Log.Info($"pages: the VRChat and Performance pages added after page {Count(w) - 2} (a copy of the config: {bak})");
+        }
+        w.PagesVersion = 1;
+        store.MarkDirty();
+        return true;
     }
 }

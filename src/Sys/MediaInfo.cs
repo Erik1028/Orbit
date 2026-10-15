@@ -111,6 +111,7 @@ public sealed class MediaInfo : IDisposable
                     }
                     lastKey = key;
                     Set(!string.IsNullOrEmpty(props?.Title), props?.Title, props?.Artist, playing, art, newKey || (loadArt && art != null) ? "new" : null);
+                    ReadTimeline(s);
                 }
             }
             catch (Exception e) { Log.Warn("media: " + e.Message); }
@@ -125,6 +126,37 @@ public sealed class MediaInfo : IDisposable
             // bursts of events: at most one read every 2 s (a command reads at once)
             while (!_stop && !_now && Clock.Now - readAt < 2.0) _wake.WaitOne(100);
             _now = false;
+        }
+    }
+
+    // where in the track it is: the session's timeline, read with the rest (a seek shows at the next read) and run on from the
+    // moment the player last updated it while it plays (a player that never stamps it: from when it was read)
+    double _pos, _dur;
+    DateTimeOffset _posAt;
+    bool _tlOk;
+
+    void ReadTimeline(GlobalSystemMediaTransportControlsSession s)
+    {
+        try
+        {
+            var tl = s.GetTimelineProperties();
+            double dur = (tl.EndTime - tl.StartTime).TotalSeconds, pos = (tl.Position - tl.StartTime).TotalSeconds;
+            var at = tl.LastUpdatedTime;
+            var now = DateTimeOffset.Now;
+            if (at > now || now - at > TimeSpan.FromHours(12)) at = now;
+            lock (_lock) { _dur = dur; _pos = pos; _posAt = at; _tlOk = dur >= 1 && pos >= 0; }
+        }
+        catch { lock (_lock) _tlOk = false; }
+    }
+
+    // ok: the player says where it is (pos and dur in seconds)
+    public (bool ok, double pos, double dur) Timeline()
+    {
+        lock (_lock)
+        {
+            if (!_tlOk || !_has) return (false, 0, 0);
+            double p = _pos + (_playing ? (DateTimeOffset.Now - _posAt).TotalSeconds : 0);
+            return (true, Math.Clamp(p, 0, _dur), _dur);
         }
     }
 

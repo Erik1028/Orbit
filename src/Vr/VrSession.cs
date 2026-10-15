@@ -301,6 +301,62 @@ public sealed class VrStats
             : _ft.m_nNumFramePresents > 1 || (_ft.m_nReprojectionFlags & 0x3) != 0 ? 1 : 0);
         FrameHead = (FrameHead + 1) % FrameHistory;
         if (FrameCount < FrameHistory) FrameCount++;
+        AddLong(Clock.Now, _ft.m_flTotalRenderGpuMs, FrameFlag[(FrameHead + FrameHistory - 1) % FrameHistory], _ft.m_flClientFrameIntervalMs);
+    }
+
+    // ---- the last 30 s (the frame graph on a 4 x 3 page): a bucket per 0.1 s holding its slowest frame, and the frame-to-frame
+    // times of those 30 s in a histogram (0.25 ms steps) for the 1 % low ----
+    public const int LongBuckets = 300;
+    public readonly float[] LongMs = new float[LongBuckets];
+    public readonly byte[] LongFlag = new byte[LongBuckets];
+    public readonly long[] LongTick = InitTicks();
+    public long LongNow = -1;                  // the newest bucket's tick (0.1 s steps)
+    const int Bins = 512, Ring = 4096;
+    readonly int[] _binCount = new int[Bins];
+    readonly short[] _ringBin = new short[Ring];
+    readonly long[] _ringTick = new long[Ring];
+    int _ringHead, _ringLen, _binTotal;
+
+    static long[] InitTicks() { var a = new long[LongBuckets]; Array.Fill(a, -1L); return a; }
+
+    public void AddLong(double now, float ms, byte flag, float intervalMs)
+    {
+        long tick = (long)(now * 10);
+        int i = (int)(tick % LongBuckets);
+        if (LongTick[i] != tick) { LongTick[i] = tick; LongMs[i] = 0; LongFlag[i] = 0; }
+        if (ms > LongMs[i]) LongMs[i] = ms;
+        if (flag > LongFlag[i]) LongFlag[i] = flag;
+        LongNow = tick;
+        // older than 30 s, or the ring full: out of the histogram
+        while (_ringLen > 0)
+        {
+            int tail = (_ringHead - _ringLen + Ring) % Ring;
+            if (_ringLen < Ring && _ringTick[tail] > tick - LongBuckets) break;
+            _binCount[_ringBin[tail]]--;
+            _binTotal--;
+            _ringLen--;
+        }
+        if (intervalMs <= 0) return;
+        short bin = (short)Math.Clamp((int)(intervalMs * 4), 0, Bins - 1);
+        _ringBin[_ringHead] = bin;
+        _ringTick[_ringHead] = tick;
+        _ringHead = (_ringHead + 1) % Ring;
+        _ringLen++;
+        _binCount[bin]++;
+        _binTotal++;
+    }
+
+    // the frame rate of the slowest 1 % of the last 30 s of frames (-1: too few)
+    public float OnePercentLow()
+    {
+        if (_binTotal < 50) return -1;
+        int need = Math.Max(1, _binTotal / 100), acc = 0;
+        for (int b = Bins - 1; b >= 0; b--)
+        {
+            acc += _binCount[b];
+            if (acc >= need) return 1000f / ((b + 0.5f) / 4f);
+        }
+        return -1;
     }
     public float LeftBattery = -1, RightBattery = -1, TrackerAverage = -1;
     Compositor_CumulativeStats _prev;
