@@ -21,6 +21,9 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>assets\orbit.ico</ApplicationIcon>
     <NoWarn>$(NoWarn);CS0649;CS0169;CA1416;CS8981</NoWarn>
+    <!-- smaller installer: only the English (built-in) resources of WinForms; there are no Hungarian ones anyway,
+         and the app's own text does not come from them (MessageBox buttons / file dialogs are Windows') -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,5 +43,21 @@
     <EmbeddedResource Include="docs\CHANGELOG.md" LogicalName="whatsnew/CHANGELOG.md" />
     <EmbeddedResource Include="docs\OrbitOverlay Quick Start.txt" LogicalName="files/OrbitOverlay Quick Start.txt" />
   </ItemGroup>
+
+  <!-- Smaller installer: a self-contained publish copies the WHOLE Windows Desktop runtime, WPF included, although
+       Orbit is WinForms only. Drop WPF (managed + its native DLLs) and the WinForms designer / VB parts: nothing Orbit
+       or WinForms references reaches them (checked with an assembly-reference walk of the publish output).
+       Removed from RuntimePackAsset, so the bundled deps.json does not list them either (WindowsBase: the small .NET
+       facade of the same name stays). Using WPF or a PropertyGrid one day = take those names out of the list. -->
+  <Target Name="OrbitDropUnusedDesktopRuntime" AfterTargets="ResolveRuntimePackAssets" Condition="'$(SelfContained)' == 'true'">
+    <PropertyGroup>
+      <_OrbitDropPattern>^(PresentationCore|PresentationFramework|PresentationFramework-System\w+|PresentationFramework\.(Aero|Aero2|AeroLite|Classic|Luna|Royale)|PresentationUI|ReachFramework|System\.Printing|System\.Xaml|System\.IO\.Packaging|System\.Windows\.Controls\.Ribbon|System\.Windows\.Input\.Manipulations|System\.Windows\.Presentation|UIAutomationClient|UIAutomationClientSideProviders|UIAutomationProvider|UIAutomationTypes|WindowsBase|WindowsFormsIntegration|DirectWriteForwarder|D3DCompiler_47_cor3|PenImc_cor3|PresentationNative_cor3|vcruntime140_cor3|wpfgfx_cor3|System\.Windows\.Forms\.Design|System\.Windows\.Forms\.Design\.Editors|System\.Design|System\.Drawing\.Design|Microsoft\.VisualBasic\.Forms)(\.resources)?$</_OrbitDropPattern>
+    </PropertyGroup>
+    <ItemGroup>
+      <_OrbitDropAsset Include="@(RuntimePackAsset)" Condition="$([System.String]::Copy('%(RuntimePackAsset.NuGetPackageId)').StartsWith('Microsoft.WindowsDesktop.App.Runtime')) and $([System.Text.RegularExpressions.Regex]::IsMatch('%(RuntimePackAsset.Filename)', '$(_OrbitDropPattern)'))" />
+      <RuntimePackAsset Remove="@(_OrbitDropAsset)" />
+      <ReferenceCopyLocalPaths Remove="@(_OrbitDropAsset)" />
+    </ItemGroup>
+  </Target>
 
 </Project>
