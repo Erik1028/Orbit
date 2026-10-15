@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Erik1028.OrbitOverlay
+PackageVersion: 1.12.3
+PackageLocale: en-US
+Publisher: Erik1028
+PublisherUrl: https://github.com/Erik1028
+PublisherSupportUrl: https://github.com/Erik1028/OrbitOverlay/issues
+PackageName: OrbitOverlay
+PackageUrl: https://erik1028.github.io/OrbitOverlay/
+License: MIT
+LicenseUrl: https://github.com/Erik1028/OrbitOverlay/blob/main/LICENSE
+ShortDescription: A SteamVR overlay with a wrist watch, your desktop as curved screens with a laser mouse, and a VR keyboard.
+Description: |-
+  OrbitOverlay is a free SteamVR overlay for Windows. It puts a customizable watch on your wrist, your monitors and
+  app windows around you as curved screens you control with a laser mouse, and a VR keyboard that opens when you
+  click a text field. It also has VRChat extras, layout profiles, night mode and an optional Windows 95 style.
+Moniker: orbitoverlay
+Tags:
+  - steamvr
+  - vr
+  - overlay
+  - vrchat
+  - openvr
+  - virtual-reality
+ReleaseNotesUrl: https://github.com/Erik1028/OrbitOverlay/releases/tag/v1.12.3
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
