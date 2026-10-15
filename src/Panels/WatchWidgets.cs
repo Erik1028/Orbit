@@ -14,8 +14,16 @@ public static class WatchWidgets
     // Sizes are in cells, smallest first; Default is the index of the size a new one gets. Tone was its colour
     // in the modern style before the Bento look (0 = the accent, 1 = the logo's indigo, 2 = between the two,
     // 3 = Orbit's green); the watch now colours by role (WristPanel.RoleColor) and no longer reads it.
+    // Extra: sizes only the modern style offers (the Bento S and L), after Sizes - Sizes keeps its order and Default, so
+    // a saved face (the 95 one too) reads as it always did; the 95 face draws an extra one with its nearest picture.
     public sealed record Kind(string Id, string Name, string Title95, string Icon, W95Icons.Id Icon95, (int W, int H)[] Sizes,
-        int Default = 0, bool Button = false, int Tone = 0);
+        int Default = 0, bool Button = false, int Tone = 0, (int W, int H)[] Extra = null)
+    {
+        public (int W, int H)[] Union { get; } = Extra == null ? Sizes : Sizes.Concat(Extra).ToArray();
+
+        // what a style offers: 95 its sizes, modern the extra ones too
+        public (int W, int H)[] SizesFor(bool classic) => classic ? Sizes : Union;
+    }
 
     static readonly (int, int)[] Btn = { (1, 1), (2, 1) };
     static readonly (int, int)[] Stat = { (1, 1), (2, 1) };
@@ -23,8 +31,9 @@ public static class WatchWidgets
     public static readonly Kind[] Kinds =
     {
         // clocks
-        new("time", "Time", "Clock", "", W95Icons.Id.Clock, new[] { (2, 1), (3, 1), (4, 1), (3, 2), (4, 2), (6, 2), (6, 3), (6, 4) }, 4),
-        new("date", "Date", "Date", "", W95Icons.Id.Clock, new[] { (2, 1), (3, 1), (4, 1), (6, 1) }, 1, Tone: 0),
+        new("time", "Time", "Clock", "", W95Icons.Id.Clock, new[] { (2, 1), (3, 1), (4, 1), (3, 2), (4, 2), (6, 2), (6, 3), (6, 4) }, 4,
+            Extra: new[] { (1, 1), (2, 2) }),
+        new("date", "Date", "Date", "", W95Icons.Id.Clock, new[] { (2, 1), (3, 1), (4, 1), (6, 1) }, 1, Tone: 0, Extra: new[] { (1, 1) }),
         new("calendar", "Calendar", "Calendar", "", W95Icons.Id.Clock, new[] { (1, 1), (2, 1), (2, 2) }, 0, Tone: 0),
         new("analog", "Analog clock", "Clock", "", W95Icons.Id.Clock, new[] { (2, 2), (3, 3), (4, 4) }, Tone: 0),
         new("timer", "Timer", "Timer", "", W95Icons.Id.Clock, new[] { (1, 1), (2, 1), (2, 2) }, 2, Tone: 0),
@@ -119,11 +128,11 @@ public static class WatchWidgets
     }
 
     // A new widget where it fits: in the preferred cell (any size that fits there), else its default size
-    // anywhere, then any other size from the smallest. Null when there is no room.
-    public static WatchWidget Add(List<WatchWidget> list, Kind k, int prefX = -1, int prefY = -1)
+    // anywhere, then any other size from the smallest (classic: only the sizes the 95 face has). Null when there is no room.
+    public static WatchWidget Add(List<WatchWidget> list, Kind k, int prefX = -1, int prefY = -1, bool classic = false)
     {
         var sizes = new List<(int W, int H)> { k.Sizes[k.Default] };
-        sizes.AddRange(k.Sizes.Where((s, i) => i != k.Default));
+        sizes.AddRange(k.SizesFor(classic).Where((s, i) => i != k.Default));
         if (prefX >= 0)
             foreach (var (w, h) in sizes)
                 if (Free(list, null, prefX, prefY, w, h)) return Place(list, k, prefX, prefY, w, h);
@@ -141,21 +150,21 @@ public static class WatchWidgets
         return n;
     }
 
-    // the allowed size closest to what the pointer asks for (a corner drag)
-    public static (int W, int H) SnapSize(Kind k, int wantW, int wantH)
+    // the allowed size (in that style) closest to what the pointer asks for (a corner drag)
+    public static (int W, int H) SnapSize(Kind k, int wantW, int wantH, bool classic = false)
     {
         wantW = Math.Max(1, wantW);
         wantH = Math.Max(1, wantH);
-        return k.Sizes.OrderBy(s => Math.Abs(s.W - wantW) + Math.Abs(s.H - wantH)).ThenBy(s => s.W * s.H).First();
+        return k.SizesFor(classic).OrderBy(s => Math.Abs(s.W - wantW) + Math.Abs(s.H - wantH)).ThenBy(s => s.W * s.H).First();
     }
 
-    // the next smaller (-1) or larger (+1) allowed size that fits where the widget is, or null
-    public static (int W, int H)? Step(IReadOnlyList<WatchWidget> list, WatchWidget w, int dir)
+    // the next smaller (-1) or larger (+1) allowed size (in that style) that fits where the widget is, or null
+    public static (int W, int H)? Step(IReadOnlyList<WatchWidget> list, WatchWidget w, int dir, bool classic = false)
     {
         var k = Find(w.Type);
         if (k == null) return null;
         int area = w.W * w.H;
-        var order = k.Sizes.OrderBy(s => s.W * s.H).ThenBy(s => s.W).ToList();
+        var order = k.SizesFor(classic).OrderBy(s => s.W * s.H).ThenBy(s => s.W).ToList();
         int at = order.FindIndex(s => s.W == w.W && s.H == w.H);
         if (at < 0)
         {
@@ -226,6 +235,7 @@ public static class WatchWidgets
     // What a hand-edited (or newer) config got wrong: outside the grid or overlapping = dropped; a size this
     // version doesn't offer = the largest offered size inside its box (or the nearest, if that fits).
     // Unknown types are KEPT (a newer Orbit's widgets survive a round trip; they draw as nothing here).
+    // Both styles' sizes count (the face is one list): a modern-only size survives a switch to 95 and back.
     public static List<WatchWidget> Clean(List<WatchWidget> list)
     {
         var ok = new List<WatchWidget>();
@@ -233,9 +243,9 @@ public static class WatchWidgets
         {
             if (w == null || string.IsNullOrEmpty(w.Type) || !InGrid(w.X, w.Y, w.W, w.H)) continue;
             var k = Find(w.Type);
-            if (k != null && !k.Sizes.Contains((w.W, w.H)))
+            if (k != null && !k.Union.Contains((w.W, w.H)))
             {
-                var inside = k.Sizes.Where(s => s.W <= w.W && s.H <= w.H).OrderByDescending(s => s.W * s.H).ToList();
+                var inside = k.Union.Where(s => s.W <= w.W && s.H <= w.H).OrderByDescending(s => s.W * s.H).ToList();
                 var s = inside.Count > 0 ? inside[0] : SnapSize(k, w.W, w.H);
                 if (!Free(ok, null, w.X, w.Y, s.W, s.H)) continue;
                 w.W = s.W;

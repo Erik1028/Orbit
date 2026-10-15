@@ -130,8 +130,11 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             _nextDraw = now + (fast ? 0.1 : 0.5);
             if (Theme.Classic)      // the 95 clock shows seconds: draw again just after the next one starts
                 _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
-            else if (C.Face == "custom" && HasWidget("time"))       // so does the modern time widget (its seconds line)
+            else if (C.Face == "custom" && HasWidget("time"))       // so does the modern time widget (seconds in every size)
                 _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
+            // the time in VR (its card, the clock's header) moves on a whole minute after SteamVR came on: just after that too
+            if (!Theme.Classic && C.Face == "custom" && d.VrSince is { } since && (HasWidget("session") || HasWidget("time")))
+                _nextDraw = Math.Min(_nextDraw, now + 60.02 - (DateTime.Now - since).TotalSeconds % 60);
         }
     }
 

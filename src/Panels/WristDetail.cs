@@ -116,7 +116,7 @@ public sealed partial class WristPanel
         if (Press("wclose", new RectangleF(E.Right - 22 - 46, E.Y + 14, 46, 46), "\uE711", null, false, !_closing, 18, true))
             CloseDetail();
         var c = new RectangleF(E.X + 24, E.Y + 74, E.Width - 48, E.Height - 96);
-        var now = DateTime.Now;
+        var now = Now;
         switch (kind)
         {
             case "media": MediaDetail(c, d); break;
