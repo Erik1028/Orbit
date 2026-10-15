@@ -130,6 +130,8 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             _nextDraw = now + (fast ? 0.1 : 0.5);
             if (Theme.Classic)      // the 95 clock shows seconds: draw again just after the next one starts
                 _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
+            else if (C.Face == "custom" && HasWidget("time"))       // so does the modern time widget (its seconds line)
+                _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
         }
     }
 

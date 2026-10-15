@@ -587,6 +587,87 @@ static class Tools
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
 
+    // --faceshot DIR: your own watch face, without VR - from a COPY of the config (the real one is only read), drawn in the
+    // modern style with your look, then once more with the Bento theme's colours (accent #FF5D93, panel #0A0B10): before /
+    // after pictures of a redesign. The numbers are the snapshot's made-up ones (plus a made-up room and Hexpad), the clock,
+    // CPU, RAM and the system volume are live, dates in this PC's language.
+    public static int FaceShot(string dir)
+    {
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(dir);
+        string real = Path.Combine(Log.Dir, "config.json"), copy = Path.Combine(dir, "config.json");
+        if (File.Exists(real)) File.Copy(real, copy, true);
+        else Log.Warn("faceshot: no config.json in " + Log.Dir + " - the default face");
+        var cfg = new ConfigStore(copy);
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+        var data = new PanelData { VrConnected = true, VramTotalGB = gpu.DedicatedVram / (1024f * 1024 * 1024), FakeGpuLoad = 63, FakeVram = 9.4f };
+        data.VrSince = DateTime.Now.AddMinutes(-83);
+        data.Vr.AppFps = 86; data.Vr.ReprojPct = 4; data.Vr.GpuMs = 9.3f; data.Vr.DisplayHz = 90;
+        data.Vr.Batteries.Add(("HMD", 0.71f, false));
+        data.Vr.Batteries.Add(("L", 0.82f, false));
+        data.Vr.Batteries.Add(("R", 0.18f, true));
+        data.Vr.Batteries.Add(("Trk×6", 0.44f, false));
+        data.FakeMedia = (true, "Midnight City", "M83", true);
+        var frng = new Random(3);
+        for (int i = 0; i < VrStats.FrameHistory; i++)
+        {
+            data.Vr.FrameMs[i] = 7.5f + (float)frng.NextDouble() * 2.5f + (i % 97 == 0 ? 6 : 0);
+            data.Vr.FrameFlag[i] = (byte)(i % 97 == 0 ? 1 : i == 300 ? 2 : 0);
+        }
+        data.Vr.FrameHead = 0; data.Vr.FrameCount = VrStats.FrameHistory;
+        data.NightMode = cfg.Data.Appearance.NightMode;
+        data.DesktopsVisible = cfg.Data.General.DesktopsVisible;
+        data.LayoutName = cfg.Data.ActiveLayout ?? "Desk";
+        // a made-up VRChat room and a made-up Hexpad (a colour per key)
+        var room = new RoomWatcher.Snapshot { Version = 1, LogFound = true, InRoom = true, World = "Midnight Rooftop", VrcxFound = true, Friends = 120 };
+        string[] names = { "Nova", "Pixel Fox", "Moss", "Kite", "Juniper", "Static", "Orbit Fan 2000", "Lumen", "Quill", "Sable", "Wren", "Echo" };
+        for (int i = 0; i < names.Length; i++)
+            room.Here.Add(new RoomWatcher.Person { Id = $"usr_{i}", Name = names[i], Joined = DateTime.Now.AddMinutes(-3 * i - 1), Friend = i is 1 or 4 or 9 });
+        data.Room = room;
+        var dock = new HexpadLink.Snapshot { State = HexpadLink.LinkState.Ok, Api = 2, Profile = "Default", PageName = "Home", Page = 0, Pages = 3, Version = 1 };
+        uint[] cols = { 0xFF2D6CDF, 0xFFE0473C, 0xFF3CB371, 0xFFE8A33D, 0xFF8E5BD8, 0xFF2BB5B8 };
+        for (int i = 0; i < HexpadLink.Keys; i++)
+        {
+            var px = new uint[68 * 68];
+            for (int y = 0; y < 68; y++)
+                for (int x = 0; x < 68; x++)
+                {
+                    float d = MathF.Sqrt((x - 34) * (x - 34) + (y - 34) * (y - 34));
+                    px[y * 68 + x] = d < 18 ? 0xFFFFFFFF : cols[i];
+                }
+            dock.Faces[i] = new HexpadLink.Face(px, 68, 68);
+            dock.FaceVersion[i] = 1000 + i;
+        }
+        using var faces = new HexpadFaces();
+        faces.Update(painter, dock);
+        data.Dock = dock;
+        data.DockFaces = faces;
+
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        var a = cfg.Data.Appearance;
+        var wc = cfg.Data.Wrist;
+        Log.Info($"faceshot: style {a.Style}, accent {a.Accent:X8}, panel {a.PanelColor:X8} at {a.PanelOpacity:0.00}, face {wc.Face}, background {wc.Background}, " +
+                 $"widgets {string.Join(" ", wc.Widgets?.Select(w => $"{w.Type}@{w.X},{w.Y}:{w.W}x{w.H}") ?? Array.Empty<string>())}");
+        wrist.Stats.Sample(Clock.Now);                 // a CPU reading needs two samples
+        Thread.Sleep(400);
+        wrist.Stats.Sample(Clock.Now + 2);
+        a.Style = "modern";
+        uint accent0 = a.Accent, panel0 = a.PanelColor;
+        foreach (var (tag, accent, panel) in new[] { ("real", accent0, panel0), ("bento", 0xFFFF5D93u, 0xFF0A0B10u) })
+        {
+            a.Accent = accent;
+            a.PanelColor = panel;
+            Theme.Apply(a);
+            wrist.Settle();
+            wrist.Draw(data);
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_{tag}.png"));
+        }
+        Log.Info("faceshot written to " + dir);
+        return 0;
+    }
+
     // Every widget kind at every size, alone on a watch with no background ("cards"), and every opened view
     // without its clip: anything drawn outside the card sticks out (a non-transparent pixel there), and in the
     // modern style anything within a few pixels of the card's edge is too close to it. Logged, one line each.
