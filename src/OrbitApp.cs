@@ -113,6 +113,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
         _dockFaces = new HexpadFaces();
         _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
+        _wrist.DockIn = new DockInput(_hexpad, _cfg);       // the watch's opened dock: the same link, its own presses
         _roomPanel = new RoomPanel(_gpu, _painter, _cfg);
         _whatsNewPanel = new WhatsNewPanel(_gpu, _painter) { OnOk = DismissWhatsNew };
         _theater = new Theater(_gpu, _painter);

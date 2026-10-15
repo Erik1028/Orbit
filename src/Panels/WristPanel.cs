@@ -113,7 +113,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             else target = 0;
         }
         Alpha += (target - Alpha) * Math.Min(1, dt * 10);
-        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); SwipeCancel(); _open = null; return; }      // looking away closes an opened widget
+        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); SwipeCancel(); DockLetGo(); _open = null; return; }      // looking away closes an opened widget
         Ov.SetAlpha(Math.Min(1, Alpha));
         if (!Ov.Visible)
         {
@@ -462,19 +462,36 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public void PointerMove(Hand h, Vector2 px)
     {
         _ptr.Move(px.X, px.Y);
+        if (DockLive) { DockIn.Move(px); if (DockIn.TakeDirty()) _dirty = true; }      // the opened dock (WristDock.cs)
         if (SwipeMove(px)) { _dirty = true; return; }       // a swipe between the pages: the face follows the laser
         if (_ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;     // only when it gets onto another control
     }
-    public void PointerLeave(Hand h) { SwipeCancel(); _ptr.Leave(); _dirty = true; }
+    public void PointerLeave(Hand h) { SwipeCancel(); _ptr.Leave(); _dockIn?.Leave(); _dirty = true; }
     public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
     {
         if (b != PtrButton.Primary) return;
         _ptr.Move(px.X, px.Y);
-        if (down) { _ptr.Press(); SwipeBegin(px); }
-        else { SwipeEnd(px); _ptr.Release(); }
+        if (down) { _ptr.Press(); SwipeBegin(px); if (DockLive) DockIn.Down(px); }
+        else { SwipeEnd(px); _ptr.Release(); if (_dockIn?.Busy == true) _dockIn.Up(); }
         _dirty = true;
     }
-    public void PointerScroll(Hand h, float n, Vector2 px) { }
+    // the stick scrolls the opened room's list (nothing else on the watch scrolls); the 95 list moves 3 rows a notch (a wheel's),
+    // so it gets whole notches, a third as many
+    float _wheel95;
+    public void PointerScroll(Hand h, float n, Vector2 px)
+    {
+        if (DockLive) { DockIn.Scroll(px, n); if (DockIn.TakeDirty()) _dirty = true; return; }      // the stick over a knob turns it
+        if (!DetailIs("room") || _closing) return;
+        if (Theme.Classic)
+        {
+            _wheel95 += n / 3;
+            if (MathF.Abs(_wheel95) < 1) return;
+            n = MathF.Truncate(_wheel95);
+            _wheel95 -= n;
+        }
+        _ptr.Wheel += n;
+        _dirty = true;
+    }
     public bool Grabbable => !C.Locked;
 
     public Matrix4x4 WorldTransform =>

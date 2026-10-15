@@ -32,6 +32,8 @@ public sealed partial class WristPanel
         "cpu" or "ram" => "system",
         "volume" => "volume",
         "minesweeper" => "mines",
+        "room" => "room",
+        "dock" => "dock",
         _ => null,
     };
 
@@ -43,14 +45,17 @@ public sealed partial class WristPanel
         _closing = false;
         _openStart = Clock.Now;
         _calOffset = 0;
+        _roomScroll = 0;
+        DockLetGo();
         _ui.SpringFrom(OpenKey, 0);
         _dirty = true;
     }
 
     void CloseDetail()
     {
-        // Minesweeper shrinks back into its tile in both styles (95: the zoom outline the other way round)
-        if (Theme.Classic && DetailIs("mines")) { _closing = true; _openStart = Clock.Now; }
+        // Minesweeper and the room shrink back into their tiles in both styles (95: the zoom outline the other way round)
+        DockLetGo();
+        if (Theme.Classic && (DetailIs("mines") || DetailIs("room") || DetailIs("dock"))) { _closing = true; _openStart = Clock.Now; }
         else if (Theme.Classic) _open = null;      // a 95 dialog just goes away
         else _closing = true;
         _dirty = true;
@@ -64,6 +69,7 @@ public sealed partial class WristPanel
         _open = w;
         _closing = false;
         _openStart = -10;
+        _roomScroll = 0;
         _ui.SpringFrom(OpenKey, 1);
         return true;
     }
@@ -106,7 +112,7 @@ public sealed partial class WristPanel
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
         // Minesweeper grows out of its tile: its game is in the card from the start, scaled with it (and back on closing) - the
         // same widget getting bigger; playable once it is big
-        bool grow = kind == "mines";
+        bool grow = kind is "mines" or "room" or "dock";           // the room too: its card grows into the list of who is there
         float ca = grow ? Math.Clamp(e * 3, 0, 1) : Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
         if (ca <= 0.01f) return;
         _halo = Bento.Card;                    // the opened card is flat
@@ -126,7 +132,7 @@ public sealed partial class WristPanel
         }
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
-        if (kind != "mines")          // Minesweeper's board takes the left: its name is over its own column
+        if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
         if (Press("wclose", new RectangleF(E.Right - 22 - 46, E.Y + 14, 46, 46), "\uE711", null, false, !_closing, 18, true))
@@ -145,6 +151,8 @@ public sealed partial class WristPanel
             case "system": SystemDetail(c, d); break;
             case "volume": VolumeDetail(c); break;
             case "mines": MinesDetail(E); break;
+            case "room": RoomDetail(E, d); break;
+            case "dock": DockDetail(E, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -516,7 +524,7 @@ public sealed partial class WristPanel
         double t = (Clock.Now - _openStart) / 0.22;
         if (_closing)
         {
-            // (Minesweeper only) the zoom outline back into its tile, then it is gone
+            // (Minesweeper, the room) the zoom outline back into its tile, then it is gone
             if (t >= 1) { _open = null; _closing = false; return; }
             var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
             _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
@@ -532,6 +540,8 @@ public sealed partial class WristPanel
             return;
         }
         if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it
+        if (kind == "room") { Room95Detail(win, d); return; }     // the Room window: a details list and a status bar
+        if (kind == "dock") { Dock95Detail(win, d); return; }     // the Hexpad window
         _p.Fill(win, Theme.W95Face);
         _p.Bevel(win, Painter.Edge.Window);
         _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), k.Title95);
