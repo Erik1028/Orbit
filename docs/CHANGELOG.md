@@ -3,6 +3,11 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.10.1 | Fix: starting after the update to 1.10.0
+- The first start after updating to 1.10.0 stopped with an error while switching your colours to Bento. Fixed;
+  your settings were not changed by it.
+- This "What's new" also lists what 1.10.0 brought, since that version never got to show it.
+
 ## 1.10.0 | A new look: Bento
 - The watch is redesigned: dark navy cards, small uppercase captions, big bold numbers with their units, a pink
   accent, and clear colours for state (green ok, yellow look, red act) and for data (purple CPU, blue memory).

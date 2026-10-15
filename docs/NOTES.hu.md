@@ -196,6 +196,16 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.10.1 – javítás: indulás az 1.10.0-ra frissítés után (2026-10-15)
+
+- Az 1.10.0 első indulása `NullReferenceException`-nel állt le: a `LookVersion`-átállás a `NoteVersion`-ben (a
+  konstruktorban) `AppearanceChanged()`-et hívott, ami `_win.Dirty`-t állít – az ablak ekkor még nem létezik. A config
+  nem íródott (a mentés előtt állt meg). Most `Theme.Apply` (az ablak és a dashboard később úgyis ebből rajzol).
+  TANULSÁG: a konstruktorban futó kód ne hívjon ablakot/dashboardot érintő metódust; a frissítés-utáni indulást
+  (`--updated-from`) a kiadás előtt ki kell próbálni.
+- `NoteVersion`: ha a config `LastVersion`-je régebbi az `--updated-from`-nál (egy verzió mentés előtt leállt), a
+  régebbit veszi → a „What's new” az 1.10.0 pontjait is mutatja.
+
 ## 1.10.0 – Bento redesign, 1. lépés (2026-10-15)
 
 Erik: „először is lenne egy redesign … ne másold le teljesen, mivel vannak hibái, a színek, formák és design vonulat
