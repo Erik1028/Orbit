@@ -3,6 +3,18 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.11.0 | A look for every widget
+- Each widget on the watch can have its own design: Tint, Solid, Two-tone, Header, Outline or Glass, or the normal
+  card.
+- Pick a colour for each widget: Auto or one of 13 colours. Two-tone also takes a second colour, or makes a matching
+  one for you.
+- In the watch layout editor, select a widget to see the Style and Colour choices with small previews. "Use on all
+  widgets" copies the look to the whole face.
+- Text stays readable on every colour: the watch picks light or dark text for you. Warnings show as a small badge, so
+  they never vanish on a red or amber card, and switched-on buttons always look different from switched-off ones.
+- Cards have a soft light along the top for a bit more depth. A widget's own colour also carries into its opened view.
+- Night mode dims the new colours too. The Windows 95 style is unchanged.
+
 ## 1.10.1 | Fix: starting after the update to 1.10.0
 - The first start after updating to 1.10.0 stopped with an error while switching your colours to Bento. Fixed;
   your settings were not changed by it.

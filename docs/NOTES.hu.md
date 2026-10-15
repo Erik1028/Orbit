@@ -196,6 +196,34 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.11.0 – widgetenkénti kinézet + Bento 2. lépés (2026-10-15)
+
+Erik: „legyen minden widget külön színezhető” (a lista 7. pontja), majd „lehessen több stílust beállítani, 2 tónus,
+egyéb designok per widget”. Folyamat: workflow (megvalósítás a `bento-step2` ágon, `Orbit-bento2` munkafa → kód-,
+látvány- és ellenőrző-review: 19 találat, 1 magas → javítás → végső ellenőrzés), scratch: `scratchpad/step2`.
+
+- **Painter**: `FillGradient` (2/3 stop, szög, span; `ID2D1LinearGradientBrush` gyorsítótár, LRU 64 fölött, téma-
+  váltáskor ürül; 95-ben sima Fill), `CircleGradient`; `GradientsMade` számláló (nyugalomban 0 új ecset/frame).
+  Az alap kártya felső fénye: `Bento.CardTop` (Lift + 0,035) → Card a felső felén.
+- **Config**: `WatchWidget.Style` (null = Bento kártya | tint | solid | twotone | header | outline | glass),
+  `Color`, `Color2` (uint?) – csak beállítva íródnak (`JsonIgnore WhenWritingNull`), Erik configja bájtra azonos.
+- **`Bento.Look`** (struct): a kártya festése (stopok, szög, fény, keret, fejsáv) + minden token, amit egy widget
+  olvas (Text/Sub/Faint/Tile/Track/Accent/AccentFill/OnAccent/Data/Cpu/Mem/...). `Bento.Make(style, szín, szín2,
+  saját, éjszaka, kártyák)` → a WristPanel kulcs szerint gyorsítótárazza; `Bento.Use`/`Reset` a stílusos widget
+  körül (a `finally` is visszaállít). Alap widget nem hív `Use`-t → a step-1 színek változatlanok.
+- **Olvashatóság**: kitöltésen fehér vagy #0B1220 szöveg (az egész átmenetre nézve), a kitöltés sötétül/világosodik
+  4,8:1-ig; Warn/Bad színes kártyán sötét korong „!”-lel (sosem tűnik el, nincs piros érték piros kártyán); gombok:
+  solid/two-tone KI = sötét változat, BE = teljes szín + pipa; csak-akció gombok (Recenter, Layout, Settings) teljes
+  kitöltéssel. Glass „Cards only” háttérrel sűrűbb (világos világ felett is olvasható). Éjszaka a színek −40 %.
+- **Szerkesztő** (csak modern): kijelölt widgetnél 7 stílus-csempe előnézettel, Auto + 13 szín, two-tone-nál második
+  szín, „Use on all widgets”; a Background és a „Start over” csak kijelölés nélkül látszik.
+- **QA**: `--snapshot` stílusgaléria (`qa/styles_*.png`), 604 stílusos számlap elrendezés- és kontrasztellenőrzése
+  a szöveg nélküli renderhez mérve (4,5:1, nagy/vastag/ikon 3:1), lebegő kártyák sötét szobán és fehér falon is.
+  `--perfbench --bench-style <look|mixed>`. Mérve: Erik számlapja 0,72 ms (main 0,69–0,70), a legrosszabb stílusos
+  (header) 0,80 ms. 95: az eltérések csak élő óra/CPU területek (21 kivágás átnézve).
+- Hátra: Erik VR-ban nézze meg a stílusokat (különösen Glass „Watch panel” háttérrel), a Bento 3. lépés (idő/dátum/
+  naptár családok), majd a lista többi pontja.
+
 ## 1.10.1 – javítás: indulás az 1.10.0-ra frissítés után (2026-10-15)
 
 - Az 1.10.0 első indulása `NullReferenceException`-nel állt le: a `LookVersion`-átállás a `NoteVersion`-ben (a
