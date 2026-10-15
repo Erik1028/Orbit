@@ -16,6 +16,7 @@ static class Program
     //   --no-elevate      run without admin rights this time even if 'Run as administrator' is on
     //   --from-task / --install-task / --restart   internal (elevated start, see Elevation)
     //   --snapshot <dir>  render every panel to PNG (no VR needed) and exit
+    //   --clockshot <dir> only the clocks' designs (watch widgets): their checks and sheets
     //   --selftest        connect to a running SteamVR, check overlay/UV conventions, exit
     //   --scene [--dash]  dev: act as a running game for 12 s (closes the dashboard; --dash opens Orbit's tab)
     //   --osctest <port>  dev: send sample OSC messages
@@ -37,7 +38,7 @@ static class Program
         int uf = Array.IndexOf(args, "--updated-from");
         if (uf >= 0 && uf + 1 < args.Length) UpdatedFrom = args[uf + 1];
         bool has(string a) => args.Contains(a);
-        bool tool = has("--snapshot") || has("--faceshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest");
+        bool tool = has("--snapshot") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest");
         if (tool) return RunTool(args);
 
         // install / uninstall (the same exe: named "OrbitSetup.exe" it is the installer)
@@ -128,6 +129,11 @@ static class Program
                 int i = Array.IndexOf(args, "--snapshot");
                 return Tools.Snapshot(i + 1 < args.Length ? args[i + 1] : "snapshot");
             }
+            if (args.Contains("--clockshot"))
+            {
+                int i = Array.IndexOf(args, "--clockshot");
+                return Tools.ClockShot(i + 1 < args.Length ? args[i + 1] : "clockshot");
+            }
             if (args.Contains("--faceshot"))
             {
                 int i = Array.IndexOf(args, "--faceshot");
@@ -154,8 +160,9 @@ static class Program
             }
             if (args.Contains("--perfbench"))
             {
-                int i = Array.IndexOf(args, "--perfbench"), s = Array.IndexOf(args, "--bench-style");
-                return PerfBench.Run(i + 1 < args.Length ? args[i + 1] : "perfbench", s >= 0 && s + 1 < args.Length ? args[s + 1] : null);
+                int i = Array.IndexOf(args, "--perfbench"), s = Array.IndexOf(args, "--bench-style"), v = Array.IndexOf(args, "--bench-variant");
+                return PerfBench.Run(i + 1 < args.Length ? args[i + 1] : "perfbench", s >= 0 && s + 1 < args.Length ? args[s + 1] : null,
+                    v >= 0 && v + 1 < args.Length ? args[v + 1] : null);
             }
             if (args.Contains("--theatertest"))
             {

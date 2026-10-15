@@ -203,6 +203,7 @@ static partial class Tools
             Log.Info($"config: an unstyled widget writes no look {!pj.Contains("Style") && !pj.Contains("Color")} (want True), a styled one reads back " +
                      $"{back.Style == "twotone" && back.Color == 0xFF14B8A6 && back.Color2 == 0xFFA855F7} (want True)");
         }
+        VariantWants();
         // the modern-only sizes (time 1x1 and 2x2, date 1x1): Clean() keeps them whatever the style (one face for both); the modern
         // editor's Smaller / corner drag / add reach them, the 95 one's do not
         {
@@ -624,6 +625,42 @@ static partial class Tools
         surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_style.png"));
         ClickM(Chip(0).X, Chip(0).Y);             // back to the default card: only gpu
         Log.Info($"editor: gpu back to the default card {gpuW?.Style == null} (want True), its colour kept {gpuW?.Color:X8} (want FF14B8A6)");
+        // a clock's designs: gallery 0's time (2,0 2x1) - Flip, then Standard again (stored as none); a two-tone clock (its look still
+        // ends above Done); its analog clock (0,0 2x2) - Station
+        wcfg.Widgets = Gallery(0);
+        wrist.Settle();
+        ptr.Leave(); FrameM();
+        void ClickCell(int cx, int cy, int cw, int ch)
+        {
+            var c = WatchWidgets.CellRect(cx, cy, cw, ch, false);
+            ClickM(222 + (c.X + c.Width / 2) * 0.75f, 84 + (c.Y + c.Height / 2) * 0.75f);
+        }
+        void ClickChip(WatchWidget w, string id)
+        {
+            var offered = WatchWidgets.VariantsOf(w.Type).Where(v => v.Fits(w.W, w.H)).ToList();
+            var c = SettingsView.ClockChip(offered.FindIndex(v => v.Id == id), offered.Count);
+            ClickM(c.X + c.Width / 2, c.Y + c.Height / 2);
+        }
+        void Settled() { ptr.Leave(); wrist.Settle(); FrameM(); ui.ResetAnimations(); FrameM(); }
+        var timeW = wcfg.Widgets.First(x => x.Type == "time");
+        var analogW = wcfg.Widgets.First(x => x.Type == "analog");
+        ClickCell(2, 0, 2, 1);
+        ClickChip(timeW, "flip");
+        Settled();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_clock.png"));
+        Log.Info($"editor: the time's design {timeW.Variant} (want flip)");
+        ClickChip(timeW, "standard");
+        Log.Info($"editor: Standard again is stored as none {timeW.Variant == null} (want True)");
+        timeW.Style = "twotone";
+        timeW.Variant = "segment";
+        Settled();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_clock_twotone.png"));
+        Log.Info($"editor: a two-tone clock's look ends at {view.LookBottom:0} (want under 574)");
+        ClickCell(0, 0, 2, 2);
+        ClickChip(analogW, "station");
+        Settled();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_analog.png"));
+        Log.Info($"editor: the analog clock's design {analogW.Variant} (want station)");
         view.EditingWatch = false;
         wcfg.Face = face0;
         wcfg.Widgets = null;
@@ -947,6 +984,61 @@ static partial class Tools
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr w, IntPtr l);
 
+    // A clock's design in the config: written only once set and read back; Clean() keeps it (a newer Orbit's too); a size it does
+    // not fit draws that size's default; the editor stores a size's default as none
+    static void VariantWants()
+    {
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        string none = System.Text.Json.JsonSerializer.Serialize(new WatchWidget { Type = "time", X = 0, Y = 0, W = 3, H = 2 }, opts);
+        var back = System.Text.Json.JsonSerializer.Deserialize<WatchWidget>(
+            System.Text.Json.JsonSerializer.Serialize(new WatchWidget { Type = "time", W = 2, H = 1, Variant = "flip" }, opts), opts);
+        Log.Info($"config: a clock without a design writes no Variant {!none.Contains("Variant")} (want True), one with a design reads back {back.Variant == "flip"} (want True)");
+        var face = new List<WatchWidget>
+        {
+            new() { Type = "time", X = 0, Y = 0, W = 3, H = 2, Variant = "words" }, new() { Type = "analog", X = 3, Y = 0, W = 2, H = 2, Variant = "station" },
+            new() { Type = "analog", X = 5, Y = 0, W = 1, H = 1, Variant = "roman" }, new() { Type = "time", X = 0, Y = 2, W = 2, H = 1, Variant = "hologram" },
+        };
+        string before = string.Join(" ", face.Select(w => w.Variant));
+        string after = string.Join(" ", WatchWidgets.Clean(face).Select(w => w.Variant));
+        Log.Info($"variants: Clean() keeps every design, an unknown one too {before == after} (want True): {after}");
+        static string Of(string kind, int w, int h, string v) => WatchWidgets.VariantOf(new WatchWidget { Type = kind, W = w, H = h, Variant = v });
+        Log.Info($"variants: at a size it does not fit a design draws the default: words 2x1 {Of("time", 2, 1, "words")} (want standard), roman 1x1 " +
+                 $"{Of("analog", 1, 1, "roman")} (want squircle), classic 1x1 {Of("analog", 1, 1, "classic")} (want squircle), unknown 3x2 {Of("time", 3, 2, "hologram")} (want standard)");
+        Log.Info($"variants: where it fits it draws: words 3x2 {Of("time", 3, 2, "words")} (want words), squircle 3x3 {Of("analog", 3, 3, "squircle")} (want squircle), " +
+                 $"none 2x2 {Of("analog", 2, 2, null)} (want classic), none 1x1 {Of("analog", 1, 1, null)} (want squircle)");
+        var a2 = new WatchWidget { Type = "analog", W = 2, H = 2 };
+        var a1 = new WatchWidget { Type = "analog", W = 1, H = 1 };
+        var t3 = new WatchWidget { Type = "time", W = 3, H = 2 };
+        Log.Info($"variants: a size's default picked is stored as none: classic 2x2 {WatchWidgets.StoreVariant(a2, "classic") == null}, squircle 1x1 " +
+                 $"{WatchWidgets.StoreVariant(a1, "squircle") == null}, standard 3x2 {WatchWidgets.StoreVariant(t3, "standard") == null}, squircle 2x2 " +
+                 $"{WatchWidgets.StoreVariant(a2, "squircle")} (want True, True, True, squircle)");
+    }
+
+    // --clockshot DIR: only the clocks' designs (a quick --snapshot for them, in its own config): the config rules, every design at
+    // every size with the layout and style checks, the sheets qa/variants_time.png / variants_analog.png
+    public static int ClockShot(string dir)
+    {
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(Path.Combine(dir, "qa"));
+        var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+        cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
+        Theme.Apply(cfg.Data.Appearance);
+        var data = new PanelData { VrConnected = true, VramTotalGB = 16, FakeGpuLoad = 63, FakeVram = 9.4f, VrSince = DateTime.Now.AddMinutes(-83) };
+        data.Vr.AppFps = 86; data.Vr.ReprojPct = 4; data.Vr.GpuMs = 9.3f; data.Vr.DisplayHz = 90;
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        VariantWants();
+        var culture0 = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("en-US");
+        cfg.Data.Wrist.Face = "custom";
+        LayoutCheckRun(wrist, data, cfg, painter, gpu, dir, "modern", true);
+        StylesRun(wrist, data, painter, cfg, gpu, dir, variantsOnly: true);
+        CultureInfo.CurrentCulture = culture0;
+        Log.Info("clockshot written to " + dir);
+        return 0;
+    }
+
     // --faceshot DIR: your own watch face, without VR - from a COPY of the config (the real one is only read), drawn in the
     // modern style with your look, then once more with the Bento theme's colours (accent #FF5D93, panel #0A0B10): before /
     // after pictures of a redesign. The numbers are the snapshot's made-up ones (plus a made-up room and Hexpad), the clock,
@@ -1099,7 +1191,7 @@ static partial class Tools
     // Every widget kind at every size, alone on a watch with no background ("cards"), and every opened view
     // without its clip: anything drawn outside the card sticks out (a non-transparent pixel there), and in the
     // modern style anything within a few pixels of the card's edge is too close to it. Logged, one line each.
-    static int LayoutCheckRun(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir, string style)
+    static int LayoutCheckRun(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir, string style, bool variantsOnly = false)
     {
         var wcfg = cfg.Data.Wrist;
         bool classic = Theme.Classic;
@@ -1167,6 +1259,13 @@ static partial class Tools
         }
         wcfg.Face = "custom";
         wcfg.Background = "cards";
+        if (variantsOnly)
+        {
+            problems += VariantChecks();
+            wcfg.Background = "panel";
+            Log.Info($"layout variants: {problems} problem(s)");
+            return problems;
+        }
         // every size the style offers; in 95 then the modern-only ones too (a face made in the modern style, drawn with the
         // nearest 95 picture)
         var sized = WatchWidgets.Kinds.SelectMany(kd => kd.SizesFor(classic).Select(s => (kd, s.W, s.H))).ToList();
@@ -1336,6 +1435,103 @@ static partial class Tools
             }
             FamilySet(wrist, data, cfg, null);
             FamilySheet(Path.Combine(dir, "qa", "family_time.png"), sheet);
+            problems += VariantChecks();
+        }
+
+        // The clocks' designs (WatchWidget.Variant): every design at every size it takes, the time in both languages and both clocks
+        // (SteamVR on), with the family's rules (nothing outside its card or near its edge, no text cut or under 14 px); each also in
+        // three looks. qa/variants/<kind>_<design>_<WxH>_<case>.png, side by side in qa/variants_time.png / variants_analog.png.
+        // Then a flip card's fold: frames only while it folds.
+        int VariantChecks()
+        {
+            int bad = 0;
+            var texts = new List<(string s, float size)>();
+            string vq = Path.Combine(dir, "qa", "variants");
+            Directory.CreateDirectory(vq);
+            var sheets = new Dictionary<string, List<(string label, string file, int w, int h)>> { ["time"] = new(), ["analog"] = new() };
+            void One(string kind, string variant, int w, int h, Family fc, string look, uint? colour, bool sheet)
+            {
+                FamilySet(wrist, data, cfg, fc);
+                wcfg.Widgets = new List<WatchWidget> { new() { Type = kind, X = 0, Y = 0, W = w, H = h, Variant = variant, Style = look, Color = colour } };
+                wrist.Settle();
+                wrist.Draw(data);
+                texts.Clear();
+                painter.TextSpy = (s, _, _, size, _, _) => texts.Add((s, size));
+                wrist.Draw(data);
+                painter.TextSpy = null;
+                string tag = look == null ? fc.Tag : "look_" + look;
+                string file = Path.Combine(vq, $"{kind}_{variant}_{w}x{h}_{tag}.png");
+                wrist.Surf.SavePng(gpu, file);
+                if (sheet) sheets[kind].Add(($"{variant} {w}x{h} {tag}", file, w, h));
+                var px = Read();
+                wrist.Backgrounds = true;
+                wrist.Draw(data);
+                wrist.Backgrounds = false;
+                var cardOnly = Read();
+                var r = WatchWidgets.CellRect(0, 0, w, h, false);
+                var (o, ow) = Outside(px, r, 1.5f);
+                var (cl, cw) = TooClose(px, r, 3, 8, cardOnly);
+                var cut = texts.Where(x => x.s.Contains('…')).Select(x => x.s).ToList();
+                var small = texts.Where(x => x.size < 14).Select(x => $"'{x.s}' {x.size:0.#} px").ToList();
+                if (o > 0 || cl > 0 || cut.Count > 0 || small.Count > 0)
+                {
+                    bad++;
+                    Log.Warn($"layout {style}: {kind} {variant} {w}x{h} {tag}: " + string.Join("; ", new[]
+                    {
+                        o > 0 ? $"{o} px outside the card, first at {ow}" : null, cl > 0 ? $"{cl} px within 8 px of its edge, first at {cw}" : null,
+                        cut.Count > 0 ? "cut: " + string.Join(", ", cut) : null, small.Count > 0 ? "under 14 px: " + string.Join(", ", small) : null,
+                    }.Where(x => x != null)));
+                }
+            }
+            foreach (var lang in new[] { "en-US", "hu-HU" })
+            {
+                string l = lang[..2];
+                var day = lang == "en-US" ? new DateTime(2026, 9, 30) : new DateTime(2026, 9, 24);
+                DateTime noon = day.Add(new TimeSpan(12, 58, 47)), late = day.Add(new TimeSpan(23, 58, 47));
+                foreach (var v in WatchWidgets.TimeVariants)
+                    foreach (var (w, h) in WatchWidgets.Find("time").Union.Where(x => v.Fits(x.W, x.H)))
+                    {
+                        One("time", v.Id, w, h, new Family("time", w, h, $"{l}_12h", lang, false, 83, noon), null, null, l == "en");
+                        One("time", v.Id, w, h, new Family("time", w, h, $"{l}_24h", lang, true, 83, late), null, null, l == "hu");
+                    }
+            }
+            var enNoon = new Family("time", 3, 2, "en_12h", "en-US", false, 83, new DateTime(2026, 9, 30, 12, 58, 47));
+            var looks = new (string, uint?)[] { ("solid", 0xFF14B8A6), ("glass", null), ("header", 0xFFFF5D93) };
+            foreach (var v in WatchWidgets.TimeVariants)
+                foreach (var (look, c) in looks) One("time", v.Id, 3, 2, enNoon, look, c, true);
+            var ten = new Family("analog", 2, 2, "en", "en-US", true, 83, new DateTime(2026, 10, 15, 10, 9, 36));
+            foreach (var v in WatchWidgets.AnalogVariants)
+            {
+                foreach (var (w, h) in WatchWidgets.Find("analog").Union.Where(x => v.Fits(x.W, x.H)).OrderBy(x => x.W))
+                    One("analog", v.Id, w, h, ten, null, null, true);
+                foreach (var (look, c) in looks) One("analog", v.Id, 2, 2, ten, look, c, true);
+            }
+            Log.Info("variants: the word clock's words " + string.Join(", ", new[] { (2, 2), (4, 1), (3, 2), (4, 2), (6, 2), (6, 3), (6, 4) }
+                .Select(x => $"{x.Item1}x{x.Item2} {wrist.WordSize(x.Item1, x.Item2):0.#} px")));
+            // a flip card folds only when its digits change, and asks for frames only while it folds
+            FamilySet(wrist, data, cfg, enNoon with { At = new DateTime(2026, 9, 30, 12, 58, 59) });
+            wcfg.Widgets = new List<WatchWidget> { new() { Type = "time", X = 0, Y = 0, W = 3, H = 2, Variant = "flip" } };
+            wrist.Settle();
+            wrist.Draw(data);
+            wrist.Draw(data);
+            bool still = !wrist.Animating;
+            wrist.TestNow = new DateTime(2026, 9, 30, 12, 59, 0);
+            wrist.Draw(data);
+            bool folds = wrist.Animating;
+            Thread.Sleep(110);
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", "variants_flip_fold.png"));
+            Thread.Sleep(320);
+            wrist.Draw(data);
+            bool done = !wrist.Animating;
+            Log.Info($"variants: a flip card asks for no frames at rest {still} (want True), folds when the minute changes {folds} (want True), " +
+                     $"stops within 0.45 s {done} (want True)");
+            FamilySet(wrist, data, cfg, null);
+            int Order(string kind, string label) => Array.FindIndex(WatchWidgets.VariantsOf(kind), v => label.StartsWith(v.Id + " "));
+            foreach (var (kind, items) in sheets)
+                FamilySheet(Path.Combine(dir, "qa", $"variants_{kind}.png"),
+                    items.OrderBy(x => Order(kind, x.label)).ThenBy(x => x.label.Split(' ')[^1]).ToList());
+            return bad;
         }
         wcfg.Background = "panel";
         Log.Info($"layout {style}: {problems} problem(s)");
@@ -1443,7 +1639,8 @@ static partial class Tools
     // the cards alone, so a gradient or a header's band is the card, not content - nor on a header band's lower edge, and every
     // text's contrast against what is really under it (a render without text; with no page, over a dark room and a white wall):
     // 4.5:1, 3:1 for big, bold or icon text; "nothing there" (Faint) is left out. styles_buttons_*: the tiles in every look.
-    static int StylesRun(WristPanel wrist, PanelData data, Painter painter, ConfigStore cfg, Gpu gpu, string dir, string tag = "")
+    static int StylesRun(WristPanel wrist, PanelData data, Painter painter, ConfigStore cfg, Gpu gpu, string dir, string tag = "",
+        bool variantsOnly = false)
     {
         var wcfg = cfg.Data.Wrist;
         string qa = Path.Combine(dir, "qa");
@@ -1612,6 +1809,42 @@ static partial class Tools
         wcfg.Face = "custom";
         wcfg.Background = "panel";
         string[] looks = { "default", "tint", "solid", "twotone", "header", "outline", "glass" };
+        // the clocks' designs in every look, each at every size it takes (a size's default is checked with the kinds below), with no
+        // page; the colours taking turns (none every eighth), the time in English at 12 h and in Hungarian at 24 h by turns
+        void VariantStyles()
+        {
+            wcfg.Background = "cards";
+            uint[] vt = { navy, teal, amber, Col("Pink"), Col("White"), Col("Purple"), Col("Green") };
+            int n = 0;
+            foreach (var look in looks)
+                foreach (var (kind, vs) in new[] { ("time", WatchWidgets.TimeVariants), ("analog", WatchWidgets.AnalogVariants) })
+                    foreach (var v in vs)
+                        foreach (var (w, h) in WatchWidgets.Find(kind).Union)
+                        {
+                            if (!v.Fits(w, h) || v.Id == WatchWidgets.DefaultVariant(kind, w, h)) continue;
+                            n++;
+                            bool en = n % 2 == 0;
+                            var at = kind == "analog" ? new DateTime(2026, 10, 15, 10, 9, 36) : en ? new DateTime(2026, 9, 30, 12, 58, 47) : new DateTime(2026, 9, 24, 23, 58, 47);
+                            string tag = en ? "en_12h" : "hu_24h";
+                            FamilySet(wrist, data, cfg, new Family(kind, w, h, tag, en || kind == "analog" ? "en-US" : "hu-HU", !en, 83, at));
+                            wcfg.Widgets = new List<WatchWidget>
+                            {
+                                new() { Type = kind, X = 0, Y = 0, W = w, H = h, Variant = v.Id, Style = look == "default" ? null : look, Color = n % 8 == 0 ? null : vt[n % vt.Length] },
+                            };
+                            Check(look, $"{look} {kind} {v.Id} {w}x{h} {tag}", null);
+                        }
+            FamilySet(wrist, data, cfg, null);
+        }
+        if (variantsOnly)
+        {
+            VariantStyles();
+            wcfg.Background = "panel";
+            data.FakeVram = vram0;
+            data.Vr.GpuMs = gpu0;
+            foreach (var look in lowest.Keys) Log.Info($"styles {look}: lowest text contrast {lowest[look].cr:0.0}:1 ({lowest[look].what})");
+            Log.Info($"layout styles (variants): {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
+            return problems;
+        }
         foreach (var look in looks)
         {
             string style = look == "default" ? null : look;
@@ -1722,6 +1955,7 @@ static partial class Tools
                 Check(look, $"{look} {fc.Kind} {fc.W}x{fc.H} {fc.Tag}", null);
             }
         FamilySet(wrist, data, cfg, null);
+        VariantStyles();
         wcfg.Background = "panel";
         data.FakeVram = vram0;
         data.Vr.GpuMs = gpu0;

@@ -393,7 +393,7 @@ public sealed partial class WristPanel
         }
         // the cards are opaque on the page; floating ones (no page behind) let a little of the world through
         uint f0 = cards ? Theme.WithAlpha(L.Fill0, 0.96f) : L.Fill0, f1 = cards ? Theme.WithAlpha(L.Fill1, 0.96f) : L.Fill1;
-        if (k.Id == "analog" && w.W == 1) { AnalogFace(r, k, w, L, f0, f1, cards); return; }
+        if (k.Id == "analog" && WatchWidgets.VariantOf(w) == "squircle") { AnalogFace(r, k, w, L, f0, f1, cards); return; }
         _p.FillGradient(r, f0, f1, CardRadius, L.Angle, L.Span);
         (_haloF0, _haloF1, _haloAngle, _haloSpan, _haloCard) = (f0, f1, L.Angle, L.Span, r);
         if (L.Sheen != 0) _p.FillGradient(r, L.Sheen, L.Sheen & 0x00FFFFFF, CardRadius, 90, 0.5f);
@@ -565,8 +565,7 @@ public sealed partial class WristPanel
             case "time": TimeOrbit(r, w, now, d, id); break;
             case "date": DateOrbit(r, w, now); break;
             case "calendar": CalendarOrbit(r, w, now); break;
-            case "analog" when w.W == 1: AnalogS(r, w, now); break;
-            case "analog": AnalogOrbit(r, now, Bento.Accent); break;
+            case "analog": AnalogClock(r, w, now); break;          // its design (WristClocks): the squircle on a 1x1, the dial from 2x2
             case "timer": TimerOrbit(r, w, id); break;
             case "stopwatch": StopwatchOrbit(r, w, id); break;
             case "session": SessionOrbit(r, w, d, id); break;
@@ -1061,6 +1060,7 @@ public sealed partial class WristPanel
     // line - they take the size of the space left between them. One row: TimeM; a 1x1: TimeS.
     void TimeOrbit(RectangleF r, WatchWidget w, DateTime now, PanelData d, int id)
     {
+        if (TimeVariant(r, w, now, d, id)) return;          // a design of its own (WristClocks)
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
         string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture);

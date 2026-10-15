@@ -72,6 +72,8 @@ public sealed class WatchWidget
     public uint? Color2 { get; set; }                   // two-tone's second colour (null = made from Color)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string> Items { get; set; }             // a button group's buttons (button kinds' ids, 2-6)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Variant { get; set; }                 // a clock's design (WatchWidgets.Variants); null = its size's default
 }
 
 public sealed class DesktopConfig

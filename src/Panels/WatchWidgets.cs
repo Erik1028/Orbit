@@ -282,6 +282,51 @@ public static class WatchWidgets
         return ok;
     }
 
+    // ---- the clocks' designs (WatchWidget.Variant): the clock itself, separate from its look (Style / Color) ----
+    // Modern only (the 95 face draws its 1995 clocks whatever is set). Fits: the sizes a design works at - the editor offers it
+    // only there, and a widget at another size draws its size's default (the variant is kept: a size it fits brings it back).
+    // An unknown one (a newer Orbit's) is kept as well and draws the default.
+    public sealed record Variant(string Id, string Name, Func<int, int, bool> Fits);
+
+    public static readonly Variant[] TimeVariants =
+    {
+        new("standard", "Standard", (w, h) => true),
+        new("flip", "Flip", (w, h) => true),            // split-flap cards
+        new("outline", "Outline", (w, h) => true),      // hollow digits
+        new("stacked", "Stacked", (w, h) => true),      // hours over minutes (square and tall cards; side by side on wide ones)
+        new("segment", "Segment", (w, h) => true),      // seven-segment LED digits
+        new("words", "Words", (w, h) => w >= 2 && h >= 2),   // a word clock: every word printed, the time's lit (2x2 and up)
+    };
+
+    public static readonly Variant[] AnalogVariants =
+    {
+        new("squircle", "Squircle", (w, h) => true),    // the macOS widget clock (1x1's default)
+        new("classic", "Classic", (w, h) => w >= 2),    // Orbit's dial (the default from 2x2)
+        new("minimal", "Minimal", (w, h) => true),
+        new("roman", "Roman", (w, h) => w >= 2),
+        new("station", "Station", (w, h) => true),      // a Swiss railway clock
+    };
+
+    // a kind's designs (null: it has none)
+    public static Variant[] VariantsOf(string kind) => kind switch { "time" => TimeVariants, "analog" => AnalogVariants, _ => null };
+
+    // what a widget of that kind and size draws with no variant of its own
+    public static string DefaultVariant(string kind, int w, int h) => kind == "analog" ? (w == 1 && h == 1 ? "squircle" : "classic") : "standard";
+
+    // the design a widget draws: its own where it fits its size, else its size's default (null: a kind without designs)
+    public static string VariantOf(WatchWidget w)
+    {
+        var vs = VariantsOf(w.Type);
+        if (vs == null) return null;
+        if (w.Variant != null)
+            foreach (var v in vs)
+                if (v.Id == w.Variant) return v.Fits(w.W, w.H) ? v.Id : DefaultVariant(w.Type, w.W, w.H);
+        return DefaultVariant(w.Type, w.W, w.H);
+    }
+
+    // a design picked in the editor as it is stored: its size's default is no variant (nothing written)
+    public static string StoreVariant(WatchWidget w, string id) => id == DefaultVariant(w.Type, w.W, w.H) ? null : id;
+
     // ================= 1.12: the 4 x 3 grid and the pages =================
 
     // The sizes on the 4 x 3 grid (the Bento grid: S 1x1, M 2x1, L 2x2, Wide 4x1), the same in both styles - the 95 face draws each
