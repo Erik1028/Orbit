@@ -196,6 +196,22 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.9.4 – húzás két lézerrel egy képernyőn (2026-10-15)
+
+Erik listájáról: „ha mind a kettő kontroller a kijelzőre mutat, … egy ablakot … a kijelző tetejére húzni hogy full
+screenbe rakjam, ha túlhúzom a kurzort az egér átugrik a másik kontrollerre, akkor is ha azzal nem is kattintottam”.
+
+- **Ok**: a sugár elhagyja a panelt → `PointerLeave` → `MouseOwner` törlődik → a másik kéz sugara (ami a panelen van)
+  `OwnsMouse`-zal azonnal átveszi, miközben az első kéz még nyomja a gombot → a húzott ablak a másik lézerhez ugrik.
+  Ugyanez, ha a húzó kéz 0,4 s-nál tovább áll.
+- **Pointer capture** (`Laser`): amíg a ravasz nyomva van egy panelen, az megtartja a sugarat a szélén túl is
+  (`VrOverlay.ProjectLocal` → `LocalRaycast.Intersect(clampToEdge: true)`: lapos panelen a síkra, ívelten a
+  hengerre vetít, és a szélre szorít) → a kurzor a monitor legfelső sorára kerül → Aero Snap teljes képernyő.
+- **`MouseOwner.Held`**: amíg a tulajdonos kéz nyom egy egérgombot, más kéz nem veheti át (`OwnsMouse`, lenyomás), és a
+  `PointerLeave` sem törli a tulajdonost. Monitor- és ablakpanel egyaránt.
+- `--capturetest`: 12 ellenőrzés (lapos/ívelt, fent/balra/sarok, rögzítés nélkül nincs találat) – a valódi egérhez
+  nem nyúl.
+
 ## 1.9.3 – „What's new” frissítés után (2026-10-15)
 
 Erik listájáról: „Frissítés után egy popup hogy mi változott”.

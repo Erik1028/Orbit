@@ -12,10 +12,13 @@ namespace Orbit;
 // rays from behind never hit it, and a ray that crosses the arc twice hits the second crossing
 // (--raytest against ComputeOverlayIntersection). A flat overlay is hit from both sides.
 // uv comes back with a top-left origin, like VrOverlay.Raycast. Allocates nothing.
+// clampToEdge: a ray past the edge still "hits", at the nearest point of the edge (pointer capture: a panel keeps the
+// beam of a hand that holds the trigger on it, so a drag can reach the very edge of the screen).
 public static class LocalRaycast
 {
     public static bool Intersect(in Matrix4x4 world, float width, float curvature, float texW, float texH,
-        Vector3 origin, Vector3 dir, out float dist, out Vector2 uvTopLeft, out Vector3 point, out Vector3 normal)
+        Vector3 origin, Vector3 dir, out float dist, out Vector2 uvTopLeft, out Vector3 point, out Vector3 normal,
+        bool clampToEdge = false)
     {
         dist = 0; uvTopLeft = default; point = default; normal = default;
         if (!(width > 0) || !(texW > 0) || !(texH > 0)) return false;
@@ -32,6 +35,7 @@ public static class LocalRaycast
             float t = -o.Z / d.Z;
             if (!(t > 0)) return false;
             p = o + d * t;
+            if (clampToEdge) p = new Vector3(Math.Clamp(p.X, -width / 2, width / 2), Math.Clamp(p.Y, -h / 2, h / 2), 0);
             if (MathF.Abs(p.X) > width / 2 || MathF.Abs(p.Y) > h / 2) return false;
             u = p.X / width + 0.5f;
             n = Vector3.UnitZ;
@@ -55,8 +59,15 @@ public static class LocalRaycast
             double tExit = Math.Max(r1, r2);
             if (!(tExit > 0)) return false;
             double px = ox + dx * tExit, py = o.Y + d.Y * tExit, pz = oz + dz * tExit;
-            if (Math.Abs(py) > h / 2) return false;
             double th = Math.Atan2(px, r - pz);                 // 0 at the origin, positive towards +X
+            if (clampToEdge)
+            {
+                th = Math.Clamp(th, -half, half);
+                py = Math.Clamp(py, -h / 2, h / 2);
+                px = r * Math.Sin(th);
+                pz = r - r * Math.Cos(th);
+            }
+            if (Math.Abs(py) > h / 2) return false;
             if (Math.Abs(th) > half) return false;
             p = new Vector3((float)px, (float)py, (float)pz);
             u = (float)(th / (2 * half) + 0.5);

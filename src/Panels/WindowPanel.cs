@@ -168,6 +168,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     bool OwnsMouse(Hand h)
     {
         double now = Clock.Now;
+        if (_mouse.Held && _mouse.Hand != h) return false;     // the other hand is in the middle of a drag
         if (_mouse.Hand == null || _mouse.Hand == h || _mouse.Panel == null || now - _mouse.LastMove > 0.4)
         {
             _mouse.Hand = h; _mouse.Panel = this; _mouse.LastMove = now;
@@ -200,7 +201,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     public void PointerLeave(Hand h)
     {
         _hovering[(int)h] = false;
-        if (_mouse.Hand == h && _mouse.Panel == this) { _mouse.Hand = null; _mouse.Panel = null; }
+        if (_mouse.Hand == h && _mouse.Panel == this && !_mouse.Held) { _mouse.Hand = null; _mouse.Panel = null; }
     }
 
     bool _leftDown, _rightDown;
@@ -210,6 +211,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
     {
         if (!Cfg.Mouse && down) return;      // ups still go out, or a button would stay held
+        if (down && _mouse.Held && _mouse.Hand != h) return;      // the other hand is in the middle of a drag
         if (Hwnd == IntPtr.Zero) { ReleaseButtons(); return; }
         if (down)
         {
@@ -246,13 +248,16 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
             _rightDown = down;
             Native.SendMouse(down ? Native.MOUSEEVENTF_RIGHTDOWN : Native.MOUSEEVENTF_RIGHTUP);
         }
+        if (_mouse.Panel == this) _mouse.Held = _leftDown || _rightDown || _pending != null;
     }
 
     void ReleaseButtons()
     {
+        bool had = _leftDown || _rightDown || _pending != null;
         _pending = null;
         if (_leftDown) { _leftDown = false; Native.SendMouse(Native.MOUSEEVENTF_LEFTUP); }
         if (_rightDown) { _rightDown = false; Native.SendMouse(Native.MOUSEEVENTF_RIGHTUP); }
+        if (had && _mouse.Panel == this) _mouse.Held = false;
     }
 
     public void PointerScroll(Hand h, float notches, Vector2 px)

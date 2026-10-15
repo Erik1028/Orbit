@@ -215,6 +215,15 @@ public sealed class Laser : IDisposable
             }
         }
 
+        // Pointer capture, like Windows: while the trigger is held on a panel, that panel keeps the beam past its edge, the
+        // point held on the edge. A window dragged to the top of a monitor reaches the very top (snap to full screen), and
+        // the beam leaving the panel no longer lets the other hand take the mouse in the middle of the drag.
+        if (_press != null && best != _press && _press.Interactive && _press.Overlay != null
+            && _press.Overlay.ProjectLocal(vr, o, d, out float cDist, out var cUv, out var cPoint, out var cNormal))
+        {
+            best = _press; bestDist = cDist; bestUv = cUv; bestPoint = cPoint; bestNormal = cNormal;
+        }
+
         if (best != _hover)
         {
             _hover?.PointerLeave(_hand);

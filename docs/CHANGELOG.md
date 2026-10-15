@@ -3,6 +3,12 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.9.4 | Dragging with two lasers on one screen
+- While you hold the trigger on a screen, that screen keeps your laser even past its edge, and the cursor stays on
+  the edge. Dragging a window to the very top of a monitor now snaps it full screen.
+- The other hand can no longer take the mouse in the middle of a drag (it used to jump to the other laser when the
+  dragging one went past the edge or held still).
+
 ## 1.9.3 | What's new, after every update
 - After an update, a "What's new" window lists what changed since your old version: in VR it appears in front of
   you, on the desktop in the settings window. OK closes it in both places.

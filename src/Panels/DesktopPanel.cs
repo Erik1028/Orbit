@@ -10,6 +10,7 @@ public sealed class MouseOwner
 {
     public Hand? Hand;
     public IPointerTarget Panel;      // monitor or window panel
+    public bool Held;                 // the owning hand holds a mouse button: nobody else takes the mouse until it lets go
     public double LastMove;
     public double LastClick = -10;    // a click from VR went into Windows (keyboard pop-up uses it)
     public Action Clicked;
@@ -167,6 +168,8 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
     bool OwnsMouse(Hand h)
     {
         double now = Clock.Now;
+        // a hand in the middle of a drag keeps the mouse, even standing still or past the edge (two beams on one screen)
+        if (_mouse.Held && _mouse.Hand != h) return false;
         // take over when nobody owns it, the owner stopped pointing at a desktop, or went quiet for a moment
         if (_mouse.Hand == null || _mouse.Hand == h || _mouse.Panel == null || now - _mouse.LastMove > 0.4)
         {
@@ -197,7 +200,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
     public void PointerLeave(Hand h)
     {
         _hovering[(int)h] = false;
-        if (_mouse.Hand == h && _mouse.Panel == this) { _mouse.Hand = null; _mouse.Panel = null; }
+        if (_mouse.Hand == h && _mouse.Panel == this && !_mouse.Held) { _mouse.Hand = null; _mouse.Panel = null; }
     }
 
     bool _leftDown, _rightDown;
@@ -205,6 +208,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
     public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
     {
         if (!Cfg.Mouse && down) return;      // ups still go out, or a button would stay held
+        if (down && _mouse.Held && _mouse.Hand != h) return;      // the other hand is in the middle of a drag
         if (down)
         {
             _mouse.Hand = h; _mouse.Panel = this; _mouse.LastMove = Clock.Now;
@@ -222,12 +226,15 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
             _rightDown = down;
             Native.SendMouse(down ? Native.MOUSEEVENTF_RIGHTDOWN : Native.MOUSEEVENTF_RIGHTUP);
         }
+        if (_mouse.Panel == this) _mouse.Held = _leftDown || _rightDown;
     }
 
     void ReleaseButtons()
     {
+        bool had = _leftDown || _rightDown;
         if (_leftDown) { _leftDown = false; Native.SendMouse(Native.MOUSEEVENTF_LEFTUP); }
         if (_rightDown) { _rightDown = false; Native.SendMouse(Native.MOUSEEVENTF_RIGHTUP); }
+        if (had && _mouse.Panel == this) _mouse.Held = false;
     }
 
     public void PointerScroll(Hand h, float notches, Vector2 px)
