@@ -154,8 +154,8 @@ static class Program
             }
             if (args.Contains("--perfbench"))
             {
-                int i = Array.IndexOf(args, "--perfbench");
-                return PerfBench.Run(i + 1 < args.Length ? args[i + 1] : "perfbench");
+                int i = Array.IndexOf(args, "--perfbench"), s = Array.IndexOf(args, "--bench-style");
+                return PerfBench.Run(i + 1 < args.Length ? args[i + 1] : "perfbench", s >= 0 && s + 1 < args.Length ? args[s + 1] : null);
             }
             if (args.Contains("--theatertest"))
             {

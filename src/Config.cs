@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Orbit;
 
@@ -33,6 +34,7 @@ public sealed class WristConfig
 }
 
 // One widget of the custom watch face, in grid cells (see WatchWidgets).
+// Its own look (modern style only; Bento.Make): written only once set, so a face never styled saves as it always did.
 public sealed class WatchWidget
 {
     public string Type { get; set; }
@@ -40,6 +42,12 @@ public sealed class WatchWidget
     public int Y { get; set; }
     public int W { get; set; } = 1;
     public int H { get; set; } = 1;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Style { get; set; }                   // null = the Bento card | tint | solid | twotone | header | outline | glass
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public uint? Color { get; set; }                    // null = automatic (the accent; purple / blue for CPU and memory)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public uint? Color2 { get; set; }                   // two-tone's second colour (null = made from Color)
 }
 
 public sealed class DesktopConfig
@@ -292,6 +300,9 @@ public sealed class ConfigStore
     }
 
     static double Now => Clock.Now;
+
+    // the file as a save would write it now (--faceshot: a config that was only read must come out byte for byte the same)
+    public string Serialized() => JsonSerializer.Serialize(Data, Json);
 
     double _lastChange;
 
