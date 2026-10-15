@@ -144,6 +144,7 @@ public sealed class NotificationPanel : IDisposable
     VrOverlay _ov;
     bool _dirty;
     const float Width = 0.42f, Distance = 0.85f;
+    public NotificationHistory History;          // every card shown, for the watch's notifications widget
     float _placedAngle = float.NaN;
 
     // Head-locked: the first card's centre sits 'angle' degrees below the centre of view, the panel
@@ -191,6 +192,7 @@ public sealed class NotificationPanel : IDisposable
         while (src.Incoming.TryDequeue(out var n))
         {
             if (_ov == null) continue;
+            History?.Add(n);
             n.Shown = now;
             _cards.Insert(0, n);
             if (_cfg.Data.General.NotificationSound) _sound.PlayChime(n.Volume * 0.6f);
@@ -305,4 +307,25 @@ public sealed class NotificationPanel : IDisposable
     public Surface Surface => _surf;
 
     public void Dispose() { DestroyOverlay(); _surf.Dispose(); _sound.Dispose(); _canvas95?.Dispose(); }
+}
+
+// The last notifications shown (newest first, 20 at most), for the watch's notifications widget. Main thread only.
+public sealed class NotificationHistory
+{
+    public readonly record struct Item(string Source, string Title, string Content, DateTime At);
+    public const int Max = 20;
+    readonly List<Item> _items = new();
+    public int Version { get; private set; }
+    public IReadOnlyList<Item> Items => _items;
+
+    public void Add(Notification n) => Add(n.Source, n.Title, n.Content, DateTime.Now);
+
+    public void Add(string source, string title, string content, DateTime at)
+    {
+        _items.Insert(0, new Item(source ?? "", title ?? "", content ?? "", at));
+        if (_items.Count > Max) _items.RemoveRange(Max, _items.Count - Max);
+        Version++;
+    }
+
+    public void Clear() { _items.Clear(); Version++; }
 }

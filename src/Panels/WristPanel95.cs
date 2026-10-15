@@ -34,6 +34,7 @@ public sealed partial class WristPanel
     {
         Canvas95 ??= new Surface(_p.Gpu, TW95, TH95);
         _ui.Begin(_ptr, 2);
+        SwipeGuard();
         _ui.Canvas95 = new SizeF(TW95, TH95);
         _p.BeginPixel(Canvas95.Bitmap, 0x00000000);
         if (C.Face == "custom") Custom95(d);

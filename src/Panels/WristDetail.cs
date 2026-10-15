@@ -59,7 +59,7 @@ public sealed partial class WristPanel
     // --snapshot: show the first widget of this type opened, at rest
     public bool OpenForTest(string type)
     {
-        var w = C.Widgets?.Find(x => x?.Type == type);
+        var w = WatchPages.Widgets(C, CurPage)?.Find(x => x?.Type == type);
         if (w == null || DetailOf(type) == null) return false;        // e.g. the dock: a tap opens its own panel
         _open = w;
         _closing = false;
@@ -100,7 +100,7 @@ public sealed partial class WristPanel
         if (!LayoutTest) _p.Fill(all, Theme.WithAlpha(0xFF000000, 0.62f * ec), Bento.PageRadius);
         if (_ui.Clickable("wscrim", all, out _, out _) && !_closing) CloseDetail();        // a tap beside it
         var target = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, false);
-        var r = Lerp(WatchWidgets.Rect(_open, false), target, e);
+        var r = Lerp(WatchWidgets.Rect(_open, false, _grid), target, e);
         _p.Fill(r, Bento.Card, CardRadius);
         _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), Bento.Edge, Bento.EdgeWidth, CardRadius - 0.6f);
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
@@ -518,7 +518,7 @@ public sealed partial class WristPanel
         {
             // (Minesweeper only) the zoom outline back into its tile, then it is gone
             if (t >= 1) { _open = null; _closing = false; return; }
-            var zc = Lerp(win, WatchWidgets.Rect(_open, true), (float)t);
+            var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
             _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
             return;
@@ -526,7 +526,7 @@ public sealed partial class WristPanel
         if (t < 1)
         {
             // the 1995 window zoom: an outline growing from the widget to the window
-            var z = Lerp(WatchWidgets.Rect(_open, true), win, (float)t);
+            var z = Lerp(WatchWidgets.Rect(_open, true, _grid), win, (float)t);
             _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
             return;

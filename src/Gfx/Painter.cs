@@ -654,6 +654,54 @@ public sealed class Painter : IDisposable
         Dc.PopLayer();
     }
 
+    // the first 'count' points as a line with round joins and ends (the frame graph's line); created per call like Arc
+    public void Polyline(Vector2[] pts, int count, uint c, float width)
+    {
+        if (count < 2) return;
+        _roundCaps ??= _g.D2DFactory.CreateStrokeStyle(new StrokeStyleProperties
+        {
+            StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round,
+        });
+        using var geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            sink.BeginFigure(pts[0], FigureBegin.Hollow);
+            for (int i = 1; i < count; i++) sink.AddLine(pts[i]);
+            sink.EndFigure(FigureEnd.Open);
+            sink.Close();
+        }
+        Dc.DrawGeometry(geo, Brush(c), width, _roundCaps);
+    }
+
+    // the first 'count' points, filled (the frame graph's area)
+    public void Polygon(Vector2[] pts, int count, uint c)
+    {
+        if (count < 3) return;
+        using var geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            sink.BeginFigure(pts[0], FigureBegin.Filled);
+            for (int i = 1; i < count; i++) sink.AddLine(pts[i]);
+            sink.EndFigure(FigureEnd.Closed);
+            sink.Close();
+        }
+        Dc.FillGeometry(geo, Brush(c));
+    }
+
+    readonly Dictionary<(float, float), ID2D1StrokeStyle> _dashes = new();
+
+    // a dashed line (flat ends): 'dash' px drawn, 'gap' px left out (the frame budget)
+    public void DashedLine(float x1, float y1, float x2, float y2, uint c, float width, float dash = 4, float gap = 4)
+    {
+        if (Theme.Classic || PixelMode) { Line(x1, y1, x2, y2, c, width); return; }
+        if (!_dashes.TryGetValue((dash, gap), out var st))
+            _dashes[(dash, gap)] = st = _g.D2DFactory.CreateStrokeStyle(new StrokeStyleProperties
+            {
+                StartCap = CapStyle.Flat, EndCap = CapStyle.Flat, DashCap = CapStyle.Flat, DashStyle = DashStyle.Custom,
+            }, new[] { dash / MathF.Max(0.5f, width), gap / MathF.Max(0.5f, width) });
+        Dc.DrawLine(new Vector2(x1, y1), new Vector2(x2, y2), Brush(c), width, st);
+    }
+
     // a filled polygon (the 95 clock's hands)
     public void Polygon(Vector2[] pts, uint c)
     {
@@ -1002,6 +1050,8 @@ public sealed class Painter : IDisposable
     {
         _brush?.Dispose();
         _brush = null;
+        foreach (var d in _dashes.Values) d.Dispose();
+        _dashes.Clear();
         DropGradients();
         DropSquircles();
         DropLayouts();

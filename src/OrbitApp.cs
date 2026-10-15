@@ -28,6 +28,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly PanelData _data = new();
     readonly GpuStats _gpuStats = new();
     readonly MediaInfo _media = new();
+    readonly NotificationHistory _notes = new();     // the watch's notifications widget
     readonly HexpadLink _hexpad = new();
     readonly RoomWatcher _room = new();
     RoomWatcher.Snapshot _roomSnap = new();
@@ -99,6 +100,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _gpu = new Gpu(adapter);
         _painter = new Painter(_gpu);
         Theme.Apply(C.Appearance);
+        // 1.12, the watch pages: a new install starts on the VRChat and Performance pages; an older config gets them once, after its
+        // own face (a copy of config.json first). Only the config here - no window exists yet (1.10.0 crashed touching one).
+        WatchPages.Migrate(_cfg);
         _layout = new DesktopLayout(_desktops, _cfg);
         _data.Gpu = _gpuStats;
         _data.Media = _media;
@@ -123,7 +127,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _data.Dock = _dockSnap;
         _data.DockFaces = _dockFaces;
         _hexpad.Start();
-        _notifyPanel = new NotificationPanel(_gpu, _painter, _cfg);
+        _notifyPanel = new NotificationPanel(_gpu, _painter, _cfg) { History = _notes };
+        _data.Notes = _notes;
         // VRChat chatbox: /chatbox/input <text> <send now> <notification sound>, /chatbox/typing <bool>
         _kb.OnChatSend = text =>
         {
@@ -1695,7 +1700,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     void UpdateDock(double now, float dt)
     {
         var d = C.Dock;
-        bool widget = C.Wrist.Face == "custom" && (C.Wrist.Widgets?.Exists(w => w.Type == "dock") ?? false);
+        bool widget = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "dock");
         _hexpad.Active = _vr.Connected && d.Enabled && (d.Visible || widget);
         int v = _hexpad.Version;
         if (v != _dockSnap.Version)

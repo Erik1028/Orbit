@@ -41,6 +41,12 @@ static class Bento
     public const uint DataPurple = 0xFF8B7CF8;   // CPU
     public const uint DataBlue = 0xFF5AA9FF;     // RAM, VRAM
 
+    // people's initials (the room, the notifications): a colour per name, light enough for dark letters
+    public static readonly uint[] Avatars =
+    {
+        0xFFF9A8D4, 0xFFFDE68A, 0xFF86EFAC, 0xFF93C5FD, 0xFFC4B5FD, 0xFFFDBA74, 0xFF67E8F9, 0xFFFCA5A5,
+    };
+
     // ---- what the widget being drawn reads: its look's while it draws (Use), the default look's otherwise ----
     public static uint Text = White, Sub = Grey, Faint = Dim;
     public static uint Cap = Grey, CapText = White;   // the caption row's grey and white (a header's band has its own)

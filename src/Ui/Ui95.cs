@@ -188,6 +188,7 @@ public sealed partial class Ui
     public bool Track95(string id, RectangleF r, ref float value, float min, float max, bool enabled = true, int ticks = 11)
     {
         Behave(id, r, out bool hover, out bool held);
+        if (held) DragHeld = true;
         var ch = new RectangleF(r.X + 6, r.Y + 8, r.Width - 12, 4);
         bool changed = false;
         if (enabled && (held || (_active == id && Released)))

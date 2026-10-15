@@ -33,6 +33,26 @@ public sealed class WristConfig
     public string Background { get; set; } = "panel";   // custom face: panel (one watch panel) | cards (each widget its own card)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int[] MinesBest { get; set; }                // Minesweeper's best times in seconds: 9 x 9, 16 x 16 (0 = none; null until a win)
+    // The custom face's pages (1.12): Widgets above is page 1, as it always was; these are written only once set, so a face
+    // that never had pages saves exactly as before.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Grid { get; set; }                    // page 1's grid: null = 6x4 | 4x3
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Name { get; set; }                    // page 1's name (null = "Page 1")
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WatchPage> Pages { get; set; }          // pages 2, 3, ... (null = only page 1)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int Page { get; set; }                       // the page the watch shows (0 = page 1)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int PagesVersion { get; set; }               // 1 = the VRChat and Performance pages were added once (deleting them keeps them gone)
+}
+
+// A page of the custom watch face after the first (WristConfig.Widgets is page 1)
+public sealed class WatchPage
+{
+    public string Name { get; set; }
+    public string Grid { get; set; } = "6x4";           // 6x4 | 4x3
+    public List<WatchWidget> Widgets { get; set; } = new();
 }
 
 // One widget of the custom watch face, in grid cells (see WatchWidgets).
@@ -50,6 +70,8 @@ public sealed class WatchWidget
     public uint? Color { get; set; }                    // null = automatic (the accent; purple / blue for CPU and memory)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public uint? Color2 { get; set; }                   // two-tone's second colour (null = made from Color)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string> Items { get; set; }             // a button group's buttons (button kinds' ids, 2-6)
 }
 
 public sealed class DesktopConfig
@@ -242,9 +264,12 @@ public sealed class ConfigStore
     bool _dirty;
     double _dirtySince;
 
+    public bool Fresh { get; }                 // there was no config file: a new install (its first start)
+
     public ConfigStore(string path = null)
     {
         Path = path ?? System.IO.Path.Combine(Log.Dir, "config.json");
+        Fresh = !File.Exists(Path);
         Data = Load();
     }
 
@@ -290,6 +315,11 @@ public sealed class ConfigStore
                     foreach (var l in cfg.Layouts) l.Panels = (l.Panels ?? new()).Where(s => s?.Id != null && s.Kind != null).ToList();
                     if (!cfg.Layouts.Any(l => l.Name == cfg.ActiveLayout)) cfg.ActiveLayout = cfg.Layouts[0].Name;
                     cfg.Keyboard.Place ??= new();
+                    if (cfg.Wrist.Pages != null)
+                    {
+                        cfg.Wrist.Pages.RemoveAll(p => p == null);
+                        foreach (var p in cfg.Wrist.Pages) p.Widgets ??= new();
+                    }
                     return cfg;
                 }
             }

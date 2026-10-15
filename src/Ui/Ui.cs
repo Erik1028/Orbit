@@ -85,6 +85,7 @@ public sealed partial class Ui
         s.Wheel = 0;
         Changed = false;
         Animating = false;
+        DragHeld = false;
         _hot.Clear();
         Inert = false;
         BeginPopups95();
@@ -170,6 +171,16 @@ public sealed partial class Ui
     public void ForgetSprings(Func<string, bool> which)
     {
         foreach (var k in new List<string>(_springs.Keys)) if (which(k)) _springs.Remove(k);
+    }
+
+    // a slider / trackbar was held in the frame just drawn (a drag there is the slider's, not a swipe)
+    public bool DragHeld;
+
+    // the press belongs to no widget (the watch is being swiped): nothing is held, the release clicks nothing
+    public void CancelPress()
+    {
+        _active = null;
+        Pressed = Released = false;
     }
 
     // a press-and-release area without a look of its own (the caller draws it); held = pressed right now
@@ -291,6 +302,7 @@ public sealed partial class Ui
     public bool Slider(string id, RectangleF r, string label, ref float value, float min, float max, Func<float, string> fmt, bool enabled = true)
     {
         Behave(id, r, out bool hover, out bool held);
+        if (held) DragHeld = true;
         var track = new RectangleF(r.X + 10, r.Bottom - 18, r.Width - 20, 6);
         bool changed = false;
         if (enabled && (held || (_active == id && Released)))

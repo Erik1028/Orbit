@@ -22,6 +22,9 @@ public sealed class PanelData
     public HexpadLink.Snapshot Dock;     // Hexpad's stream dock (null = not looked for)
     public HexpadFaces DockFaces;
     public RoomWatcher.Snapshot Room;    // who is in the VRChat instance (null = not followed)
+    public NotificationHistory Notes;    // the last notifications shown (the notifications widget)
+    public (double pos, double dur)? FakeTimeline;     // --snapshot: where in the track (null: the media session's)
+    public uint[] FakeArt;               // --snapshot: a cover with FakeMedia (MediaInfo.ArtSize square, premultiplied)
     public bool StatusLine;              // the chatbox status line is on
     public bool Theater;                 // theater mode plays
     public (bool has, string title, string artist, bool playing)? FakeMedia;
@@ -110,7 +113,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             else target = 0;
         }
         Alpha += (target - Alpha) * Math.Min(1, dt * 10);
-        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); _open = null; return; }      // looking away closes an opened widget
+        if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); SwipeCancel(); _open = null; return; }      // looking away closes an opened widget
         Ov.SetAlpha(Math.Min(1, Alpha));
         if (!Ov.Visible)
         {
@@ -126,7 +129,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             Draw(d);
             Ov.SetTexture(Surf.Tex);
             _lastDraw = now;
-            bool fast = WantsFrames || (C.Face == "custom" && FastWidgets);
+            bool fast = C.Face == "custom" ? FramesShown || FastWidgets : WantsFrames;
             _nextDraw = now + (fast ? 0.1 : 0.5);
             if (Theme.Classic)      // the 95 clock shows seconds: draw again just after the next one starts
                 _nextDraw = Math.Min(_nextDraw, now + 1.02 - DateTime.Now.Millisecond / 1000.0);
@@ -146,6 +149,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         _rolling = false;
         if (Theme.Classic) { Draw95(d); return; }
         _ui.Begin(_ptr, 1);
+        SwipeGuard();
         _p.Begin(Surf.Bitmap, 0x00000000, TestScale);
         string face = C.Face ?? "full";
         var now = DateTime.Now;
@@ -458,14 +462,16 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public void PointerMove(Hand h, Vector2 px)
     {
         _ptr.Move(px.X, px.Y);
+        if (SwipeMove(px)) { _dirty = true; return; }       // a swipe between the pages: the face follows the laser
         if (_ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;     // only when it gets onto another control
     }
-    public void PointerLeave(Hand h) { _ptr.Leave(); _dirty = true; }
+    public void PointerLeave(Hand h) { SwipeCancel(); _ptr.Leave(); _dirty = true; }
     public void PointerButton(Hand h, PtrButton b, bool down, Vector2 px)
     {
         if (b != PtrButton.Primary) return;
         _ptr.Move(px.X, px.Y);
-        if (down) _ptr.Press(); else _ptr.Release();
+        if (down) { _ptr.Press(); SwipeBegin(px); }
+        else { SwipeEnd(px); _ptr.Release(); }
         _dirty = true;
     }
     public void PointerScroll(Hand h, float n, Vector2 px) { }
@@ -493,5 +499,5 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
 
     public void GrabEnd() { _grabbing = false; }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); Volume.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); Volume.Dispose(); Mic.Dispose(); }
 }
