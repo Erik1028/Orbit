@@ -27,6 +27,10 @@ public sealed partial class WristPanel
         }
     }
 
+    // --snapshot's time-family pictures: a fixed moment (the longest month and day names, the widest digits); null = the clock
+    public DateTime? TestNow;
+    DateTime Now => TestNow ?? DateTime.Now;
+
     bool HasWidget(string type)
     {
         if (C.Widgets == null) return false;
@@ -275,8 +279,9 @@ public sealed partial class WristPanel
     // The words of the date widgets, made when the day (or the language) changes - not on every frame
     DateTime _wordsDay;
     CultureInfo _wordsCulture;
-    string _dateLine, _dayName, _monthDay, _weekNote, _year, _dayNum, _monthName, _monthShort;
-    readonly string[] _capWeekday = new string[2], _capMonth = new string[2], _capDdd = new string[2];
+    string _dateLine, _dayName, _monthDay, _weekNote, _weekYear, _year, _dayNum;
+    readonly string[] _capMonth = new string[2], _capWeekday = new string[3], _capDayDate = new string[2], _dateForms = new string[3],
+        _monthNames = new string[2];
 
     void Words(DateTime now)
     {
@@ -286,19 +291,26 @@ public sealed partial class WristPanel
         _wordsCulture = culture;
         _dateLine = Capital(DateText(now));
         _dayName = Capital(now.ToString("dddd", culture));
-        _monthDay = now.ToString(culture.DateTimeFormat.MonthDayPattern, culture);
+        string md = culture.DateTimeFormat.MonthDayPattern, mdShort = md.Replace("MMMM", "MMM");
+        _monthDay = now.ToString(md, culture);
         _weekNote = $"week {ISOWeek.GetWeekOfYear(now)}";
         _year = now.Year.ToString(culture);
+        _weekYear = $"{_weekNote} · {_year}";
         _dayNum = now.Day.ToString(culture);
-        _monthName = Capital(now.ToString("MMMM", culture));
-        _monthShort = now.ToString("MMM", culture);
         string ddd = now.ToString("ddd", culture);
+        _capMonth[0] = now.ToString("MMMM", culture);
+        _capMonth[1] = now.ToString("MMM", culture);
+        _monthNames[0] = Capital(_capMonth[0]);
+        _monthNames[1] = Capital(_capMonth[1]);
         _capWeekday[0] = now.ToString("dddd", culture);
         _capWeekday[1] = ddd;
-        _capMonth[0] = now.ToString("MMMM", culture);
-        _capMonth[1] = _monthShort;
-        _capDdd[0] = ddd;
-        _capDdd[1] = ddd.Substring(0, Math.Min(2, ddd.Length));
+        _capWeekday[2] = ddd.Substring(0, Math.Min(2, ddd.Length));
+        _capDayDate[0] = ddd + " " + _dayNum;
+        _capDayDate[1] = ddd;
+        // the clock's header, longest first: the date as the watch writes it ("October 15, Thursday"), shorter, the date alone
+        _dateForms[0] = _dateLine;
+        _dateForms[1] = Capital(now.ToString(mdShort, culture) + ", " + ddd);
+        _dateForms[2] = Capital(now.ToString(mdShort, culture));
     }
 
     // no motion in progress: everything drawn where it ends up (snapshots, a reset)
@@ -437,7 +449,7 @@ public sealed partial class WristPanel
         }
         _dockKeys = DockShows(d);
         bool muted = Volume.Level >= 0 && Volume.Muted;
-        var now = DateTime.Now;
+        var now = Now;
         double t = Clock.Now - _introStart;
         _rolling = false;
         if (_wid.Count > list.Count + 32)
@@ -506,8 +518,8 @@ public sealed partial class WristPanel
     {
         switch (k.Id)
         {
-            case "time": TimeOrbit(r, w, now, id); break;
-            case "date": DateOrbit(r, now); break;
+            case "time": TimeOrbit(r, w, now, d, id); break;
+            case "date": DateOrbit(r, w, now); break;
             case "calendar": CalendarOrbit(r, w, now); break;
             case "analog": AnalogOrbit(r, now, Bento.Accent); break;
             case "timer": TimerOrbit(r, w, id); break;
@@ -610,7 +622,7 @@ public sealed partial class WristPanel
     // A card's caption: UPPERCASE, letter-spaced, grey, at the top-left (from x) - the first of its forms that fits maxW.
     // Never cut: one that fits nowhere is left out. Returns the width it took. badge: on a coloured card (Bento.Badge) a level
     // that needs attention is a dot after it - its value keeps the card's text colour (a red value on a red card would vanish).
-    float Caption(float x, RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok)
+    float Caption(float x, RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok, uint color = 0)
     {
         bool dot = badge != StatLevel.Ok && Bento.CapBadge;
         if (dot) maxW -= DotW;
@@ -620,7 +632,7 @@ public sealed partial class WristPanel
             string s = Upper(f);
             float w = _p.MeasureTracked(s, CapSize, FontWeight.SemiBold, CapTrack);
             if (w > maxW) continue;
-            CapText(s, x, r.Y + CapBase, w, Bento.Cap);
+            CapText(s, x, r.Y + CapBase, w, color != 0 ? color : Bento.Cap);
             if (!dot) return w;
             StatusDot(x + w + 10, r.Y + CapBase - 5, badge);
             return w + DotW;
@@ -629,7 +641,8 @@ public sealed partial class WristPanel
         return dot ? DotW - 3 : 0;
     }
 
-    float Caption(RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok) => Caption(r.X + PadX(r), r, maxW, forms, badge);
+    float Caption(RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok, uint color = 0) =>
+        Caption(r.X + PadX(r), r, maxW, forms, badge, color);
 
     const float DotW = 17;                     // a status badge after a caption, with its gap
 
@@ -993,48 +1006,49 @@ public sealed partial class WristPanel
 
     // ---- the widgets ----
 
-    // The time: the date on top (the one header in its own words: grey, 17 px and up; a caption would only say "time"), the
-    // time big, bold and left. Two rows and more: the seconds as a line along the bottom with ":42" at its end; one row: the
-    // seconds small on the time's baseline (AM / PM there instead, on a 12-hour clock). The digits keep 10 px from the date
-    // line (its descenders included) and from the seconds line: they take the size of the space left between them.
-    void TimeOrbit(RectangleF r, WatchWidget w, DateTime now, int id)
+    // The time: the date on top (the one header in its own words: grey, 17 px and up; a caption would only say "time") with the
+    // time in VR at its right while SteamVR is on, the time big, bold and left. Two rows and more: the seconds as a line along
+    // the bottom with ":42" at its end, the digits 10 px from the date line (its descenders included) and from the seconds
+    // line - they take the size of the space left between them. One row: TimeM; a 1x1: TimeS.
+    void TimeOrbit(RectangleF r, WatchWidget w, DateTime now, PanelData d, int id)
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
         string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         float pad = PadX(r), iw = r.Width - 2 * pad;
+        Words(now);
+        if (w.W == 1 && w.H == 1) { TimeS(r, t, ampm, now, id); return; }
         bool tall = w.H >= 2;
         float ds = tall ? MathF.Round(Math.Clamp(r.Height * 0.085f, SmallText, 24)) : SmallText;
         var (db, _) = _p.TextLine(ds, FontWeight.SemiBold);
         float dBase = r.Y + 9 + db;
-        Words(now);
-        TextAt(Ellipsize(_dateLine, iw, ds, FontWeight.SemiBold), r.X + pad, dBase, iw + 2, Bento.Cap, ds, FontWeight.SemiBold);
+        DateHeader(r.X + pad, dBase, iw, ds, VrNote(d));
         const float Gap = 10;
-        float top = dBase + ds * 0.24f + Gap, bottom;           // under the date's descenders (a "y", a "g")
-        if (tall)
+        float top = dBase + ds * 0.24f + Gap;           // under the date's descenders (a "y", a "g")
+        if (!tall)
         {
-            float lt = r.Height >= 300 ? 6 : 4;
-            string sec = ":" + now.ToString("ss", culture);
-            float sw = _p.MeasureWidth(":00", SmallText, FontWeight.SemiBold) + 2;
-            var line = new RectangleF(r.X + pad, r.Bottom - 18 - lt / 2, iw - sw - 10, lt);
-            _p.Fill(line, Bento.Track, lt / 2);
-            float f = now.Second / 60f;
-            if (f > 0) _p.Fill(new RectangleF(line.X, line.Y, MathF.Max(lt, line.Width * f), lt), Bento.Accent, lt / 2);
-            float secBase = line.Y + lt / 2 + SmallText * DigitH / 2;
-            TextAt(sec, r.Right - pad - sw - 2, secBase, sw + 2, Sub, SmallText, FontWeight.SemiBold, TextAlignment.Trailing);
-            bottom = MathF.Min(line.Y, secBase - SmallText * DigitTop) - Gap;      // above the line and the ":42" at its end
+            TimeM(r, t, ampm, h24, now, top, r.Bottom - 14, id);
+            return;
         }
-        else bottom = r.Bottom - 14;
-        // one row: the seconds (or AM / PM) small beside it; two rows: only AM / PM
-        string small = tall ? ampm : ampm ?? now.ToString("ss", culture);
+        float lt = r.Height >= 300 ? 6 : 4;
+        string sec = ":" + now.ToString("ss", culture);
+        float sw = _p.MeasureWidth(":00", SmallText, FontWeight.SemiBold) + 2;
+        var line = new RectangleF(r.X + pad, r.Bottom - 18 - lt / 2, iw - sw - 10, lt);
+        _p.Fill(line, Bento.Track, lt / 2);
+        float f = now.Second / 60f;
+        if (f > 0) _p.Fill(new RectangleF(line.X, line.Y, MathF.Max(lt, line.Width * f), lt), Bento.Accent, lt / 2);
+        float secBase = line.Y + lt / 2 + SmallText * DigitH / 2;
+        TextAt(sec, r.Right - pad - sw - 2, secBase, sw + 2, Sub, SmallText, FontWeight.SemiBold, TextAlignment.Trailing);
+        float bottom = MathF.Min(line.Y, secBase - SmallText * DigitTop) - Gap;      // above the line and the ":42" at its end
+        // AM / PM small beside it
         float ss = 0, sw2 = 0;
         float w100 = _p.MeasureWidth(t, 100, FontWeight.Bold, Theme.Display);
         float size = MathF.Min(100 * iw / w100, (bottom - top) / DigitSpan);
-        if (small != null)
+        if (ampm != null)
         {
-            ss = tall ? MathF.Max(SmallText, MathF.Round(size * 0.22f)) : SmallText;
-            sw2 = _p.MeasureWidth(small == ampm ? small : "00", ss, FontWeight.SemiBold) + 6;
+            ss = MathF.Max(SmallText, MathF.Round(size * 0.22f));
+            sw2 = _p.MeasureWidth(ampm, ss, FontWeight.SemiBold) + 6;
             size = MathF.Min(100 * (iw - sw2) / w100, (bottom - top) / DigitSpan);
         }
         size = MathF.Max(17, MathF.Floor(size * 2) / 2);
@@ -1043,20 +1057,108 @@ public sealed partial class WristPanel
         float tw = _p.MeasureWidth(t, size, FontWeight.Bold, Theme.Display);
         RollText(Ui.Id("wtt", id), t, new RectangleF(r.X + pad, by - tb, tw + 2, th), Bento.Text, size, FontWeight.Bold, Theme.Display,
             TextAlignment.Leading);
-        if (small != null) TextAt(small, r.X + pad + tw + 6, by, sw2, Sub, ss, FontWeight.SemiBold);
+        if (ampm != null) TextAt(ampm, r.X + pad + tw + 6, by, sw2, Sub, ss, FontWeight.SemiBold);
     }
 
-    // the date: the weekday in the accent (accent text only this big and bold), the date big under it; the week on the right
-    void DateOrbit(RectangleF r, DateTime now)
+    // One row: the time 44 px (smaller only where even the widest time would not fit, so it keeps its size all day), the seconds
+    // small on its baseline; on a 12-hour clock AM / PM over them, at the digits' top. Centred between the date line and the
+    // card's bottom.
+    void TimeM(RectangleF r, string t, string ampm, bool h24, DateTime now, float top, float bottom, int id)
     {
-        float pad = PadX(r), iw = r.Width - 2 * pad;
+        float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
+        string sec = now.ToString("ss", CultureInfo.CurrentCulture);
+        float aw = ampm == null ? 0 : _p.MeasureTracked(ampm, CapSize, FontWeight.SemiBold, CapTrack);
+        float sw = MathF.Max(_p.MeasureWidth("00", SmallText, FontWeight.SemiBold), aw) + 6;
+        float size = MathF.Max(24, FitSize(h24 ? "00:00" : "12:00", iw - sw, 44, FontWeight.Bold, Theme.Display));
+        float by = top + size * DigitTop + (bottom - top - size * DigitSpan) / 2;
+        float tw = ValueText(x, by, t, size, Bento.Text, Ui.Id("wtt", id));
+        TextAt(sec, x + tw + 6, by, sw, Sub, SmallText, FontWeight.SemiBold);
+        if (ampm != null) CapText(ampm, x + tw + 6, by - size * DigitH + CapSize * DigitH, aw, Sub);      // on the card, not a band
+    }
+
+    // A 1x1: the weekday and the day as its caption (AM / PM at its right on a 12-hour clock), the time as big as the other 1x1
+    // values (the widest time decides), under it the minute so far as a line - it fills up once a minute, a step a second (a
+    // spring would redraw the watch all the time)
+    void TimeS(RectangleF r, string t, string ampm, DateTime now, int id)
+    {
+        float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
+        float aw = ampm == null ? 0 : _p.MeasureTracked(ampm, CapSize, FontWeight.SemiBold, CapTrack);
+        Caption(r, aw > 0 ? iw - aw - 8 : iw, _capDayDate);
+        if (aw > 0) CapText(ampm, r.Right - pad - aw, r.Y + CapBase, aw + 2, Bento.Cap);
+        float vs = MathF.Max(24, FitSize(ampm == null ? "00:00" : "12:00", iw, Hero, FontWeight.Bold, Theme.Display));
+        ValueText(x, r.Y + SBase, t, vs, Bento.Text, Ui.Id("wtt", id));
+        var bar = new RectangleF(x, r.Bottom - 16, iw, 4);
+        _p.Fill(bar, Bento.Track, 2);
+        if (now.Second > 0) _p.Fill(new RectangleF(bar.X, bar.Y, MathF.Max(4, bar.Width * now.Second / 60f), 4), Bento.Accent, 2);
+    }
+
+    // The clock's header: the date in the first of its forms that fits beside the time in VR (at the right, the same grey), else
+    // the date alone (cut only when even its shortest form cannot fit)
+    void DateHeader(float x, float by, float iw, float size, string meta)
+    {
+        float mw = meta == null ? 0 : _p.MeasureWidth(meta, size, FontWeight.SemiBold);
+        string date = null;
+        if (mw > 0)
+        {
+            foreach (var f in _dateForms)
+                if (_p.MeasureWidth(f, size, FontWeight.SemiBold) <= iw - mw - 12) { date = f; break; }
+            if (date == null) mw = 0;
+        }
+        if (date == null)
+        {
+            foreach (var f in _dateForms)
+                if (_p.MeasureWidth(f, size, FontWeight.SemiBold) <= iw) { date = f; break; }
+            date ??= Ellipsize(_dateForms[^1], iw, size, FontWeight.SemiBold);
+        }
+        TextAt(date, x, by, iw + 2, Bento.Cap, size, FontWeight.SemiBold);
+        if (mw > 0) TextAt(meta, x + iw - mw - 2, by, mw + 2, Bento.Cap, size, FontWeight.SemiBold, TextAlignment.Trailing);
+    }
+
+    // "VR 1:23": the time in VR as the clock's header writes it (null while SteamVR is off), made once a minute
+    int _vrNoteMin = -1;
+    string _vrNote;
+    string VrNote(PanelData d)
+    {
+        if (d.VrSince is not { } since) return null;
+        int m = Math.Max(0, (int)(Now - since).TotalMinutes);
+        if (m != _vrNoteMin) { _vrNoteMin = m; _vrNote = $"VR {m / 60}:{m % 60:00}"; }
+        return _vrNote;
+    }
+
+    // The date. A 1x1 (the calendar's too): DateS. Wider: TODAY with the week (and the year on the widest), the weekday in the
+    // accent (accent text only this big and bold), the date big under it.
+    void DateOrbit(RectangleF r, WatchWidget w, DateTime now)
+    {
         Words(now);
-        CaptionRow(r, _weekNote, CapToday);
-        string day = _dayName, date = _monthDay;
-        TextAt(Ellipsize(day, iw, SmallText, FontWeight.Bold), r.X + pad, r.Y + 49, iw + 2, Bento.Cur.AccentText, SmallText, FontWeight.Bold);
-        float bs = MathF.Max(20, FitSize(date, iw, 30, FontWeight.Bold, Theme.Display));
-        TextAt(Ellipsize(date, iw, bs, FontWeight.Bold, Theme.Display), r.X + pad, r.Y + 81, iw + 2, Bento.Text, bs, FontWeight.Bold,
+        if (w.W == 1) { DateS(r); return; }
+        float pad = PadX(r), iw = r.Width - 2 * pad;
+        CaptionRow(r, w.W >= 6 ? _weekYear : _weekNote, CapToday);
+        TextAt(Ellipsize(_dayName, iw, SmallText, FontWeight.Bold), r.X + pad, r.Y + 49, iw + 2, Bento.Cur.AccentText, SmallText, FontWeight.Bold);
+        float bs = MathF.Max(20, FitSize(_monthDay, iw, 24, FontWeight.Bold, Theme.Display));
+        TextAt(Ellipsize(_monthDay, iw, bs, FontWeight.Bold, Theme.Display), r.X + pad, r.Y + 81, iw + 2, Bento.Text, bs, FontWeight.Bold,
             TextAlignment.Leading, Theme.Display);
+    }
+
+    // The date as a 1x1: the weekday (the first of its forms that fits) as the caption in the accent - on a header's band or
+    // under a glass sheen in the caption row's own white (the band is the accent; the sheen washes a colour out) - the day 38 px,
+    // the month 15 px under it (14 when long, else its short form)
+    void DateS(RectangleF r)
+    {
+        float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
+        Caption(r, iw, _capWeekday, color: Bento.Cur.Band != 0 || Bento.Cur.Sheen != 0 ? Bento.CapText : Bento.Cur.AccentText);
+        ValueText(x, r.Y + 66, _dayNum, 38, Bento.Text, null);
+        Note(x, r.Y + 85, iw, _monthNames);
+    }
+
+    // A 1x1's note under its value ("September", "since 17:16"): 15 px, down to 14 for a long one, else its next form. Under
+    // 15 px its grey is a touch lighter (toward the text colour), so the smaller letters still read on every card.
+    void Note(float x, float by, float iw, string[] forms)
+    {
+        string s = forms[0];
+        float size = FitSize(s, iw, 15, FontWeight.SemiBold, null);
+        for (int i = 1; i < forms.Length && size < 14; i++) { s = forms[i]; size = FitSize(s, iw, 15, FontWeight.SemiBold, null); }
+        size = MathF.Max(14, size);
+        TextAt(Ellipsize(s, iw, size, FontWeight.SemiBold), x, by, iw + 2, size < 15 ? Theme.Mix(Sub, Bento.Text, 0.3f) : Sub, size, FontWeight.SemiBold);
     }
 
     void CalendarOrbit(RectangleF r, WatchWidget w, DateTime now)
@@ -1096,14 +1198,30 @@ public sealed partial class WristPanel
             }
             return;
         }
-        // the weekday as the caption, the day big with the month after it (the year on a wide one)
-        if (w.W >= 2)
+        if (w.W >= 2) WeekStrip(r, now);
+        else DateS(r);
+    }
+
+    // a 2x1: this week as a strip - the month as its caption with the year at the right, the weekday letters, the days (today a
+    // filled circle in the accent, the weekend grey, the last or next month's days faint)
+    void WeekStrip(RectangleF r, DateTime now)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        float pad = PadX(r), cw = (r.Width - 2 * pad) / 7;
+        CaptionRow(r, _year, _capMonth);
+        int first = (int)culture.DateTimeFormat.FirstDayOfWeek;
+        var day0 = now.Date.AddDays(-(((int)now.DayOfWeek - first + 7) % 7));
+        for (int c = 0; c < 7; c++)
         {
-            CaptionRow(r, _year, _capWeekday);
-            ValueUnit(r.X + pad, r.Y + MBase, iw, _dayNum, _monthName, 40, 24, Bento.Text);
-            return;
+            var day = day0.AddDays(c);
+            float x = r.X + pad + c * cw;
+            bool today = day == now.Date, weekend = day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+            _p.Text(DayHead(culture, day.DayOfWeek), new RectangleF(x, r.Y + 36, cw, 20), Sub, CapSize, FontWeight.SemiBold, TextAlignment.Center);
+            if (today) _p.Circle(x + cw / 2, r.Y + 72, 12, Bento.AccentFill);
+            uint c2 = today ? Bento.OnAccent : day.Month != now.Month ? Bento.Faint : weekend ? Sub : Bento.Text;
+            _p.Text(DayNumber(day.Day), new RectangleF(x, r.Y + 60, cw, 24), c2, SmallText, today ? FontWeight.Bold : FontWeight.SemiBold,
+                TextAlignment.Center);
         }
-        Small(r, _capDdd, _dayNum, _monthShort, 0, 0, Bento.Text, null);
     }
 
     // "1" .. "31", made once; the month grid's weekday heads ("H", "SZE"), UPPERCASE, two letters at most
@@ -1239,49 +1357,73 @@ public sealed partial class WristPanel
         return span.TotalHours >= 1 ? $"{(int)span.TotalHours}:{span.Minutes:00}" : $"{Math.Max(0, (int)span.TotalMinutes)} min";
     }
 
-    // The time in VR as a value and a unit - "1:23", or "42" "min" in the first hour - and how far into its current hour it is
-    // (the card's line). The words are made once a minute.
+    // The time in VR as a value and a unit - "1:23", or "42" "min" in the first hour - and as hours and minutes ("1" h "23" min;
+    // no hours in the first one). The words are made once a minute.
     int _sessMinutes = -1;
-    string _sessValue, _sessUnit;
-    (string value, string unit, float hour) SessionValue(PanelData d)
+    string _sessValue, _sessUnit, _sessH, _sessM;
+    (string value, string unit) SessionValue(PanelData d)
     {
-        if (d.VrSince is not { } since) return ("–", null, -1);
-        var span = DateTime.Now - since;
+        if (d.VrSince is not { } since) return ("–", null);
+        var span = Now - since;
         int minutes = Math.Max(0, (int)span.TotalMinutes);
         if (minutes != _sessMinutes)
         {
             _sessMinutes = minutes;
-            if (span.TotalHours >= 1) { _sessValue = $"{(int)span.TotalHours}:{span.Minutes:00}"; _sessUnit = null; }
+            if (minutes >= 60) { _sessValue = $"{minutes / 60}:{minutes % 60:00}"; _sessUnit = null; }
             else { _sessValue = minutes.ToString(CultureInfo.InvariantCulture); _sessUnit = "min"; }
+            _sessH = minutes >= 60 ? (minutes / 60).ToString(CultureInfo.InvariantCulture) : null;
+            _sessM = (minutes % 60).ToString(CultureInfo.InvariantCulture);
         }
-        return (_sessValue, _sessUnit, (float)(Math.Max(0, span.TotalMinutes) % 60 / 60));
+        return (_sessValue, _sessUnit);
     }
 
-    // a 1x1's one graphic: a thin line, how far into the hour the session is (it starts over at every full hour)
+    // The time in VR. A 1x1: "1:23" (or "42 min" in the first hour) as big as the other 1x1 values, since when under it. Wider:
+    // "1 h 23 min" - the numbers bold, the units grey on their baseline - with the start in the caption row. SteamVR off: a
+    // faint dash.
     void SessionOrbit(RectangleF r, WatchWidget w, PanelData d, int id)
     {
-        var (val, unit, hour) = SessionValue(d);
-        uint vc = val == "–" ? Bento.Faint : Bento.Text;
+        var (val, unit) = SessionValue(d);
+        bool off = d.VrSince == null;
+        uint vc = off ? Bento.Faint : Bento.Text;
+        float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         if (w.W >= 2)
         {
-            Wide(r, CapSessionWide, d.VrSince is { } s2 ? SinceNote(s2) : null, val, unit, hour, Bento.Accent, vc, Ui.Id("wsl", id), Ui.Id("wse", id));
+            CaptionRow(r, off ? null : SinceNote(d.VrSince.Value)[0], CapSessionWide);
+            float by = r.Y + MBase;
+            if (off) { ValueText(x, by, val, 40, vc, null); return; }
+            // as big as fits (40 px, down to 30): every part measured at 100 px once
+            float uw = _p.MeasureWidth("h", SmallText, FontWeight.SemiBold), mw = _p.MeasureWidth("min", SmallText, FontWeight.SemiBold);
+            float nw = (_sessH != null ? _p.MeasureWidth(_sessH, 100, FontWeight.Bold, Theme.Display) : 0) +
+                       _p.MeasureWidth(_sessM, 100, FontWeight.Bold, Theme.Display);
+            float units = (_sessH != null ? uw + 4 + 10 : 0) + 4 + mw;
+            float vs = MathF.Max(30, MathF.Min(40, MathF.Floor(100 * (iw - units) / nw * 2) / 2));
+            if (_sessH != null)
+            {
+                x += ValueText(x, by, _sessH, vs, vc, Ui.Id("wseh", id)) + 4;
+                TextAt("h", x, by, uw + 2, Sub, SmallText, FontWeight.SemiBold);
+                x += uw + 10;
+            }
+            x += ValueText(x, by, _sessM, vs, vc, Ui.Id("wsem", id)) + 4;
+            TextAt("min", x, by, mw + 2, Sub, SmallText, FontWeight.SemiBold);
             return;
         }
-        Small(r, CapSession, val, unit, hour, Bento.Accent, vc, Ui.Id("wsl", id), Ui.Id("wse", id));
+        Small(r, CapSession, val, unit, 0, 0, vc, null, Ui.Id("wse", id));
+        if (!off) Note(x, r.Y + 85, iw, SinceNote(d.VrSince.Value));      // a 12-hour start drops its AM / PM before it is cut
     }
 
-    // "since 7:08 AM", made when the start or the clock style changes
+    // "since 7:08 AM" and a shorter "since 7:08", made when the start or the clock style changes
     DateTime _sinceAt;
     bool _since24;
-    string _sinceNote;
-    string SinceNote(DateTime since)
+    readonly string[] _sinceNote = new string[2];
+    string[] SinceNote(DateTime since)
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        if (since != _sinceAt || h24 != _since24 || _sinceNote == null)
+        if (since != _sinceAt || h24 != _since24 || _sinceNote[0] == null)
         {
             _sinceAt = since;
             _since24 = h24;
-            _sinceNote = "since " + ShortClock(since);
+            _sinceNote[0] = "since " + ShortClock(since);
+            _sinceNote[1] = "since " + since.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture);
         }
         return _sinceNote;
     }
@@ -1878,7 +2020,9 @@ public sealed partial class WristPanel
             }
             switch (k.Id)
             {
+                case "time" when w.W == 1: Time95Small(c, now); break;
                 case "time": Time95(c, now, w.H >= 2); break;
+                case "date" when w.W == 1: Calendar95(c, w, now); break;       // the modern-only 1x1: the calendar's day
                 case "date":
                     // a wide one gets the 10-point font
                     string ds = FitDate95(now, c.Width - 6);
@@ -1944,6 +2088,15 @@ public sealed partial class WristPanel
         BigTime95(time, ampm, tr, size, true);
         if (!withDate) return;
         _ui.Text95(FitDate95(now, c.Width - 6), new RectangleF(c.X, MathF.Min(c.Bottom - 15, tr.Bottom + 1), c.Width, 13), Blk95, false, TextAlignment.Center);
+    }
+
+    // a 1x1 time (modern only: the 95 face draws it when the face was made in the modern style): a small window's value, the
+    // hours and minutes, with AM / PM or the day under them
+    void Time95Small(RectangleF c, DateTime now)
+    {
+        bool h24 = _cfg.Data.Appearance.Clock24h;
+        var culture = CultureInfo.CurrentCulture;
+        Value95(c, now.ToString(h24 ? "H:mm" : "h:mm", culture), h24 ? now.ToString("ddd d", culture) : now.Hour < 12 ? "AM" : "PM", Blk95);
     }
 
     // the long date when it fits, else without the year, then the short date

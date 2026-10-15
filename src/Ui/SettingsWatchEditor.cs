@@ -42,9 +42,10 @@ public sealed partial class SettingsView
         w.Face = face;
     }
 
-    void AddWidget(Ui ui, List<WatchWidget> list, WatchWidgets.Kind k)
+    // classic: the 95 editor (only the sizes the 95 face has; the modern one offers the Bento S and L too)
+    void AddWidget(Ui ui, List<WatchWidget> list, WatchWidgets.Kind k, bool classic)
     {
-        var n = WatchWidgets.Add(list, k, _wcell.x, _wcell.y);
+        var n = WatchWidgets.Add(list, k, _wcell.x, _wcell.y, classic);
         if (n == null) { _wmsg = "No room left: remove or shrink a widget first."; return; }
         _wselW = n;
         _wcell = (-1, -1);
@@ -155,7 +156,7 @@ public sealed partial class SettingsView
             var k = WatchWidgets.Find(_wdrag.Type);
             int nx = _wdrag.X, ny = _wdrag.Y, nw = _wdrag.W, nh = _wdrag.H;
             if (_wresize && k != null) (nw, nh) = cx == _wgrabX && cy == _wgrabY ? (_wgrabW, _wgrabH)
-                : WatchWidgets.SnapSize(k, _wgrabW + cx - _wgrabX, _wgrabH + cy - _wgrabY);
+                : WatchWidgets.SnapSize(k, _wgrabW + cx - _wgrabX, _wgrabH + cy - _wgrabY, classic);
             else if (!_wresize)
             {
                 nx = Math.Clamp(cx - _wgrabX, 0, WatchWidgets.Cols - nw);
@@ -226,7 +227,7 @@ public sealed partial class SettingsView
             var r = new RectangleF(222 + i % 6 * 81, 450 + i / 6 * 34, 77, 30);
             // the icon only when it fits with the name and a margin on both sides
             string icon = 11 + 8 + p.MeasureWidth(k.Name, 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
-            if (ui.Button(Ui.Id("wpal", i), r, k.Name, icon, false, true, 11)) AddWidget(ui, list, k);
+            if (ui.Button(Ui.Id("wpal", i), r, k.Name, icon, false, true, 11)) AddWidget(ui, list, k, false);
         }
 
         float rx = 724, rw = 260;
@@ -362,7 +363,7 @@ public sealed partial class SettingsView
         });
         if (hit >= 0) _wpal = hit;
         if (ui.Button95("we95.add", new RectangleF(610, 76, 112, 23), _wcell.x >= 0 ? "&Add here" : "&Add", true, true))
-            AddWidget(ui, list, WatchWidgets.Palette[Math.Clamp(_wpal, 0, WatchWidgets.Palette.Length - 1)]);
+            AddWidget(ui, list, WatchWidgets.Palette[Math.Clamp(_wpal, 0, WatchWidgets.Palette.Length - 1)], true);
         if (_wmsg != null) ui.Text95(_wmsg, new RectangleF(610, 106, 112, 60), 0xFF800000, wrap: true);
 
         ui.Group95(new RectangleF(376, 280, 358, 102), "Selected widget");
@@ -375,6 +376,7 @@ public sealed partial class SettingsView
             ui.Text95(KindName(sel), new RectangleF(410, 299, 300, 15), 0xFF000000, true);
             if (k != null)
             {
+                // the 95 face's sizes; a size only the modern face has selects none (the box shows empty) until one is picked
                 var sizes = k.Sizes.Select(s => $"{s.W} x {s.H}").ToArray();
                 int si = Array.FindIndex(k.Sizes, s => s.W == sel.W && s.H == sel.H);
                 int si2 = si;
