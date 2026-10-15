@@ -196,6 +196,42 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.12.0 – oldalak, új widgetek, óra-stílusok, Bento 3. lépés (2026-10-15)
+
+Erik: „gyorsan végezni annyi felírt ötlettel amennyivel csak lehet”, „még ne legyen kiadás, majd ha mindennel
+végeztünk”. Párhuzamos ügynökök, mindegyik saját git worktree-ben (`Orbit-<név>`, ág = a feature neve), gyors
+saját ellenőrzéssel; review-kör nélkül; a merge-ket én oldottam fel a main-en.
+
+- **Bento 3. lépés** (`bento-step3`): `Kind.Extra` – csak modern méretek (idő 1x1/2x2, dátum 1x1; `SizesFor`,
+  `Clean` az unióra, 95-ben a legközelebbi rajz), idő S/M/L (dátumsor + „VR 1:23”, másodperc az alapvonalon,
+  másodperc-csík), dátum S/M, naptár hétcsík (2x1) és havi rács (2x2, régió szerinti hétkezdés), idő VR-ban S/M;
+  másodperc-határ utáni újrarajzolás csak ha van másodperces widget. Snapshot en-US és hu-HU, 12/24 h.
+- **1x1 analóg** (`analog1x1`): Erik képe alapján (macOS squircle óra): `Painter.FillSquircle/StrokeSquircle`
+  (n = 4, méretenként gyorsítótárazva), 60 vonás a belső squircle-ig, narancs #FF8C32 másodpercmutató.
+- **Óra-stílusok** (`clock-variants`): `WatchWidget.Variant`; idő: Standard/Flip/Outline/Stacked/Segment/Words;
+  analóg: Squircle/Classic/Minimal/Roman/Station; nem illő méreten az alapértelmezett rajzol (a változat megmarad);
+  szerkesztőben „Clock” sor. `--clockshot`, `--perfbench --bench-variant`.
+- **Aknakereső** (`minesweeper`): `Mines.cs`/`WristMines.cs`/`MinesTest.cs`; 1x1 alap, koppintásra kinő a csempéből
+  (modern: rugó, 95: 1995-ös zoom-keret); 9x9/10 és (csak modern) 16x16/40; első kattintás biztonságos, chord,
+  zászló hosszú nyomással (0,4 s) vagy Flag mode; legjobb idők `WristConfig.MinesBest`; 95: winmine.exe kliensterület
+  pixelre (168x211), a címsor/menü mellé került.
+- **Oldalak** (`pages`): `WristConfig.Widgets` = 1. oldal (bájtra változatlan), `Pages`/`Grid`/`Name`/`Page`/
+  `PagesVersion` csak beállítva íródik; `WatchPages.Migrate` a konstruktorban (UI nélkül!): régi confignál ELŐBB
+  `config.json.bak-pages-<idő>`, aztán VRChat + Performance (6x4) egyszer; új telepítés: custom face, VRChat 6x4 +
+  Performance 6x4. Lapozás: húzás (>20%), pöttyök, 95-ben tálca-gombok. `GridSpec` 6x4/4x3 oldalanként,
+  `Sizes43`. Új fajták: mic (Windows felvevő eszköz némítása, Core Audio), notifications (20-as előzmény),
+  buttons (`WatchWidget.Items`). Média idővonal (GSMTC timeline), borító-színátmenet, 30 s képidő-grafikon 1% low-val.
+- **Betűtípus** (`font-setting`): `AppearanceConfig.Font`, `Theme.Font/Display`; a szélesebb fontok kicsinyítve
+  (Segoe szélességére), táblázatos számjegyek; snapshot minden fonttal (`ORBIT_SNAP_FONTS=0` kihagyja).
+- **Kisebb telepítő** (`installer-size`): `SatelliteResourceLanguages=en` + a WPF és a WinForms designer kiszedése a
+  bundle-ből (`OrbitDropUnusedDesktopRuntime` target): 75,7 → 49,1 MB.
+- **Javítások**: ablak áthúzása monitorok között (`IPointerTarget.TakesDragFrom/AdoptDrag`: a szomszéd monitor
+  átveszi a lenyomott gombot); a beállításablak mozgatása VR-ból nem fagyaszt (WM_ENTERSIZEMOVE alatt 10 ms-os
+  timer hívja a ciklust – `SettingsWindow.ModalTick`); a játék-input blokk utóideje 1,5 s csak monitor/ablak után,
+  0,3 s a kis panelek után, azonnal ha a panel eltűnt; a képernyő-sáv csak a középső monitor alatt (`TheaterAnchor`,
+  másodpercenként) + billentyűzet-gomb.
+- **Félretéve**: nyelvválasztó (ág `language`, worktree `Orbit-lang`, félkész – Erik: „egyelőre hagyjuk későbbre”).
+
 ## 1.11.0 – widgetenkénti kinézet + Bento 2. lépés (2026-10-15)
 
 Erik: „legyen minden widget külön színezhető” (a lista 7. pontja), majd „lehessen több stílust beállítani, 2 tónus,

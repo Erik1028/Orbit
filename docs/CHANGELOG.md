@@ -3,6 +3,27 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.12.0 | Watch pages, new widgets and clock designs
+- Your custom watch face can have several pages. Swipe sideways with the laser or tap the dots at the bottom (in the
+  Windows 95 style: the page buttons along the bottom).
+- Two new pages, VRChat and Performance, come after your own face, which stays exactly as it is. A copy of your
+  settings is saved first. Add, remove and edit pages in the watch editor; a page can also use a 4 x 3 grid with
+  bigger cards.
+- New widgets: Microphone (tap to mute), Notifications (the last ones you got), Button group (several buttons in
+  one card) and Minesweeper - a small tile that grows into the game when you tap it. In the Windows 95 style it is
+  the real 1995 Minesweeper.
+- Clock designs: the time can be Flip, Outline, Stacked, Segment or a Words clock, and the analog clock Squircle,
+  Classic, Minimal, Roman or a Swiss station clock. New 1 x 1 analog clock, like the macOS widget clock.
+- Time, date, calendar and time in VR are redesigned, with new sizes (time 1 x 1 and 2 x 2, date 1 x 1), a week strip
+  and a month grid. Seconds tick exactly on the second.
+- Now playing shows how far the song is and takes its colours from the album art; the frame graph shows the last
+  30 seconds with the 1% low.
+- Settings > Look > Font: pick the typeface of the modern style.
+- The bar under the monitors stays under the middle one, and it has a keyboard button.
+- Fixed: a window can be dragged from one monitor to the next again; moving the settings window from VR no longer
+  freezes everything; VRChat gets the controllers back sooner after you switch the overlay off.
+- The installer download is about a third smaller (49 MB instead of 76 MB).
+
 ## 1.11.0 | A look for every widget
 - Each widget on the watch can have its own design: Tint, Solid, Two-tone, Header, Outline or Glass, or the normal
   card.
