@@ -306,10 +306,12 @@ public sealed partial class WristPanel
             TextAt(Ellipsize(why, iw, 20, FontWeight.SemiBold), x, r.Y + 64, iw + 2, Sub, 20, FontWeight.SemiBold);
             return;
         }
+        bool compact = r.Height < 120;                    // a 6 x 4 one-row card (97 px)
         string world = string.IsNullOrEmpty(d.Room.World) ? "A world" : d.Room.World;
-        TextAt(Ellipsize(world, iw, 20, FontWeight.SemiBold), x, r.Y + 62, iw + 2, Bento.Text, 20, FontWeight.SemiBold);
-        const float rad = 15, pitch = 23;
-        float cy = r.Bottom - 13 - rad;
+        float ws = compact ? 18 : 20;
+        TextAt(Ellipsize(world, iw, ws, FontWeight.SemiBold), x, r.Y + (compact ? 50 : 62), iw + 2, Bento.Text, ws, FontWeight.SemiBold);
+        float rad = compact ? 12 : 15, pitch = compact ? 18 : 23;
+        float cy = r.Bottom - (compact ? 10 : 13) - rad;
         int shown = _roomOrder.Count;
         for (int i = 0; i < shown; i++) Avatar(x + rad + i * pitch, cy, rad, _roomOrder[i].name, _roomOrder[i].friend);
         float tx = x + 2 * rad + (shown - 1) * pitch + 12, room = r.Right - pad - tx;
@@ -325,7 +327,8 @@ public sealed partial class WristPanel
     bool _palMade;
     int _palTheme = -1;
 
-    bool CoverCard(WatchWidgets.Kind k, WatchWidget w, bool styled) => k.Id == "media" && _big && !styled;
+    // now playing in its cover's colours: on either grid, unless it has a look of its own
+    bool CoverCard(WatchWidgets.Kind k, WatchWidget w, bool styled) => k.Id == "media" && !styled;
 
     // the card: three colours of the cover, corner to corner, darker toward the bottom (white text on it reads)
     void CoverBack(RectangleF r, PanelData d)
@@ -466,8 +469,32 @@ public sealed partial class WristPanel
             }
             return;
         }
-        bool tall = w.H >= 2, wide = w.W >= 4;
+        bool tall = w.H >= 2, wide = w.W >= 4, compact = r.Height < 120;       // compact: a 6 x 4 one-row card (97 px)
         float tx = x, right = r.Right - pad;
+        if (tall && r.Width >= r.Height * 1.5f)
+        {
+            // two rows and wide (6 x 4: 4x2, 6x2): the cover as tall as the card on the left; the caption, the title (two lines if it
+            // must), the artist with where in the track, the line, and previous / play / next under them
+            float s = r.Height - 28;
+            var cover = new RectangleF(r.X + 14, r.Y + 14, s, s);
+            CoverArt(cover);
+            tx = cover.Right + 18;
+            float tw = right - tx;
+            CapText(Upper(CaptionWidth(CapMedia, tw) >= 0 && _p.MeasureTracked(Upper(CapMedia[0]), CapSize, FontWeight.SemiBold, CapTrack) <= tw ? CapMedia[0] : CapMedia[1]),
+                tx, r.Y + CapBase, tw, CoverCap);
+            float bcy = r.Bottom - 14 - 26;
+            if (CoverDisc(Ui.Id("wcm", id * 3), tx + 20, bcy, 40, "\uE892", glyph, has, false)) OnAction?.Invoke(MediaIds[0]);
+            if (CoverDisc(Ui.Id("wcm", id * 3 + 1), tx + 40 + 12 + 26, bcy, 52, play, glyph, has, true)) OnAction?.Invoke(MediaIds[1]);
+            if (CoverDisc(Ui.Id("wcm", id * 3 + 2), tx + 40 + 12 + 52 + 12 + 20, bcy, 40, "\uE893", glyph, has, false)) OnAction?.Invoke(MediaIds[2]);
+            float ty = r.Y + 60;
+            if (!has) { TextAt(Ellipsize(NotPlaying, tw, SmallText, FontWeight.SemiBold), tx, ty, tw + 2, CoverSub, SmallText, FontWeight.SemiBold); return; }
+            var (l1, l2) = TwoLines(title ?? "", tw, 20, FontWeight.SemiBold);
+            TextAt(l1, tx, ty, tw + 2, CoverText, 20, FontWeight.SemiBold);
+            if (l2.Length > 0) { ty += 24; TextAt(l2, tx, ty, tw + 2, CoverText, 20, FontWeight.SemiBold); }
+            SubLine(tx, ty + 22, tw, artist, tok, pos, dur);
+            if (tok) CoverBar(new RectangleF(tx, ty + 36, tw, 4), pos / dur);
+            return;
+        }
         if (wide)
         {
             // Wide: the cover on the left, previous / play / next on the right
@@ -475,13 +502,14 @@ public sealed partial class WristPanel
             var cover = new RectangleF(r.X + 14, r.Y + 14, s, s);
             CoverArt(cover);
             tx = cover.Right + 16;
-            float cy = r.Y + r.Height / 2;
+            float cy = r.Y + r.Height / 2, big = compact ? 48 : 52;
             if (CoverDisc(Ui.Id("wcm", id * 3 + 2), r.Right - pad - 20, cy, 40, "\uE893", glyph, has, false)) OnAction?.Invoke(MediaIds[2]);
-            if (CoverDisc(Ui.Id("wcm", id * 3 + 1), r.Right - pad - 40 - 10 - 26, cy, 52, play, glyph, has, true)) OnAction?.Invoke(MediaIds[1]);
-            if (CoverDisc(Ui.Id("wcm", id * 3), r.Right - pad - 40 - 10 - 52 - 10 - 20, cy, 40, "\uE892", glyph, has, false)) OnAction?.Invoke(MediaIds[0]);
-            right = r.Right - pad - 40 - 10 - 52 - 10 - 40 - 16;
-            CoverText3(r, tx, right, r.Y + CapBase, r.Y + 72, r.Y + 96, has, title, artist, tok, pos, dur, 22, false);
-            if (tok) CoverBar(new RectangleF(tx, r.Bottom - 18, right - tx, 4), pos / dur);
+            if (CoverDisc(Ui.Id("wcm", id * 3 + 1), r.Right - pad - 40 - 10 - big / 2, cy, big, play, glyph, has, true)) OnAction?.Invoke(MediaIds[1]);
+            if (CoverDisc(Ui.Id("wcm", id * 3), r.Right - pad - 40 - 10 - big - 10 - 20, cy, 40, "\uE892", glyph, has, false)) OnAction?.Invoke(MediaIds[0]);
+            right = r.Right - pad - 40 - 10 - big - 10 - 40 - 16;
+            if (compact) CoverText3(r, tx, right, r.Y + CapBase, r.Y + 52, r.Y + 72, has, title, artist, tok, pos, dur, 18, false);
+            else CoverText3(r, tx, right, r.Y + CapBase, r.Y + 72, r.Y + 96, has, title, artist, tok, pos, dur, 22, false);
+            if (tok) CoverBar(new RectangleF(tx, r.Bottom - (compact ? 14 : 18), right - tx, 4), pos / dur);
             return;
         }
         if (tall)
@@ -506,11 +534,12 @@ public sealed partial class WristPanel
             return;
         }
         // M: the caption, the title and the artist with where in the track; the white play disc on the right; the line along the bottom
-        float disc = 48, dcx = r.Right - pad - disc / 2, dcy = r.Y + 70;
+        float disc = compact ? 44 : 48, dcx = r.Right - pad - disc / 2, dcy = compact ? r.Y + r.Height / 2 : r.Y + 70;
         if (CoverDisc(Ui.Id("wcm", id * 3 + 1), dcx, dcy, disc, play, glyph, has, true)) OnAction?.Invoke(MediaIds[1]);
         right = dcx - disc / 2 - 12;
-        CoverText3(r, x, right, r.Y + CapBase, r.Y + 80, r.Y + 102, has, title, artist, tok, pos, dur, 20, true);
-        if (tok) CoverBar(new RectangleF(x, r.Bottom - 16, iw, 4), pos / dur);
+        if (compact) CoverText3(r, x, right, r.Y + CapBase, r.Y + 52, r.Y + 72, has, title, artist, tok, pos, dur, 18, true);
+        else CoverText3(r, x, right, r.Y + CapBase, r.Y + 80, r.Y + 102, has, title, artist, tok, pos, dur, 20, true);
+        if (tok) CoverBar(new RectangleF(x, r.Bottom - (compact ? 14 : 16), iw, 4), pos / dur);
     }
 
     void CoverArt(RectangleF cover)
@@ -674,9 +703,9 @@ public sealed partial class WristPanel
         bool none = value == "–";
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         Caption(r, iw, CapCpu, lv);
-        ValueText(x, r.Y + 78, value, MathF.Max(24, FitSize(value, iw, Hero, FontWeight.Bold, Theme.Display)), none ? Bento.Faint : Bento.Level(lv, Bento.Text), null);
+        ValueText(x, r.Y + (_big ? 78 : SBase), value, MathF.Max(24, FitSize(value, iw, Hero, FontWeight.Bold, Theme.Display)), none ? Bento.Faint : Bento.Level(lv, Bento.Text), null);
         int n = Math.Min(30, Stats.CpuCount);
-        float pitch = iw / 30f, bw = MathF.Max(2, pitch - 1.4f), hmax = 24, bottom = r.Bottom - 12;
+        float pitch = iw / 30f, bw = MathF.Max(1.6f, pitch - (_big ? 1.4f : 0.8f)), hmax = _big ? 24 : 16, bottom = r.Bottom - (_big ? 12 : 10);
         uint role = RoleColor("cpu");
         float top = 0.25f;
         for (int i = 0; i < n; i++) top = MathF.Max(top, Stats.CpuHistory[(Stats.CpuHead - n + i + SystemStats.History) % SystemStats.History]);
@@ -828,7 +857,7 @@ public sealed partial class WristPanel
             _ui.Progress95(new RectangleF(c.X + 4, c.Bottom - 16, c.Width - 8, 12), has && !muted ? MathF.Sqrt(MathF.Max(0, Mic.Peak)) : 0, 0xFF008000);
             return;
         }
-        Value95(c, !has ? "--" : muted ? "Muted" : "Live", "microphone", muted ? 0xFF800000 : Blk95);
+        Value95(c, !has ? "--" : muted ? "Muted" : "Live", _ui.Width95("microphone") <= c.Width - 2 ? "microphone" : "mic", muted ? 0xFF800000 : Blk95);
     }
 
     // ---- the notifications: the last ones shown, newest first - who (an initial), what, how long ago ----

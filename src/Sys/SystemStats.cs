@@ -27,10 +27,11 @@ public sealed class SystemStats
     public readonly float[] CpuHistory = new float[History];
     public int CpuCount, CpuHead;
     public float RamUsedGB = -1, RamTotalGB = -1;
+    public bool Hold;                            // the tools' pictures: keep the made-up numbers (this PC's load would vary them)
 
     public void Sample(double now)
     {
-        if (now < _next) return;
+        if (Hold || now < _next) return;
         _next = now + 1;
         if (GetSystemTimes(out var i, out var k, out var u))
         {

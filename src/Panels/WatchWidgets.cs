@@ -63,7 +63,7 @@ public static class WatchWidgets
         // one monitor / window as a big curved screen, the rest steps aside and the world dims
         new("theater", "Theater", "Theater", "\uE8B2", W95Icons.Id.Theater, Btn, 1, true, 1),
         // VRChat: who is in the instance; a tap opens the Room panel
-        new("room", "Room", "Room", "\uE716", W95Icons.Id.People, new[] { (1, 1), (2, 1) }, 1, false, 2),
+        new("room", "Room", "Room", "\uE716", W95Icons.Id.People, new[] { (1, 1), (2, 1), (3, 1) }, 1, false, 2),
         // the stream dock (Hexpad): its keys live; a tap opens it as a panel. Offered only while Hexpad runs.
         new("dock", "Hexpad", "Hexpad", "\uE80A", W95Icons.Id.Dock, new[] { (1, 1), (2, 1), (2, 2) }, 1, false, 1),
         // a game: Minesweeper - small first (the face, the mines left, the time, a hint of the board); a tap grows it into the
@@ -409,14 +409,18 @@ public static class WatchWidgets
                 for (int i = 0; i < six.Length; i++) Put(six[i], i, 3);
                 break;
             case "vrchat":
-                Put("time", 0, 0, 3, 2); Put("room", 3, 0, 2, 1); Put("battery", 5, 0); Put("mic", 3, 1); Put("session", 4, 1); Put("status", 5, 1);
-                Put("media", 0, 2, 3, 1); Put("notifications", 3, 2, 2, 1); Put("theater", 5, 2);
-                for (int i = 0; i < six.Length; i++) Put(six[i], i, 3);
+                // the concept's VRChat page on 6 x 4: the time big, the room, the microphone and the batteries beside it; the
+                // notifications and now playing; a row of buttons for VRChat (the keyboard for the chatbox, the status line, theater)
+                Put("time", 0, 0, 3, 2); Put("room", 3, 0, 3, 1); Put("mic", 3, 1); Put("battery", 4, 1, 2, 1);
+                Put("notifications", 0, 2, 3, 1); Put("media", 3, 2, 3, 1);
+                Put("buttons", 0, 3, 6, 1, "keyboard", "desktops", "status", "theater", "night", "settings");
                 break;
             case "performance":
-                Put("graph", 0, 0, 4, 2); Put("time", 4, 0, 2, 1); Put("fps", 4, 1); Put("gpu", 5, 1);
-                Put("cpu", 0, 2); Put("ram", 1, 2); Put("vram", 2, 2); Put("reproj", 3, 2); Put("battery", 4, 2, 2, 1);
-                for (int i = 0; i < six.Length; i++) Put(six[i], i, 3);
+                // the concept's Performance page on 6 x 4: the frame graph big, the time, CPU and VRAM beside it; the batteries and the
+                // frame numbers; Monitors / Theater / Night
+                Put("graph", 0, 0, 4, 2); Put("time", 4, 0, 2, 1); Put("cpu", 4, 1); Put("vram", 5, 1);
+                Put("battery", 0, 2, 2, 1); Put("fps", 2, 2); Put("gpu", 3, 2); Put("reproj", 4, 2); Put("ram", 5, 2);
+                Put("buttons", 0, 3, 6, 1, "desktops", "theater", "night");
                 break;
         }
         return l;
@@ -484,7 +488,7 @@ public static class WatchPages
     public static WatchPage Make(string preset, string grid) =>
         new() { Name = WatchWidgets.PresetName(preset), Grid = grid, Widgets = WatchWidgets.PagePreset(preset, GridSpec.Of(grid)) };
 
-    // The first start of 1.12. A new install (no config yet): the custom face, its pages VRChat and Performance on the 4 x 3 grid.
+    // The first start of 1.12. A new install (no config yet): the custom face, its pages VRChat and Performance on the 6 x 4 grid.
     // A config from before: a copy of config.json first (config.json.bak-pages-<time>, next to it), then the VRChat and Performance
     // pages after the pages it has - page 1, its own face, is not touched. Once: PagesVersion remembers it, so pages deleted later
     // stay deleted. Only the config: this runs in the app's constructor (no window yet).
@@ -495,10 +499,10 @@ public static class WatchPages
         if (store.Fresh)
         {
             w.Face = "custom";
-            w.Grid = "4x3";
+            w.Grid = null;
             w.Name = "VRChat";
-            w.Widgets = WatchWidgets.PagePreset("vrchat", GridSpec.G43);
-            w.Pages = new List<WatchPage> { Make("performance", "4x3") };
+            w.Widgets = WatchWidgets.PagePreset("vrchat", GridSpec.G64);
+            w.Pages = new List<WatchPage> { Make("performance", "6x4") };
             Log.Info("pages: a new install - the VRChat and Performance pages");
         }
         else
@@ -514,8 +518,8 @@ public static class WatchPages
                 return false;
             }
             w.Pages ??= new List<WatchPage>();
-            w.Pages.Add(Make("vrchat", "4x3"));
-            w.Pages.Add(Make("performance", "4x3"));
+            w.Pages.Add(Make("vrchat", "6x4"));
+            w.Pages.Add(Make("performance", "6x4"));
             Log.Info($"pages: the VRChat and Performance pages added after page {Count(w) - 2} (a copy of the config: {bak})");
         }
         w.PagesVersion = 1;

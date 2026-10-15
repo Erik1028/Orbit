@@ -570,11 +570,18 @@ public sealed partial class WristPanel
             case "stopwatch": StopwatchOrbit(r, w, id); break;
             case "session": SessionOrbit(r, w, d, id); break;
             case "battery": BatteryOrbit(r, w, d, id); break;
-            case "media": MediaOrbit(r, w, d, id); break;
+            case "media":
+                if (CoverCard(k, w, Styled(w))) MediaCover(r, w, d, id);      // its cover's colours (a look of its own: the classic card)
+                else MediaOrbit(r, w, d, id);
+                break;
             case "dock": DockOrbit(r, w, d, id); break;
-            case "room": RoomOrbit(r, w, d, id); break;
+            case "room":
+                if (w.W >= 3) RoomM43(r, d, id);                 // the world big, its people as initials
+                else RoomOrbit(r, w, d, id);
+                break;
             case "volume": VolumeOrbit(r, w, id); break;
-            case "graph": GraphOrbit(d.Vr, r, Bento.Accent); break;
+            case "graph": GraphLine(r, w, d); break;
+            case "cpu" when w.W == 1 && w.H == 1: CpuS43(r, d); break;
             case "minesweeper": MinesOrbit(r, w, id); break;
             case "mic": MicOrbit(r, w, id); break;
             case "notifications": NotesOrbit(r, w, d, id); break;
@@ -2076,16 +2083,6 @@ public sealed partial class WristPanel
         bool none = value == "–";
         Wide(r, WideCaption(k.Id), caption, value, !none && unit is "fps" or "ms" or "GB" ? unit : null, frac, Bento.Level(lv, RoleColor(k.Id)),
             none ? Bento.Faint : Bento.Level(lv, Bento.Text), Ui.Id("wsg", id), lv: lv);
-    }
-
-    // the last ~5 s of frames as bars: the frame numbers as the caption's note, amber over budget / reprojected, red dropped
-    void GraphOrbit(VrStats v, RectangleF r, uint tint)
-    {
-        float pad = PadX(r);
-        // the numbers turn amber / red with the worst of them, not only the bars
-        var (note, lv) = FrameNote(v);
-        CaptionRow(r, r.X + pad, r.Right - pad, note, Bento.CapBadge ? Bento.Cap : Bento.Level(lv, Bento.Cap), CapGraph, lv);
-        GraphBars(v, new RectangleF(r.X + pad, r.Y + 38, r.Width - 2 * pad, r.Height - 38 - 12), tint);
     }
 
     // "86 fps · 9,3 ms · 4%" and the worst of their levels (each number read once)
