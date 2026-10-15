@@ -189,7 +189,8 @@ public sealed partial class WristPanel
     }
 
     // something on the face changes faster than twice a second
-    bool FastWidgets => (_timer == TimerState.Running && HasWidget("timer")) || (_swRunning && HasWidget("stopwatch")) || _open != null;
+    bool FastWidgets => (_timer == TimerState.Running && HasWidget("timer")) || (_swRunning && HasWidget("stopwatch")) || _open != null ||
+                        (MinesTicking && HasWidget("minesweeper"));
 
     static string Clock2(double seconds)
     {
@@ -404,7 +405,7 @@ public sealed partial class WristPanel
     // over a card without a caption (the dial, the dock's keys) or whose caption row holds more (the cover, round buttons
     // from 31 px down: a band would run into them)
     bool StripBand(WatchWidgets.Kind k, WatchWidget w) =>
-        k.Id is "analog" or "media" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" && w.W >= 2);
+        k.Id is "analog" or "media" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" or "minesweeper" && w.W >= 2);
 
     float BandHeight(WatchWidgets.Kind k, WatchWidget w, RectangleF r)
     {
@@ -534,6 +535,7 @@ public sealed partial class WristPanel
             case "room": RoomOrbit(r, w, d, id); break;
             case "volume": VolumeOrbit(r, w, id); break;
             case "graph": GraphOrbit(d.Vr, r, Bento.Accent); break;
+            case "minesweeper": MinesOrbit(r, w, id); break;
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2136,6 +2138,7 @@ public sealed partial class WristPanel
                 case "room": Room95Widget(r, c, d, w, id); break;
                 case "volume": Volume95(c, w, id); break;
                 case "graph": Graph95(d.Vr, c); break;
+                case "minesweeper": Mines95Widget(c, w); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);

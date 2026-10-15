@@ -545,6 +545,7 @@ static class Tools
         }
         wrist.TestScale = 1;
         wrist.TestNow = null;
+        MinesTools.Run(wrist, data, cfg, gpu, dir, "");       // Minesweeper: its rules, the laser's ways, its pictures
         wcfg.Face = face0;
         wcfg.Widgets = null;
         string Dump() => string.Join(" ", wcfg.Widgets.Select(w => $"{w.Type}@{w.X},{w.Y}:{w.W}x{w.H}"));
@@ -719,6 +720,7 @@ static class Tools
         Log.Info($"95 editor: a 1x1 time (modern-only) selected, still {was} (want 1x1); picked 2 x 1 in the size box: {t11.W}x{t11.H} (want 2x1)");
         view.EditingWatch = false;
         TapFamily("_95");
+        MinesTools.Run(wrist, data, cfg, gpu, dir, "_95");
         wcfg.Face = face0;
         wcfg.Widgets = null;
         System.Globalization.CultureInfo.CurrentCulture = culture;
