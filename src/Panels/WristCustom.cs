@@ -1891,7 +1891,7 @@ public sealed partial class WristPanel
     {
         bool click = _ui.Clickable(Ui.Id("wdk", id), r, out bool hover, out bool held);
         if (held) _p.Fill(r, Theme.WithAlpha(Bento.Accent, 0.12f), CardRadius);
-        if (click) OnAction?.Invoke("dock");
+        if (click) OpenDetail(w);                // grows into the watch's opened dock (WristDock.cs)
         float pad = PadX(r);
         if (!DockShows(d))
         {
@@ -2402,7 +2402,7 @@ public sealed partial class WristPanel
     // the dock in a little 95 window: the key faces shrunk (nearest), where it is beside them; a click opens it
     void Dock95Widget(RectangleF r, RectangleF c, PanelData d, WatchWidget w, int id)
     {
-        if (_ui.Clickable(Ui.Id("wdk", id), r, out _, out _)) OnAction?.Invoke("dock");
+        if (_ui.Clickable(Ui.Id("wdk", id), r, out _, out _)) OpenDetail(w);
         if (!DockShows(d))
         {
             W95Icons.Draw(_p, W95Icons.Id.Dock, MathF.Floor(c.X + (c.Width - 16) / 2), MathF.Floor(c.Y + (c.Height - 30) / 2));

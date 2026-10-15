@@ -476,6 +476,7 @@ static partial class Tools
                 wrist.CloseForTest();
             }
             RoomViewTools.Run(wrist, data, cfg, gpu, dir, tag);      // the room opened: its cases, a tap opens it (not the Room panel)
+            DockViewTools.Run(wrist, data, cfg, painter, gpu, dir, tag);      // the dock opened, on made-up data (not the Hexpad panel)
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();

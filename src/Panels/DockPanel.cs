@@ -5,6 +5,7 @@ using System.Numerics;
 using Valve.VR;
 using Vortice.Direct2D1;
 using Vortice.DirectWrite;
+using Slide = Orbit.DockInput.Slide;
 
 namespace Orbit;
 
@@ -66,7 +67,6 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     readonly Painter _p;
     readonly Ui _ui;
     readonly ConfigStore _cfg;
-    readonly HexpadLink _link;
     readonly HexpadFaces _faces;
     readonly PointerState _ptr = new();
     public readonly Surface Surf;
@@ -78,39 +78,29 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     double _nextDraw;
     int _seen = -1;
     float _twoStartWidth;
-    HexpadLink.Snapshot _s = new();
 
-    // input
+    // input: DockInput's (the watch's opened dock has one of its own); its parts under the names the drawing below always used
     Hand? _owner;
-    string _hover, _pressed, _confirm, _scrollId;
-    float _scrollAcc;
-    double _wokeAt = -10;
-    readonly Dictionary<string, RectangleF> _hit = new();     // control -> rect in texture pixels ("enc1:s" = its slider)
-    readonly Dictionary<string, RectangleF> _cards = new();   // knob -> its whole row (the stick over it moves the slider)
-    readonly Dictionary<string, RectangleF> _track = new();   // knob -> where its thumb's centre runs (texture pixels)
-
-    // the slider being dragged
-    string _drag, _dragKind;
-    bool _dragAbs;
-    float _dragGrab;            // abs: where on the thumb it was taken (px from its centre); jog: where the drag began
-    float _jogOff;              // jog: how far it is dragged (px)
-    int _jogSent;               // jog: detents sent in this drag
-    // abs: the value we set is shown instead of Hexpad's while dragging and for a moment after (its read-back lags)
-    readonly Dictionary<string, float> _local = new();
-    readonly Dictionary<string, double> _holdUntil = new();
-    readonly Dictionary<string, (double at, string kind)> _stickEnd = new();   // the stick moved it: final then
-
-    const double Hold = 0.6, StickFinal = 0.4;
-    const float StickStep = 0.02f;
-
-    enum Slide { None, Abs, Jog }
+    readonly DockInput _in;
+    HexpadLink.Snapshot _s => _in.Snap;
+    string _hover => _in.Hover;
+    string _pressed => _in.Pressed;
+    string _confirm => _in.Confirm;
+    string _drag => _in.Drag;
+    float _jogOff => _in.JogOff;
+    int _jogSent => _in.JogSent;
+    Dictionary<string, double> _holdUntil => _in.HoldUntil;
+    Dictionary<string, RectangleF> _hit => _in.Hit;
+    Dictionary<string, RectangleF> _cards => _in.Cards;
+    Dictionary<string, RectangleF> _track => _in.Track;
 
     DockConfig C => _cfg.Data.Dock;
     public bool Shown => C.Enabled && C.Visible;
 
     public DockPanel(Gpu g, Painter p, ConfigStore cfg, HexpadLink link, HexpadFaces faces)
     {
-        _p = p; _cfg = cfg; _link = link; _faces = faces;
+        _p = p; _cfg = cfg; _faces = faces;
+        _in = new DockInput(link, cfg);
         _ui = new Ui(p);
         Surf = new Surface(g, TW, TH);
     }
@@ -128,7 +118,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
 
     public void DestroyOverlay()
     {
-        ReleasePress();
+        _in.ReleasePress();
         _ptr.Leave();
         Ov?.Dispose();
         Ov = null;
@@ -138,7 +128,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
 
     public void Toggle()
     {
-        if (C.Visible) { C.Visible = false; _confirm = null; _cfg.MarkDirty(); return; }
+        if (C.Visible) { C.Visible = false; _in.Confirm = null; _cfg.MarkDirty(); return; }
         Open();
     }
 
@@ -167,15 +157,16 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _vis = Math.Clamp(_vis + Math.Sign(target - _vis) * dt / 0.18f, 0, 1);
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
-            if (_vis <= 0) { ReleasePress(); _ptr.Leave(); _hover = null; }
+            if (_vis <= 0) { _in.ReleasePress(); _ptr.Leave(); _in.Hover = null; }
             Ov.Hide();
             return;
         }
         float e = 1 - MathF.Pow(1 - _vis, 3);
         Ov.SetAlpha(e);
         Ov.SetWidth(Math.Clamp(C.Width, 0.15f, 0.9f) * (0.92f + 0.08f * e));
-        if (s.Version != _seen) { _seen = s.Version; _s = s; _dirty = true; }
-        Timers(now);
+        if (s.Version != _seen) { _seen = s.Version; _in.Snap = s; _dirty = true; }
+        _in.Timers(now);
+        if (_in.TakeDirty()) _dirty = true;
         bool flashing = now - _s.EchoAt < 0.4;
         if (_dirty || flashing || now >= _nextDraw || _ui.Animating)
         {
@@ -187,178 +178,32 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         Ov.Show();
     }
 
-    // the stick's final value once it stops; Hexpad's own value again once a hold runs out
-    void Timers(double now)
-    {
-        if (_stickEnd.Count > 0)
-            foreach (var id in new List<string>(_stickEnd.Keys))
-            {
-                var (at, kind) = _stickEnd[id];
-                if (now < at) continue;
-                _stickEnd.Remove(id);
-                if (_local.TryGetValue(id, out float v)) _link.Set(id, kind, v, true);
-                _holdUntil[id] = now + Hold;
-            }
-        if (_holdUntil.Count > 0)
-            foreach (var id in new List<string>(_holdUntil.Keys))
-                if (now >= _holdUntil[id] && _drag != id && !_stickEnd.ContainsKey(id))
-                {
-                    _holdUntil.Remove(id);
-                    _local.Remove(id);
-                    _dirty = true;
-                }
-    }
+    // ---------------- input: one hand at a time, handed to DockInput ----------------
 
-    // ---------------- input ----------------
-
-    bool Live => _s.State == HexpadLink.LinkState.Ok;
-    bool CanPress => Live && C.Input && _confirm == null;
-
-    string HitTest(Vector2 px)
-    {
-        foreach (var (id, r) in _hit)
-            if (r.Contains(px.X, px.Y)) return id;
-        return null;
-    }
-
-    string CardAt(Vector2 px)
-    {
-        foreach (var (id, r) in _cards)
-            if (r.Contains(px.X, px.Y)) return id;
-        return null;
-    }
-
-    static string Base(string id) => id != null && id.Contains(':') ? id[..id.IndexOf(':')] : id;
-    static string S(string id) => Ui.Id(id, ":s");          // a knob's slider (the push is the knob's own id)
-
-    // what a knob's slider does now
-    Slide TypeOf(string id)
-    {
-        var c = Ctl(id);
-        if (c == null || string.IsNullOrEmpty(c.Slider)) return Slide.None;
-        if (c.Slider == "abs") return _s.Api >= 2 && !string.IsNullOrEmpty(c.Kind) ? Slide.Abs : Slide.Jog;
-        return Slide.Jog;
-    }
-
-    bool Off(string id) => _s.Values.TryGetValue(id, out var v) && v.Off;
-
-    // an abs slider's value: ours while dragging and just after, else Hexpad's (null = it does not know)
-    float? AbsValue(string id, double now)
-    {
-        if ((_drag == id || _holdUntil.TryGetValue(id, out var t) && now < t) && _local.TryGetValue(id, out float mine)) return mine;
-        return _s.Values.TryGetValue(id, out var v) ? v.V : null;
-    }
-
-    // drag this far for one detent; pages and tracks are whole steps, so they want a longer pull
-    float Detent(string id) => Ctl(id)?.Kind is "page" or "media" ? 60 : 24;
-
-    void Press(string id)
-    {
-        if (_s.Controls.TryGetValue(id, out var c) && c.Danger)
-        {
-            _confirm = id;               // nothing is sent until it is confirmed
-            return;
-        }
-        _link.Input(id, true);
-        _pressed = id;
-    }
-
-    // the laser lets go (or leaves, or the panel goes): the key comes up, a drag ends, the stick's value is final
-    void ReleasePress()
-    {
-        if (_pressed != null) _link.Input(_pressed, false);
-        _pressed = null;
-        EndDrag();
-        if (_stickEnd.Count > 0)
-        {
-            foreach (var (id, (_, kind)) in _stickEnd)
-                if (_local.TryGetValue(id, out float v)) _link.Set(id, kind, v, true);
-            foreach (var id in _stickEnd.Keys) _holdUntil[id] = Clock.Now + Hold;
-            _stickEnd.Clear();
-        }
-    }
-
-    void BeginDrag(string id, Vector2 px)
-    {
-        var t = TypeOf(id);
-        if (t == Slide.None || t == Slide.Abs && Off(id) || !_track.TryGetValue(id, out var tr)) return;
-        _drag = id;
-        _dragKind = Ctl(id)?.Kind;          // a page change mid-drag must not turn a volume drag into something else
-        _dragAbs = t == Slide.Abs;
-        _stickEnd.Remove(id);
-        if (_dragAbs)
-        {
-            // taken by the thumb it keeps where it was held; anywhere else on the track it jumps there
-            float? cur = AbsValue(id, Clock.Now);
-            float grab = Theme.Classic ? 14 : 24;
-            _dragGrab = 0;
-            if (cur is float v && MathF.Abs(px.X - (tr.X + tr.Width * v)) <= grab) _dragGrab = px.X - (tr.X + tr.Width * v);
-        }
-        else
-        {
-            _dragGrab = px.X;
-            _jogOff = 0;
-            _jogSent = 0;
-        }
-        DragTo(px);
-    }
-
-    void DragTo(Vector2 px)
-    {
-        if (_drag == null || !_track.TryGetValue(_drag, out var tr)) return;
-        if (_dragAbs)
-        {
-            float v = Math.Clamp((px.X - _dragGrab - tr.X) / tr.Width, 0, 1);
-            _local[_drag] = v;
-            _holdUntil[_drag] = double.MaxValue;
-            _link.Set(_drag, _dragKind, v, false);
-        }
-        else
-        {
-            _jogOff = px.X - _dragGrab;
-            int n = (int)(_jogOff / Detent(_drag));         // towards zero: a detent per full step of drag
-            if (n != _jogSent) { _link.Jog(_drag, n - _jogSent); _jogSent = n; }
-        }
-        _dirty = true;
-    }
-
-    void EndDrag()
-    {
-        if (_drag == null) return;
-        if (_dragAbs)
-        {
-            if (_local.TryGetValue(_drag, out float v)) _link.Set(_drag, _dragKind, v, true);
-            _holdUntil[_drag] = Clock.Now + Hold;
-        }
-        _drag = null;
-        _jogOff = 0;
-        _dirty = true;
-    }
+    bool Live => _in.Live;
+    static string S(string id) => DockInput.S(id);
+    Slide TypeOf(string id) => _in.TypeOf(id);
+    bool Off(string id) => _in.Off(id);
+    float? AbsValue(string id, double now) => _in.AbsValue(id, now);
+    float Detent(string id) => _in.Detent(id);
 
     public void PointerMove(Hand h, Vector2 px)
     {
         _owner ??= h;
         if (_owner != h) return;
         _ptr.Move(px.X, px.Y);
-        if (_drag != null) DragTo(px);
-        string hov = _drag != null ? S(_drag) : CanPress ? HitTest(px) : null;
-        if (hov != _hover) { _hover = hov; _dirty = true; }
+        _in.Move(px);
+        if (_in.TakeDirty()) _dirty = true;
         if (_ui.NeedsRedrawForMove(_ptr, Theme.Classic ? 2 : 1)) _dirty = true;
-        // the dock's idle screen swallows the first press: wake it as soon as the laser arrives
-        if (_s.Ambient && C.Input && Clock.Now - _wokeAt > 2)
-        {
-            _wokeAt = Clock.Now;
-            _link.Wake();
-        }
     }
 
     public void PointerLeave(Hand h)
     {
         if (_owner != h) return;
         _owner = null;
-        ReleasePress();
+        _in.Leave();
+        _in.TakeDirty();
         _ptr.Leave();
-        _hover = null;
         _dirty = true;
     }
 
@@ -367,53 +212,29 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         if (b != PtrButton.Primary) return;
         if (down)
         {
-            if (_owner != h && (_ptr.Down || _pressed != null || _drag != null)) return;
+            if (_owner != h && (_ptr.Down || _in.Busy)) return;
             _owner = h;
             _ptr.Move(px.X, px.Y);
             _ptr.Press();
-            if (CanPress && HitTest(px) is { } id)
-            {
-                if (id.EndsWith(":s")) BeginDrag(Base(id), px);
-                else Press(id);
-            }
+            _in.Down(px);
         }
         else
         {
             if (_owner != h) return;
             _ptr.Move(px.X, px.Y);
             _ptr.Release();
-            ReleasePress();
+            _in.Up();
         }
+        _in.TakeDirty();
         _dirty = true;
     }
 
-    // the stick over a knob's row: an abs slider moves 2 % per notch (its final value once the stick rests),
-    // a jog one turns a detent per notch
+    // the stick over a knob's row moves its slider
     public void PointerScroll(Hand h, float notches, Vector2 px)
     {
-        if (_owner != h || !CanPress || _drag != null) return;
-        string id = CardAt(px);
-        if (id == null) return;
-        var t = TypeOf(id);
-        if (t == Slide.Abs)
-        {
-            if (Off(id) || AbsValue(id, Clock.Now) is not float cur) return;
-            string kind = Ctl(id).Kind;
-            float v = Math.Clamp(cur + StickStep * notches, 0, 1);
-            _local[id] = v;
-            _holdUntil[id] = double.MaxValue;
-            _stickEnd[id] = (Clock.Now + StickFinal, kind);
-            _link.Set(id, kind, v, false);
-            _dirty = true;
-            return;
-        }
-        if (t != Slide.Jog) return;
-        if (_scrollId != id) { _scrollId = id; _scrollAcc = 0; }
-        _scrollAcc += notches;
-        int n = 0;
-        while (_scrollAcc >= 1) { n++; _scrollAcc -= 1; }
-        while (_scrollAcc <= -1) { n--; _scrollAcc += 1; }
-        if (n != 0) _link.Jog(id, n);
+        if (_owner != h) return;
+        _in.Scroll(px, notches);
+        if (_in.TakeDirty()) _dirty = true;
     }
 
     public VrOverlay Overlay => Ov;
@@ -423,7 +244,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     public bool Grabbable => true;
     public Matrix4x4 WorldTransform =>
         _vr != null && Placement.TryWorld(C.Place, _vr, out var w) ? w : MathUtil.FromArray(C.Place.M);
-    public void GrabBegin(bool detach) { ReleasePress(); }
+    public void GrabBegin(bool detach) { _in.ReleasePress(); }
     public void GrabMove(Matrix4x4 world) { if (_vr != null) { Placement.SetWorld(C.Place, _vr, world); _cfg.MarkDirty(); } }
     public void GrabStickX(float v, float dt) { C.Width = Math.Clamp(C.Width * (1 + v * 0.9f * dt), 0.15f, 0.9f); _cfg.MarkDirty(); }
     public void GrabTwoHandBegin() => _twoStartWidth = C.Width;
@@ -439,85 +260,26 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     public void DrawFor(HexpadLink.Snapshot s, double now, string hover = null, string pressed = null, string confirm = null,
         string drag = null, float dragAt = 0)
     {
-        _s = s; _hover = hover; _pressed = pressed; _confirm = confirm;
-        _local.Clear(); _holdUntil.Clear(); _stickEnd.Clear();
-        _drag = null; _jogOff = 0; _jogSent = 0;
+        _in.Pose(s, hover, pressed, confirm, drag, dragAt);
         _ui.ResetAnimations();
-        if (drag != null)
-        {
-            _drag = drag;
-            _dragAbs = TypeOf(drag) == Slide.Abs;
-            _dragKind = Ctl(drag)?.Kind;
-            if (_dragAbs) { _local[drag] = Math.Clamp(dragAt, 0, 1); _holdUntil[drag] = double.MaxValue; }
-            else { _jogOff = dragAt; _jogSent = (int)(dragAt / Detent(drag)); }
-            _hover ??= S(drag);
-        }
         Draw(now);
-        _drag = null; _jogOff = 0; _jogSent = 0;
-        _local.Clear(); _holdUntil.Clear();
+        _in.AfterPose();
     }
 
     public void Draw(double now)
     {
-        _hit.Clear();
-        _cards.Clear();
-        _track.Clear();
+        _in.BeginLayout();
         if (Theme.Classic) Draw95(now);
         else DrawModern(now);
     }
 
-    string Where()
-    {
-        if (_s.InFolder)
-            return _s.FolderPages > 1 ? $"{_s.FolderName} · {_s.FolderPage + 1}/{_s.FolderPages}" : _s.FolderName;
-        return $"{_s.PageName} · {_s.Page + 1}/{_s.Pages}";
-    }
-
-    string StateLine() => _s.State switch
-    {
-        HexpadLink.LinkState.NotRunning => "Hexpad is not running",
-        HexpadLink.LinkState.OldHexpad => "Update Hexpad to see the dock here",
-        HexpadLink.LinkState.Unplugged => "The dock is unplugged",
-        HexpadLink.LinkState.ScreenOff => "The dock's screen is off",
-        _ => "Connecting to Hexpad...",
-    };
-
-    HexpadLink.Control Ctl(string id) => id != null && _s.Controls.TryGetValue(id, out var c) ? c : null;
-
-    // "Volume: mute" -> "Mute": a knob's group / caption already says what it is
-    static string Short(string summary)
-    {
-        if (string.IsNullOrEmpty(summary)) return "";
-        int i = summary.IndexOf(": ", StringComparison.Ordinal);
-        string s = i >= 0 ? summary[(i + 2)..] : summary;
-        return s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..] : s;
-    }
-    bool Flash(string id, double now) => now - _s.EchoAt < 0.4 && _s.Echo == id;
-
-    // a knob's name: what it turns ("Volume"), else where it sits on the dock
-    static string KnobName(string id, HexpadLink.Control c) =>
-        !string.IsNullOrEmpty(c?.Label) ? c.Label : id switch { "enc1" => "Big knob", "enc0" => "Left knob", _ => "Right knob" };
-
-    static string PushLabel(HexpadLink.Control c) => string.IsNullOrEmpty(c?.Push) ? "" : Short(c.Push);
-
-    // the value beside a slider's name: "42%" (abs), the detents of this pull (jog), or why the track rests
-    string ValueText(string id, Slide t, double now)
-    {
-        var c = Ctl(id);
-        if (t == Slide.Abs)
-        {
-            _s.Values.TryGetValue(id, out var x);
-            if (x?.Off == true) return "Off";
-            float? v = AbsValue(id, now);
-            if (v == null) return "--";
-            bool mine = _drag == id || _holdUntil.ContainsKey(id);
-            if (x?.Muted == true && !mine) return "Muted";
-            return $"{MathF.Round(v.Value * Math.Max(1, c?.Max ?? 100))}%";
-        }
-        if (t == Slide.Jog)
-            return _drag != id ? "" : _jogSent > 0 ? $"+{_jogSent}" : _jogSent < 0 ? $"−{-_jogSent}" : "0";
-        return "";
-    }
+    string Where() => _in.Where();
+    string StateLine() => _in.StateLine();
+    HexpadLink.Control Ctl(string id) => _in.Ctl(id);
+    bool Flash(string id, double now) => _in.Flash(id, now);
+    static string KnobName(string id, HexpadLink.Control c) => DockInput.KnobName(id, c);
+    static string PushLabel(HexpadLink.Control c) => DockInput.PushLabel(c);
+    string ValueText(string id, Slide t, double now) => _in.ValueText(id, t, now);
 
     // ---- modern: a dark slab like the device ----
     const float Pad = 20, Tile = 136, Gap = 12, KeysY = 66;
@@ -747,22 +509,11 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _p.Text($"Run “{label}”?", new RectangleF(card.X + 24, card.Y + 20, card.Width - 48, 40), Theme.Text,
             FitSize($"Run “{label}”?", card.Width - 48, 22), FontWeight.SemiBold);
         _p.Text("It could end your VR session, so it asks first.", new RectangleF(card.X + 24, card.Y + 62, card.Width - 48, 26), sub, 15);
-        if (_ui.Button("dk.no", new RectangleF(card.X + 24, card.Bottom - 68, 196, 46), "Cancel")) _confirm = null;
-        if (_ui.Button("dk.yes", new RectangleF(card.Right - 220, card.Bottom - 68, 196, 46), "Do it", null, true))
-        {
-            _link.Input(_confirm, true);
-            _link.Input(_confirm, false);
-            _confirm = null;
-        }
+        if (_ui.Button("dk.no", new RectangleF(card.X + 24, card.Bottom - 68, 196, 46), "Cancel")) _in.ConfirmNo();
+        if (_ui.Button("dk.yes", new RectangleF(card.Right - 220, card.Bottom - 68, 196, 46), "Do it", null, true)) _in.ConfirmYes();
     }
 
-    // a key says what it does; a knob's push is its own action
-    string ConfirmLabel()
-    {
-        var c = Ctl(_confirm);
-        string label = _confirm.StartsWith("enc") && !string.IsNullOrEmpty(c?.Push) ? c.Push : c?.Label;
-        return string.IsNullOrEmpty(label) ? _confirm : label;
-    }
+    string ConfirmLabel() => _in.ConfirmLabel();
 
     // ---- Windows 95: a "Hexpad" window, the key faces 1:1 in picture boxes, a trackbar group per knob ----
     const uint Blk95 = 0xFF000000, Wht95 = 0xFFFFFFFF, Navy95 = 0xFF000080;
@@ -916,12 +667,8 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _ui.Text95(Fit95($"Run \"{label}\"?", box.Width - 64), new RectangleF(box.X + 52, box.Y + 30, box.Width - 60, 16), Blk95, true);
         _ui.Text95("It could end your VR session.", new RectangleF(box.X + 52, box.Y + 48, box.Width - 60, 16));
         if (_ui.Button95("dk95.yes", new RectangleF(box.X + box.Width / 2 - 80, box.Bottom - 32, 75, 23), "&Yes", true, true))
-        {
-            _link.Input(_confirm, true);
-            _link.Input(_confirm, false);
-            _confirm = null;
-        }
-        if (_ui.Button95("dk95.no", new RectangleF(box.X + box.Width / 2 + 5, box.Bottom - 32, 75, 23), "&No")) _confirm = null;
+            _in.ConfirmYes();
+        if (_ui.Button95("dk95.no", new RectangleF(box.X + box.Width / 2 + 5, box.Bottom - 32, 75, 23), "&No")) _in.ConfirmNo();
     }
 
     public void Dispose()
