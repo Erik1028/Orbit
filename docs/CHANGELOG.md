@@ -3,6 +3,9 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.12.3 | Smooth Hexpad on the watch
+- Hexpad's keys and knobs on the watch now move as smoothly as Hexpad sends them, instead of a few times a second.
+
 ## 1.12.2 | Room and Hexpad open on the watch
 - The VRChat room widget opens right on the watch: tap it and it grows into the list of who is in the world, your
   friends, how long you have been there and who left lately (the stick scrolls). No separate window any more.

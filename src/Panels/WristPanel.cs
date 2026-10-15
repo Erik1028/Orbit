@@ -48,6 +48,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     bool _dirty = true, _grabbing;
     int _themeVersion = -1;
     double _nextDraw, _lastDraw;
+    int _dockVersion = -1;
     VrSession _vr;
 
     WristConfig C => _cfg.Data.Wrist;
@@ -122,6 +123,14 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         }
         Ov.Show();
         if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
+        // Hexpad's keys / knobs changed (its animations, a knob turned): drawn as they come (up to its 20 a second), not on the
+        // next timer tick - that was 2-10 frames a second (Erik: "a hexpad elég kevés fps-el mozog")
+        int dv = d.Dock?.Version ?? -1;
+        if (dv != _dockVersion)
+        {
+            _dockVersion = dv;
+            if (C.Face == "custom" && (HasWidget("dock") || _open?.Type == "dock")) _dirty = true;
+        }
         // motion is drawn at the headset's rate (it was 45 fps; laid-out text is kept now, a frame is ~1.5 ms)
         if (_dirty || now >= _nextDraw || Animating)
         {

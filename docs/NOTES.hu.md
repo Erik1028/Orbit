@@ -196,6 +196,12 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.12.3 – folyamatos Hexpad az órán (2026-10-15)
+
+Erik: „a hexpad elég kevés fps-el mozog”. Az óra csak `_dirty`-ra vagy az időzítőre (0,1 / 0,5 s) rajzolt újra, a
+Hexpad új képei (`Snapshot.Version`) nem tették dirty-vé → 2–10 kép/s. Most a dock-verzió változása dirty, ha a dock
+widget az aktuális oldalon van vagy a dock nézet nyitva (a Hexpad legfeljebb 20/s-mal küld, 50 ms-os push).
+
 ## 1.12.2 – a szoba és a Hexpad az órán nyílik ki (2026-10-15)
 
 Erik: „az órán a vrchat szoba is egy kiugró widget legyen, nem külön ablak”, „a hexpad is lehetne órán lévő kiugró
