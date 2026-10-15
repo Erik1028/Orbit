@@ -103,7 +103,8 @@ public sealed partial class SettingsView
         var p = ui.P;
         var wn = WhatsNewShown;
         bool modal = wn != null && wn.Count > 0;
-        ui.Inert = modal;
+        if (Tab != TabLook || modal) _fontsOpen = false;
+        ui.Inert = modal || _fontsOpen;       // an open font list: the page under it is only a picture
         p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
         DrawHeader(ui);
         if (Theme.Classic) DrawNavClassic(ui);
@@ -120,6 +121,7 @@ public sealed partial class SettingsView
             case TabVrchat: DrawVrchat(ui); break;
             default: DrawGeneral(ui); break;
         }
+        if (_fontsOpen) { ui.Inert = false; DrawFontList(ui); }
         if (modal)
         {
             ui.Inert = false;
@@ -564,10 +566,12 @@ public sealed partial class SettingsView
 
     // long window titles: cut with an ellipsis to fit
     readonly Dictionary<(string, float, float, FontWeight), string> _fit = new();
+    int _fitLook = -1;
 
     string Fit(Painter p, string s, float maxW, float size, FontWeight w = FontWeight.Normal)
     {
         if (string.IsNullOrEmpty(s)) return s;
+        if (_fitLook != Theme.Version) { _fit.Clear(); _fitLook = Theme.Version; }     // another font measures differently
         var key = (s, maxW, size, w);
         if (_fit.TryGetValue(key, out var r)) return r;
         if (p.MeasureWidth(s, size, w) <= maxW) r = s;
@@ -733,7 +737,7 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
             };
             changed = true;
         }
@@ -747,6 +751,19 @@ public sealed partial class SettingsView
         if (Theme.Classic)
             ui.Label(new RectangleF(lx, 556, 356, 40), "Windows 95 has its own colours; the ones above are for Modern.",
                 Theme.Dim, 12, FontWeight.Normal, true);
+        else
+        {
+            // the modern style's typeface: the chosen one's name in it; the list opens over the page (DrawFontList)
+            ui.Section(new RectangleF(lx, 566, 360, 20), "Font");
+            var field = FontField;
+            bool click = ui.Clickable("look.font", field, out bool hover, out _);
+            float hv = ui.Anim("look.font#h", hover || _fontsOpen ? 1 : 0, 18);
+            p.Fill(field, Theme.Mix(Theme.Panel, 0xFFFFFFFF, 0.05f * hv), 9);
+            p.Stroke(field, _fontsOpen ? Theme.Accent : Theme.Mix(Theme.Border, Theme.Accent, 0.5f * hv), 1, 9);
+            p.Text(Theme.UserFont ?? Theme.DefaultFontName, new RectangleF(field.X + 14, field.Y, field.Width - 52, field.Height), Theme.Text, 16);
+            p.Icon(_fontsOpen ? Theme.IcoUp : Theme.IcoDown, new RectangleF(field.Right - 36, field.Y, 24, field.Height), Theme.Dim, 14);
+            if (click) _fontsOpen = true;
+        }
 
         // right: one-click themes, laser
         ui.Section(new RectangleF(rx, 84, 360, 20), "Themes");
@@ -784,6 +801,63 @@ public sealed partial class SettingsView
         if (ui.Slider("night.b", new RectangleF(rx - 10, 512, 376, 58), "Night brightness", ref nb, 0.15f, 0.9f, f => $"{f * 100:0}%"))
             a.NightBrightness = nb;
         if (changed) _h.AppearanceChanged();
+    }
+
+    // ---- Look > Font: the list of typefaces, each name drawn in itself with a clock beside it; a pick applies at once ----
+    bool _fontsOpen;
+    static readonly RectangleF FontField = new(232, 588, 356, 38);
+    const float FontRow = 40;
+
+    // the list over the page, above its field and its title: null (the default) first, then the ones installed here
+    RectangleF FontList => new(FontField.X, 562 - (Theme.FontsInstalled.Length + 1) * FontRow - 12,
+        FontField.Width, (Theme.FontsInstalled.Length + 1) * FontRow + 12);
+
+    void DrawFontList(Ui ui)
+    {
+        var p = ui.P;
+        var a = C.Appearance;
+        var box = FontList;
+        if (ui.Pressed && !box.Contains(ui.Mouse.X, ui.Mouse.Y))
+        {
+            _fontsOpen = false;          // a click beside it only closes it (the page under it was a picture this frame)
+            return;
+        }
+        ui.Hover(box);
+        p.Fill(new RectangleF(box.X - 2, box.Y + 4, box.Width + 4, box.Height + 4), 0x55000000, 14);
+        p.Fill(box, Theme.Panel2, 12);
+        p.Stroke(box, Theme.Border, 1, 12);
+        string sel = Theme.UserFont;
+        for (int i = 0; i <= Theme.FontsInstalled.Length; i++)
+        {
+            string font = i == 0 ? null : Theme.FontsInstalled[i - 1];
+            string fam = font ?? Theme.UiFont;
+            var row = new RectangleF(box.X + 6, box.Y + 6 + i * FontRow, box.Width - 12, FontRow);
+            bool click = ui.Clickable(Ui.Id("look.font/", i), row, out bool hover, out _);
+            bool on = font == sel;
+            if (on || hover) p.Fill(row, on ? Theme.Panel3 : Theme.WithAlpha(0x14FFFFFF, 1), 8);
+            if (on) p.Fill(new RectangleF(row.X, row.Y + 10, 4, row.Height - 20), Theme.Accent, 2);
+            string name = font ?? Theme.DefaultFontName;
+            p.Text(name, new RectangleF(row.X + 14, row.Y, row.Width - 120, row.Height), Theme.Text, 17, FontWeight.Normal,
+                TextAlignment.Leading, ParagraphAlignment.Center, fam);
+            if (font == null)
+            {
+                float nw = MathF.Min(p.MeasureWidth(name, 17, FontWeight.Normal, fam), row.Width - 120);
+                p.Text("default", new RectangleF(row.X + 14 + nw + 8, row.Y, 70, row.Height), Theme.Dim, 12);
+            }
+            p.Text("12:45", new RectangleF(row.Right - 112, row.Y, 70, row.Height), Theme.Dim, 17, FontWeight.SemiBold,
+                TextAlignment.Trailing, ParagraphAlignment.Center, fam);
+            if (on) p.Icon(Theme.IcoCheck, new RectangleF(row.Right - 34, row.Y, 24, row.Height), Theme.Accent, 14);
+            if (click)
+            {
+                _fontsOpen = false;
+                if (font != a.Font)
+                {
+                    a.Font = font;
+                    ui.Changed = true;
+                    _h.AppearanceChanged();
+                }
+            }
+        }
     }
 
     // ---------------- General ----------------

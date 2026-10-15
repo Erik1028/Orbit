@@ -694,8 +694,214 @@ static class Tools
         wcfg.Face = face0;
         wcfg.Widgets = null;
         System.Globalization.CultureInfo.CurrentCulture = culture;
+        FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
         Log.Info("snapshot written to " + dir);
         return 0;
+    }
+
+    // ---- Look > Font: the modern style in every font offered (the 95 one keeps its own pixel font). First the list itself: opened by
+    // a click, a pick applies at once and is saved, a click beside it only closes it, the default again leaves no trace in the config.
+    // Then per font, in fonts/<font>: the settings pages, the watch faces and opened views, the keyboard, the notifications and What's
+    // new, the ink of every text against its box (sticking out a pixel or more where the default font does not is a problem); its
+    // digits one width (tabular: a ticking clock must not jiggle); and the layout checks again, modern and styles (their qa pictures
+    // kept only when one fails). About 2.5 minutes; ORBIT_SNAP_FONTS=0 leaves all of it out.
+    static void FontsRun(WristPanel wrist, KeyboardPanel kb, SettingsView view, Ui ui, Surface surf, PointerState ptr, Painter painter,
+        Gpu gpu, ConfigStore cfg, PanelData data, FakeHost host, string dir, Func<int, List<WatchWidget>> gallery)
+    {
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_FONTS") == "0") return;
+        var wcfg = cfg.Data.Wrist;
+        string face0 = wcfg.Face;
+        var keep = cfg.Data.Appearance;
+        var culture0 = CultureInfo.CurrentCulture;
+        var en = new CultureInfo("en-US");
+        void Look(string font)
+        {
+            cfg.Data.Appearance = new AppearanceConfig { Clock24h = false, Font = font };
+            Theme.Apply(cfg.Data.Appearance);
+        }
+        void Frame()
+        {
+            ui.Begin(ptr, 1.5f);
+            painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
+            view.Draw(ui);
+            painter.End();
+            ui.End();
+        }
+        void Click(float x, float y) { ptr.Move(x * 1.5f, y * 1.5f); Frame(); ptr.Press(); Frame(); ptr.Release(); Frame(); }
+
+        // the list (Look tab, its field under Style): rows of 40 above the field, the default first
+        CultureInfo.CurrentCulture = en;
+        Look(null);
+        view.Tab = SettingsView.TabLook;
+        ui.ResetAnimations();
+        int n = Theme.FontsInstalled.Length + 1;
+        float top = 562 - n * 40 - 12;
+        float Row(int i) => top + 6 + i * 40 + 20;
+        Click(332, 607);
+        ptr.Move(332 * 1.5f, Row(2) * 1.5f);
+        Frame(); Frame();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_look_fonts.png"));
+        string first = n > 1 ? Theme.FontsInstalled[0] : null;
+        Click(332, Row(1));
+        bool picked = cfg.Data.Appearance.Font == first && Theme.UserFont == first && Theme.Font == first;
+        bool saved = cfg.Serialized().Contains($"\"Font\": \"{first}\"");
+        ptr.Leave(); Frame();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_look_font_picked.png"));
+        Log.Info($"fonts: the list offers {n} ({Theme.DefaultFontName}, {string.Join(", ", Theme.FontsInstalled)}); a pick applies {picked} " +
+                 $"(want True), is saved {saved} (want True)");
+        uint accent0 = cfg.Data.Appearance.Accent;
+        Click(332, 607);                     // open
+        Click(612 + 124 + 58, 129);          // the "Ocean" theme card, beside the open list
+        bool kept = cfg.Data.Appearance.Accent == accent0;
+        Click(332, 607);                     // open
+        Click(332, Row(0));                  // the default
+        Log.Info($"fonts: a click beside the open list changed nothing {kept} (want True); the default again {cfg.Data.Appearance.Font == null && Theme.UserFont == null} " +
+                 $"(want True), nothing about it in the config {!cfg.Serialized().Contains("\"Font\"")} (want True)");
+        ptr.Leave();
+
+        var fonts = new List<string> { null };
+        fonts.AddRange(Theme.FontsInstalled);
+        var baseline = new Dictionary<string, HashSet<string>>();
+        var spied = new List<(string s, System.Drawing.RectangleF r, float size, Vortice.DirectWrite.FontWeight w, string fam, bool wrap,
+            Vortice.DirectWrite.TextAlignment h, Vortice.DirectWrite.ParagraphAlignment v, float tracking)>();
+        int total = 0;
+        var notes = new List<string>();
+        foreach (var font in fonts)
+        {
+            string name = font ?? "default";
+            string fdir = Path.Combine(dir, "fonts", name.Replace(' ', '_'));
+            Directory.CreateDirectory(fdir);
+            CultureInfo.CurrentCulture = en;
+            Look(font);
+            var misfit = new Dictionary<string, Dictionary<string, string>>();       // page -> text key -> what is wrong
+            void Spy(string page, Action draw)
+            {
+                spied.Clear();
+                painter.FitSpy = (s, r, size, w, fam, wrap, h, v, tr) => spied.Add((s, r, size, w, fam, wrap, h, v, tr));
+                draw();
+                painter.FitSpy = null;
+                if (!misfit.TryGetValue(page, out var bad)) misfit[page] = bad = new Dictionary<string, string>();
+                foreach (var t in spied)
+                {
+                    // ink outside its box: cut off (or over its neighbour); the key leaves out the live digits (clock, CPU) and the size
+                    if (t.fam == Theme.IconFont || string.IsNullOrWhiteSpace(t.s)) continue;
+                    float o = painter.Overhang(t.s, t.r, t.size, t.w, t.fam, t.wrap, t.h, t.v, t.tracking);
+                    if (o >= 1)          // under a pixel: only the anti-aliased fringe
+                        bad[$"{new string(t.s.Select(ch => char.IsDigit(ch) ? '0' : ch).ToArray())}|{t.r.Width:0}x{t.r.Height:0}"] =
+                            $"'{t.s}' {t.size:0.#} px in {t.fam} sticks out {o:0.#} px of its {t.r.Width:0.#} x {t.r.Height:0.#} box";
+                }
+            }
+            // the settings pages, What's new over them and as its own panel
+            for (int t = 0; t < SettingsView.TabCount; t++)
+            {
+                view.Tab = t;
+                ui.ResetAnimations();
+                if (view.ShowsWristPreview) wrist.Draw(data);
+                if (view.ShowsKeyboardPreview) kb.Draw();
+                Spy($"settings{t}", Frame);
+                surf.SavePng(gpu, Path.Combine(fdir, $"settings{t}.png"));
+            }
+            host.WhatsNewList = WhatsNew.Since("1.8.2");
+            host.WhatsNewSub = $"Updated to {Updater.Current.ToString(3)} from 1.8.2";
+            view.Tab = SettingsView.TabGeneral;
+            ui.ResetAnimations();
+            Spy("settings_whatsnew", Frame);
+            surf.SavePng(gpu, Path.Combine(fdir, "settings_whatsnew.png"));
+            using (var wnp = new WhatsNewPanel(gpu, painter))
+            {
+                Spy("whatsnew_panel", () => wnp.DrawFor(host.WhatsNewList, host.WhatsNewSub));
+                wnp.Surf.SavePng(gpu, Path.Combine(fdir, "whatsnew_panel.png"));
+            }
+            host.WhatsNewList = Array.Empty<WhatsNew.Entry>();
+            view.Tab = 0;
+            // the watch: the faces, the custom face's galleries, every opened view
+            foreach (var face in new[] { "full", "analog", "minimal", "time" })
+            {
+                wcfg.Face = face;
+                wcfg.PerfGraph = face == "analog";
+                wrist.Draw(data);
+                Spy($"wrist_{face}", () => wrist.Draw(data));
+                wrist.Surf.SavePng(gpu, Path.Combine(fdir, $"wrist_{face}.png"));
+            }
+            wcfg.PerfGraph = false;
+            wcfg.Face = "custom";
+            for (int g = 0; g < 3; g++)
+            {
+                wcfg.Widgets = gallery(g);
+                wrist.Settle();
+                wrist.Draw(data);
+                Spy($"wrist_custom{g}", () => wrist.Draw(data));
+                wrist.Surf.SavePng(gpu, Path.Combine(fdir, $"wrist_custom{g}.png"));
+            }
+            foreach (var (type, g) in new[] { ("media", 0), ("battery", 0), ("time", 0), ("calendar", 2), ("timer", 2), ("stopwatch", 2), ("fps", 0), ("cpu", 2), ("volume", 2) })
+            {
+                wcfg.Widgets = gallery(g);
+                wrist.Settle();
+                if (!wrist.OpenForTest(type)) continue;
+                wrist.Draw(data);
+                Spy($"wrist_open_{type}", () => wrist.Draw(data));
+                wrist.Surf.SavePng(gpu, Path.Combine(fdir, $"wrist_open_{type}.png"));
+                wrist.CloseForTest();
+            }
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+            // the keyboard (and its chatbox line), the notifications
+            Spy("keyboard", kb.Draw);
+            kb.Surf.SavePng(gpu, Path.Combine(fdir, "keyboard.png"));
+            kb.PreviewChat("Szia! Mindjárt jövök, csak befejezem ezt :)");
+            Spy("keyboard_chat", kb.Draw);
+            kb.Surf.SavePng(gpu, Path.Combine(fdir, "keyboard_chat.png"));
+            kb.PreviewChat("");
+            typeof(KeyboardPanel).GetField("_chat", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(kb, false);
+            kb.Draw();
+            using (var np = new NotificationPanel(gpu, painter, cfg))
+            {
+                np.AddForPreview(new Notification { Source = "VRCX", Title = "Friend online", Content = "Sam has joined The Black Cat (Friends+)" });
+                np.AddForPreview(new Notification { Source = "Discord", Title = "New message", Content = "Alex: are you in VR? The new watch looks great, the cursor is way smoother now." });
+                Spy("notifications", np.Draw);
+                np.Surface.SavePng(gpu, Path.Combine(fdir, "notifications.png"));
+            }
+            // the digits: one width each, and times of the same shape as wide as each other
+            bool tabular = true;
+            foreach (var (fam, size, w) in new[] { (Theme.Display, 44f, Vortice.DirectWrite.FontWeight.Bold), (Theme.Display, 44f, Vortice.DirectWrite.FontWeight.SemiBold),
+                                                   (Theme.Font, 16f, Vortice.DirectWrite.FontWeight.Normal), (Theme.Font, 16f, Vortice.DirectWrite.FontWeight.SemiBold) })
+            {
+                var dw = Enumerable.Range(0, 10).Select(d => painter.MeasureWidth(((char)('0' + d)).ToString(), size, w, fam)).ToList();
+                var tw = new[] { "00:00", "11:11", "12:58", "23:47" }.Select(x => painter.MeasureWidth(x, size, w, fam)).ToList();
+                if (dw.Max() - dw.Min() > 0.01f || tw.Max() - tw.Min() > 0.01f) tabular = false;
+            }
+            int problems = 0, fits = 0;
+            if (font == null)
+            {
+                foreach (var (page, m) in misfit) baseline[page] = m.Keys.ToHashSet();
+                File.WriteAllLines(Path.Combine(fdir, "misfits.txt"), misfit.SelectMany(kv => kv.Value.Values.Select(v => $"{kv.Key}: {v}")));
+                Log.Info($"fonts default: {misfit.Sum(kv => kv.Value.Count)} texts already sticking out of their box (the baseline; fonts/default/misfits.txt), " +
+                         $"digits one width {tabular} (the default as it always was)");
+                continue;
+            }
+            foreach (var (page, m) in misfit)
+                foreach (var (key, what) in m)
+                    if (!baseline.TryGetValue(page, out var b) || !b.Contains(key)) { fits++; Log.Warn($"fonts {name}: {page}: {what}"); }
+            CultureInfo.CurrentCulture = culture0;
+            int lp = LayoutCheckRun(wrist, data, cfg, painter, gpu, fdir, "modern " + name);
+            CultureInfo.CurrentCulture = en;
+            int sp = StylesRun(wrist, data, painter, cfg, gpu, fdir, " " + name);
+            if (lp + sp == 0 && Directory.Exists(Path.Combine(fdir, "qa"))) Directory.Delete(Path.Combine(fdir, "qa"), true);
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+            problems = fits + lp + sp + (tabular ? 0 : 1);
+            total += problems;
+            Log.Info($"fonts {name} (drawn at {painter.FontScale(font) * 100:0}%): texts sticking out of their box {fits} (want 0), digits one width {tabular} (want True), layout {lp}, styles {sp}: " +
+                     $"{problems} problem(s)");
+            notes.Add($"{name} {problems}");
+        }
+        Log.Info($"layout fonts: {total} problem(s) in {fonts.Count - 1} fonts ({string.Join(", ", notes)})");
+        cfg.Data.Appearance = keep;
+        Theme.Apply(keep);
+        CultureInfo.CurrentCulture = culture0;
+        wcfg.Face = face0;
+        wcfg.Widgets = null;
+        view.Tab = 0;
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -799,6 +1005,21 @@ static class Tools
                 }
             for (int i = 0; i < ws.Count; i++) (ws[i].Style, ws[i].Color, ws[i].Color2) = keep[i];
         }
+        // the same face in every font of Look > Font (your colours): face_font_<font>.png
+        string font0 = a.Font;
+        a.Accent = accent0;
+        a.PanelColor = panel0;
+        foreach (var font in new string[] { null }.Concat(Theme.FontsInstalled))
+        {
+            a.Font = font;
+            Theme.Apply(a);
+            wrist.Settle();
+            wrist.Draw(data);
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_font_{(font ?? "default").Replace(' ', '_')}.png"));
+        }
+        a.Font = font0;
+        Theme.Apply(a);
         Log.Info("faceshot written to " + dir);
         return 0;
     }
@@ -1114,7 +1335,7 @@ static class Tools
     // the cards alone, so a gradient or a header's band is the card, not content - nor on a header band's lower edge, and every
     // text's contrast against what is really under it (a render without text; with no page, over a dark room and a white wall):
     // 4.5:1, 3:1 for big, bold or icon text; "nothing there" (Faint) is left out. styles_buttons_*: the tiles in every look.
-    static int StylesRun(WristPanel wrist, PanelData data, Painter painter, ConfigStore cfg, Gpu gpu, string dir)
+    static int StylesRun(WristPanel wrist, PanelData data, Painter painter, ConfigStore cfg, Gpu gpu, string dir, string tag = "")
     {
         var wcfg = cfg.Data.Wrist;
         string qa = Path.Combine(dir, "qa");
@@ -1377,8 +1598,8 @@ static class Tools
         wcfg.Background = "panel";
         data.FakeVram = vram0;
         data.Vr.GpuMs = gpu0;
-        foreach (var look in lowest.Keys) Log.Info($"styles {look}: lowest text contrast {lowest[look].cr:0.0}:1 ({lowest[look].what})");
-        Log.Info($"layout styles: {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
+        foreach (var look in lowest.Keys) Log.Info($"styles{tag} {look}: lowest text contrast {lowest[look].cr:0.0}:1 ({lowest[look].what})");
+        Log.Info($"layout styles{tag}: {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
         return problems;
     }
 

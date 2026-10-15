@@ -63,6 +63,7 @@ static class Theme
     public static void Apply(AppearanceConfig a)
     {
         Classic = a.Style == "classic";
+        UserFont = a.Font != null && Array.IndexOf(FontsInstalled, a.Font) >= 0 ? a.Font : null;   // not on this PC: the default
         if (Classic)
         {
             // one grey window face for every piece of chrome, white wells, black text, navy selection
@@ -155,13 +156,22 @@ static class Theme
             if (!has(DisplayFont)) DisplayFont = "Segoe UI";
             if (!has(IconFont)) IconFont = "Segoe MDL2 Assets";
             if (!has(ClassicFont)) ClassicFont = "Tahoma";
+            FontsInstalled = Array.FindAll(FontChoices, has);
         }
         catch { }
     }
 
+    // Look > Font: typefaces that come with Windows 10 / 11 and read well small on a watch, offered when installed. The modern
+    // style only - the 95 skin keeps its pixel font, icons their icon font. null = the default pair above (Segoe UI Variable).
+    public static readonly string[] FontChoices =
+        { "Bahnschrift", "Tahoma", "Trebuchet MS", "Calibri", "Candara", "Georgia", "Consolas", "Cascadia Mono", "Comic Sans MS" };
+    public static string[] FontsInstalled { get; private set; } = FontChoices;     // narrowed by ResolveFonts
+    public static string UserFont { get; private set; }                             // the chosen one (Apply), null = default
+    public static string DefaultFontName => UiFont.Replace(" Text", "");
+
     // the typeface for UI text and big numbers in the current skin
-    public static string Font => Classic ? ClassicFont : UiFont;
-    public static string Display => Classic ? ClassicFont : DisplayFont;
+    public static string Font => Classic ? ClassicFont : UserFont ?? UiFont;
+    public static string Display => Classic ? ClassicFont : UserFont ?? DisplayFont;
 
     // Segoe Fluent Icons code points
     public const string IcoKeyboard = "\uE765";
@@ -317,7 +327,7 @@ public sealed class Painter : IDisposable
                 foreach (var old in _formats.Values) old.Dispose();
                 _formats.Clear();
             }
-            f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, size, "en-us");
+            f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, size * FontScale(family), "en-us");
             f.TextAlignment = h;
             f.ParagraphAlignment = v;
             f.WordWrapping = wrap ? WordWrapping.Wrap : WordWrapping.NoWrap;
@@ -608,7 +618,10 @@ public sealed class Painter : IDisposable
     {
         if (string.IsNullOrEmpty(s) || NoText) return;
         TextSpy?.Invoke(s, r, c, size, w, family);
-        var f = Format(family ?? Theme.Font, size, w, h, v, wrap);
+        FitSpy?.Invoke(s, r, size, w, family ?? Theme.Font, wrap, h, v, 0);
+        FontCheck();
+        family ??= Theme.Font;
+        var f = Format(family, size, w, h, v, wrap);
         // the 95 skin's GDI-measured pixel text stays exactly as it was
         if (PixelMode)
         {
@@ -622,6 +635,7 @@ public sealed class Painter : IDisposable
             // a ticking clock or a springing card makes new ones all the time: start over rather than grow forever
             if (_layouts.Count >= 1000) DropLayouts();
             lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            if (Tabular(family, s)) Figures(lay, s, family, size, w);
             _layouts[key] = lay;
         }
         Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
@@ -650,7 +664,10 @@ public sealed class Painter : IDisposable
         if (string.IsNullOrEmpty(s) || NoText) return;
         if (PixelMode || tracking == 0 || s.Length < 2) { Text(s, r, c, size, w, h, v, family); return; }
         TextSpy?.Invoke(s, r, c, size, w, family);
-        var f = Format(family ?? Theme.Font, size, w, h, v, false);
+        FitSpy?.Invoke(s, r, size, w, family ?? Theme.Font, false, h, v, tracking);
+        FontCheck();
+        family ??= Theme.Font;
+        var f = Format(family, size, w, h, v, false);
         float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
         var key = (s, f, lw, lh, tracking);
         if (!_tracked.TryGetValue(key, out var lay))
@@ -659,6 +676,7 @@ public sealed class Painter : IDisposable
             lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
             using (var l1 = lay.QueryInterface<IDWriteTextLayout1>())
                 l1.SetCharacterSpacing(0, tracking, 0, new TextRange(0, (uint)(s.Length - 1)));
+            if (Tabular(family, s)) Figures(lay, s, family, size, w, tracking);
             _tracked[key] = lay;
         }
         Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
@@ -673,6 +691,7 @@ public sealed class Painter : IDisposable
     // from the top of a line of this text to its baseline, and the line's height (text drawn ParagraphAlignment.Near)
     public (float baseline, float height) TextLine(float size, FontWeight w = FontWeight.Normal, string family = null)
     {
+        FontCheck();
         family ??= Theme.Font;
         var key = (size, w, family);
         if (_lines.TryGetValue(key, out var m)) return m;
@@ -686,12 +705,150 @@ public sealed class Painter : IDisposable
         return m;
     }
 
+    // ---- Look > Font ----
+    // A typeface of the list is drawn no wider than the default one: its size scaled by the default's width over its own (a sample of
+    // the watch's and the settings' words, and of clock figures), never above 1 - so every layout made for Segoe UI still fits, and a
+    // narrower font keeps its size. Its figures are lining and tabular (OpenType 'lnum' + 'tnum'): a ticking clock or a rolling
+    // digit does not jiggle the text around it, and old-style figures do not drop below the line; a font without tabular figures
+    // has each digit padded out to the widest one's cell. The default font (and the 95 skin) draws exactly as before.
+    IDWriteTypography _figures;
+    string _font;                                    // the chosen font the caches were filled with
+    readonly Dictionary<(string, FontWeight), float[]> _digitPads = new();
+    readonly Dictionary<string, float> _scales = new();
+    static readonly string[] Notes = { "since 11:53", "since 23:16", "since 1:23 PM", "September", "Szeptember", "Wednesday", "csütörtök" };
+
+    // --snapshot's fit check: every text drawn - the family it is drawn in, whether it wraps, its alignment and letter spacing
+    public Action<string, RectangleF, float, FontWeight, string, bool, TextAlignment, ParagraphAlignment, float> FitSpy;
+
+    // the chosen font changed: what was laid out and measured for the last one goes (a pick is rare, the caches are big)
+    void FontCheck()
+    {
+        if (string.Equals(_font, Theme.UserFont, StringComparison.Ordinal)) return;
+        _font = Theme.UserFont;
+        DropLayouts();
+        _widths.Clear();
+        _heights.Clear();
+        _lines.Clear();
+    }
+
+    // 1 for the default font and anything not in the list
+    public float FontScale(string family)
+    {
+        if (family == null || Array.IndexOf(Theme.FontChoices, family) < 0) return 1;
+        if (_scales.TryGetValue(family, out float k)) return k;
+        const string Words = "Time in VR since 11:53 Wednesday, September 30 Battery Keyboard Desktops Settings Now playing Midnight City";
+        const string Clock = "12:58 23:47 100% 86 fps 9.3 ms";
+        k = 1;
+        foreach (var w in new[] { FontWeight.Normal, FontWeight.SemiBold })
+            k = MathF.Min(k, RawWidth(Theme.UiFont, Words, w, false) / RawWidth(family, Words, w, true));
+        k = MathF.Min(k, RawWidth(Theme.DisplayFont, Clock, FontWeight.Bold, false) / RawWidth(family, Clock, FontWeight.Bold, true));
+        // and each of the tightest notes on its own (a 1x1's "since 11:53" under its value: Segoe UI's narrow 1 makes room there)
+        foreach (var note in Notes)
+            k = MathF.Min(k, RawWidth(Theme.UiFont, note, FontWeight.SemiBold, false) / RawWidth(family, note, FontWeight.SemiBold, true));
+        k = MathF.Floor(k * 100) / 100;
+        _scales[family] = k;
+        return k;
+    }
+
+    // s at 100 px, laid out on its own (no cache, no scale); figures: as a font of the list draws them (lining, tabular, padded)
+    float RawWidth(string family, string s, FontWeight w, bool figures)
+    {
+        using var f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, 100, "en-us");
+        using var lay = _g.DWrite.CreateTextLayout(s, f, 100000, 1000);
+        float pad = 0;
+        if (figures)
+        {
+            lay.SetTypography(FiguresTypography(), new TextRange(0, (uint)s.Length));
+            var pads = DigitPads(family, w);
+            if (pads != null) foreach (char ch in s) if ((uint)(ch - '0') <= 9) pad += pads[ch - '0'];
+        }
+        return lay.Metrics.WidthIncludingTrailingWhitespace + pad;
+    }
+
+    IDWriteTypography FiguresTypography()
+    {
+        if (_figures == null)
+        {
+            _figures = _g.DWrite.CreateTypography();
+            _figures.AddFontFeature(new FontFeature { NameTag = FontFeatureTag.LiningFigures, Parameter = 1 });
+            _figures.AddFontFeature(new FontFeature { NameTag = FontFeatureTag.TabularFigures, Parameter = 1 });
+        }
+        return _figures;
+    }
+
+    // a font of the list (the chosen one, or a row of the list itself) with figures in the text
+    bool Tabular(string family, string s)
+    {
+        if (Theme.Classic || Array.IndexOf(Theme.FontChoices, family) < 0) return false;
+        foreach (char ch in s) if ((uint)(ch - '0') <= 9) return true;
+        return false;
+    }
+
+    // the list font's figures on a layout of s (and the padding where it has no tabular ones); 'tracking' = TrackedText's spacing
+    void Figures(IDWriteTextLayout lay, string s, string family, float size, FontWeight w, float tracking = 0)
+    {
+        lay.SetTypography(FiguresTypography(), new TextRange(0, (uint)s.Length));
+        var pads = DigitPads(family, w);
+        if (pads == null) return;
+        float k = size * FontScale(family) / 200;
+        using var l1 = lay.QueryInterface<IDWriteTextLayout1>();
+        for (int i = 0; i < s.Length; i++)
+        {
+            int d = s[i] - '0';
+            if ((uint)d > 9 || pads[d] <= 0) continue;
+            float half = pads[d] * k;
+            l1.SetCharacterSpacing(half, half + (i < s.Length - 1 ? tracking : 0), 0, new TextRange((uint)i, 1));
+        }
+    }
+
+    // per digit, how much narrower than the widest digit it is at 100 px (unscaled, with the figures above); null = all one width
+    float[] DigitPads(string family, FontWeight w)
+    {
+        if (_digitPads.TryGetValue((family, w), out var pads)) return pads;
+        using var f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, 100, "en-us");
+        var adv = new float[10];
+        for (int d = 0; d < 10; d++)
+        {
+            using var lay = _g.DWrite.CreateTextLayout(((char)('0' + d)).ToString(), f, 10000, 1000);
+            lay.SetTypography(FiguresTypography(), new TextRange(0, 1));
+            adv[d] = lay.Metrics.WidthIncludingTrailingWhitespace;
+        }
+        float max = 0, min = float.MaxValue;
+        foreach (float a in adv) { max = MathF.Max(max, a); min = MathF.Min(min, a); }
+        if (max - min > 0.05f)
+        {
+            pads = new float[10];
+            for (int d = 0; d < 10; d++) pads[d] = max - adv[d];
+        }
+        _digitPads[(family, w)] = pads;
+        return pads;
+    }
+
+    // how far the ink of a text sticks out of its box, laid out the way Text / TrackedText lay it out (--snapshot's fit check):
+    // the most on any side, in px (0 or less: inside)
+    public float Overhang(string s, RectangleF r, float size, FontWeight w, string family, bool wrap, TextAlignment h, ParagraphAlignment v,
+        float tracking = 0)
+    {
+        if (string.IsNullOrEmpty(s)) return 0;
+        FontCheck();
+        family ??= Theme.Font;
+        var f = Format(family, size, w, h, v, wrap);
+        using var lay = _g.DWrite.CreateTextLayout(s, f, MathF.Max(0, r.Width), MathF.Max(0, r.Height));
+        if (tracking != 0 && s.Length > 1)
+            using (var l1 = lay.QueryInterface<IDWriteTextLayout1>())
+                l1.SetCharacterSpacing(0, tracking, 0, new TextRange(0, (uint)(s.Length - 1)));
+        if (Tabular(family, s)) Figures(lay, s, family, size, w, tracking);
+        var o = lay.OverhangMetrics;
+        return MathF.Max(MathF.Max(o.Left, o.Right), MathF.Max(o.Top, o.Bottom));
+    }
+
     public void Icon(string glyph, RectangleF r, uint c, float size) =>
         Text(glyph, r, c, size, FontWeight.Normal, TextAlignment.Center, ParagraphAlignment.Center, Theme.IconFont);
 
     public float MeasureWidth(string s, float size, FontWeight w = FontWeight.Normal, string family = null)
     {
         if (string.IsNullOrEmpty(s)) return 0;
+        FontCheck();
         family ??= Theme.Font;
         var key = (s, size, w, PixelMode ? family + "\u0001px" : family);
         if (_widths.TryGetValue(key, out float cached)) return cached;
@@ -699,6 +856,7 @@ public sealed class Painter : IDisposable
         using var layout = PixelMode
             ? _g.DWrite.CreateGdiCompatibleTextLayout(s, (uint)s.Length, f, 10000, 1000, 1f, null, false)
             : _g.DWrite.CreateTextLayout(s, f, 10000, 1000);
+        if (!PixelMode && Tabular(family, s)) Figures(layout, s, family, size, w);
         float width = layout.Metrics.WidthIncludingTrailingWhitespace;
         if (_widths.Count > 2000) _widths.Clear();     // chat text etc. would grow it forever
         _widths[key] = width;
@@ -710,11 +868,13 @@ public sealed class Painter : IDisposable
     public float MeasureHeight(string s, float size, FontWeight w, float width, string family = null)
     {
         if (string.IsNullOrEmpty(s) || width <= 0) return 0;
+        FontCheck();
         family ??= Theme.Font;
         var key = (s, size, w, width, family);
         if (_heights.TryGetValue(key, out float cached)) return cached;
         var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, true);
         using var layout = _g.DWrite.CreateTextLayout(s, f, width, 100000);
+        if (Tabular(family, s)) Figures(layout, s, family, size, w);
         float h = layout.Metrics.Height;
         if (_heights.Count > 1000) _heights.Clear();
         _heights[key] = h;
@@ -777,5 +937,7 @@ public sealed class Painter : IDisposable
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();
+        _figures?.Dispose();
+        _figures = null;
     }
 }
