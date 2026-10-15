@@ -26,7 +26,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     readonly ConfigStore _cfg;
     readonly PointerState _ptr = new();
     Surface _surf, _canvas95, _retired;     // _retired: the last size's texture, freed once the overlay has the new one
-    int _tw, _th, _w95, _layoutKey = -1;
+    int _tw, _th, _w95, _layoutKey = -1, _look = -1;
     public VrOverlay Ov { get; private set; }
     float _vis, _lastSize, _wheelAcc, _drawnDim = -1;
     bool _dirty = true, _wasOn, _theater, _drawnCurved;
@@ -131,6 +131,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         if (key != _layoutKey && !held) Relayout(key);
         // changed elsewhere (grabbing the big screen, the settings window): the sliders follow
         if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved) _dirty = true;
+        if (_look != Theme.Version) { _look = Theme.Version; _dirty = true; }      // a new look (colours, font): drawn again
 
         // under the middle of the screen, the same height on your view whatever the distance, bent like the screen,
         // 1 cm nearer than it (a growing big screen must not cover it); it rises into place a little as it fades in.

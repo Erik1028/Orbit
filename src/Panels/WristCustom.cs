@@ -1156,12 +1156,13 @@ public sealed partial class WristPanel
     }
 
     // A 1x1's note under its value ("September", "since 17:16"): 15 px, down to 14 for a long one, else its next form. Under
-    // 15 px its grey is a touch lighter (toward the text colour), so the smaller letters still read on every card.
+    // 15 px its grey is a touch lighter (toward the text colour), so the smaller letters still read on every card. A font picked
+    // in Look > Font takes the next form rather than going under 15 px (a narrower one would fit a long form there).
     void Note(float x, float by, float iw, string[] forms)
     {
         string s = forms[0];
-        float size = FitSize(s, iw, 15, FontWeight.SemiBold, null);
-        for (int i = 1; i < forms.Length && size < 14; i++) { s = forms[i]; size = FitSize(s, iw, 15, FontWeight.SemiBold, null); }
+        float size = FitSize(s, iw, 15, FontWeight.SemiBold, null), least = Theme.UserFont != null ? 15 : 14;
+        for (int i = 1; i < forms.Length && size < least; i++) { s = forms[i]; size = FitSize(s, iw, 15, FontWeight.SemiBold, null); }
         size = MathF.Max(14, size);
         TextAt(Ellipsize(s, iw, size, FontWeight.SemiBold), x, by, iw + 2, size < 15 ? Theme.Mix(Sub, Bento.Text, 0.3f) : Sub, size, FontWeight.SemiBold);
     }

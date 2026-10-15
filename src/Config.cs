@@ -180,6 +180,8 @@ public sealed class AppearanceConfig
     public bool NightMode { get; set; } = false;       // every panel in VR dimmed
     public string Style { get; set; } = "modern";      // modern | classic (Windows 95)
     public float NightBrightness { get; set; } = 0.45f;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Font { get; set; }                   // Look > Font (modern only): one of Theme.FontChoices; null = Segoe UI Variable
 }
 
 // One saved arrangement ("Desk", "Bed", ...): where every panel was, its size and curve, night mode.

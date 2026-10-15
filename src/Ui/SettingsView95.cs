@@ -506,7 +506,7 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
             };
             changed = true;
         }

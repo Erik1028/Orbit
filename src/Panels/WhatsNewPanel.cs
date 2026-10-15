@@ -22,6 +22,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
     VrSession _vr;
     float _vis, _scroll, _width = 0.75f, _twoStartWidth;
     bool _dirty = true, _placed;
+    int _look = -1;
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
     IReadOnlyList<WhatsNew.Entry> _list = Array.Empty<WhatsNew.Entry>();
@@ -65,6 +66,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         if (Ov == null) return;
         bool want = show && list != null && list.Count > 0;
         if (want && (!ReferenceEquals(list, _list) || sub != _sub)) { _list = list; _sub = sub; _scroll = 0; _dirty = true; }
+        if (_look != Theme.Version) { _look = Theme.Version; _dirty = true; }      // a new look (colours, font): drawn again
         if (want && !_placed) BringHere();
         _vis = Math.Clamp(_vis + Math.Sign((want ? 1 : 0) - _vis) * dt / 0.22f, 0, 1);
         if (_vis <= 0 || !_placed)
