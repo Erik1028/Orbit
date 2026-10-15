@@ -122,6 +122,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             OnExit = ToggleTheater,
             OnTheater = s => { _lastScreen = s; if (!_theater.On) ToggleTheater(); },
             OnSettings = () => { _theater.Apply(C.Theater); _cfg.MarkDirty(); _win.Dirty = true; },
+            OnKeyboard = ToggleKeyboard,
+            KeyboardShown = () => C.Keyboard.Visible,
         };
         _status = new StatusLine(_osc);
         _data.Dock = _dockSnap;
@@ -949,6 +951,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
     // the bar under a screen: under the big screen in theater mode (the switcher), else under the monitor / window
     // whose lower part a laser points at (Theater button + settings)
+    ITheaterScreen _barAnchor;
+    double _barAnchorAt;
+
     void UpdateTheaterBar(double now, float dt)
     {
         _theaterChoices.Clear();
@@ -966,11 +971,15 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         }
         ITheaterScreen pointed = null;
         bool lower = false, onBar = false;
+        // outside theater mode the bar belongs to the middle monitor only (Erik: it jumping under whichever monitor the
+        // cursor crossed was distracting); the pick is re-read once a second, it allocates
+        if (!_theater.On && now >= _barAnchorAt) { _barAnchor = TheaterAnchor(); _barAnchorAt = now + 1; }
         foreach (var la in _lasers)
         {
             if (la.Hovered == null) continue;
             if (la.Hovered == _theaterBar) { onBar = true; continue; }
             if (la.Hovered is not ITheaterScreen s) continue;
+            if (!_theater.On && s != _barAnchor) continue;
             var ts = s.TextureSize;
             bool low = ts.Y > 0 && la.HoverPx.Y / ts.Y > 0.72f;
             if (pointed == null || low) { pointed = s; lower = low; }

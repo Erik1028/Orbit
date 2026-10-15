@@ -8,17 +8,19 @@ using Vortice.DirectWrite;
 namespace Orbit;
 
 // The bar under a screen.
-// - Under a monitor or mirrored window it shows up when you point at the lower part of it (or at the bar itself): a
-//   Theater button and theater mode's settings - how dark the world gets, the big screen's size, curved or flat.
+// - Under the middle monitor (the one Recenter centres on) it shows up when you point at the lower part of it (or at the
+//   bar itself): a Theater button and theater mode's settings - how dark the world gets, the big screen's size, curved
+//   or flat. It stays under that monitor: pointing at the others does not move it about.
 // - In theater mode it sits under the big screen while you point at it (and for a moment when it starts): a button for
 //   every monitor and window to switch to (left to right as on your desk, then the windows), the same settings, live,
 //   and Exit.
+// - Both: a keyboard button (lit while the keyboard is shown).
 // It fades away when you are not using it, so nothing sits under the picture. Turned off: Settings > Monitors.
 public sealed class TheaterBar : IPointerTarget, IDisposable
 {
     // modern: pills on a rounded bar; 95: push buttons, trackbars and a check box on a strip, half-size canvas drawn 2x
     const int H = 84, Pad = 10, ChipW = 230, Gap = 8, GoW = 196, SliderW = 210, CurveW = 168;
-    const int H95 = 34, Btn95W = 150, Exit95W = 46, Go95W = 86, Track95W = 84;
+    const int H95 = 34, Btn95W = 150, Exit95W = 46, Go95W = 86, Track95W = 84, Kb95W = 86;
 
     readonly Gpu _g;
     readonly Painter _p;
@@ -29,7 +31,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     int _tw, _th, _w95, _layoutKey = -1, _look = -1;
     public VrOverlay Ov { get; private set; }
     float _vis, _lastSize, _wheelAcc, _drawnDim = -1;
-    bool _dirty = true, _wasOn, _theater, _drawnCurved;
+    bool _dirty = true, _wasOn, _theater, _drawnCurved, _drawnKb;
     double _showUntil, _holdUntil;
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
@@ -41,6 +43,8 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     public Action<ITheaterScreen> OnTheater;    // under a screen: start theater mode with it
     public Action OnExit;
     public Action OnSettings;                   // a setting changed (size and curve apply to the big screen at once)
+    public Action OnKeyboard;                   // the keyboard button: show / hide the keyboard
+    public Func<bool> KeyboardShown;
 
     TheaterConfig C => _cfg.Data.Theater;
 
@@ -130,7 +134,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         int key = (th ? 1000 + _choices.Count * 2 : 0) + (Theme.Classic ? 1 : 0);
         if (key != _layoutKey && !held) Relayout(key);
         // changed elsewhere (grabbing the big screen, the settings window): the sliders follow
-        if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved) _dirty = true;
+        if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved || KbOn != _drawnKb) _dirty = true;
         if (_look != Theme.Version) { _look = Theme.Version; _dirty = true; }      // a new look (colours, font): drawn again
 
         // under the middle of the screen, the same height on your view whatever the distance, bent like the screen,
@@ -183,12 +187,13 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         int n = _choices.Count;
         if (Theme.Classic)
         {
-            _w95 = (int)MathF.Ceiling(4 + (_theater ? n * (Btn95W + 3) : Go95W + 3) + SettingsWidth95() + (_theater ? Exit95W + 3 : 0) + 4);
+            _w95 = (int)MathF.Ceiling(4 + (_theater ? n * (Btn95W + 3) : Go95W + 3) + SettingsWidth95() + Kb95W + 3 + (_theater ? Exit95W + 3 : 0) + 4);
             _tw = _w95 * 2; _th = H95 * 2;
         }
         else
         {
-            _tw = Pad + (_theater ? n * (ChipW + Gap) : GoW + Gap) + SliderW + Gap + SliderW + Gap + CurveW + (_theater ? Gap + (H - 2 * Pad) : 0) + Pad;
+            _tw = Pad + (_theater ? n * (ChipW + Gap) : GoW + Gap) + SliderW + Gap + SliderW + Gap + CurveW + Gap + (H - 2 * Pad) +
+                  (_theater ? Gap + (H - 2 * Pad) : 0) + Pad;
             _th = H;
         }
         _retired?.Dispose();
@@ -278,6 +283,15 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         if (_ui.Toggle("thb.curve", new RectangleF(g.X + 2 * (SliderW + Gap), Pad, CurveW - 10, ch), "Curved", ref curved))
         { C.Curved = curved; changed = true; }
         x = g.Right + Gap;
+        // the keyboard: lit while it is shown
+        bool kbOn = KbOn;
+        var kr = new RectangleF(x, Pad, ch, ch);
+        bool kb = _ui.Clickable("thb.kb", kr, out bool kh, out bool kheld);
+        float ka = _ui.Anim("thb.kb#a", kbOn ? 1 : 0, 14), khv = _ui.Anim("thb.kb#h", kh ? 1 : 0, 18), kp = _ui.Anim("thb.kb#p", kheld ? 1 : 0, 30);
+        uint kbg = Theme.Mix(Theme.Mix(Theme.Mix(Theme.Panel3, Theme.Accent, ka), 0xFFFFFFFF, 0.12f * khv * (1 - ka)), 0xFF000000, 0.2f * kp);
+        _p.Fill(RectangleF.Inflate(kr, -ch * 0.04f * kp, -ch * 0.04f * kp), kbg, ch / 2);
+        _p.Icon(Theme.IcoKeyboard, kr, Theme.Mix(Theme.Text, Theme.OnAccent, ka), 20);
+        x += ch + Gap;
         if (_theater)
         {
             // Exit: everything goes back
@@ -289,8 +303,10 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         }
         _p.End();
         _ui.End();
-        Act(pick, go, exit, changed);
+        Act(pick, go, exit, changed, kb);
     }
+
+    bool KbOn => KeyboardShown?.Invoke() == true;
 
     void Draw95()
     {
@@ -338,20 +354,25 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         bool curved = C.Curved;
         if (_ui.Check95("thb95.curve", x, 11, "&Curved", ref curved)) { C.Curved = curved; changed = true; }
         x += 19 + _ui.LabelWidth95("Curved") + 10;
+        // the keyboard: a push button that stays pushed in while the keyboard is shown
+        bool kb = _ui.Button95("thb95.kb", new RectangleF(x, by, Kb95W, 22), "&Keyboard", true, false, KbOn, W95Icons.Id.Keyboard);
+        x += Kb95W + 3;
         if (_theater) exit = _ui.Button95("thb95.x", new RectangleF(x, by, Exit95W, 22), "Exit");
         _p.End();
         _p.Begin(_surf.Bitmap, 0x00000000);
         _p.ImageNearest(_canvas95.Bitmap, new RectangleF(0, 0, _tw, _th));
         _p.End();
         _ui.End();
-        Act(pick, go, exit, changed);
+        Act(pick, go, exit, changed, kb);
     }
 
-    void Act(ITheaterScreen pick, bool go, bool exit, bool changed)
+    void Act(ITheaterScreen pick, bool go, bool exit, bool changed, bool kb)
     {
         _lastSize = SizeNow;
         _drawnDim = C.Dim;
         _drawnCurved = C.Curved;
+        _drawnKb = KbOn;
+        if (kb) { OnKeyboard?.Invoke(); _dirty = true; }
         if (changed) { OnSettings?.Invoke(); _dirty = true; }
         if (pick != null) { OnSwitch?.Invoke(pick); _dirty = true; }
         else if (exit) OnExit?.Invoke();
