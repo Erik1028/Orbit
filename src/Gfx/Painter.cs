@@ -425,6 +425,75 @@ public sealed class Painter : IDisposable
         _grads.Clear();
     }
 
+    // ---- the squircle: a superellipse, |x/a|^n + |y/b|^n = 1 (the 1x1 analog clock's face, the shape of a phone's widget) ----
+    // Its outline is made once per size and exponent, around (0, 0), and drawn moved into place; a few are kept (a card springing
+    // to a new size makes one a frame: past 32 they start over). Plain rectangles in the 95 skin.
+    readonly Dictionary<(float, float, float), ID2D1PathGeometry> _squircles = new();
+
+    ID2D1PathGeometry Squircle(float w, float h, float n)
+    {
+        var key = (w, h, n);
+        if (_squircles.TryGetValue(key, out var geo)) return geo;
+        if (_squircles.Count >= 32) DropSquircles();
+        geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            // the parametric form (|cos t|^(2/n), |sin t|^(2/n)): its points crowd where it bends, at the corners
+            const int N = 160;
+            float a = w / 2, b = h / 2, e = 2 / n;
+            Vector2 At(int i)
+            {
+                float t = i * MathF.Tau / N, c = MathF.Cos(t), s = MathF.Sin(t);
+                return new(a * MathF.Sign(c) * MathF.Pow(MathF.Abs(c), e), b * MathF.Sign(s) * MathF.Pow(MathF.Abs(s), e));
+            }
+            sink.BeginFigure(At(0), FigureBegin.Filled);
+            for (int i = 1; i < N; i++) sink.AddLine(At(i));
+            sink.EndFigure(FigureEnd.Closed);
+            sink.Close();
+        }
+        _squircles[key] = geo;
+        return geo;
+    }
+
+    void DropSquircles()
+    {
+        foreach (var g in _squircles.Values) g.Dispose();
+        _squircles.Clear();
+    }
+
+    // the squircle filling r: c0 -> c1 laid over r as FillGradient lays it (c0 == c1: flat)
+    public void FillSquircle(RectangleF r, uint c0, uint c1, float angleDeg = 90, float span = 1, float n = 4)
+    {
+        if (Theme.Classic || PixelMode) { Fill(r, c0); return; }
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var geo = SquircleAt(r, n, out var at, out var old);
+        Dc.FillGeometry(geo, c0 == c1 ? Brush(c0) : Place(GradBrush(c0, c1, c1, 2), at, angleDeg, span));
+        Dc.Transform = old;
+    }
+
+    // its outline, centred on r's squircle (inset r by half the width to keep it inside); three stops: a, b half-way, c - a rim lit
+    // from one side
+    public void StrokeSquircle(RectangleF r, uint a, uint b, uint c, float width, float angleDeg = 90, float span = 1, float n = 4)
+    {
+        if (Theme.Classic || PixelMode) { Stroke(r, a, width); return; }
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var geo = SquircleAt(r, n, out var at, out var old);
+        Dc.DrawGeometry(geo, a == b && b == c ? Brush(a) : Place(GradBrush(a, b, c, 3), at, angleDeg, span), width);
+        Dc.Transform = old;
+    }
+
+    public void StrokeSquircle(RectangleF r, uint c, float width, float n = 4) => StrokeSquircle(r, c, c, c, width, 90, 1, n);
+
+    // r's outline, the transform moved to r's centre (the caller puts 'old' back); 'at' is r in that moved space (where a gradient goes)
+    ID2D1PathGeometry SquircleAt(RectangleF r, float n, out RectangleF at, out Matrix3x2 old)
+    {
+        var geo = Squircle(r.Width, r.Height, n);
+        old = Dc.Transform;
+        Dc.Transform = Matrix3x2.CreateTranslation(r.X + r.Width / 2, r.Y + r.Height / 2) * old;
+        at = new RectangleF(-r.Width / 2, -r.Height / 2, r.Width, r.Height);
+        return geo;
+    }
+
     // ---- Windows 95 shapes ----
 
     // one device pixel - two from 1.5x up - so the 3D edges stay crisp at any scale
@@ -774,6 +843,7 @@ public sealed class Painter : IDisposable
         _brush?.Dispose();
         _brush = null;
         DropGradients();
+        DropSquircles();
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();

@@ -207,10 +207,11 @@ static class Tools
             {
                 new() { Type = "time", X = 0, Y = 0, W = 1, H = 1 }, new() { Type = "time", X = 1, Y = 0, W = 2, H = 2 },
                 new() { Type = "date", X = 3, Y = 0, W = 1, H = 1 }, new() { Type = "time", X = 4, Y = 0, W = 2, H = 1 },
+                new() { Type = "analog", X = 3, Y = 1, W = 1, H = 1 },
             };
             static string Sizes(List<WatchWidget> l) => string.Join(" ", l.Select(w => $"{w.Type}{w.W}x{w.H}"));
             string want = Sizes(Extras());
-            Log.Info($"sizes: Clean() keeps a modern-made face (time 1x1, 2x2, date 1x1) {Sizes(WatchWidgets.Clean(Extras())) == want} (want True)");
+            Log.Info($"sizes: Clean() keeps a modern-made face (time 1x1, 2x2, date 1x1, analog 1x1) {Sizes(WatchWidgets.Clean(Extras())) == want} (want True)");
             var time = WatchWidgets.Find("time");
             var one = new List<WatchWidget> { new() { Type = "time", X = 0, Y = 0, W = 2, H = 1 }, new() { Type = "date", X = 0, Y = 2, W = 2, H = 1 } };
             string S((int W, int H)? s) => s is { } v ? $"{v.W}x{v.H}" : "none";
@@ -226,6 +227,11 @@ static class Tools
             var addM = WatchWidgets.Add(new List<WatchWidget>(full), time, 2, 1, false);
             var add95 = WatchWidgets.Add(new List<WatchWidget>(full), time, 2, 1, true);
             Log.Info($"sizes: a time added into a 1x1 hole modern {(addM == null ? "none" : $"{addM.W}x{addM.H}")} (want 1x1), 95 {(add95 == null ? "none" : $"{add95.W}x{add95.H}")} (want none)");
+            var analog = WatchWidgets.Find("analog");
+            var anM = WatchWidgets.Add(new List<WatchWidget>(full), analog, 2, 1, false);
+            var an95 = WatchWidgets.Add(new List<WatchWidget>(full), analog, 2, 1, true);
+            Log.Info($"sizes: an analog clock added into a 1x1 hole modern {(anM == null ? "none" : $"{anM.W}x{anM.H}")} (want 1x1), 95 {(an95 == null ? "none" : $"{an95.W}x{an95.H}")} (want none); " +
+                     $"into an empty face {(WatchWidgets.Add(new List<WatchWidget>(), analog) is { } e ? $"{e.W}x{e.H}" : "none")} (want 2x2)");
         }
         // a used "Bed" profile with night mode for the Layouts tab
         cfg.Data.Layouts[1].Saved = new DateTime(2026, 10, 13, 23, 40, 0);
@@ -488,7 +494,7 @@ static class Tools
         {
             var miss = new List<string>();
             int n = 0;
-            foreach (var kind in new[] { "time", "date", "calendar", "session" })
+            foreach (var kind in new[] { "time", "date", "calendar", "session", "analog" })
                 foreach (var (w, h) in WatchWidgets.Find(kind).Union)
                 {
                     n++;
@@ -506,7 +512,7 @@ static class Tools
                     wrist.CloseForTest();
                     wrist.PointerLeave(Hand.Left);
                 }
-            Log.Info($"opened widget{tag}: a tap on every time, date, calendar and time-in-VR size opened it {n - miss.Count} of {n} (want {n} of {n})" +
+            Log.Info($"opened widget{tag}: a tap on every time, date, calendar, time-in-VR and analog clock size opened it {n - miss.Count} of {n} (want {n} of {n})" +
                      (miss.Count > 0 ? ", not: " + string.Join(", ", miss) : ""));
             wcfg.Face = face0;
             wcfg.Widgets = null;
@@ -517,6 +523,28 @@ static class Tools
         StylesRun(wrist, data, painter, cfg, gpu, dir);
         System.Globalization.CultureInfo.CurrentCulture = culture0;
         TapFamily("");
+        // the 1x1 analog clock (Erik's picture: the macOS widget clock) close up, drawn at 2.5x (its card at 25,25 - 262,270) and as
+        // the watch has it: qa/analog_1x1_<moment / look>[_1x].png
+        foreach (var (tag, at, look, col) in new (string, TimeSpan, string, uint?)[]
+        {
+            ("0644", new(6, 44, 47), null, null), ("1009", new(10, 9, 30), null, null), ("0645", new(6, 45, 12), null, null), ("0220", new(2, 20, 50), null, null),
+            ("blue", new(10, 9, 30), null, 0xFF3B82F6), ("solid_teal", new(10, 9, 30), "solid", 0xFF14B8A6), ("glass", new(10, 9, 30), "glass", null),
+            ("header_pink", new(10, 9, 30), "header", 0xFFFF5D93), ("solid_white", new(10, 9, 30), "solid", 0xFFE5E7EB),
+        })
+        {
+            wcfg.Face = "custom";
+            wcfg.Widgets = new List<WatchWidget> { new() { Type = "analog", X = 0, Y = 0, W = 1, H = 1, Style = look, Color = col } };
+            wrist.TestNow = new DateTime(2026, 10, 15) + at;
+            foreach (float sc in new[] { 2.5f, 1f })
+            {
+                wrist.TestScale = sc;
+                wrist.Settle();
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"analog_1x1_{tag}{(sc == 1 ? "_1x" : "")}.png"));
+            }
+        }
+        wrist.TestScale = 1;
+        wrist.TestNow = null;
         wcfg.Face = face0;
         wcfg.Widgets = null;
         string Dump() => string.Join(" ", wcfg.Widgets.Select(w => $"{w.Type}@{w.X},{w.Y}:{w.W}x{w.H}"));
@@ -1360,10 +1388,18 @@ static class Tools
             foreach (var kind in WatchWidgets.Kinds)
                 foreach (var (w, h) in kind.SizesFor(false))
                 {
+                    if (kind.Id == "analog" && w == 1) continue;     // below, in every colour (the others keep the colours they had)
                     wcfg.Widgets = new List<WatchWidget>
                         { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} {w}x{h}", null);
                 }
+        // the 1x1 analog clock (its face is its card, ticks to its edge): each look in each colour and without one
+        foreach (var look in looks)
+            foreach (uint? c in turns.Select(x => (uint?)x).Append(null))
+            {
+                wcfg.Widgets = new List<WatchWidget> { new() { Type = "analog", X = 0, Y = 0, W = 1, H = 1, Style = look == "default" ? null : look, Color = c } };
+                Check(look, $"{look} analog 1x1 {(c is { } v ? (v & 0xFFFFFF).ToString("X6") : "auto")}", null);
+            }
         // the time family's cases (both languages and clocks, SteamVR on and off) in four looks
         foreach (var look in new[] { "default", "solid", "header", "glass" })
             foreach (var fc in FamilyCases())

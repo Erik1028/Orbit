@@ -35,7 +35,8 @@ public static class WatchWidgets
             Extra: new[] { (1, 1), (2, 2) }),
         new("date", "Date", "Date", "", W95Icons.Id.Clock, new[] { (2, 1), (3, 1), (4, 1), (6, 1) }, 1, Tone: 0, Extra: new[] { (1, 1) }),
         new("calendar", "Calendar", "Calendar", "", W95Icons.Id.Clock, new[] { (1, 1), (2, 1), (2, 2) }, 0, Tone: 0),
-        new("analog", "Analog clock", "Clock", "", W95Icons.Id.Clock, new[] { (2, 2), (3, 3), (4, 4) }, Tone: 0),
+        new("analog", "Analog clock", "Clock", "", W95Icons.Id.Clock, new[] { (2, 2), (3, 3), (4, 4) }, Tone: 0,
+            Extra: new[] { (1, 1) }),         // 1x1: the squircle clock (WristCustom.AnalogS)
         new("timer", "Timer", "Timer", "", W95Icons.Id.Clock, new[] { (1, 1), (2, 1), (2, 2) }, 2, Tone: 0),
         new("stopwatch", "Stopwatch", "Stopwatch", "", W95Icons.Id.Clock, new[] { (1, 1), (2, 1) }, 1, Tone: 0),
         new("session", "Time in VR", "Session", "", W95Icons.Id.Computer, Stat, Tone: 1),
