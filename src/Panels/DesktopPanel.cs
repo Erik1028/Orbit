@@ -229,6 +229,22 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
         if (_mouse.Panel == this) _mouse.Held = _leftDown || _rightDown;
     }
 
+    // a window dragged from one monitor onto the next: this panel carries the held button on (no up / down goes to
+    // Windows, so the drag continues) and lets it go when the trigger is released
+    public bool TakesDragFrom(IPointerTarget from, Hand h) =>
+        from is DesktopPanel o && o != this && Cfg.Mouse && o.Cfg.Mouse && (o._leftDown || o._rightDown) && _mouse.Hand == h && _mouse.Panel == o;
+
+    public void AdoptDrag(IPointerTarget from, Hand h)
+    {
+        var o = (DesktopPanel)from;
+        _leftDown = o._leftDown; _rightDown = o._rightDown;
+        o._leftDown = o._rightDown = false;
+        o._hovering[(int)h] = false;
+        _mouse.Hand = h; _mouse.Panel = this; _mouse.LastMove = Clock.Now;
+        _mouse.Held = _leftDown || _rightDown;
+        _lastPx = new Vector2(-100, -100);        // the next move always places the cursor here
+    }
+
     void ReleaseButtons()
     {
         bool had = _leftDown || _rightDown;

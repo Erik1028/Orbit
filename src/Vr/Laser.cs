@@ -31,6 +31,11 @@ public interface IPointerTarget
 
     // > 0: this hand drives the Windows cursor here, draw it at this many metres per screen pixel
     float LaserCursorScale(Hand h) => 0;
+
+    // A drag held on 'from' reaches this panel: true = it carries on here (the next monitor of the same Windows desktop),
+    // false = 'from' keeps the beam on its edge (pointer capture)
+    bool TakesDragFrom(IPointerTarget from, Hand h) => false;
+    void AdoptDrag(IPointerTarget from, Hand h) { }
 }
 
 // One hand's pointer: ray test against our overlays, hover/click/scroll forwarding,
@@ -217,8 +222,16 @@ public sealed class Laser : IDisposable
 
         // Pointer capture, like Windows: while the trigger is held on a panel, that panel keeps the beam past its edge, the
         // point held on the edge. A window dragged to the top of a monitor reaches the very top (snap to full screen), and
-        // the beam leaving the panel no longer lets the other hand take the mouse in the middle of the drag.
-        if (_press != null && best != _press && _press.Interactive && _press.Overlay != null
+        // the beam leaving the panel no longer lets the other hand take the mouse in the middle of the drag. Only another
+        // monitor takes the drag over (a window dragged across screens): the button stays down in Windows, the cursor follows.
+        if (_press != null && best != _press && best != null && best.TakesDragFrom(_press, _hand))
+        {
+            best.AdoptDrag(_press, _hand);
+            if (_pressSecondary == _press) _pressSecondary = best;
+            _press = best;
+            _freezeUntil = 0;
+        }
+        else if (_press != null && best != _press && _press.Interactive && _press.Overlay != null
             && _press.Overlay.ProjectLocal(vr, o, d, out float cDist, out var cUv, out var cPoint, out var cNormal))
         {
             best = _press; bestDist = cDist; bestUv = cUv; bestPoint = cPoint; bestNormal = cNormal;
