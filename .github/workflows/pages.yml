@@ -1,4 +1,4 @@
-# Publishes the website in site/ to GitHub Pages (https://erik1028.github.io/Orbit/).
+# Publishes the website in site/ to GitHub Pages (https://erik1028.github.io/OrbitOverlay/).
 # The screenshots (docs/img) and the changelog (docs/CHANGELOG.md) are copied in at build time,
 # so the site always shows the same pictures and "What's new" as the app.
 name: Website
