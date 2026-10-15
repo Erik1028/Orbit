@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrbitOverlay guide</title>
+<meta name="description" content="Every OrbitOverlay watch widget with its sizes, and fixes for the most common problems.">
+<meta property="og:title" content="OrbitOverlay guide">
+<meta property="og:description" content="Every watch widget with its sizes, and fixes for the most common problems.">
+<meta property="og:image" content="https://erik1028.github.io/OrbitOverlay/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#171a24">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+<div class="wrap">
+<a class="logo" href="./"><img src="favicon.svg" width="30" height="30" alt="">OrbitOverlay</a>
+<nav aria-label="Sections"><a class="opt" href="#widgets">Widgets</a><a class="opt" href="#help">Troubleshooting</a><a href="guide.html" aria-current="page">Guide</a><a class="opt" href="https://github.com/Erik1028/OrbitOverlay">GitHub</a><a class="lang" href="hu/" hreflang="hu" lang="hu">HU</a></nav>
+</div>
+</header>
+
+<main class="wrap">
+
+<div class="page-head">
+<h1>Guide</h1>
+<p>Every widget you can put on the watch, and what to do when something doesn't work.</p>
+<div class="toc"><a href="#widgets">Watch widgets</a><a href="#help">Troubleshooting</a><a href="#files">Where your files are</a></div>
+</div>
+
+<section class="log" id="widgets" style="padding-top:48px">
+<h2>Watch widgets</h2>
+<p style="color:var(--dim);margin-top:12px;max-width:44em">The custom face is a grid of 6 × 4 cells. Sizes are width × height in cells. Add and arrange widgets in Settings › Wrist › Edit layout: drag to move, drag the corner to resize. Tap a widget on your wrist to open it big.</p>
+<div class="wtable-wrap">
+<table class="wtable">
+<thead><tr><th scope="col">Widget</th><th scope="col">Shows</th><th scope="col">Sizes</th></tr></thead>
+<tbody>
+<tr class="group"><td colspan="3">Time</td></tr>
+<tr><td>Time</td><td>The time in six designs: standard, flip, outline, stacked, segment, and a word clock from 2 × 2.</td><td class="sz">1×1 2×1 3×1 4×1 2×2 3×2 4×2 6×2 6×3 6×4</td></tr>
+<tr><td>Analog clock</td><td>Squircle, classic, minimal, roman or Swiss station dial. 1 × 1 is the squircle clock.</td><td class="sz">1×1 2×2 3×3 4×4</td></tr>
+<tr><td>Date</td><td>Weekday and date.</td><td class="sz">1×1 2×1 3×1 4×1 6×1</td></tr>
+<tr><td>Calendar</td><td>The month with today marked. Opens the full month.</td><td class="sz">1×1 2×1 2×2</td></tr>
+<tr><td>Timer</td><td>Countdown with − / + and presets when opened.</td><td class="sz">1×1 2×1 2×2</td></tr>
+<tr><td>Stopwatch</td><td>Start, stop and laps.</td><td class="sz">1×1 2×1</td></tr>
+<tr><td>Time in VR</td><td>How long this SteamVR session has been running.</td><td class="sz">1×1 2×1</td></tr>
+<tr class="group"><td colspan="3">Status</td></tr>
+<tr><td>Batteries</td><td>Headset, both controllers and trackers. Opens every battery.</td><td class="sz">1×1 2×1 2×2 3×2</td></tr>
+<tr><td>Now playing</td><td>Song from Spotify, a browser or any Windows media player, with controls. Opens the cover and volume.</td><td class="sz">2×1 3×1 4×1 6×1 4×2 6×2</td></tr>
+<tr><td>Volume</td><td>Windows volume slider.</td><td class="sz">1×1 2×1 3×1</td></tr>
+<tr><td>Microphone</td><td>Mute and unmute your microphone.</td><td class="sz">1×1 2×1</td></tr>
+<tr><td>Notifications</td><td>The latest notifications, for example from VRCX.</td><td class="sz">2×1 3×1 2×2</td></tr>
+<tr class="group"><td colspan="3">Performance</td></tr>
+<tr><td>Performance</td><td>Frame rate, reprojection, GPU time and VRAM in one row.</td><td class="sz">4×1 6×1</td></tr>
+<tr><td>Frame graph</td><td>Live frame times. Opens the graph with averages.</td><td class="sz">3×1 4×1 6×1 4×2 6×2</td></tr>
+<tr><td>Frame rate, Reprojection, GPU time, VRAM</td><td>One number each.</td><td class="sz">1×1 2×1</td></tr>
+<tr><td>CPU, Memory</td><td>Total CPU load and used RAM. CPU opens its history.</td><td class="sz">1×1 2×1</td></tr>
+<tr class="group"><td colspan="3">Buttons</td></tr>
+<tr><td>Single buttons</td><td>Keyboard, Monitors, Recenter, Layout, Night mode, Settings, Status line, Theater.</td><td class="sz">1×1 2×1</td></tr>
+<tr><td>Button group</td><td>Two to six of those buttons in one widget.</td><td class="sz">2×1 3×1 2×2 6×1</td></tr>
+<tr class="group"><td colspan="3">VRChat and extras</td></tr>
+<tr><td>Room</td><td>How many people are in your VRChat instance. Opens who is there.</td><td class="sz">1×1 2×1 3×1</td></tr>
+<tr><td>Hexpad</td><td>The keys of your Ajazz AKP03 stream dock, live. Only shows up when Hexpad runs.</td><td class="sz">1×1 2×1 2×2</td></tr>
+<tr><td>Minesweeper</td><td>A game of Minesweeper on your wrist.</td><td class="sz">1×1 2×2 3×2</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="log" id="help">
+<h2>Troubleshooting</h2>
+<div style="margin-top:24px">
+
+<div class="fix"><h3>Nothing shows up in the headset</h3><div>
+<ul>
+<li>OrbitOverlay must be running. Look for its icon in the Windows tray, or start it from the Start menu.</li>
+<li>The game has to run through SteamVR. Overlays can't show in games that use another runtime.</li>
+<li>With Virtual Desktop, choose SteamVR as the runtime, not VDXR / OpenXR.</li>
+</ul></div></div>
+
+<div class="fix"><h3>The watch doesn't appear</h3><div>
+<p>Turn the inside of your wrist towards your face. Check Settings › Wrist: the watch must be switched on, and the hand (left or right) must be the one you are looking at. "Always visible" keeps it on all the time.</p></div></div>
+
+<div class="fix"><h3>The laser can't click into some windows</h3><div>
+<p>Windows that run as administrator, like Task Manager, ignore a mouse from a normal app. Turn on Settings › General › Run as administrator and restart OrbitOverlay.</p></div></div>
+
+<div class="fix"><h3>The game reacts when I click a panel</h3><div>
+<p>Turn on Settings › VRChat › Keep clicks from the game. While a laser points at an OrbitOverlay panel, the game won't get that hand's trigger, grip, stick or B / Y.</p></div></div>
+
+<div class="fix"><h3>The chatbox or status line does nothing</h3><div>
+<p>Both talk to VRChat over OSC. In VRChat, open the Action Menu › Options › OSC and enable it.</p></div></div>
+
+<div class="fix"><h3>Friends are missing from the Room panel</h3><div>
+<p>Your friends list comes from VRCX. Without VRCX, the panel still lists everyone in the instance, and people you star come first.</p></div></div>
+
+<div class="fix"><h3>No notifications from VRCX</h3><div>
+<p>OrbitOverlay listens for XSOverlay notifications on <code>127.0.0.1:42069</code>. Turn on XSOverlay notifications in VRCX.</p></div></div>
+
+<div class="fix"><h3>The Hexpad panel or widget is missing</h3><div>
+<p>They only appear while the Hexpad app is running with an Ajazz AKP03 connected.</p></div></div>
+
+<div class="fix"><h3>Windows says the installer is unsafe</h3><div>
+<p>The installer isn't code-signed yet, so SmartScreen warns about it. Click <i>More info</i>, then <i>Run anyway</i>. The source of every release is on GitHub.</p></div></div>
+
+<div class="fix"><h3>Something else is wrong</h3><div>
+<p><a href="https://github.com/Erik1028/OrbitOverlay/issues">Open an issue on GitHub</a>. Say which headset, which version, and what you did. Attaching the log from the folder below helps a lot.</p></div></div>
+
+</div>
+</section>
+
+<section class="log" id="files">
+<h2>Where your files are</h2>
+<div style="margin-top:24px">
+<div class="fix"><h3>Settings and logs</h3><div><p><code>%LOCALAPPDATA%\Orbit</code>. Uninstalling keeps this folder. Delete it for a completely fresh start.</p></div></div>
+<div class="fix"><h3>The app</h3><div><p><code>%LOCALAPPDATA%\Programs\OrbitOverlay</code>, with <code>OrbitOverlay Quick Start.txt</code> next to it.</p></div></div>
+</div>
+</section>
+
+</main>
+
+<footer>
+<div class="wrap">
+<p>OrbitOverlay by <a href="https://github.com/Erik1028">Erik1028</a>. Free and open source under the MIT license. Not affiliated with Valve, VRChat or any headset maker.</p>
+<span><a href="./">Home</a> · <a href="https://github.com/Erik1028/OrbitOverlay">Source</a> · <a href="https://github.com/Erik1028/OrbitOverlay/releases">Releases</a></span>
+</div>
+</footer>
+</body>
+</html>

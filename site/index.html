@@ -7,129 +7,22 @@
 <meta name="description" content="A free SteamVR overlay for Windows: a watch on your wrist, your PC screens around you with a laser mouse, and a VR keyboard.">
 <meta property="og:title" content="OrbitOverlay">
 <meta property="og:description" content="A free SteamVR overlay for Windows: a watch on your wrist, your PC screens around you, and a VR keyboard.">
-<meta property="og:image" content="https://erik1028.github.io/OrbitOverlay/img/watch-widgets.png">
+<meta property="og:image" content="https://erik1028.github.io/OrbitOverlay/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="https://erik1028.github.io/OrbitOverlay/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#171a24">
+<link rel="alternate" hreflang="hu" href="https://erik1028.github.io/OrbitOverlay/hu/">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<style>
-/* Layout: a plain manual for the app, one column of parts, each part = what it is + how you use it in VR + a real screenshot.
-   Colours and type are taken from the app itself (Bento panels, default pink accent, Segoe UI). */
-:root{
-  color-scheme:dark;
-  --bg:#171a24;      /* app window */
-  --panel:#21263a;   /* watch tile */
-  --line:#2d3347;
-  --text:#e8ebf2;
-  --dim:#9aa2b6;
-  --accent:#ff5d93;  /* Config.Accent default, 0xFFFF5D93 */
-  --ok:#4ade80;
-  --sans:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
-  --display:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
-  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,"SF Mono",Menlo,monospace;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
-img{max-width:100%;height:auto;display:block}
-a{color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
-a:hover{color:var(--accent)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
-h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
-h2{font-size:clamp(26px,3.4vw,34px);font-weight:700}
-h3{font-size:18px;font-weight:600}
-p{margin:0}
-.wrap{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
-.mono{font-family:var(--mono);font-size:14px}
-kbd{font-family:var(--mono);font-size:13.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 7px;white-space:nowrap}
-
-/* top bar */
-.top .wrap{display:flex;align-items:center;gap:20px;padding-block:18px}
-.logo{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:700;font-size:19px;text-decoration:none}
-.top nav{margin-left:auto;display:flex;gap:22px;font-size:15px}
-.top nav a{text-decoration:none;color:var(--dim)}
-.top nav a:hover{color:var(--text)}
-@media (max-width:720px){.top nav .opt{display:none}}
-
-/* intro */
-.intro{padding-block:56px 40px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px 48px;align-items:end}
-.intro h1{font-size:clamp(40px,6.4vw,76px);font-weight:700;letter-spacing:-0.02em}
-.intro p{font-size:clamp(18px,2vw,21px);color:var(--dim);max-width:34em;margin-top:16px}
-.get{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
-.btn{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#1b0a12;font-weight:700;font-size:17px;text-decoration:none;padding:13px 22px;border-radius:12px}
-.btn:hover{color:#1b0a12;background:#ff7aa6}
-.get .mono{color:var(--dim)}
-.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
-@media (max-width:820px){.intro{grid-template-columns:1fr}}
-
-.hero-shot{border-radius:20px;overflow:hidden;border:1px solid var(--line)}
-.cap{margin-top:12px;color:var(--dim);font-size:14.5px}
-
-/* parts */
-.part{padding-block:72px 0;display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:28px 56px;align-items:start}
-.part .txt{display:flex;flex-direction:column;gap:14px}
-.part .txt>p{color:var(--dim)}
-.how{list-style:none;margin:6px 0 0;padding:14px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:15.5px}
-.how li{display:grid;grid-template-columns:minmax(0,9.5em) minmax(0,1fr);gap:12px}
-.how li span:first-child{color:var(--dim)}
-.shot{border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#0f1118}
-.shots{display:flex;flex-direction:column;gap:14px}
-.part ul.plain{margin:0;padding-left:1.1em;color:var(--dim)}
-.part ul.plain li{margin:4px 0}
-@media (max-width:860px){.part{grid-template-columns:1fr;padding-top:56px}}
-
-/* controls */
-.ctl{width:100%;border-collapse:collapse;font-size:16px}
-.ctl td{padding:11px 0;border-bottom:1px solid var(--line);vertical-align:top}
-.ctl tr:first-child td{border-top:1px solid var(--line)}
-.ctl td:first-child{width:42%;padding-right:20px}
-.ctl td:last-child{color:var(--dim)}
-
-/* small extras */
-.extras{padding-block:72px 0}
-.extras dl{margin:24px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 40px}
-.extras dt{font-weight:600}
-.extras dd{margin:6px 0 0;color:var(--dim);font-size:16px}
-@media (max-width:860px){.extras dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:560px){.extras dl{grid-template-columns:1fr}}
-
-/* install */
-.install{padding-block:72px 0;display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:28px 56px}
-.install ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:14px}
-.install ol li::marker{font-family:var(--mono);color:var(--accent)}
-.install .aside{color:var(--dim);font-size:15.5px;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
-@media (max-width:860px){.install{grid-template-columns:1fr}}
-
-/* faq */
-.faq{padding-block:72px 0}
-.faq dl{margin:24px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 56px}
-.faq dt{font-weight:600}
-.faq dd{margin:6px 0 0;color:var(--dim);font-size:16px}
-@media (max-width:760px){.faq dl{grid-template-columns:1fr}}
-
-/* changelog */
-.log{padding-block:72px 0}
-#log{margin-top:24px;display:flex;flex-direction:column}
-.ver{display:grid;grid-template-columns:minmax(0,7em) minmax(0,1fr);gap:4px 24px;padding-block:20px;border-top:1px solid var(--line)}
-.ver .v{font-family:var(--mono);font-size:15px;color:var(--accent);padding-top:2px}
-.ver ul{margin:8px 0 0;padding-left:1.1em;color:var(--dim);font-size:15.5px}
-.ver li{margin:4px 0}
-.more{margin-top:8px;align-self:flex-start;background:none;border:1px solid var(--line);color:var(--text);font:inherit;font-size:15px;padding:9px 16px;border-radius:10px;cursor:pointer}
-.more:hover{border-color:var(--dim)}
-@media (max-width:560px){.ver{grid-template-columns:1fr}}
-
-footer{margin-top:88px;border-top:1px solid var(--line)}
-footer .wrap{padding-block:32px 48px;display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;color:var(--dim);font-size:14.5px}
-footer p{max-width:40em}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header class="top">
 <div class="wrap">
 <a class="logo" href="#top"><img src="favicon.svg" width="30" height="30" alt="">OrbitOverlay</a>
-<nav aria-label="Sections"><a class="opt" href="#watch">Watch</a><a class="opt" href="#desktop">Desktop</a><a class="opt" href="#install">Install</a><a href="#log">Changelog</a><a href="https://github.com/Erik1028/OrbitOverlay">GitHub</a></nav>
+<nav aria-label="Sections"><a class="opt" href="#watch">Watch</a><a class="opt" href="#desktop">Desktop</a><a class="opt" href="#install">Install</a><a href="guide.html">Guide</a><a class="opt" href="https://github.com/Erik1028/OrbitOverlay">GitHub</a><a class="lang" href="hu/" hreflang="hu" lang="hu">HU</a></nav>
 </div>
 </header>
 
@@ -141,20 +34,31 @@ footer p{max-width:40em}
 <p>A free SteamVR overlay for Windows. A watch on your wrist, your PC screens around you with the laser as a mouse, and a keyboard that shows up when you click a text field.</p>
 </div>
 <div class="get">
-<a class="btn" href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitSetup.exe"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M6 10l6 6 6-6M4 21h16"/></svg>Download OrbitSetup.exe</a>
+<a class="btn" href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitOverlaySetup.exe"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M6 10l6 6 6-6M4 21h16"/></svg>Download OrbitOverlaySetup.exe</a>
 <span class="mono"><i class="live"></i><span id="ver">latest release</span><span id="verdate"></span> · Windows 10 / 11</span>
 </div>
 </section>
 
-<figure style="margin:0">
-<div class="hero-shot"><img src="img/watch-widgets.png" width="1328" height="472" alt="The OrbitOverlay watch: analog clock, time and date, batteries for headset, controllers and trackers, now playing, frame graph and performance numbers"></div>
-<figcaption class="cap">The watch with the Bento widgets, captured from the app. Time, batteries, music, frame timing and GPU numbers, one glance at your wrist.</figcaption>
-</figure>
+<section class="try" aria-label="Try the watch">
+<div class="watch" id="watch-demo"><img src="img/watch-widgets.png" width="1328" height="472" alt="The OrbitOverlay watch with widgets"></div>
+<aside>
+<p><b>Try it.</b> This is the custom watch face, rebuilt for the browser.</p>
+<ul>
+<li>Tap a widget to open it big, like on your wrist</li>
+<li>Swipe, or use the dots, for the second page</li>
+<li>The timer, stopwatch and volume work</li>
+<li>The moon button is night mode</li>
+</ul>
+<p class="note">Time and date are live. Batteries, frame times and the song are demo values; in VR they come from SteamVR and Windows.</p>
+</aside>
+</section>
+
+<figure class="clip" id="clip" hidden data-src="img/demo.mp4"><div class="shot"></div><figcaption class="cap">In the headset: the watch, a window grabbed with the laser, and the keyboard.</figcaption></figure>
 
 <section class="part" id="watch">
 <div class="txt">
 <h2>The watch</h2>
-<p>Turn your left wrist towards you and the watch appears. You build the face yourself from widgets on a grid, give each one its own style and colour, and spread them over several pages. Tap a widget to open it big.</p>
+<p>Turn your wrist towards you and the watch appears. You build the face yourself from widgets on a 6 × 4 grid, give each one its own style and colour, and spread them over several pages. Tap a widget to open it big.</p>
 <ul class="plain">
 <li>Clocks: analog, flip, segment, words, Swiss station</li>
 <li>Battery for the headset, both controllers and trackers</li>
@@ -162,6 +66,7 @@ footer p{max-width:40em}
 <li>Frame time, reprojection, GPU, CPU and memory</li>
 <li>Microphone, notifications, buttons, and Minesweeper</li>
 </ul>
+<p><a href="guide.html#widgets">All widgets and their sizes</a></p>
 </div>
 <div class="shot"><img src="img/watch-faces.png" width="1352" height="952" alt="Built-in watch faces side by side: full, analog, minimal and time only" loading="lazy"></div>
 </section>
@@ -207,7 +112,7 @@ footer p{max-width:40em}
 </div>
 </section>
 
-<section class="extras" id="vrchat">
+<section class="facts" id="vrchat">
 <h2>Also in the box</h2>
 <dl>
 <div><dt>VRChat</dt><dd>See who is in your instance, get a card when a friend arrives, show what you are listening to in the chatbox.</dd></div>
@@ -225,23 +130,23 @@ footer p{max-width:40em}
 </div>
 <div>
 <ol>
-<li><a href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitSetup.exe">Download OrbitSetup.exe</a>. The link always points to the latest release.</li>
+<li><a href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitOverlaySetup.exe">Download OrbitOverlaySetup.exe</a>. The link always points to the latest release.</li>
 <li>Run it. It installs for your Windows user only, without admin rights, and can start together with SteamVR.</li>
 <li>Put on your headset and look at your left wrist.</li>
 </ol>
-<p class="aside"><b style="color:var(--text)">Windows SmartScreen</b> may warn you, because the installer is not code-signed yet. Click <i>More info</i>, then <i>Run anyway</i>. On first start OrbitOverlay asks once for administrator rights, so the laser can also click into admin windows. You can say no and everything else still works.</p>
-<p class="aside">Needs Windows 10 (2004 or later) or 11, a DirectX 11 GPU and SteamVR. With Virtual Desktop, choose SteamVR as the runtime.</p>
+<p class="aside"><b>Windows SmartScreen</b> may warn you, because the installer is not code-signed yet. Click <i>More info</i>, then <i>Run anyway</i>. On first start OrbitOverlay asks once for administrator rights, so the laser can also click into admin windows. You can say no and everything else still works.</p>
+<p class="aside">Needs Windows 10 (2004 or later) or 11, a DirectX 11 GPU and SteamVR. With Virtual Desktop, choose SteamVR as the runtime. Something not working? See <a href="guide.html#help">Troubleshooting</a>.</p>
 </div>
 </section>
 
-<section class="faq" id="faq">
+<section class="facts two" id="faq">
 <h2>Questions</h2>
 <dl>
 <div><dt>Does it work with Quest, Pico or Virtual Desktop?</dt><dd>Yes, as long as the game runs through SteamVR. In Virtual Desktop, pick SteamVR instead of VDXR / OpenXR, otherwise overlays can't show.</dd></div>
 <div><dt>How do I update?</dt><dd>Settings › General › Check for updates. The installed app updates itself from the GitHub releases and shows what changed.</dd></div>
 <div><dt>Does it work with my XSOverlay add-ons?</dt><dd>Notifications use XSOverlay's format, and the VRChat avatar parameters work with DXOverlay and similar add-ons.</dd></div>
 <div><dt>How was it made?</dt><dd>Largely written with an AI assistant, from my own ideas and a lot of testing in the headset. The whole source is on GitHub under the MIT license.</dd></div>
-<div><dt>How do I uninstall it?</dt><dd>Windows Settings › Apps › OrbitOverlay › Uninstall.</dd></div>
+<div><dt>How do I uninstall it?</dt><dd>Windows Settings › Apps › OrbitOverlay › Uninstall. Your settings stay in <code>%LOCALAPPDATA%\Orbit</code>.</dd></div>
 <div><dt>Found a bug?</dt><dd><a href="https://github.com/Erik1028/OrbitOverlay/issues">Open an issue on GitHub</a>, and say which headset and version you use.</dd></div>
 </dl>
 </section>
@@ -256,64 +161,11 @@ footer p{max-width:40em}
 <footer>
 <div class="wrap">
 <p>OrbitOverlay by <a href="https://github.com/Erik1028">Erik1028</a>. Free and open source under the MIT license. Not affiliated with Valve, VRChat or any headset maker.</p>
-<span><a href="https://github.com/Erik1028/OrbitOverlay">Source</a> · <a href="https://github.com/Erik1028/OrbitOverlay/releases">Releases</a></span>
+<span><a href="https://github.com/Erik1028/OrbitOverlay">Source</a> · <a href="https://github.com/Erik1028/OrbitOverlay/releases">Releases</a> · <a href="guide.html">Guide</a></span>
 </div>
 </footer>
 
-<script>
-(function () {
-  // Version and date next to the download button. The link itself works without this.
-  fetch('https://api.github.com/repos/Erik1028/OrbitOverlay/releases/latest')
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (rel) {
-      if (!rel) return;
-      document.getElementById('ver').textContent = rel.tag_name || rel.name || 'latest release';
-      if (rel.published_at) {
-        var d = new Date(rel.published_at);
-        document.getElementById('verdate').textContent = ' · ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      }
-    })
-    .catch(function () {});
-
-  // Changelog: built from docs/CHANGELOG.md, which the Pages workflow copies next to this page.
-  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function inline(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`(.+?)`/g, '<kbd>$1</kbd>'); }
-  fetch('CHANGELOG.md')
-    .then(function (r) { return r.ok ? r.text() : null; })
-    .then(function (md) {
-      if (!md) return;
-      var versions = [], cur = null;
-      md.split(/\r?\n/).forEach(function (line) {
-        var h = /^##\s+([^|]+)\|\s*(.+)$/.exec(line);
-        if (h) { cur = { v: h[1].trim(), t: h[2].trim(), pts: [] }; versions.push(cur); return; }
-        if (!cur) return;
-        if (/^- /.test(line)) { cur.pts.push(line.slice(2).trim()); return; }
-        if (/^\s+\S/.test(line) && cur.pts.length) { cur.pts[cur.pts.length - 1] += ' ' + line.trim(); }
-      });
-      if (!versions.length) return;
-      var log = document.getElementById('log');
-      log.innerHTML = '';
-      var more = document.createElement('button');
-      more.className = 'more';
-      more.type = 'button';
-      more.textContent = 'Show older versions';
-      log.appendChild(more);
-      function render(list) {
-        list.forEach(function (x) {
-          var el = document.createElement('article');
-          el.className = 'ver';
-          el.innerHTML = '<span class="v">' + esc(x.v) + '</span><div><h3>' + esc(x.t) + '</h3><ul>' +
-            x.pts.map(function (p) { return '<li>' + inline(p) + '</li>'; }).join('') + '</ul></div>';
-          log.insertBefore(el, more);
-        });
-      }
-      render(versions.slice(0, 3));
-      var rest = versions.slice(3);
-      if (!rest.length) more.remove();
-      more.addEventListener('click', function () { render(rest); more.remove(); });
-    })
-    .catch(function () {});
-})();
-</script>
+<script src="watch-demo.js"></script>
+<script src="main.js"></script>
 </body>
 </html>
