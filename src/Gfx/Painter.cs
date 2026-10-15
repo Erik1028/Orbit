@@ -164,26 +164,26 @@ static class Theme
     public static string Display => Classic ? ClassicFont : DisplayFont;
 
     // Segoe Fluent Icons code points
-    public const string IcoKeyboard = "";
-    public const string IcoMonitor = "";
-    public const string IcoRecenter = "";
-    public const string IcoSettings = "";
-    public const string IcoHide = "";
-    public const string IcoShow = "";
-    public const string IcoWatch = "";
-    public const string IcoGeneral = "";
-    public const string IcoBack = "";       // backspace
-    public const string IcoEnter = "";
-    public const string IcoShift = "";
-    public const string IcoUp = "";
-    public const string IcoDown = "";
-    public const string IcoLeft = "";
-    public const string IcoRight = "";
-    public const string IcoWin = "";
-    public const string IcoFolder = "";
-    public const string IcoColor = "";
-    public const string IcoLink = "";
-    public const string IcoCheck = "";
+    public const string IcoKeyboard = "\uE765";
+    public const string IcoMonitor = "\uE7F4";
+    public const string IcoRecenter = "\uE72C";
+    public const string IcoSettings = "\uE713";
+    public const string IcoHide = "\uED1A";
+    public const string IcoShow = "\uE890";
+    public const string IcoWatch = "\uE916";
+    public const string IcoGeneral = "\uE80F";
+    public const string IcoBack = "\uE750";       // backspace
+    public const string IcoEnter = "\uE751";
+    public const string IcoShift = "\uE752";
+    public const string IcoUp = "\uE70E";
+    public const string IcoDown = "\uE70D";
+    public const string IcoLeft = "\uE76B";
+    public const string IcoRight = "\uE76C";
+    public const string IcoWin = "\uE782";
+    public const string IcoFolder = "\uE838";
+    public const string IcoColor = "\uE790";
+    public const string IcoLink = "\uE71B";
+    public const string IcoCheck = "\uE73E";
 
     public static uint WithAlpha(uint c, float a) => ((uint)Math.Clamp(a * ((c >> 24) & 0xFF), 0, 255) << 24) | (c & 0xFFFFFF);
 
@@ -536,8 +536,12 @@ public sealed class Painter : IDisposable
             lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
             _layouts[key] = lay;
         }
-        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), DrawTextOptions.Clip);
+        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
     }
+
+    // Text cut to its rectangle (DrawTextOptions.Clip): the default. Off, a draw that has made sure its text fits (the modern
+    // watch's custom face: cut with "...", sized to fit) saves a clip per string - about a third of a watch frame.
+    public bool ClipText { get; set; } = true;
 
     void DropLayouts()
     {
@@ -568,7 +572,7 @@ public sealed class Painter : IDisposable
                 l1.SetCharacterSpacing(0, tracking, 0, new TextRange(0, (uint)(s.Length - 1)));
             _tracked[key] = lay;
         }
-        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), DrawTextOptions.Clip);
+        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
     }
 
     public float MeasureTracked(string s, float size, FontWeight w, float tracking, string family = null) =>

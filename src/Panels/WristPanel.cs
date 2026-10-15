@@ -221,7 +221,9 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         {
             float tw = _p.MeasureWidth(time, size, FontWeight.SemiBold, Theme.Display);
             float x = align == TextAlignment.Center ? r.X + (r.Width + tw) / 2 + 6 : r.X + tw + 6;
-            _p.Text(now.Hour < 12 ? "AM" : "PM", new RectangleF(x, r.Y + r.Height * 0.55f, 70, size * 0.3f), Theme.Dim, size * 0.2f, FontWeight.SemiBold);
+            // nothing under 15 px on the watch (the analog face's 52 px time made it 10)
+            float ss = MathF.Max(15, size * 0.2f);
+            _p.Text(now.Hour < 12 ? "AM" : "PM", new RectangleF(x, r.Y + r.Height * 0.55f, 70, MathF.Max(ss * 1.4f, size * 0.3f)), Theme.Dim, ss, FontWeight.SemiBold);
         }
     }
 
@@ -311,7 +313,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         string label = v.AppFps < 0 ? "waiting for frames" :
             $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms GPU · {Math.Max(0, v.ReprojPct):0}% reprojected";
         _p.Text(label, new RectangleF(r.X + 10, r.Y + 4, r.Width - 20, 24), Theme.Text, 16, FontWeight.SemiBold);
-        _p.Text($"{budget:0.0} ms", new RectangleF(r.Right - 80, by - 22, 72, 20), Theme.Dim, 13, FontWeight.Normal, TextAlignment.Trailing);
+        _p.Text($"{budget:0.0} ms", new RectangleF(r.Right - 80, by - 22, 72, 20), Theme.Dim, 15, FontWeight.Normal, TextAlignment.Trailing);
     }
 
     // the 95 skin's graph: a sunken black box, green grid, green bars - the performance window of the era
@@ -357,7 +359,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             var r = new RectangleF(28 + i * (bw + 10), 354, bw, 62);
             bool on = (i == 0 && d.KeyboardVisible) || (i == 1 && d.DesktopsVisible) || (i == 4 && d.NightMode);
             bool click = icons[i] == null
-                ? _ui.Button(Ui.Id("w", i), r, d.LayoutName, null, false, true, d.LayoutName.Length > 5 ? 14 : 17)
+                ? _ui.Button(Ui.Id("w", i), r, d.LayoutName, null, false, true, d.LayoutName.Length > 5 ? 15 : 17)
                 : _ui.Button(Ui.Id("w", i), r, null, icons[i], on, true, 24);
             if (click) OnAction?.Invoke(ids[i]);
         }
@@ -396,7 +398,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             _p.Text(artist ?? "", new RectangleF(text.X, text.Y + 36, text.Width, 28), Theme.Dim, 17);
         }
         else
-            _p.Text("Nothing playing", text, Theme.Faint, 19);
+            _p.Text(NotPlaying, text, Theme.Faint, 19);
         string[] ids = { "media.prev", "media.play", "media.next" };
         string[] icons = { "\uE892", playing ? "\uE769" : "\uE768", "\uE893" };
         for (int i = 0; i < 3; i++)
@@ -416,9 +418,13 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         _p.Text(caption, new RectangleF(x + 2, 230, cw, 26), Theme.Dim, 16);
     }
 
+    // a device: its name, its bar and the percentage - in the watch's one battery rule (WristCustom.BatteryLevel: Ok above 30 %,
+    // Warn 16-30 %, Bad at 15 % or less, on the number shown), so a battery has the same colour on every face
     void DrawBattery(RectangleF r, string label, float pct, bool charging)
     {
-        uint col = pct > 0.5f ? Theme.Good : pct > 0.2f ? Theme.Warn : Theme.Bad;
+        int shown = ShownPct(pct);
+        var lv = BatteryLevel(shown);
+        uint col = Bento.Level(lv, Bento.Ok);
         _p.Text(label, new RectangleF(r.X, r.Y, 74, r.Height), Theme.Dim, 18, FontWeight.SemiBold, TextAlignment.Trailing);
         var bar = new RectangleF(r.X + 84, r.Y + 8, 70, r.Height - 16);
         if (Theme.Classic)
@@ -436,8 +442,8 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             _p.Fill(bar, 0x30FFFFFF, 4);
             _p.Fill(new RectangleF(bar.X, bar.Y, bar.Width * Math.Clamp(pct, 0, 1), bar.Height), col, 4);
         }
-        _p.Text((charging ? "⚡" : "") + $"{pct * 100:0}%", new RectangleF(bar.Right + 4, r.Y, r.Right - bar.Right - 4, r.Height),
-            Theme.Text, 18, FontWeight.SemiBold, TextAlignment.Trailing);
+        _p.Text((charging ? "⚡" : "") + Pct(shown), new RectangleF(bar.Right + 4, r.Y, r.Right - bar.Right - 4, r.Height),
+            Bento.Level(lv, Theme.Text), 18, FontWeight.SemiBold, TextAlignment.Trailing);
     }
 
     // ---- IPointerTarget ----

@@ -327,6 +327,10 @@ static class Tools
             Log.Info($"cursor hotspot {cur.Hotspot}");
         }
         // ---- the custom face (widgets on the grid): the watch, the Wrist tab, the editor and a scripted edit ----
+        // In the default look (the Bento theme, #FF5D93 on #0A0B10), so the galleries check the ON tiles and discs in the colours
+        // a new watch has; the 12-hour clock of the look above is kept (AM / PM is the tighter fit).
+        cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
+        Theme.Apply(cfg.Data.Appearance);
         var wcfg = cfg.Data.Wrist;
         string face0 = wcfg.Face;
         List<WatchWidget> Gallery(int n)
