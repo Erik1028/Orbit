@@ -138,5 +138,29 @@ public sealed class Surface : IDisposable
         finally { gpu.Ctx.Unmap(staging, 0); }
     }
 
+    // The texture's pixels as they are (premultiplied BGRA: the picture over black) - --snapshot's checks, without a PNG
+    public unsafe uint[] ReadPixels(Gpu gpu)
+    {
+        using var staging = gpu.Device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)W, Height = (uint)H, MipLevels = 1, ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm, SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Staging, CPUAccessFlags = CpuAccessFlags.Read,
+        });
+        gpu.Ctx.CopyResource(staging, Tex);
+        var map = gpu.Ctx.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+        try
+        {
+            var px = new uint[W * H];
+            for (int y = 0; y < H; y++)
+            {
+                uint* src = (uint*)((byte*)map.DataPointer + y * map.RowPitch);
+                for (int x = 0; x < W; x++) px[y * W + x] = src[x];
+            }
+            return px;
+        }
+        finally { gpu.Ctx.Unmap(staging, 0); }
+    }
+
     public void Dispose() { Bitmap?.Dispose(); Tex?.Dispose(); }
 }

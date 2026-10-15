@@ -190,6 +190,15 @@ static class Tools
             host.WhatsNewList = Array.Empty<WhatsNew.Entry>();
             view.Tab = keep;
         }
+        // a widget's look in the config: written only once set, and read back as it was
+        {
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            string pj = System.Text.Json.JsonSerializer.Serialize(new WatchWidget { Type = "cpu", X = 1, Y = 2 }, opts);
+            var styled = new WatchWidget { Type = "cpu", Style = "twotone", Color = 0xFF14B8A6, Color2 = 0xFFA855F7 };
+            var back = System.Text.Json.JsonSerializer.Deserialize<WatchWidget>(System.Text.Json.JsonSerializer.Serialize(styled, opts), opts);
+            Log.Info($"config: an unstyled widget writes no look {!pj.Contains("Style") && !pj.Contains("Color")} (want True), a styled one reads back " +
+                     $"{back.Style == "twotone" && back.Color == 0xFF14B8A6 && back.Color2 == 0xFFA855F7} (want True)");
+        }
         // a used "Bed" profile with night mode for the Layouts tab
         cfg.Data.Layouts[1].Saved = new DateTime(2026, 10, 13, 23, 40, 0);
         cfg.Data.Layouts[1].NightMode = true;
@@ -448,6 +457,11 @@ static class Tools
         }
         SaveOpened("");
         LayoutCheck("modern");
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        StylesRun(wrist, data, painter, wcfg, gpu, dir);
+        System.Globalization.CultureInfo.CurrentCulture = culture0;
+        wcfg.Face = face0;
+        wcfg.Widgets = null;
         string Dump() => string.Join(" ", wcfg.Widgets.Select(w => $"{w.Type}@{w.X},{w.Y}:{w.W}x{w.H}"));
         // Wrist tab with the custom face picked (seeded from "full"), then the editor
         view.Tab = SettingsView.TabWrist;
@@ -474,7 +488,7 @@ static class Tools
             new(222 + (16 + cx * (94.6667f + 8) + 47.33f) * 0.75f, 84 + (16 + cy * 104 + 48) * 0.75f);
         var c42 = CellM(4, 2);
         ClickM(c42.X, c42.Y);
-        ClickM(724 + 130, 212 + 19);              // Remove
+        ClickM(724 + 2 * (244 / 3f + 8) + 40, 138 + 17);     // Remove (the third button under the name)
         var gpuW = wcfg.Widgets.FirstOrDefault(w => w.Type == "gpu");
         var c52 = CellM(5, 2);
         ptr.Move(c52.X * 1.5f, c52.Y * 1.5f); FrameM(); ptr.Press(); FrameM();
@@ -493,6 +507,26 @@ static class Tools
         ptr.Leave();
         FrameM();
         surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor.png"));
+        // the selected widget's look (gpu): Solid, Teal; then Two-tone with Purple second, on every widget
+        static System.Numerics.Vector2 Chip(int i) => new(724 + i % 4 * 66.5f + 29.75f, 206 + i / 4 * 52 + 23);
+        static System.Numerics.Vector2 Swatch(float top, int i) => new(724 + 17 + i % 7 * 37.6f, top + 17 + i / 7 * 38);
+        int Pal(string n) => 1 + Array.FindIndex(Bento.Palette, q => q.name == n);
+        ClickM(Chip(2).X, Chip(2).Y);
+        var tealSw = Swatch(338, Pal("Teal"));
+        ClickM(tealSw.X, tealSw.Y);
+        Log.Info($"editor: gpu look {gpuW?.Style} {gpuW?.Color:X8} (want solid FF14B8A6)");
+        ClickM(Chip(3).X, Chip(3).Y);
+        var purpleSw = Swatch(442, Pal("Purple"));
+        ClickM(purpleSw.X, purpleSw.Y);
+        ClickM(724 + 130, 522 + 17);              // Use on all widgets
+        bool allTwo = wcfg.Widgets.All(x => x.Style == "twotone" && x.Color == 0xFF14B8A6 && x.Color2 == 0xFFA855F7);
+        Log.Info($"editor: every widget two-tone teal / purple {allTwo} (want True), {wcfg.Widgets.Count} widgets");
+        ptr.Leave();
+        wrist.Settle();
+        FrameM();
+        surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_style.png"));
+        ClickM(Chip(0).X, Chip(0).Y);             // back to the default card: only gpu
+        Log.Info($"editor: gpu back to the default card {gpuW?.Style == null} (want True), its colour kept {gpuW?.Color:X8} (want FF14B8A6)");
         view.EditingWatch = false;
         wcfg.Face = face0;
         wcfg.Widgets = null;
@@ -603,6 +637,10 @@ static class Tools
         if (File.Exists(real)) File.Copy(real, copy, true);
         else Log.Warn("faceshot: no config.json in " + Log.Dir + " - the default face");
         var cfg = new ConfigStore(copy);
+        // read and written again unchanged, it must be the same file (no look on any widget: nothing new in it)
+        if (File.Exists(copy))
+            Log.Info($"faceshot: config read and written again is byte-identical {cfg.Serialized() == File.ReadAllText(copy)} (want True), " +
+                     $"widgets with a look of their own: {cfg.Data.Wrist.Widgets?.Count(w => w.Style != null || w.Color != null || w.Color2 != null) ?? 0}");
         using var gpu = new Gpu(-1);
         using var painter = new Painter(gpu);
         var data = new PanelData { VrConnected = true, VramTotalGB = gpu.DedicatedVram / (1024f * 1024 * 1024), FakeGpuLoad = 63, FakeVram = 9.4f };
@@ -668,6 +706,23 @@ static class Tools
             wrist.Draw(data);
             wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_{tag}.png"));
         }
+        // the same face in each of the widgets' own looks (on the copy only): automatic colours, then a colour per widget
+        if (wc.Face == "custom" && wc.Widgets is { Count: > 0 } ws)
+        {
+            var keep = ws.Select(w => (w.Style, w.Color, w.Color2)).ToList();
+            uint[] picks = { 0xFF1E3A8A, 0xFF14B8A6, 0xFFF59E0B, 0xFFFF5D93, 0xFFA855F7, 0xFF3B82F6 };
+            foreach (var look in Bento.Styles)
+                foreach (bool colours in new[] { false, true })
+                {
+                    if (look == null && !colours) continue;
+                    for (int i = 0; i < ws.Count; i++) { ws[i].Style = look; ws[i].Color = colours ? picks[i % picks.Length] : null; ws[i].Color2 = null; }
+                    wrist.Settle();
+                    wrist.Draw(data);
+                    wrist.Draw(data);
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_look_{look ?? "default"}{(colours ? "_colours" : "")}.png"));
+                }
+            for (int i = 0; i < ws.Count; i++) (ws[i].Style, ws[i].Color, ws[i].Color2) = keep[i];
+        }
         Log.Info("faceshot written to " + dir);
         return 0;
     }
@@ -710,9 +765,10 @@ static class Tools
                 }
             return (n, where);
         }
-        (int close, string where) TooClose(uint[] px, System.Drawing.RectangleF r, float from, float to)
+        // bg: the same card drawn alone (its fill, band, border) - each pixel is compared with its own background; else the card
+        // colour is the most common colour in the band (the opened views)
+        (int close, string where) TooClose(uint[] px, System.Drawing.RectangleF r, float from, float to, uint[] bg = null)
         {
-            // the card colour: the most common colour in the band
             var counts = new Dictionary<uint, int>();
             var band = new List<(int, int)>();
             for (int y = (int)r.Top; y < (int)r.Bottom; y++)
@@ -733,6 +789,7 @@ static class Tools
             foreach (var (x, y) in band)
             {
                 uint c = px[y * WristPanel.TW + x];
+                if (bg != null) card = bg[y * WristPanel.TW + x];
                 int dr = (int)((c >> 16) & 255) - (int)((card >> 16) & 255), dg = (int)((c >> 8) & 255) - (int)((card >> 8) & 255), db = (int)(c & 255) - (int)(card & 255);
                 if (Math.Abs(dr) + Math.Abs(dg) + Math.Abs(db) > 24) { n++; where ??= $"({x},{y})"; }
             }
@@ -750,10 +807,18 @@ static class Tools
                 Directory.CreateDirectory(Path.Combine(dir, "qa"));
                 wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}_{kind.Id}_{w}x{h}.png"));
                 var px = Read();
+                uint[] cardOnly = null;
+                if (!classic && !kind.Button)
+                {
+                    wrist.Backgrounds = true;
+                    wrist.Draw(data);
+                    wrist.Backgrounds = false;
+                    cardOnly = Read();
+                }
                 var r = WatchWidgets.CellRect(0, 0, w, h, classic);
                 r = new System.Drawing.RectangleF(r.X * k, r.Y * k, r.Width * k, r.Height * k);
                 var (o, ow) = Outside(px, r, classic ? 0 : 1.5f);
-                var (cl, cw) = classic || kind.Button ? (0, null) : TooClose(px, r, 3, 8);
+                var (cl, cw) = classic || kind.Button ? (0, null) : TooClose(px, r, 3, 8, cardOnly);
                 if (o > 0 || cl > 0)
                 {
                     problems++;
@@ -822,6 +887,228 @@ static class Tools
         data.FakeMedia = fake0;
         wcfg.Background = "panel";
         Log.Info($"layout {style}: {problems} problem(s)");
+        return problems;
+    }
+
+    // The widgets' own looks (WatchWidget.Style / Color / Color2): a gallery, and the layout check's rules on it.
+    // qa/styles_<look>.png: a face in that look, its rows in a dark, a mid and a light colour; _<colour>: all of it in one colour;
+    // _night: night mode (the fills dimmer), _night_vr: the same as seen in VR (the overlay dims everything to 45 % at night);
+    // styles_mixed: every look at once; styles_glass_cards: glass with no page behind. Then every kind at every size alone in
+    // each look (a picture only when something is wrong). Checked: nothing within 3-8 px of a card's edge - against a render of
+    // the cards alone, so a gradient or a header's band is the card, not content - and every text's contrast against what is
+    // really under it (a render without text): 4.5:1, 3:1 for big, bold or icon text; "nothing there" (Faint) is left out.
+    static int StylesRun(WristPanel wrist, PanelData data, Painter painter, WristConfig wcfg, Gpu gpu, string dir)
+    {
+        string qa = Path.Combine(dir, "qa");
+        Directory.CreateDirectory(qa);
+        int TW = WristPanel.TW, TH = WristPanel.TH, problems = 0, faces = 0, checkedTexts = 0;
+        var texts = new List<(string s, System.Drawing.RectangleF r, uint c, float size, Vortice.DirectWrite.FontWeight w, string fam, bool faint)>();
+        var lowest = new Dictionary<string, (float cr, string what)>();
+        static int Dist(uint a, uint b) =>
+            Math.Abs((int)((a >> 16) & 255) - (int)((b >> 16) & 255)) + Math.Abs((int)((a >> 8) & 255) - (int)((b >> 8) & 255)) +
+            Math.Abs((int)(a & 255) - (int)(b & 255));
+
+        // the face on the watch now: drawn, then without text, then the cards alone; save = its picture (null: only when wrong)
+        int Check(string look, string name, string save)
+        {
+            faces++;
+            wrist.Settle();
+            wrist.Draw(data);
+            texts.Clear();
+            painter.TextSpy = (s, r, c, size, w, fam) => texts.Add((s, r, c, size, w, fam, c == Bento.Faint));
+            wrist.Draw(data);
+            painter.TextSpy = null;
+            var px = wrist.Surf.ReadPixels(gpu);
+            painter.NoText = true;
+            wrist.Draw(data);
+            painter.NoText = false;
+            var bare = wrist.Surf.ReadPixels(gpu);
+            wrist.Backgrounds = true;
+            wrist.Draw(data);
+            wrist.Backgrounds = false;
+            var cardsOnly = wrist.Surf.ReadPixels(gpu);
+            int n = 0;
+            bool floating = wcfg.Background == "cards";
+            var rects = new List<System.Drawing.RectangleF>();
+            foreach (var w in wcfg.Widgets)
+            {
+                var k = WatchWidgets.Find(w.Type);
+                if (k == null) continue;
+                var r = WatchWidgets.Rect(w, false);
+                rects.Add(r);
+                if (k.Button) continue;          // a button is its card: drawn in its look, nothing near its edge
+                int close = 0; string where = null;
+                for (int y = (int)r.Top; y < (int)r.Bottom; y++)
+                    for (int x = (int)r.Left; x < (int)r.Right; x++)
+                    {
+                        float dx = MathF.Min(x - r.Left, r.Right - 1 - x), dy = MathF.Min(y - r.Top, r.Bottom - 1 - y), d = MathF.Min(dx, dy);
+                        if ((dx < 26 && dy < 26) || d < 3 || d >= 8) continue;
+                        if (Dist(px[y * TW + x], cardsOnly[y * TW + x]) > 24) { close++; where ??= $"({x},{y})"; }
+                    }
+                if (close > 0) { n++; Log.Warn($"styles {name}: {w.Type} {w.W}x{w.H}: {close} px within 8 px of its edge, first at {where}"); }
+            }
+            if (floating)
+            {
+                // no page: nothing outside the cards
+                int outside = 0; string where = null;
+                for (int y = 0; y < TH; y++)
+                    for (int x = 0; x < TW; x++)
+                    {
+                        bool inCard = false;
+                        foreach (var r in rects)
+                            if (x >= r.Left - 1.5f && x < r.Right + 1.5f && y >= r.Top - 1.5f && y < r.Bottom + 1.5f) { inCard = true; break; }
+                        if (!inCard && (px[y * TW + x] >> 24) > 24) { outside++; where ??= $"({x},{y})"; }
+                    }
+                if (outside > 0) { n++; Log.Warn($"styles {name}: {outside} px outside the cards, first at {where}"); }
+            }
+            foreach (var t in texts)
+            {
+                if (t.faint || (t.c >> 24) < 0xF0) continue;
+                int x0 = Math.Max(0, (int)t.r.Left), x1 = Math.Min(TW, (int)MathF.Ceiling(t.r.Right));
+                int y0 = Math.Max(0, (int)t.r.Top), y1 = Math.Min(TH, (int)MathF.Ceiling(t.r.Bottom));
+                var ink = new List<uint>();
+                var all = new List<uint>();
+                for (int y = y0; y < y1; y++)
+                    for (int x = x0; x < x1; x++)
+                    {
+                        uint a = px[y * TW + x], b = bare[y * TW + x];
+                        all.Add(b);
+                        if (Dist(a, b) > 48) ink.Add(b);
+                    }
+                var under = ink.Count >= 4 ? ink : all;
+                if (under.Count == 0) continue;
+                // what is under its letters: the middle of those backgrounds (by contrast)
+                var crs = new List<(float cr, uint bg)>(under.Count);
+                foreach (var b in under) crs.Add((Bento.Contrast(t.c | 0xFF000000, b | 0xFF000000), b));
+                crs.Sort((p, q) => p.cr.CompareTo(q.cr));
+                var (cr, bg) = crs[crs.Count / 2];
+                bool big = t.size >= 24 || (t.w >= Vortice.DirectWrite.FontWeight.SemiBold && t.size >= 15) || t.fam == Theme.IconFont;
+                float want = big ? 3f : 4.5f;
+                checkedTexts++;
+                string what = $"'{t.s}' {t.c & 0xFFFFFF:X6} on {bg & 0xFFFFFF:X6} in {name}";
+                if (!lowest.TryGetValue(look, out var lo) || cr < lo.cr) lowest[look] = (cr, what);
+                if (cr < want) { n++; Log.Warn($"styles {name}: {what}: {cr:0.0}:1, want {want:0.0}"); }
+            }
+            if (save == null && (n > 0 || Environment.GetEnvironmentVariable("ORBIT_QA_ALL") == "1")) save = $"style_{name.Replace(' ', '_')}.png";
+            if (save != null)
+            {
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(qa, save));
+            }
+            problems += n;
+            return n;
+        }
+
+        // a picture as seen in VR at night (the overlay's colour multiplies everything)
+        static void Dim(string path, float k)
+        {
+            using var src = new System.Drawing.Bitmap(path);
+            using var bmp = new System.Drawing.Bitmap(src);
+            for (int y = 0; y < bmp.Height; y++)
+                for (int x = 0; x < bmp.Width; x++)
+                {
+                    var c = bmp.GetPixel(x, y);
+                    bmp.SetPixel(x, y, System.Drawing.Color.FromArgb(c.A, (int)(c.R * k), (int)(c.G * k), (int)(c.B * k)));
+                }
+            bmp.Save(path.Replace(".png", "_vr.png"), System.Drawing.Imaging.ImageFormat.Png);
+        }
+
+        List<WatchWidget> Face(string style, uint? c0, uint? c1, uint? c2)
+        {
+            var l = new List<WatchWidget>();
+            void Put(string t, int x, int y, int w, int h, uint? c) =>
+                l.Add(new WatchWidget { Type = t, X = x, Y = y, W = w, H = h, Style = style, Color = c });
+            Put("time", 0, 0, 3, 2, c0); Put("battery", 3, 0, 2, 2, c0); Put("cpu", 5, 0, 1, 1, c0); Put("ram", 5, 1, 1, 1, c0);
+            Put("media", 0, 2, 2, 1, c1); Put("graph", 2, 2, 3, 1, c1); Put("vram", 5, 2, 1, 1, c1);
+            Put("calendar", 0, 3, 1, 1, c2); Put("volume", 1, 3, 1, 1, c2); Put("session", 2, 3, 1, 1, c2);
+            Put("keyboard", 3, 3, 1, 1, c2); Put("desktops", 4, 3, 1, 1, c2); Put("night", 5, 3, 1, 1, c2);
+            return l;
+        }
+        uint Col(string n) => Array.Find(Bento.Palette, p => p.name == n).c;
+        uint navy = Col("Navy"), teal = Col("Teal"), amber = Col("Amber");
+
+        // levels that need attention (a dot on a coloured card): VRAM nearly full, a frame time over budget, a low battery
+        var vram0 = data.FakeVram;
+        var gpu0 = data.Vr.GpuMs;
+        data.FakeVram = data.VramTotalGB > 0 ? data.VramTotalGB * 0.95f : 15.2f;
+        data.Vr.GpuMs = 12.5f;
+        data.DesktopsVisible = true;
+        data.KeyboardVisible = false;
+        wcfg.Face = "custom";
+        wcfg.Background = "panel";
+        string[] looks = { "default", "tint", "solid", "twotone", "header", "outline", "glass" };
+        foreach (var look in looks)
+        {
+            string style = look == "default" ? null : look;
+            wcfg.Widgets = Face(style, navy, teal, amber);
+            Check(look, look, $"styles_{look}.png");
+            foreach (var (cn, c) in new[] { ("navy", navy), ("pink", Col("Pink")), ("teal", teal), ("amber", amber), ("white", Col("White")) })
+            {
+                wcfg.Widgets = Face(style, c, c, c);
+                Check(look, $"{look} {cn}", $"styles_{look}_{cn}.png");
+            }
+            if (style != null)
+            {
+                // automatic colours: the accent, purple / blue for the CPU and memory
+                wcfg.Widgets = Face(style, null, null, null);
+                Check(look, $"{look} auto", $"styles_{look}_auto.png");
+            }
+        }
+        // two-tone with a picked second colour
+        wcfg.Widgets = Face("twotone", navy, teal, amber);
+        foreach (var w in wcfg.Widgets) w.Color2 = w.Color == navy ? Col("Purple") : w.Color == teal ? Col("Blue") : Col("Red");
+        Check("twotone", "twotone picked", "styles_twotone_picked.png");
+        // night: the coloured fills dimmer (the night tile is on)
+        data.NightMode = true;
+        foreach (var look in new[] { "solid", "twotone", "tint", "header" })
+        {
+            wcfg.Widgets = Face(look, navy, teal, amber);
+            Check(look, look + " night", $"styles_{look}_night.png");
+            Dim(Path.Combine(qa, $"styles_{look}_night.png"), 0.45f);
+        }
+        data.NightMode = false;
+        // every look at once, and glass with no page behind
+        wcfg.Widgets = Face(null, null, null, null);
+        string[] mix = { "solid", "twotone", "glass", "tint", "header", "outline", "solid", "glass", "twotone", "tint", "solid", "outline", "header" };
+        uint[] mixc = { navy, Col("Pink"), 0, teal, amber, Col("Purple"), Col("Green"), Col("Blue"), Col("Orange"), Col("Red"), Col("White"), Col("Cyan"), Col("Indigo") };
+        for (int i = 0; i < wcfg.Widgets.Count; i++)
+        {
+            wcfg.Widgets[i].Style = mix[i % mix.Length];
+            wcfg.Widgets[i].Color = mixc[i % mixc.Length] == 0 ? null : mixc[i % mixc.Length];
+        }
+        Check("mixed", "mixed", "styles_mixed.png");
+        // an opened widget with a colour of its own: that colour as the accent there too
+        foreach (var (type, c) in new[] { ("volume", Col("Purple")), ("cpu", teal), ("timer", amber) })
+        {
+            wcfg.Widgets = new List<WatchWidget> { new() { Type = type, X = 0, Y = 0, W = 2, H = type == "timer" ? 2 : 1, Style = "solid", Color = c } };
+            wrist.Settle();
+            if (!wrist.OpenForTest(type)) continue;
+            wrist.Draw(data);
+            wrist.Draw(data);
+            wrist.Surf.SavePng(gpu, Path.Combine(qa, $"styles_open_{type}.png"));
+            wrist.CloseForTest();
+        }
+        wcfg.Background = "cards";
+        wcfg.Widgets = Face("glass", null, teal, amber);
+        Check("glass", "glass cards", "styles_glass_cards.png");
+        wcfg.Widgets = Face("solid", navy, teal, amber);
+        Check("solid", "solid cards", "styles_solid_cards.png");
+        // every kind at every size alone, in each look (no page: whatever sticks out shows), the colours taking turns
+        uint[] turns = { navy, teal, amber, Col("Pink"), Col("White"), Col("Purple") };
+        int turn = 0;
+        foreach (var look in looks)
+            foreach (var kind in WatchWidgets.Kinds)
+                foreach (var (w, h) in kind.Sizes)
+                {
+                    wcfg.Widgets = new List<WatchWidget>
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = turns[turn++ % turns.Length] } };
+                    Check(look, $"{look} {kind.Id} {w}x{h}", null);
+                }
+        wcfg.Background = "panel";
+        data.FakeVram = vram0;
+        data.Vr.GpuMs = gpu0;
+        foreach (var look in lowest.Keys) Log.Info($"styles {look}: lowest text contrast {lowest[look].cr:0.0}:1 ({lowest[look].what})");
+        Log.Info($"layout styles: {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
         return problems;
     }
 

@@ -10,9 +10,11 @@ namespace Orbit;
 // --perfbench <dir>: what the watch costs per frame, without VR - your own watch layout and look (from a COPY of the
 // config; the real one is only read), paced like the headset (90 Hz): the cascade when it comes into view, cold and
 // warm, then every widget opened. CPU = drawing + hand-over; GPU = until the GPU has finished it.
+// --bench-style <look>: every widget of that face in a look of its own (tint, solid, twotone, header, outline, glass, or mixed: all
+// of them in turn), each in another colour - what a fully styled face costs.
 static class PerfBench
 {
-    public static int Run(string dir)
+    public static int Run(string dir, string style = null)
     {
         dir = Path.GetFullPath(dir);
         Directory.CreateDirectory(dir);
@@ -30,10 +32,19 @@ static class PerfBench
         data.FakeMedia = (true, "Midnight City", "M83", true);
         for (int i = 0; i < VrStats.FrameHistory; i++) data.Vr.FrameMs[i] = 7.5f + (i % 7) * 0.3f;
         data.Vr.FrameHead = 0; data.Vr.FrameCount = VrStats.FrameHistory;
+        if (style != null && cfg.Data.Wrist.Widgets != null)
+        {
+            var ws = cfg.Data.Wrist.Widgets;
+            for (int i = 0; i < ws.Count; i++)
+            {
+                ws[i].Style = style == "mixed" ? Bento.Styles[1 + i % (Bento.Styles.Length - 1)] : style;
+                ws[i].Color = Bento.Palette[i % Bento.Palette.Length].c;
+            }
+        }
         using var wrist = new WristPanel(gpu, painter, cfg);
         using var query = gpu.Device.CreateQuery(new Vortice.Direct3D11.QueryDescription(Vortice.Direct3D11.QueryType.Event));
         Log.Info($"perfbench: style {cfg.Data.Appearance.Style}, face {cfg.Data.Wrist.Face}, widgets " +
-                 string.Join(" ", cfg.Data.Wrist.Widgets?.Select(w => $"{w.Type}{w.W}x{w.H}") ?? Array.Empty<string>()));
+                 string.Join(" ", cfg.Data.Wrist.Widgets?.Select(w => $"{w.Type}{w.W}x{w.H}{(w.Style != null ? ":" + w.Style : "")}") ?? Array.Empty<string>()));
 
         void Phase(string name, double seconds, Action start)
         {
@@ -76,7 +87,7 @@ static class PerfBench
             Phase("open " + w.Type, 0.6, () => { });
             wrist.CloseForTest();
         }
-        Log.Info($"perfbench: text formats {painter.FormatCount}, widths {painter.WidthCount}, layouts {painter.LayoutCount}");
+        Log.Info($"perfbench: text formats {painter.FormatCount}, widths {painter.WidthCount}, layouts {painter.LayoutCount}, gradients {painter.GradientCount}");
         return 0;
     }
 }

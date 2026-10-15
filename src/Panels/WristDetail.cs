@@ -104,6 +104,9 @@ public sealed partial class WristPanel
         float ca = Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
         if (ca <= 0.01f) return;
         _halo = Bento.Card;
+        // a widget with a colour of its own keeps it as the accent of its opened view (the card stays the default one)
+        bool own = _open.Color.HasValue;
+        if (own) Bento.Use(LookOf(0, _open.Color.Value | 0xFF000000, 0, true, false, false));
         if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
         var E = target;
@@ -127,6 +130,7 @@ public sealed partial class WristPanel
         }
         if (ca < 0.999f) _p.PopFade();
         if (!LayoutTest) _p.PopClip();
+        if (own) Bento.Reset();
     }
 
     // a bar with a knob: drag along it (or tap) to set 0..1; its empty part the cards' track
@@ -188,7 +192,7 @@ public sealed partial class WristPanel
         var bar = new RectangleF(x + 72, vy + 19, w - 72 - 22, 14);
         _p.Text(ok ? (muted ? "Muted" : "Volume " + VolumePct(lvl)) : "No output device", new RectangleF(bar.X, vy - 26, bar.Width, 26),
             ok && muted ? Bento.Bad : Sub, SmallText, FontWeight.SemiBold);
-        Slider("wdmb", bar, lvl, muted ? Bento.Faint : Theme.Accent, ok, Volume.Set);
+        Slider("wdmb", bar, lvl, muted ? Bento.Faint : Bento.Accent, ok, Volume.Set);
     }
 
     // Every device as a row: its name and bolt the way the cards write them, the percentage big (amber / red when low), its line.
@@ -223,7 +227,7 @@ public sealed partial class WristPanel
 
     void ClockDetail(RectangleF c, PanelData d, DateTime now)
     {
-        AnalogOrbit(new RectangleF(c.X - 8, c.Y - 8, c.Height + 16, c.Height + 16), now, Theme.Accent);
+        AnalogOrbit(new RectangleF(c.X - 8, c.Y - 8, c.Height + 16, c.Height + 16), now, Bento.Accent);
         float x = c.X + c.Height + 30, w = c.Right - x;
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
@@ -255,7 +259,7 @@ public sealed partial class WristPanel
         {
             CapText("TIMER", x, y + 16, w, Sub);
             _p.Text(Ellipsize($"{Clock2(TimerLeft(Clock.Now))} left{(_timer == TimerState.Paused ? " (paused)" : "")}", w, 22, FontWeight.SemiBold),
-                new RectangleF(x, y + 22, w, 32), Theme.Accent, 22, FontWeight.SemiBold);
+                new RectangleF(x, y + 22, w, 32), Bento.Accent, 22, FontWeight.SemiBold);
         }
     }
 
@@ -313,7 +317,7 @@ public sealed partial class WristPanel
         double left = TimerLeft(Clock.Now);
         float frac = _timer == TimerState.Idle ? 1 : (float)(left / Math.Max(1, Math.Max(_timerTotal, left)));
         bool done = _timer == TimerState.Done;
-        uint tint = done ? Bento.Warn : Theme.Accent;
+        uint tint = done ? Bento.Warn : Bento.Accent;
         uint vc = done ? Bento.Warn : _timer == TimerState.Paused ? Sub : Bento.Text;      // as on the card
         // the time big over its line, the state under it; the presets and the controls on the right
         float rad = c.Height / 2 - 8, cx = c.X + rad + 8;
@@ -393,7 +397,7 @@ public sealed partial class WristPanel
                 TextAlignment.Center);
         }
         var g = new RectangleF(c.X - 10, c.Y + 150, c.Width + 20, c.Height - 150);
-        GraphPlain(d.Vr, g, Theme.Accent);
+        GraphPlain(d.Vr, g, Bento.Accent);
         // the frames behind the graph: average, worst, how many dropped
         var v = d.Vr;
         int n = v.FrameCount, dropped = 0;
@@ -426,7 +430,7 @@ public sealed partial class WristPanel
                 FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
             _p.Text(Ellipsize(small, tw, SmallText, FontWeight.Normal), new RectangleF(x, c.Y + 78, tw, 24), Sub, SmallText);
         }
-        Gauge(new RectangleF(c.X, c.Y - 6, gs, gs), cf, Bento.Level(cl, Bento.DataPurple), "wdsc", cv, "", cv == "–" ? Bento.Faint : Bento.Level(cl, Bento.Text));
+        Gauge(new RectangleF(c.X, c.Y - 6, gs, gs), cf, Bento.Level(cl, RoleColor("cpu")), "wdsc", cv, "", cv == "–" ? Bento.Faint : Bento.Level(cl, Bento.Text));
         // the gauge already shows the load now: beside it, the last minute's average and peak
         float avg = 0, peak = 0;
         for (int i = 0; i < Stats.CpuCount; i++)
@@ -437,7 +441,7 @@ public sealed partial class WristPanel
         }
         bool any = Stats.CpuCount > 0;
         Facts(c.X + tx, "CPU", any ? $"avg {avg * 100:0}%" : "–", any ? $"peak {peak * 100:0}%" : "");
-        Gauge(new RectangleF(c.X + half, c.Y - 6, gs, gs), rf, Bento.Level(rl, Bento.DataBlue), "wdsr", rv, ru, rv == "–" ? Bento.Faint : Bento.Level(rl, Bento.Text));
+        Gauge(new RectangleF(c.X + half, c.Y - 6, gs, gs), rf, Bento.Level(rl, RoleColor("ram")), "wdsr", rv, ru, rv == "–" ? Bento.Faint : Bento.Level(rl, Bento.Text));
         float total = Stats.RamTotalGB, used = Stats.RamUsedGB;
         bool ram = total > 0 && used >= 0;
         Facts(c.X + half + tx, "MEMORY", ram ? $"{total - used:0.0} GB free" : "–", ram ? $"of {total:0} GB" : "");
@@ -452,7 +456,7 @@ public sealed partial class WristPanel
             int idx = (Stats.CpuHead - Stats.CpuCount + i + SystemStats.History) % SystemStats.History;
             float v = Stats.CpuHistory[idx], h = MathF.Max(2, v * b.Height);
             float x = b.Right - (Stats.CpuCount - i) * step;
-            _p.Fill(new RectangleF(x + 1, b.Bottom - h, MathF.Max(2, step - 3), h), Bento.Level(CpuLevel(v), Bento.DataPurple), 2);
+            _p.Fill(new RectangleF(x + 1, b.Bottom - h, MathF.Max(2, step - 3), h), Bento.Level(CpuLevel(v), RoleColor("cpu")), 2);
         }
     }
 
@@ -461,7 +465,7 @@ public sealed partial class WristPanel
         Volume.Sample(Clock.Now);
         float lvl = Volume.Level;
         bool ok = lvl >= 0, muted = Volume.Muted;
-        uint col = muted ? Bento.Faint : Theme.Accent;
+        uint col = muted ? Bento.Faint : Bento.Accent;
         var left = new RectangleF(c.X, c.Y, c.Height + 16, c.Height);
         string v = ok ? (muted ? "Muted" : VolumePct(lvl)) : "–";
         _p.Text(v, new RectangleF(left.X, left.Y + left.Height * 0.12f, left.Width, left.Height * 0.42f), !ok ? Bento.Faint : muted ? Bento.Bad : Bento.Text,

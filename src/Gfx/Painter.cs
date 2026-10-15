@@ -342,6 +342,56 @@ public sealed class Painter : IDisposable
         else Dc.DrawRectangle(Raw(r), Brush(c), width);
     }
 
+    // ---- linear gradients (the modern watch's cards: the top light, two-tone fills, a glass sheen) ----
+    // One brush per stop set, kept - a few dozen at most: all thrown away when the look changes or the cap is hit; its start
+    // and end move per call, like the one recoloured solid brush.
+    readonly Dictionary<(uint, uint, uint, int), ID2D1LinearGradientBrush> _grads = new();
+    int _gradVersion = -1;
+    public int GradientCount => _grads.Count;
+
+    // c0 -> c1 along angleDeg (0 = left to right, 90 = top to bottom, 45 = top-left to bottom-right) across the rectangle,
+    // or done after 'span' of it (c1 from there on)
+    public void FillGradient(RectangleF r, uint c0, uint c1, float radius, float angleDeg = 90, float span = 1) =>
+        Gradient(r, c0, c1, c1, 2, radius, angleDeg, span);
+
+    // three stops: a, b half-way, c
+    public void FillGradient(RectangleF r, uint a, uint b, uint c, float radius, float angleDeg = 90, float span = 1) =>
+        Gradient(r, a, b, c, 3, radius, angleDeg, span);
+
+    void Gradient(RectangleF r, uint a, uint b, uint c, int n, float radius, float angleDeg, float span)
+    {
+        if (Theme.Classic || PixelMode) { Fill(r, a); return; }
+        if (a == b && (n == 2 || b == c)) { Fill(r, a, radius); return; }       // flat: the solid brush
+        var brush = GradBrush(a, b, c, n);
+        float t = angleDeg * MathF.PI / 180, dx = MathF.Cos(t), dy = MathF.Sin(t);
+        float len = MathF.Abs(r.Width * dx) + MathF.Abs(r.Height * dy);
+        var s = new Vector2(r.X + r.Width / 2 - dx * len / 2, r.Y + r.Height / 2 - dy * len / 2);
+        brush.StartPoint = s;
+        brush.EndPoint = s + new Vector2(dx, dy) * (len * MathF.Max(0.01f, span));
+        if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
+        else Dc.FillRectangle(Raw(r), brush);
+    }
+
+    ID2D1LinearGradientBrush GradBrush(uint a, uint b, uint c, int n)
+    {
+        if (_gradVersion != Theme.Version) { DropGradients(); _gradVersion = Theme.Version; }
+        var key = (a, b, c, n);
+        if (_grads.TryGetValue(key, out var br)) return br;
+        if (_grads.Count >= 24) DropGradients();
+        var stops = n == 2 ? new[] { new GradientStop(0, ToColor(a)), new GradientStop(1, ToColor(b)) }
+            : new[] { new GradientStop(0, ToColor(a)), new GradientStop(0.5f, ToColor(b)), new GradientStop(1, ToColor(c)) };
+        using (var col = Dc.CreateGradientStopCollection(stops, ExtendMode.Clamp))
+            br = Dc.CreateLinearGradientBrush(new LinearGradientBrushProperties(Vector2.Zero, Vector2.UnitY), col);
+        _grads[key] = br;
+        return br;
+    }
+
+    void DropGradients()
+    {
+        foreach (var g in _grads.Values) g.Dispose();
+        _grads.Clear();
+    }
+
     // ---- Windows 95 shapes ----
 
     // one device pixel - two from 1.5x up - so the 3D edges stay crisp at any scale
@@ -515,11 +565,16 @@ public sealed class Painter : IDisposable
     public void Ring(float cx, float cy, float r, uint c, float width) =>
         Dc.DrawEllipse(new Ellipse(new Vector2(cx, cy), r, r), Brush(c), width);
 
+    // --snapshot's contrast check: every text drawn (and where, in what colour); NoText leaves all text out (what it sits on)
+    public Action<string, RectangleF, uint, float, FontWeight, string> TextSpy;
+    public bool NoText;
+
     public void Text(string s, RectangleF r, uint c, float size, FontWeight w = FontWeight.Normal,
         TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center,
         string family = null, bool wrap = false)
     {
-        if (string.IsNullOrEmpty(s)) return;
+        if (string.IsNullOrEmpty(s) || NoText) return;
+        TextSpy?.Invoke(s, r, c, size, w, family);
         var f = Format(family ?? Theme.Font, size, w, h, v, wrap);
         // the 95 skin's GDI-measured pixel text stays exactly as it was
         if (PixelMode)
@@ -559,8 +614,9 @@ public sealed class Painter : IDisposable
     public void TrackedText(string s, RectangleF r, uint c, float size, FontWeight w, float tracking,
         TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center, string family = null)
     {
-        if (string.IsNullOrEmpty(s)) return;
+        if (string.IsNullOrEmpty(s) || NoText) return;
         if (PixelMode || tracking == 0 || s.Length < 2) { Text(s, r, c, size, w, h, v, family); return; }
+        TextSpy?.Invoke(s, r, c, size, w, family);
         var f = Format(family ?? Theme.Font, size, w, h, v, false);
         float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
         var key = (s, f, lw, lh, tracking);
@@ -684,6 +740,7 @@ public sealed class Painter : IDisposable
     {
         _brush?.Dispose();
         _brush = null;
+        DropGradients();
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();

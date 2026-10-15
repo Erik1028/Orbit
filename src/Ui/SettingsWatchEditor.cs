@@ -217,7 +217,9 @@ public sealed partial class SettingsView
         EditGrid(ui, prev, false, list);
 
         // the palette: click one to put it in the marked cell or the first free spot
-        ui.Label(new RectangleF(222, 428, 480, 20), _wcell.x >= 0 ? "Add a widget to the marked cell" : "Add a widget");
+        // what went wrong (no room, it does not fit) where it happened: over the palette, under the watch
+        if (_wmsg != null) ui.Label(new RectangleF(222, 428, 480, 20), _wmsg, Theme.Warn, 13);
+        else ui.Label(new RectangleF(222, 428, 480, 20), _wcell.x >= 0 ? "Add a widget to the marked cell" : "Add a widget");
         for (int i = 0; i < WatchWidgets.Palette.Length; i++)
         {
             var k = WatchWidgets.Palette[i];
@@ -231,31 +233,98 @@ public sealed partial class SettingsView
         var sel = SelWidget(list);
         ui.Section(new RectangleF(rx, 84, rw, 22), "Selected");
         if (sel == null)
+        {
             ui.Label(new RectangleF(rx, 108, rw, 90), "Click a widget on the watch to select it. Drag it to move it, drag its corner to resize it. " +
                      "Click an empty cell to choose where the next one goes.", Theme.Dim, 13, FontWeight.Normal, true);
+
+            ui.Section(new RectangleF(rx, 274, rw, 22), "Background");
+            int bg = w.Background == "cards" ? 1 : 0;
+            if (ui.Segmented("we.bg", new RectangleF(rx, 298, rw, 36), new[] { "Watch panel", "Cards only" }, ref bg))
+                w.Background = bg == 1 ? "cards" : "panel";
+
+            ui.Section(new RectangleF(rx, 346, rw, 22), "Start over from");
+            for (int i = 0; i < WatchWidgets.Presets.Length; i++)
+                if (ui.Button(Ui.Id("wpre", i), new RectangleF(rx + i % 2 * 134, 370 + i / 2 * 40, 126, 34), WatchWidgets.PresetNames[i], null, false, true, 14))
+                    StartOver(ui, WatchWidgets.Presets[i]);
+            if (ui.Button("we.empty", new RectangleF(rx + 134, 450, 126, 34), "Empty", null, false, list.Count > 0, 14)) ClearWatch(ui, list);
+        }
         else
         {
-            p.Text(KindName(sel), new RectangleF(rx, 108, rw, 30), Theme.Text, 20, FontWeight.SemiBold);
-            p.Text($"{sel.W} × {sel.H} cells", new RectangleF(rx, 136, rw, 22), Theme.Dim, 14);
-            if (ui.Button("we.smaller", new RectangleF(rx, 164, 126, 36), "Smaller", null, false, WatchWidgets.Step(list, sel, -1) != null, 14))
+            // its name and size, smaller / larger / remove in a row, then its look (the background and "start over" are back when
+            // nothing is selected)
+            p.Text(KindName(sel), new RectangleF(rx, 106, rw - 64, 28), Theme.Text, 20, FontWeight.SemiBold);
+            p.Text($"{sel.W} × {sel.H}", new RectangleF(rx + rw - 64, 106, 64, 28), Theme.Dim, 14, FontWeight.Normal, TextAlignment.Trailing);
+            float bw = (rw - 16) / 3;
+            if (ui.Button("we.smaller", new RectangleF(rx, 138, bw, 34), "Smaller", null, false, WatchWidgets.Step(list, sel, -1) != null, 13))
                 StepSize(ui, list, sel, -1);
-            if (ui.Button("we.larger", new RectangleF(rx + 134, 164, 126, 36), "Larger", null, false, WatchWidgets.Step(list, sel, +1) != null, 14))
+            if (ui.Button("we.larger", new RectangleF(rx + bw + 8, 138, bw, 34), "Larger", null, false, WatchWidgets.Step(list, sel, +1) != null, 13))
                 StepSize(ui, list, sel, +1);
-            if (ui.Button("we.remove", new RectangleF(rx, 206, rw, 36), "Remove", Theme.IcoDelete, false, true, 14)) RemoveSelected(ui, list);
+            if (ui.Button("we.remove", new RectangleF(rx + 2 * (bw + 8), 138, bw, 34), "Remove", Theme.IcoDelete, false, true, 13)) RemoveSelected(ui, list);
+            if (sel != null && list.Contains(sel)) WidgetLook(ui, list, sel, rx, 182, rw);
         }
-        if (_wmsg != null) ui.Label(new RectangleF(rx, 248, rw, 20), _wmsg, Theme.Warn, 13);
-
-        ui.Section(new RectangleF(rx, 274, rw, 22), "Background");
-        int bg = w.Background == "cards" ? 1 : 0;
-        if (ui.Segmented("we.bg", new RectangleF(rx, 298, rw, 36), new[] { "Watch panel", "Cards only" }, ref bg))
-            w.Background = bg == 1 ? "cards" : "panel";
-
-        ui.Section(new RectangleF(rx, 346, rw, 22), "Start over from");
-        for (int i = 0; i < WatchWidgets.Presets.Length; i++)
-            if (ui.Button(Ui.Id("wpre", i), new RectangleF(rx + i % 2 * 134, 370 + i / 2 * 40, 126, 34), WatchWidgets.PresetNames[i], null, false, true, 14))
-                StartOver(ui, WatchWidgets.Presets[i]);
-        if (ui.Button("we.empty", new RectangleF(rx + 134, 450, 126, 34), "Empty", null, false, list.Count > 0, 14)) ClearWatch(ui, list);
         if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) EditingWatch = false;
+    }
+
+    // The selected widget's own look (the modern watch only; the 95 face stays as 1995 drew it): its style as chips, each with a
+    // small picture of it in the widget's colour; its colour (Auto: the accent, or purple / blue for the CPU and memory); a two-tone's
+    // second colour; and the same look on every widget of the face. Every target 34 px or more (the settings also show in VR).
+    void WidgetLook(Ui ui, List<WatchWidget> list, WatchWidget sel, float x, float y, float w)
+    {
+        var p = ui.P;
+        int style = Bento.StyleIndex(sel.Style);
+        uint auto = WristPanel.NaturalColor(sel.Type), c = sel.Color ?? auto;
+        ui.Section(new RectangleF(x, y, w, 22), "Style");
+        y += 24;
+        const float cw = 59.5f, ch = 46, gap = 7;
+        for (int i = 0; i < Bento.Styles.Length; i++)
+        {
+            var r = new RectangleF(x + i % 4 * (cw + gap), y + i / 4 * (ch + 6), cw, ch);
+            if (ui.Card(Ui.Id("wsty", i), r, i == style, out _) && i != style)
+            {
+                sel.Style = Bento.Styles[i];
+                style = i;
+                ui.Changed = true;
+            }
+            var look = Bento.Make(i, c, i == 3 ? sel.Color2 ?? 0 : 0, sel.Color.HasValue, false, false);
+            Bento.Sample(p, new RectangleF(r.X + 7, r.Y + 6, r.Width - 14, 20), look, 5);
+            p.Text(Bento.StyleNames[i], new RectangleF(r.X, r.Y + 27, r.Width, 17), i == style ? Theme.Text : Theme.Dim, 11.5f, FontWeight.SemiBold,
+                TextAlignment.Center);
+        }
+        y += 2 * ch + 6 + 10;
+        ui.Section(new RectangleF(x, y, w, 22), "Colour");
+        y += 24;
+        if (Swatches(ui, "wcol", x, y, sel.Color, auto, out var picked)) { sel.Color = picked; c = picked ?? auto; }
+        y += 80;
+        if (style == 3)
+        {
+            ui.Section(new RectangleF(x, y, w, 22), "Second colour");
+            y += 24;
+            if (Swatches(ui, "wcol2", x, y, sel.Color2, Bento.Second(c), out var picked2)) sel.Color2 = picked2;
+            y += 80;
+        }
+        if (ui.Button("we.lookall", new RectangleF(x, y, w, 34), "Use on all widgets", null, false, list.Count > 1, 13))
+        {
+            foreach (var o in list) { o.Style = sel.Style; o.Color = sel.Color; o.Color2 = sel.Color2; }
+            ui.Changed = true;
+        }
+    }
+
+    // Auto, then the palette: 7 a row, 34 px each
+    static bool Swatches(Ui ui, string id, float x, float y, uint? value, uint auto, out uint? picked)
+    {
+        picked = value;
+        bool changed = false;
+        for (int i = 0; i <= Bento.Palette.Length; i++)
+        {
+            uint col = i == 0 ? auto : Bento.Palette[i - 1].c;
+            bool on = i == 0 ? value == null : value is uint v && (v & 0xFFFFFF) == (col & 0xFFFFFF);
+            if (ui.Swatch(Ui.Id(id, i), x + 17 + i % 7 * 37.6f, y + 17 + i / 7 * 38, 14, col, on, i == 0 ? "A" : null))
+            {
+                picked = i == 0 ? null : col;
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     // ================= Windows 95 =================
