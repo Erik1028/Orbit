@@ -3,6 +3,16 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.10.0 | A new look: Bento
+- The watch is redesigned: dark navy cards, small uppercase captions, big bold numbers with their units, a pink
+  accent, and clear colours for state (green ok, yellow look, red act) and for data (purple CPU, blue memory).
+- Your colours switch to the new Bento theme once. Your old theme is still one click away on the Look tab.
+- Buttons on the watch carry their names, and a switched-on button is filled with the accent.
+- Every watch widget is easier to read in VR: nothing smaller than 15 px, and every value on a small card is the
+  same size.
+- Battery colours are calmer: green above 30%, yellow from 16 to 30%, red at 15% and below.
+- The watch draws faster than before the redesign.
+
 ## 1.9.4 | Dragging with two lasers on one screen
 - While you hold the trigger on a screen, that screen keeps your laser even past its edge, and the cursor stays on
   the edge. Dragging a window to the very top of a monitor now snaps it full screen.

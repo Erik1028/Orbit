@@ -196,6 +196,34 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.10.0 – Bento redesign, 1. lépés (2026-10-15)
+
+Erik: „először is lenne egy redesign … ne másold le teljesen, mivel vannak hibái, a színek, formák és design vonulat
+legyen ilyen” (Bento widgetkészlet-koncepció; leírás: memory orbit-wishlist-1015).
+
+- **Folyamat**: feltérképezés (3 ügynök) → terv (`scratchpad/bento_spec.json`: tokenek, betűskála, formák, widgetenként,
+  13 lépés) → kritika (18 pont, a fontosak beépítve) → az 1. lépés külön munkaágon (`Orbit-bento`, `bento-step1`) →
+  2 QA (kód + 95-ös azonosság; látvány) → 10 javítás (2e685b9) → újraellenőrzés → 2 maradék javítás (RAM/VRAM egység
+  a feliratsorban, a megnyitott óra nézet dátuma méretre igazítva).
+- **`Gfx/Bento.cs`** (csak modern): a felületek a Look panelszínéből keverve egy hűvösebb, világosabb árnyalat felé
+  (`Lift` 0,15 egy hangolható érték); Text #F2F3F7, egy szürke #9EA4B6, Ok #3DDC84 / Warn #F7C948 / Bad #FF5A5A,
+  CPU lila #8B7CF8, RAM/VRAM kék #5AA9FF, AccentFill + OnAccent, DangerFill/Edge. **Bento téma** (#FF5D93 / #0A0B10) a
+  Sakura helyén, ez az alapértelmezett és a „Default look”. `AppearanceConfig.LookVersion`: frissítéskor egyszer
+  Bento-ra vált (a régi színek a naplóba kerülnek), új telepítés eleve azzal indul.
+- **Óra (modern)**: lap r26 + 2 px él; kártya r16, lapos, ~6%-os fehér hajszálkeret; feliratok NAGYBETŰS, ritkított 15 px
+  SemiBold szürke bal fent; értékek vastagon balra, egység az alapvonalon; minden más ≥ 17 px (csempefeliratok 15-ig
+  szűkülhetnek); 1x1 = felirat + érték (30 px) + egy vonal; RAM/VRAM egysége a feliratsorban. Állapot a közös
+  küszöbökből (`LevelOf`/`FrameLevel`), a Warn/Bad az érték szövegét is színezi; akku: Ok > 30, Warn 16–30, Bad ≤ 15 a
+  kiírt egész számon; töltés = villám. Gombcsempék felirattal, BE = accent kitöltés fehér vastag felirattal. Minden
+  vezérlő ≥ 40 px találati terület. Hangerő 2x1/3x1: −/+ 44 px korongok + csak olvasható sáv. Nincs időzítő-kör
+  (Erik 10-14-én elvetette). Megnyitott nézetek a kártyák színeivel; a fix számlapok is az új akkuszabállyal.
+- **Painter**: ritkított szöveg (DirectWrite karakterköz, gyorsítótárral), `TextLine` alapvonal-metrika, `ClipText`
+  (az óra szövegei vágás nélkül → nyugalomban 0,69 ms a redesign előtti 0,89 helyett).
+- **95-ös stílus pixelre azonos** (157 kép, csatornánként, időfüggő részek maszkolva; az eltérések óra/CPU/RAM és a
+  verziószám). `--faceshot <dir>`: Erik saját számlapja a config MÁSOLATÁBÓL, saját és Bento színekkel.
+- Hátra (következő lépések, külön kiadásokban): a kártya felső fénye + vonalgrafikon (2), idő/dátum/naptár családok
+  (3), …, az Apple-stílusú 1x1 analóg (9), majd Erik listájáról a widgetenkénti szín és az állítható rács.
+
 ## 1.9.4 – húzás két lézerrel egy képernyőn (2026-10-15)
 
 Erik listájáról: „ha mind a kettő kontroller a kijelzőre mutat, … egy ablakot … a kijelző tetejére húzni hogy full

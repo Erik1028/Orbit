@@ -610,15 +610,17 @@ public sealed partial class WristPanel
     // The 1x1 card (and a column of the perf strip): caption, the value with its unit, one line under it (meter = null: none).
     // Every 1x1's value is as big as the others (Hero): a unit that does not fit beside it moves up into the caption row, at the
     // right (or, no room there either, is left out - the caption says what it is).
-    void Small(RectangleF r, string[] caption, string value, string unit, float frac, uint bar, uint vc, string meter, string roll = null)
+    // unitUp: the unit always goes up there (RAM and VRAM side by side must look the same whatever the number's width)
+    void Small(RectangleF r, string[] caption, string value, string unit, float frac, uint bar, uint vc, string meter, string roll = null,
+        bool unitUp = false)
     {
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad, by = r.Y + SBase;
-        var (vs, us) = HeroFit(value, unit, iw);
-        float uw = us == 0 && !string.IsNullOrEmpty(unit) ? _p.MeasureWidth(unit, SmallText, FontWeight.SemiBold) : 0;
-        if (uw > 0 && CaptionWidth(caption, iw - uw - 10) >= 0)
+        var (vs, us) = HeroFit(value, unitUp ? null : unit, iw);
+        float uw = us == 0 && !string.IsNullOrEmpty(unit) ? _p.MeasureTracked(unit, CapSize, FontWeight.SemiBold, CapTrack) : 0;
+        if (uw > 0 && CaptionWidth(caption, iw - uw - 6) >= 0)
         {
-            Caption(r, iw - uw - 10, caption);
-            TextAt(unit, r.Right - pad - uw - 2, r.Y + CapBase, uw + 2, Sub, SmallText, FontWeight.SemiBold, TextAlignment.Trailing);
+            Caption(r, iw - uw - 6, caption);
+            CapText(unit, r.Right - pad - uw, r.Y + CapBase, uw + 2, Sub);
         }
         else Caption(r, iw, caption);
         if (!string.IsNullOrEmpty(value))
@@ -644,7 +646,8 @@ public sealed partial class WristPanel
         var (frac, value, _, _, lv) = Reading(id, d);
         bool none = value == "–";
         string unit = none ? null : id switch { "fps" => FpsUnit(d.Vr.DisplayHz), "gpu" => "ms", "vram" or "ram" => "GB", _ => null };
-        Small(r, SmallCaption(id), value, unit, frac, Bento.Level(lv, RoleColor(id)), none ? Bento.Faint : Bento.Level(lv, Bento.Text), key);
+        Small(r, SmallCaption(id), value, unit, frac, Bento.Level(lv, RoleColor(id)), none ? Bento.Faint : Bento.Level(lv, Bento.Text), key,
+            unitUp: id is "ram" or "vram");
     }
 
     // "/90": a 1x1 frame rate's unit, made when the headset's rate changes

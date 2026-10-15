@@ -238,7 +238,9 @@ public sealed partial class WristPanel
                 FontWeight.SemiBold);
         Words(now);
         // the face draws its text unclipped: every line here is cut to the column
-        _p.Text(Ellipsize(_dateLine, w, 22, FontWeight.SemiBold), new RectangleF(x, top + 92, w, 32), Bento.Text, 22, FontWeight.SemiBold);
+        // a long date ("Október 15., csütörtök") gets smaller to fit whole, down to the 17 px floor, before anything is cut
+        float ds = MathF.Max(SmallText, FitSize(_dateLine, w, 22, FontWeight.SemiBold, null));
+        _p.Text(Ellipsize(_dateLine, w, ds, FontWeight.SemiBold), new RectangleF(x, top + 92, w, 32), Bento.Text, ds, FontWeight.SemiBold);
         _p.Text(Ellipsize($"Week {ISOWeek.GetWeekOfYear(now)} · day {now.DayOfYear} of {(DateTime.IsLeapYear(now.Year) ? 366 : 365)}", w, SmallText,
             FontWeight.Normal), new RectangleF(x, top + 126, w, 26), Sub, SmallText);
         float y = top + 176;

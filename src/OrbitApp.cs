@@ -1447,6 +1447,21 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     void NoteVersion()
     {
         string now = Updater.Current.ToString(3), last = Program.UpdatedFrom ?? C.General.LastVersion;
+        // 1.10, the Bento redesign: an install that ran before gets the new colours once (a new one starts with them); the
+        // old theme stays one click away on the Look tab, and the log keeps the old colours
+        if (C.Appearance.LookVersion < 1)
+        {
+            var a = C.Appearance;
+            if (C.General.LastVersion != null && (a.Accent != 0xFFFF5D93 || a.PanelColor != 0xFF0A0B10))
+            {
+                Log.Info($"look: the Bento colours (were accent {a.Accent:X8}, panel {a.PanelColor:X8}, laser {a.LaserColor:X8})");
+                a.Accent = 0xFFFF5D93;
+                a.PanelColor = 0xFF0A0B10;
+                AppearanceChanged();
+            }
+            a.LookVersion = 1;
+            _cfg.MarkDirty();
+        }
         if (last == now) return;
         if (last != null)
         {

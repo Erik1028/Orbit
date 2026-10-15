@@ -161,6 +161,7 @@ public sealed class AppearanceConfig
 {
     public uint Accent { get; set; } = 0xFFFF5D93;      // the Bento theme (Look tab), also what "Default look" gives
     public uint PanelColor { get; set; } = 0xFF0A0B10;
+    public int LookVersion { get; set; }               // 1 = the Bento redesign's colours were applied once (1.10); 0 = an older config
     public float PanelOpacity { get; set; } = 0.92f;
     public uint LaserColor { get; set; } = 0;          // 0 = same as accent
     public bool Clock24h { get; set; } = true;
