@@ -78,7 +78,9 @@ static class PerfBench
 
         Phase("first look (cold)", 1.4, () => wrist.Intro());
         Phase("look again (warm)", 1.4, () => wrist.Intro());
+        int made = painter.GradientsMade;
         Phase("at rest", 1.0, () => { });
+        Log.Info($"perfbench: gradient brushes made at rest {painter.GradientsMade - made} (want 0)");
         foreach (var w in cfg.Data.Wrist.Widgets ?? new List<WatchWidget>())
         {
             if (WatchWidgets.Find(w.Type) is not { Button: false }) continue;

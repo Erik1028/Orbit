@@ -524,6 +524,8 @@ static class Tools
         ptr.Leave();
         wrist.Settle();
         FrameM();
+        ui.ResetAnimations();                     // settled: a swatch's ring fades in (half-way, the picked one looks unpicked)
+        FrameM();
         surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_style.png"));
         ClickM(Chip(0).X, Chip(0).Y);             // back to the default card: only gpu
         Log.Info($"editor: gpu back to the default card {gpuW?.Style == null} (want True), its colour kept {gpuW?.Color:X8} (want FF14B8A6)");
@@ -895,8 +897,9 @@ static class Tools
     // _night: night mode (the fills dimmer), _night_vr: the same as seen in VR (the overlay dims everything to 45 % at night);
     // styles_mixed: every look at once; styles_glass_cards: glass with no page behind. Then every kind at every size alone in
     // each look (a picture only when something is wrong). Checked: nothing within 3-8 px of a card's edge - against a render of
-    // the cards alone, so a gradient or a header's band is the card, not content - and every text's contrast against what is
-    // really under it (a render without text): 4.5:1, 3:1 for big, bold or icon text; "nothing there" (Faint) is left out.
+    // the cards alone, so a gradient or a header's band is the card, not content - nor on a header band's lower edge, and every
+    // text's contrast against what is really under it (a render without text; with no page, over a dark room and a white wall):
+    // 4.5:1, 3:1 for big, bold or icon text; "nothing there" (Faint) is left out. styles_buttons_*: the tiles in every look.
     static int StylesRun(WristPanel wrist, PanelData data, Painter painter, WristConfig wcfg, Gpu gpu, string dir)
     {
         string qa = Path.Combine(dir, "qa");
@@ -904,9 +907,18 @@ static class Tools
         int TW = WristPanel.TW, TH = WristPanel.TH, problems = 0, faces = 0, checkedTexts = 0;
         var texts = new List<(string s, System.Drawing.RectangleF r, uint c, float size, Vortice.DirectWrite.FontWeight w, string fam, bool faint)>();
         var lowest = new Dictionary<string, (float cr, string what)>();
+        uint[] Black = { 0xFF000000 }, Worlds = { 0xFF2A2C33, 0xFFFFFFFF };
         static int Dist(uint a, uint b) =>
             Math.Abs((int)((a >> 16) & 255) - (int)((b >> 16) & 255)) + Math.Abs((int)((a >> 8) & 255) - (int)((b >> 8) & 255)) +
             Math.Abs((int)(a & 255) - (int)(b & 255));
+        // a pixel (premultiplied: over black) seen over a world - floating cards (no page) are checked over a dark room and a
+        // white wall
+        static uint Over(uint p, uint world)
+        {
+            uint k = 255 - (p >> 24);
+            uint Ch(int s) => Math.Min(255, ((p >> s) & 255) + (((world >> s) & 255) * k + 127) / 255);
+            return 0xFF000000 | (Ch(16) << 16) | (Ch(8) << 8) | Ch(0);
+        }
 
         // the face on the watch now: drawn, then without text, then the cards alone; save = its picture (null: only when wrong)
         int Check(string look, string name, string save)
@@ -929,6 +941,7 @@ static class Tools
             var cardsOnly = wrist.Surf.ReadPixels(gpu);
             int n = 0;
             bool floating = wcfg.Background == "cards";
+            var worlds = floating ? Worlds : Black;
             var rects = new List<System.Drawing.RectangleF>();
             foreach (var w in wcfg.Widgets)
             {
@@ -946,6 +959,14 @@ static class Tools
                         if (Dist(px[y * TW + x], cardsOnly[y * TW + x]) > 24) { close++; where ??= $"({x},{y})"; }
                     }
                 if (close > 0) { n++; Log.Warn($"styles {name}: {w.Type} {w.W}x{w.H}: {close} px within 8 px of its edge, first at {where}"); }
+                // a header's band: nothing but text within 3 px of its lower edge (a button half on it fuses with it)
+                float band = wrist.BandOf(w);
+                if (band <= 0) continue;
+                int touch = 0; string at = null;
+                for (int y = (int)(r.Top + band) - 3; y <= (int)(r.Top + band) + 3; y++)
+                    for (int x = (int)r.Left + 4; x < (int)r.Right - 4; x++)
+                        if (Dist(bare[y * TW + x], cardsOnly[y * TW + x]) > 24) { touch++; at ??= $"({x},{y})"; }
+                if (touch > 0) { n++; Log.Warn($"styles {name}: {w.Type} {w.W}x{w.H}: {touch} px on its band's edge ({band:0} px), first at {at}"); }
             }
             if (floating)
             {
@@ -977,11 +998,21 @@ static class Tools
                     }
                 var under = ink.Count >= 4 ? ink : all;
                 if (under.Count == 0) continue;
-                // what is under its letters: the middle of those backgrounds (by contrast)
-                var crs = new List<(float cr, uint bg)>(under.Count);
-                foreach (var b in under) crs.Add((Bento.Contrast(t.c | 0xFF000000, b | 0xFF000000), b));
-                crs.Sort((p, q) => p.cr.CompareTo(q.cr));
-                var (cr, bg) = crs[crs.Count / 2];
+                // what is under its letters: the middle of those backgrounds (by contrast) - with no page, over the world that
+                // reads worst (a card that is not opaque shows it)
+                float cr = float.MaxValue;
+                uint bg = 0;
+                foreach (uint world in worlds)
+                {
+                    var crs = new List<(float cr, uint bg)>(under.Count);
+                    foreach (var b in under)
+                    {
+                        uint seen = Over(b, world);
+                        crs.Add((Bento.Contrast(t.c | 0xFF000000, seen), seen));
+                    }
+                    crs.Sort((p, q) => p.cr.CompareTo(q.cr));
+                    if (crs[crs.Count / 2].cr < cr) (cr, bg) = crs[crs.Count / 2];
+                }
                 bool big = t.size >= 24 || (t.w >= Vortice.DirectWrite.FontWeight.SemiBold && t.size >= 15) || t.fam == Theme.IconFont;
                 float want = big ? 3f : 4.5f;
                 checkedTexts++;
@@ -1077,6 +1108,20 @@ static class Tools
             wcfg.Widgets[i].Color = mixc[i % mixc.Length] == 0 ? null : mixc[i % mixc.Length];
         }
         Check("mixed", "mixed", "styles_mixed.png");
+        // the button tiles, a look per row: off (keyboard, night), on (monitors), and the ones with no on / off
+        foreach (var (file, rows) in new[]
+        {
+            ("styles_buttons_1.png", new[] { ("default", navy), ("tint", teal), ("solid", amber), ("twotone", Col("Pink")) }),
+            ("styles_buttons_2.png", new[] { ("header", navy), ("outline", teal), ("glass", amber), ("solid", Col("White")) }),
+        })
+        {
+            wcfg.Widgets = new List<WatchWidget>();
+            string[] tiles = { "keyboard", "desktops", "night", "recenter", "settings", "layout" };
+            for (int y = 0; y < rows.Length; y++)
+                for (int x = 0; x < tiles.Length; x++)
+                    wcfg.Widgets.Add(new WatchWidget { Type = tiles[x], X = x, Y = y, Style = rows[y].Item1 == "default" ? null : rows[y].Item1, Color = rows[y].Item2 });
+            Check("buttons", file[..^4], file);
+        }
         // an opened widget with a colour of its own: that colour as the accent there too
         foreach (var (type, c) in new[] { ("volume", Col("Purple")), ("cpu", teal), ("timer", amber) })
         {

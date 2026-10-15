@@ -343,11 +343,15 @@ public sealed class Painter : IDisposable
     }
 
     // ---- linear gradients (the modern watch's cards: the top light, two-tone fills, a glass sheen) ----
-    // One brush per stop set, kept - a few dozen at most: all thrown away when the look changes or the cap is hit; its start
-    // and end move per call, like the one recoloured solid brush.
-    readonly Dictionary<(uint, uint, uint, int), ID2D1LinearGradientBrush> _grads = new();
+    // One brush per stop set, kept: all thrown away when the look changes; past 64 the one used longest ago goes (the watch, the
+    // settings and the editor's style chips share this painter - a many-coloured face must not rebuild them every frame). Its
+    // start and end move per call, like the one recoloured solid brush.
+    readonly Dictionary<(uint, uint, uint, int), (ID2D1LinearGradientBrush brush, long used)> _grads = new();
     int _gradVersion = -1;
+    long _gradTick;
+    const int GradCap = 64;
     public int GradientCount => _grads.Count;
+    public int GradientsMade { get; private set; }     // brushes made so far (--perfbench: none per frame once warm)
 
     // c0 -> c1 along angleDeg (0 = left to right, 90 = top to bottom, 45 = top-left to bottom-right) across the rectangle,
     // or done after 'span' of it (c1 from there on)
@@ -362,33 +366,62 @@ public sealed class Painter : IDisposable
     {
         if (Theme.Classic || PixelMode) { Fill(r, a); return; }
         if (a == b && (n == 2 || b == c)) { Fill(r, a, radius); return; }       // flat: the solid brush
-        var brush = GradBrush(a, b, c, n);
+        var brush = Place(GradBrush(a, b, c, n), r, angleDeg, span);
+        if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
+        else Dc.FillRectangle(Raw(r), brush);
+    }
+
+    // a disc filled with c0 -> c1 laid over 'area' the way FillGradient lays it there: on that card it matches the pixels under it.
+    // replace: it takes the place of what is under it, alpha included (a card that is not opaque, drawn over again, would be a
+    // touch more solid there)
+    public void CircleGradient(float cx, float cy, float rad, RectangleF area, uint c0, uint c1, float angleDeg = 90, float span = 1,
+        bool replace = false)
+    {
+        if (Theme.Classic || PixelMode) { Circle(cx, cy, rad, c0); return; }
+        var e = new Ellipse(new Vector2(cx, cy), rad, rad);
+        if (replace) Dc.PrimitiveBlend = PrimitiveBlend.Copy;
+        if (c0 == c1) Dc.FillEllipse(e, Brush(c0));
+        else Dc.FillEllipse(e, Place(GradBrush(c0, c1, c1, 2), area, angleDeg, span));
+        if (replace) Dc.PrimitiveBlend = PrimitiveBlend.SourceOver;
+    }
+
+    static ID2D1LinearGradientBrush Place(ID2D1LinearGradientBrush brush, RectangleF r, float angleDeg, float span)
+    {
         float t = angleDeg * MathF.PI / 180, dx = MathF.Cos(t), dy = MathF.Sin(t);
         float len = MathF.Abs(r.Width * dx) + MathF.Abs(r.Height * dy);
         var s = new Vector2(r.X + r.Width / 2 - dx * len / 2, r.Y + r.Height / 2 - dy * len / 2);
         brush.StartPoint = s;
         brush.EndPoint = s + new Vector2(dx, dy) * (len * MathF.Max(0.01f, span));
-        if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
-        else Dc.FillRectangle(Raw(r), brush);
+        return brush;
     }
 
     ID2D1LinearGradientBrush GradBrush(uint a, uint b, uint c, int n)
     {
         if (_gradVersion != Theme.Version) { DropGradients(); _gradVersion = Theme.Version; }
         var key = (a, b, c, n);
-        if (_grads.TryGetValue(key, out var br)) return br;
-        if (_grads.Count >= 24) DropGradients();
+        if (_grads.TryGetValue(key, out var e)) { _grads[key] = (e.brush, ++_gradTick); return e.brush; }
+        if (_grads.Count >= GradCap)
+        {
+            // full: the one used longest ago makes room
+            var old = key;
+            long oldest = long.MaxValue;
+            foreach (var (k, v) in _grads) if (v.used < oldest) { oldest = v.used; old = k; }
+            _grads[old].brush.Dispose();
+            _grads.Remove(old);
+        }
         var stops = n == 2 ? new[] { new GradientStop(0, ToColor(a)), new GradientStop(1, ToColor(b)) }
             : new[] { new GradientStop(0, ToColor(a)), new GradientStop(0.5f, ToColor(b)), new GradientStop(1, ToColor(c)) };
+        ID2D1LinearGradientBrush br;
         using (var col = Dc.CreateGradientStopCollection(stops, ExtendMode.Clamp))
             br = Dc.CreateLinearGradientBrush(new LinearGradientBrushProperties(Vector2.Zero, Vector2.UnitY), col);
-        _grads[key] = br;
+        GradientsMade++;
+        _grads[key] = (br, ++_gradTick);
         return br;
     }
 
     void DropGradients()
     {
-        foreach (var g in _grads.Values) g.Dispose();
+        foreach (var g in _grads.Values) g.brush.Dispose();
         _grads.Clear();
     }
 

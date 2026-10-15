@@ -103,7 +103,8 @@ public sealed partial class WristPanel
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
         float ca = Math.Clamp((e - 0.5f) / 0.45f, 0, 1);
         if (ca <= 0.01f) return;
-        _halo = Bento.Card;
+        _halo = Bento.Card;                    // the opened card is flat
+        _haloCard = RectangleF.Empty;
         // a widget with a colour of its own keeps it as the accent of its opened view (the card stays the default one)
         bool own = _open.Color.HasValue;
         if (own) Bento.Use(LookOf(0, _open.Color.Value | 0xFF000000, 0, true, false, false));
@@ -421,6 +422,10 @@ public sealed partial class WristPanel
     {
         var (cf, cv, _, _, cl) = Reading("cpu", d);
         var (rf, rv, ru, _, rl) = Reading("ram", d);
+        // the opened widget's own colour only for its own reading: the other keeps its role colour (two gauges in one
+        // colour would look like one thing)
+        bool ramOpen = _open?.Type == "ram";
+        uint cpuC = ramOpen ? Bento.DataPurple : RoleColor("cpu"), ramC = ramOpen ? RoleColor("ram") : Bento.DataBlue;
         float half = c.Width / 2, gs = 140, tx = gs + 6, tw = half - tx - 10;
         // a heading (a card's caption), one big fact and a smaller one beside each gauge
         void Facts(float x, string head, string big, string small)
@@ -430,7 +435,7 @@ public sealed partial class WristPanel
                 FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
             _p.Text(Ellipsize(small, tw, SmallText, FontWeight.Normal), new RectangleF(x, c.Y + 78, tw, 24), Sub, SmallText);
         }
-        Gauge(new RectangleF(c.X, c.Y - 6, gs, gs), cf, Bento.Level(cl, RoleColor("cpu")), "wdsc", cv, "", cv == "–" ? Bento.Faint : Bento.Level(cl, Bento.Text));
+        Gauge(new RectangleF(c.X, c.Y - 6, gs, gs), cf, Bento.Level(cl, cpuC), "wdsc", cv, "", cv == "–" ? Bento.Faint : Bento.Level(cl, Bento.Text));
         // the gauge already shows the load now: beside it, the last minute's average and peak
         float avg = 0, peak = 0;
         for (int i = 0; i < Stats.CpuCount; i++)
@@ -441,7 +446,7 @@ public sealed partial class WristPanel
         }
         bool any = Stats.CpuCount > 0;
         Facts(c.X + tx, "CPU", any ? $"avg {avg * 100:0}%" : "–", any ? $"peak {peak * 100:0}%" : "");
-        Gauge(new RectangleF(c.X + half, c.Y - 6, gs, gs), rf, Bento.Level(rl, RoleColor("ram")), "wdsr", rv, ru, rv == "–" ? Bento.Faint : Bento.Level(rl, Bento.Text));
+        Gauge(new RectangleF(c.X + half, c.Y - 6, gs, gs), rf, Bento.Level(rl, ramC), "wdsr", rv, ru, rv == "–" ? Bento.Faint : Bento.Level(rl, Bento.Text));
         float total = Stats.RamTotalGB, used = Stats.RamUsedGB;
         bool ram = total > 0 && used >= 0;
         Facts(c.X + half + tx, "MEMORY", ram ? $"{total - used:0.0} GB free" : "–", ram ? $"of {total:0} GB" : "");
@@ -456,7 +461,7 @@ public sealed partial class WristPanel
             int idx = (Stats.CpuHead - Stats.CpuCount + i + SystemStats.History) % SystemStats.History;
             float v = Stats.CpuHistory[idx], h = MathF.Max(2, v * b.Height);
             float x = b.Right - (Stats.CpuCount - i) * step;
-            _p.Fill(new RectangleF(x + 1, b.Bottom - h, MathF.Max(2, step - 3), h), Bento.Level(CpuLevel(v), RoleColor("cpu")), 2);
+            _p.Fill(new RectangleF(x + 1, b.Bottom - h, MathF.Max(2, step - 3), h), Bento.Level(CpuLevel(v), cpuC), 2);
         }
     }
 

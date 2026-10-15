@@ -54,10 +54,10 @@ static class Bento
     public static uint OnAccent;                 // icons and labels on AccentFill
     public static uint Data;                     // a reading's colour (0: by role - purple CPU, blue memory, the accent else)
     public static uint Ok = Green;               // a fine level (a battery's bar); the text colour on a coloured card
-    public static uint Halo;                     // the card's colour behind a satellite or a knob (a gap around it)
-    public static bool Badge;                    // a coloured card: a level shows as a dot (values keep the text colour)
-    public static bool CapBadge;                 // the same in the caption row only (a header's band)
-    public static uint BadgeRing;                // the ring around that dot
+    public static uint Halo;                     // the card's colour behind a satellite or a knob (a gap around it); 0: none (glass)
+    public static bool Badge;                    // a coloured card: a level shows as a badge (values keep the text colour)
+    public static bool CapBadge;                 // the same in the caption row only (a header's band, glass)
+    public static uint BadgeRing;                // the ring around that badge
     public static uint WarnInk = Warn, BadInk = Bad;   // Warn / Bad as text and bars on this card (lifted where it is lighter)
     public static Look Cur, Default;             // the whole look (its card and its button tiles), and the default one
 
@@ -75,7 +75,8 @@ static class Bento
             Fill0 = CardTop, Fill1 = Card, Angle = 90, Span = 0.5f, Border = 0x10FFFFFF, BorderW = EdgeWidth,
             Text = White, Sub = Grey, Faint = Dim, Cap = Grey, CapText = White, CapDot = accent, Edge = 0x10FFFFFF,
             Tile = Theme.Mix(pc, Tint, Lift + 0.10f), TileHover = Theme.Mix(pc, Tint, Lift + 0.17f), Track = Theme.Mix(pc, Tint, Lift + 0.16f),
-            Accent = accent, Ok = Green, Halo = Card, BadgeRing = White, WarnInk = Warn, BadInk = Bad,
+            Accent = accent, AccentText = accent, Ok = Green, Halo = Card, BadgeRing = White, WarnInk = Warn, BadInk = Bad,
+            Cpu = DataPurple, Mem = DataBlue, FlagWarn = Warn, FlagBad = Bad,
         };
         d.AccentFill = Theme.Luma(accent) < 0.55f ? Theme.Mix(accent, 0xFF000000, 0.08f) : accent;
         d.OnAccent = Theme.Luma(d.AccentFill) > 0.55f ? Dark : 0xFFFFFFFF;
@@ -85,9 +86,10 @@ static class Bento
         Use(d);
     }
 
-    // a value's colour: its normal colour, or Warn / Bad when it needs attention (on a coloured card: normal, its dot says it)
+    // a value's colour: its normal colour, or Warn / Bad when it needs attention (on a coloured card: the text colour - never
+    // its normal one, a low battery's bar would say "fine" in green - and its badge says how it is)
     public static uint Level(StatLevel l, uint normal) =>
-        l == StatLevel.Ok || Badge ? normal : l == StatLevel.Bad ? BadInk : WarnInk;
+        l == StatLevel.Ok ? normal : Badge ? Text : l == StatLevel.Bad ? BadInk : WarnInk;
 
     // ================= a widget's own look =================
 
@@ -119,6 +121,10 @@ static class Bento
         public uint Text, Sub, Faint, Cap, CapText, CapDot, Tile, TileHover, Track, Edge, Accent, AccentFill, OnAccent, Data, Ok, Halo, BadgeRing;
         public uint WarnInk, BadInk;
         public bool Badge, CapBadge;
+        public uint AccentText;                   // the accent as text (a weekday): lifted further than a line
+        public uint Cpu, Mem;                     // the role colours on this card (a reading without a colour of its own)
+        public uint GraphBar;                     // the frame graph's bars (0: the accent)
+        public uint FlagWarn, FlagBad;            // its flagged frames: Warn / Bad, the text colour where the bars are that hue
     }
 
     public static void Use(in Look l)
@@ -143,7 +149,15 @@ static class Bento
         L.Style = style;
         c |= 0xFF000000;
         if (c2 != 0) c2 |= 0xFF000000;
-        if (style == 0) { Colour(ref L, c, Card, L.Tile); return L; }     // the default card, its accent parts in the colour
+        if (style == 0)
+        {
+            // the default card, its accent parts in the colour - and its hairline, so a colour picked shows on every widget
+            // (a battery or a tile that is off has no accent part)
+            Colour(ref L, c, Card, L.Tile, own);
+            if (own) L.Border = L.OffBorder = Theme.WithAlpha(Away(c, Card, 2.4f), 0.5f);
+            Flags(ref L, c);
+            return L;
+        }
         if (night)
         {
             c = Theme.Mix(c, 0xFF000000, 0.4f);
@@ -162,10 +176,14 @@ static class Bento
                 L.Sub = L.Cap = Lighten(Grey, L.Fill0, 4.5f);
                 L.Faint = Theme.Mix(L.Fill1, White, 0.42f);
                 L.Border = L.OffBorder = Theme.WithAlpha(Away(c, L.Fill1, 2.4f), 0.65f);
-                Colour(ref L, c, L.Fill1, L.Tile);
+                Colour(ref L, c, L.Fill1, L.Tile, own);
+                L.AccentText = Away(c, L.Fill0, 4.5f);
+                L.Cpu = Away(DataPurple, L.Fill0, 3f);
+                L.Mem = Away(DataBlue, L.Fill0, 3f);
                 L.WarnInk = Lighten(Warn, L.Fill0, 3.6f);
                 L.BadInk = Lighten(Bad, L.Fill0, 3.6f);
                 L.Badge = Near(c, Warn) || Near(c, Bad);
+                Flags(ref L, c);
                 break;
             case 2:
                 // solid: filled with the colour (a little lighter at the top)
@@ -181,55 +199,78 @@ static class Bento
                 uint bt = OnText(c, c);
                 uint band = Fit(c, c, bt, 4.8f).f0;
                 L.Band = band;
-                L.CapBadge = true;                // a level in the caption row: a dot (red text on a red band would vanish)
-                Colour(ref L, c, Card, L.Tile);
+                L.CapBadge = true;                // a level in the caption row: a badge (red text on a red band would vanish)
+                Colour(ref L, c, Card, L.Tile, own);
+                Flags(ref L, c);
                 L.Cap = Theme.Mix(band, bt, 0.85f);
                 L.CapText = L.CapDot = L.BadgeRing = bt;
                 break;
             }
             case 5:
                 // outline: the default card inside a 2 px border of the colour
-                Colour(ref L, c, Card, L.Tile);
+                Colour(ref L, c, Card, L.Tile, own);
+                Flags(ref L, c);
                 L.Border = L.OffBorder = Away(c, Card, 3f);
                 L.BorderW = L.OffBorderW = 2;
                 break;
             case 6:
             {
-                // glass: lighter and see-through, a sheen over the top, a bright hairline; frosted in the colour when it has one
+                // glass: lighter and see-through, a sheen over the top, a bright hairline; frosted in the colour when it has one.
+                // With no page behind (cards) the world shows through - a white wall as well as a dark room: less of it there and
+                // a fainter sheen, and the frost pushed darker until white text reads over both
                 uint frost = Theme.Mix(own ? Theme.Mix(Card, c, 0.2f) : Card, 0xFFFFFFFF, 0.16f);
-                float a = cards ? 0.55f : 0.72f;
-                uint ground = cards ? 0xFF2A2C33 : Page, seen = Theme.Mix(ground, frost, a);   // over the page (cards: a mid-dark world)
-                // white text all over it, the sheen included: a light colour's frost is darker
-                for (int i = 0; i < 12 && Contrast(White, Theme.Mix(seen, 0xFFFFFFFF, 0.25f)) < 5.5f; i++)
-                {
+                float a = cards ? 0.85f : 0.72f, sh = cards ? 0.12f : 0.25f;
+                uint dark = cards ? 0xFF2A2C33 : Page, light = cards ? 0xFFFFFFFF : Page;     // what is behind: the page, or a world
+                uint Seen(uint ground) => Theme.Mix(ground, frost, a);
+                uint Top(uint ground) => Theme.Mix(Seen(ground), 0xFFFFFFFF, sh);             // under the sheen
+                for (int i = 0; i < 24 && (Contrast(White, Top(dark)) < 5.5f || Contrast(White, Top(light)) < 5f); i++)
                     frost = Theme.Mix(frost, 0xFF000000, 0.08f);
-                    seen = Theme.Mix(ground, frost, a);
-                }
+                uint seen = Seen(dark), worst = Seen(light), top = Top(light);
                 L.Fill0 = L.Fill1 = L.Off0 = L.Off1 = Theme.WithAlpha(frost, a);
                 L.OffHover = Theme.WithAlpha(Theme.Mix(frost, 0xFFFFFFFF, 0.1f), a);
-                L.Sheen = 0x40FFFFFF;
+                L.Sheen = cards ? 0x1FFFFFFFu : 0x40FFFFFFu;
                 L.Border = L.OffBorder = L.Edge = 0x59FFFFFF;
-                L.Halo = seen;
-                L.Sub = L.Cap = Lighten(Grey, Theme.Mix(seen, 0xFFFFFFFF, 0.25f), 4.5f);    // under the sheen
+                L.Halo = 0;                       // see-through: a disc of it behind the satellite would show (it sits on the rim)
+                // the grey: under the sheen and on a tile (a cover's place) as well, over the world that shows most
+                uint tile = Theme.Mix(worst, 0xFFFFFFFF, 0.17f);
+                L.Sub = L.Cap = Lighten(Lighten(Grey, Top(dark), 4.5f), Lum(tile) > Lum(top) ? tile : top, 3.2f);
                 L.Faint = Theme.Mix(seen, White, 0.4f);
                 L.Track = 0x33FFFFFF;
                 L.Tile = 0x29FFFFFF;
                 L.TileHover = 0x40FFFFFF;
-                Colour(ref L, c, seen, Theme.Mix(seen, 0xFFFFFFFF, 0.16f));
-                L.WarnInk = Lighten(Warn, Theme.Mix(seen, 0xFFFFFFFF, 0.25f), 3.6f);
-                L.BadInk = Lighten(Bad, Theme.Mix(seen, 0xFFFFFFFF, 0.25f), 3.6f);
+                Colour(ref L, c, worst, Theme.Mix(worst, 0xFFFFFFFF, 0.16f), own);
+                L.Cpu = Away(DataPurple, worst, 3f);
+                L.Mem = Away(DataBlue, worst, 3f);
+                // a level: a badge in the caption row (Bad lifted enough to read under the sheen is a pastel pink - it reads as
+                // the accent, not as an alarm); a value under it in Warn / Bad, lifted only as far as the card under it needs
+                L.CapBadge = true;
+                uint body = Theme.Mix(worst, 0xFFFFFFFF, sh * 0.5f);
+                L.WarnInk = Lighten(Warn, body, 3f);
+                L.BadInk = Lighten(Bad, body, 3f);
+                Flags(ref L, c);
                 break;
             }
         }
         return L;
     }
 
+    // a header whose caption row holds buttons (no room for a band under the caption): a strip along the top instead, the
+    // caption in the card's own colours
+    public static Look Strip(Look L)
+    {
+        L.Cap = L.Sub; L.CapText = L.Text; L.CapDot = L.Accent; L.BadgeRing = L.Text; L.CapBadge = false;
+        return L;
+    }
+
     // the colour as the accent: lines and marks light enough to see on the card, a fill that does not look like an off tile,
-    // white or dark text on that fill (the default look's rule, the fill nudged when it still reads badly)
-    static void Colour(ref Look L, uint c, uint card, uint tile)
+    // white or dark text on that fill (the default look's rule, the fill nudged when it still reads badly). A reading takes it
+    // only when it is the widget's own (own): automatic keeps the role colours, purple CPU and blue memory.
+    static void Colour(ref Look L, uint c, uint card, uint tile, bool own)
     {
         uint line = Away(c, card, 3f);
-        L.Accent = L.Data = L.CapDot = line;
+        L.Accent = L.CapDot = line;
+        L.Data = own ? line : 0;
+        L.AccentText = Away(c, card, 4.5f);
         uint fill = Theme.Luma(c) < 0.55f ? Theme.Mix(c, 0xFF000000, 0.08f) : c;
         fill = Away(fill, tile, 1.9f);
         uint on = Theme.Luma(fill) > 0.55f ? Dark : 0xFFFFFFFF;
@@ -238,8 +279,15 @@ static class Bento
         L.OnAccent = L.OnText = on;
     }
 
+    // the frame graph's flagged frames: amber / red, the text colour where the bars are that hue (amber ticks on amber bars)
+    static void Flags(ref Look L, uint c)
+    {
+        L.FlagWarn = Near(c, Warn) ? L.Text : L.WarnInk;
+        L.FlagBad = Near(c, Bad) ? L.Text : L.BadInk;
+    }
+
     // a card filled with colour (solid, two-tone): the text that reads best on all of it, the fill pushed darker / lighter
-    // until it reads well; the rest from those two - the accent parts in the text colour, a level as a dot
+    // until it reads well; the rest from those two - the accent parts in the text colour, a level as a badge
     static void Fills(ref Look L, uint f0, uint f1, float angle, float span)
     {
         uint t = OnText(f0, f1);
@@ -247,7 +295,7 @@ static class Bento
         uint mid = Theme.Mix(f0, f1, 0.5f), worst = Contrast(t, f0) < Contrast(t, f1) ? f0 : f1;
         L.Fill0 = f0; L.Fill1 = f1; L.Angle = angle; L.Span = span;
         L.Border = L.Edge = 0;
-        L.Text = L.CapText = L.CapDot = L.Accent = L.Data = L.Ok = L.BadgeRing = t;
+        L.Text = L.CapText = L.CapDot = L.Accent = L.AccentText = L.Data = L.Ok = L.BadgeRing = t;
         L.Sub = L.Cap = Theme.Mix(worst, t, 0.8f);
         L.Faint = Theme.Mix(mid, t, 0.5f);
         L.Track = Theme.Mix(mid, t, 0.24f);
@@ -257,6 +305,9 @@ static class Bento
         L.OnAccent = mid;
         L.Halo = mid;
         L.Badge = true;
+        // the frame graph: the bars fainter, a flagged one full (its badge says how bad)
+        L.GraphBar = L.Faint;
+        L.FlagWarn = L.FlagBad = t;
         // buttons: on = the fill (lifted when it is too dark to tell from off) with a check, off = a dark version of it
         L.Off0 = Theme.Mix(Card, f0, 0.3f);
         L.Off1 = Theme.Mix(Card, f1, 0.3f);

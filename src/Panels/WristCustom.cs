@@ -109,6 +109,9 @@ public sealed partial class WristPanel
         (id == "keyboard" && d.KeyboardVisible) || (id == "desktops" && d.DesktopsVisible) || (id == "night" && d.NightMode) ||
         (id == "status" && d.StatusLine) || (id == "theater" && d.Theater);
 
+    // the buttons that are on or off (IsOn); recenter, layout and settings only do something
+    static bool IsToggle(string id) => id is "keyboard" or "desktops" or "night" or "status" or "theater";
+
     void SampleSources()
     {
         double now = Clock.Now;
@@ -217,7 +220,6 @@ public sealed partial class WristPanel
     const string NotPlaying = "Not playing";  // no media: one wording on every size and opened ("Nothing playing" is too long for a 2x1)
     double _introStart = -10;
     bool _rolling;
-    uint _halo;                                // the card colour behind a satellite (a gap around it)
 
     static uint OnColor(uint fill) => Theme.Luma(fill) > 0.55f ? 0xFF0B1220 : 0xFFFFFFFF;
 
@@ -369,6 +371,7 @@ public sealed partial class WristPanel
         // the cards are opaque on the page; floating ones (no page behind) let a little of the world through
         uint f0 = cards ? Theme.WithAlpha(L.Fill0, 0.96f) : L.Fill0, f1 = cards ? Theme.WithAlpha(L.Fill1, 0.96f) : L.Fill1;
         _p.FillGradient(r, f0, f1, CardRadius, L.Angle, L.Span);
+        (_haloF0, _haloF1, _haloAngle, _haloSpan, _haloCard) = (f0, f1, L.Angle, L.Span, r);
         if (L.Sheen != 0) _p.FillGradient(r, L.Sheen, L.Sheen & 0x00FFFFFF, CardRadius, 90, 0.5f);
         if (L.Band != 0)
         {
@@ -384,10 +387,14 @@ public sealed partial class WristPanel
     }
 
     // a header's band: the caption row (17 px from 10 px down, and room under it); the date line of a tall clock; a strip
-    // over a card without a caption (the dial, the dock's keys)
+    // over a card without a caption (the dial, the dock's keys) or whose caption row holds more (the cover, round buttons
+    // from 31 px down: a band would run into them)
+    bool StripBand(WatchWidgets.Kind k, WatchWidget w) =>
+        k.Id is "analog" or "media" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" && w.W >= 2);
+
     float BandHeight(WatchWidgets.Kind k, WatchWidget w, RectangleF r)
     {
-        if (k.Id == "analog" || (k.Id == "dock" && _dockKeys)) return 6;
+        if (StripBand(k, w)) return 6;
         if (k.Id == "time" && w.H >= 2)
         {
             float ds = MathF.Round(Math.Clamp(r.Height * 0.085f, SmallText, 24));
@@ -396,6 +403,26 @@ public sealed partial class WristPanel
         return 34;
     }
     bool _dockKeys;
+
+    // --snapshot's band rule: how tall a widget's header band is (0: none)
+    public float BandOf(WatchWidget w)
+    {
+        var k = WatchWidgets.Find(w.Type);
+        return k == null || k.Button || Bento.StyleIndex(w.Style) != 4 ? 0 : BandHeight(k, w, WatchWidgets.Rect(w, false));
+    }
+
+    // The card behind a satellite or a knob (a gap around it): its own fill there - the card's gradient laid over the card, so
+    // a top light or a two-tone matches what is under it - or nothing (glass: a disc of it would show)
+    uint _halo, _haloF0, _haloF1;
+    float _haloAngle, _haloSpan;
+    RectangleF _haloCard;                      // empty: a flat card (_halo)
+
+    void HaloDisc(float cx, float cy, float rad)
+    {
+        if (_halo == 0) return;
+        if (_haloCard.IsEmpty) _p.Circle(cx, cy, rad, _halo);
+        else _p.CircleGradient(cx, cy, rad, _haloCard, _haloF0, _haloF1, _haloAngle, _haloSpan, (_haloF0 >> 24) < 0xFF);
+    }
 
     void DrawCustomFace(PanelData d)
     {
@@ -448,8 +475,13 @@ public sealed partial class WristPanel
             }
             // its look while it draws (a muted volume is the danger card, in the default look)
             bool danger = muted && k.Id == "volume", styled = Styled(w) && !danger;
-            if (styled) Bento.Use(LookOf(w, k.Id, d.NightMode, cards));
+            if (styled)
+            {
+                var look = LookOf(w, k.Id, d.NightMode, cards);
+                Bento.Use(look.Band != 0 && StripBand(k, w) ? Bento.Strip(look) : look);
+            }
             _halo = Bento.Halo;
+            _haloCard = RectangleF.Empty;
             // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card
             if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
             if (!Backgrounds)
@@ -558,9 +590,10 @@ public sealed partial class WristPanel
         return (frac, value, unit, caption, Tint95(lv, normal));
     }
 
-    // a reading's colour when all is well: the accent for the frame numbers, purple for the CPU, blue for memory - or the widget's own
+    // a reading's colour when all is well: the accent for the frame numbers, purple for the CPU, blue for memory (lifted where
+    // the card is lighter) - or the widget's own
     static uint RoleColor(string id) =>
-        Bento.Data != 0 ? Bento.Data : id switch { "cpu" => Bento.DataPurple, "ram" or "vram" => Bento.DataBlue, _ => Bento.Accent };
+        Bento.Data != 0 ? Bento.Data : id switch { "cpu" => Bento.Cur.Cpu, "ram" or "vram" => Bento.Cur.Mem, _ => Bento.Accent };
 
     // ---- the parts every card is made of ----
 
@@ -592,19 +625,24 @@ public sealed partial class WristPanel
             StatusDot(x + w + 10, r.Y + CapBase - 5, badge);
             return w + DotW;
         }
-        if (dot) StatusDot(x + 6.5f, r.Y + CapBase - 5, badge);
-        return dot ? DotW - 4 : 0;
+        if (dot) StatusDot(x + 7, r.Y + CapBase - 5, badge);
+        return dot ? DotW - 3 : 0;
     }
 
     float Caption(RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok) => Caption(r.X + PadX(r), r, maxW, forms, badge);
 
-    const float DotW = 17;                     // a status dot after a caption, with its gap
+    const float DotW = 17;                     // a status badge after a caption, with its gap
 
-    // a level as a dot (a coloured card, where its colour as text would not read): the status colour in a ring of the text colour
+    // a level as a badge (a coloured card, where its colour as text would not read): a dark disc with a "!" in the status colour.
+    // The colour always sits on dark, never on the fill - an amber dot on an amber card reads as an empty ring - so the badge is
+    // filled on every card and amber and red tell apart; on a dark card a ring of the text colour round it
     void StatusDot(float cx, float cy, StatLevel l)
     {
-        _p.Circle(cx, cy, 6.5f, Bento.BadgeRing);
-        _p.Circle(cx, cy, 4.5f, l == StatLevel.Bad ? Bento.Bad : Bento.Warn);
+        uint c = l == StatLevel.Bad ? Bento.Bad : Bento.Warn;
+        _p.Circle(cx, cy, 7, Bento.BadgeRing);
+        _p.Circle(cx, cy, 5.8f, Bento.Dark);
+        _p.Fill(new RectangleF(cx - 1.25f, cy - 4.5f, 2.5f, 5.5f), c, 1.25f);
+        _p.Circle(cx, cy + 3.3f, 1.4f, c);
     }
 
     // how wide the first form of a caption that fits maxW is (-1: none fits)
@@ -877,15 +915,22 @@ public sealed partial class WristPanel
 
     // A button that is its card: Tile when off, the accent when on (its label bold then); a 1x1 has its icon at the top-left and
     // its name at the bottom, a wide one both side by side. Springy when pressed. In the widget's look (Bento.Cur): solid and
-    // two-tone are a dark version of their fill when off, the fill with a check when on.
-    bool TileButton(string id, RectangleF r, string icon, string label, bool on, bool wide)
+    // two-tone are a dark version of their fill when off, the fill with a check when on - and a button with no on / off (toggle
+    // false: recenter, settings) is the fill, as the look promises.
+    bool TileButton(string id, RectangleF r, string icon, string label, bool on, bool wide, bool toggle)
     {
         bool click = _ui.Clickable(id, r, out bool hover, out bool held);
         float s = _ui.Spring(Ui.Id(id, "#s"), held ? 0.92f : 1f, 420, 18);
         bool scaled = MathF.Abs(s - 1) > 0.001f;
         if (scaled) _p.PushScale(s, r.X + r.Width / 2, r.Y + r.Height / 2);
         ref readonly var L = ref Bento.Cur;
+        bool full = !on && !toggle && L.Check;
         if (on) _p.FillGradient(r, L.On0, L.On1, CardRadius, L.Angle, L.Span);
+        else if (full)
+        {
+            float hv = hover ? 0.12f : 0;          // under the laser: a touch toward its text colour
+            _p.FillGradient(r, Theme.Mix(L.On0, L.OnText, hv), Theme.Mix(L.On1, L.OnText, hv), CardRadius, L.Angle, L.Span);
+        }
         else if (hover) _p.Fill(r, L.OffHover, CardRadius);
         else
         {
@@ -899,12 +944,12 @@ public sealed partial class WristPanel
                 _p.PopClip();
             }
         }
-        if (!on && L.OffBorder != 0)
+        if (!on && !full && L.OffBorder != 0)
         {
             float bi = L.OffBorderW * 0.48f;
             _p.Stroke(RectangleF.Inflate(r, -bi, -bi), L.OffBorder, L.OffBorderW, CardRadius - bi);
         }
-        uint fg = on ? L.OnText : L.OffText;
+        uint fg = on || full ? L.OnText : L.OffText;
         var lw = on ? FontWeight.Bold : FontWeight.SemiBold;
         float pad = PadX(r);
         bool check = on && L.Check;
@@ -943,7 +988,7 @@ public sealed partial class WristPanel
     {
         string icon = k.Id == "desktops" && !d.DesktopsVisible ? Theme.IcoHide : k.Icon;
         string label = k.Id == "layout" ? d.LayoutName : TileName(k, w.W >= 2);
-        if (TileButton(Ui.Id("wcb", id), r, icon, label, IsOn(k.Id, d), w.W >= 2)) OnAction?.Invoke(k.Id);
+        if (TileButton(Ui.Id("wcb", id), r, icon, label, IsOn(k.Id, d), w.W >= 2, IsToggle(k.Id))) OnAction?.Invoke(k.Id);
     }
 
     // ---- the widgets ----
@@ -1008,7 +1053,7 @@ public sealed partial class WristPanel
         Words(now);
         CaptionRow(r, _weekNote, CapToday);
         string day = _dayName, date = _monthDay;
-        TextAt(Ellipsize(day, iw, SmallText, FontWeight.Bold), r.X + pad, r.Y + 49, iw + 2, Bento.Accent, SmallText, FontWeight.Bold);
+        TextAt(Ellipsize(day, iw, SmallText, FontWeight.Bold), r.X + pad, r.Y + 49, iw + 2, Bento.Cur.AccentText, SmallText, FontWeight.Bold);
         float bs = MathF.Max(20, FitSize(date, iw, 30, FontWeight.Bold, Theme.Display));
         TextAt(Ellipsize(date, iw, bs, FontWeight.Bold, Theme.Display), r.X + pad, r.Y + 81, iw + 2, Bento.Text, bs, FontWeight.Bold,
             TextAlignment.Leading, Theme.Display);
@@ -1112,7 +1157,7 @@ public sealed partial class WristPanel
         Hand(h / 12, rad * 0.46f, MathF.Max(5, rad * 0.075f));
         Hand(m / 60, rad * 0.66f, MathF.Max(3.5f, rad * 0.048f));
         float sa = sec / 60 * MathF.Tau, sx = cx + rim * MathF.Sin(sa), sy = cy - rim * MathF.Cos(sa);
-        _p.Circle(sx, sy, MathF.Max(5, rad * 0.075f), _halo);
+        HaloDisc(sx, sy, MathF.Max(5, rad * 0.075f));
         _p.Circle(sx, sy, MathF.Max(3.5f, rad * 0.05f), tint);
         _p.Circle(cx, cy, MathF.Max(4, rad * 0.06f), Bento.Text);
         _p.Circle(cx, cy, MathF.Max(2, rad * 0.03f), tint);
@@ -1289,8 +1334,9 @@ public sealed partial class WristPanel
         float pad = PadX(r), iw = r.Width - 2 * pad;
         if (w.W == 1 && w.H == 1)
         {
-            // The emptiest one: its percentage as big as every 1x1's value (red / amber text when low) and its line; which one it
-            // is (a bolt in front while charging) up in the caption row at the right - or, with no room for both, as the caption.
+            // The emptiest one: its percentage as big as every 1x1's value (red / amber text when low; on a coloured card a badge
+            // beside it) and its line; which one it is (a bolt in front while charging) up in the caption row at the right - or,
+            // with no room for both, as the caption.
             var line = new RectangleF(r.X + pad, r.Bottom - 16, iw, 4);
             if (bats.Count == 0)
             {
@@ -1304,17 +1350,17 @@ public sealed partial class WristPanel
             var lv = BatteryLevel(shown);
             string name = Upper(b.label);
             float meta = _p.MeasureWidth(name, CapSize, FontWeight.SemiBold) + (b.charging ? 14 : 0);
-            float mx = r.X + pad, dw = lv != StatLevel.Ok && Bento.CapBadge ? DotW : 0;
-            bool captioned = CaptionWidth(CapBattery, iw - meta - 8 - dw) >= 0;
-            if (captioned)
+            float mx = r.X + pad;
+            if (CaptionWidth(CapBattery, iw - meta - 8) >= 0)
             {
-                Caption(r, iw - meta - 8, CapBattery, lv);
+                Caption(r, iw - meta - 8, CapBattery);
                 mx = r.Right - pad - meta;
             }
-            float nw = DeviceName(mx, r.Y + CapBase, name, b.charging, r.Right - pad - mx - (captioned ? 0 : dw), true);
-            if (!captioned && dw > 0) StatusDot(mx + nw + 10, r.Y + CapBase - 5, lv);
+            DeviceName(mx, r.Y + CapBase, name, b.charging, r.Right - pad - mx, true);
             string pct = Pct(shown);
-            ValueText(r.X + pad, r.Y + SBase, pct, HeroFit(pct, null, iw).vs, Bento.Level(lv, Bento.Text), null);
+            float dw = lv != StatLevel.Ok && Bento.Badge ? DotW : 0, vs = HeroFit(pct, null, iw - dw).vs;
+            float vw = ValueText(r.X + pad, r.Y + SBase, pct, vs, Bento.Level(lv, Bento.Text), null);
+            if (dw > 0) StatusDot(r.X + pad + vw + 11, r.Y + SBase - vs * DigitH / 2, lv);
             Meter(line, b.pct, Bento.Level(lv, Bento.Ok), Ui.Id("wbt", id * 8));
             return;
         }
@@ -1356,8 +1402,8 @@ public sealed partial class WristPanel
         float pw = _p.MeasureWidth(pct, ps, FontWeight.Bold, Theme.Display);
         var lv = BatteryLevel(shown);
         uint pc = Bento.Level(lv, Bento.Text);
-        bool dot = lv != StatLevel.Ok && Bento.Badge;           // a coloured card: a dot beside a low one
-        float ny = by, nr = c.Right - pw - 5 - (dot ? 16 : 0), dy = by - ps * DigitH / 2;
+        bool dot = lv != StatLevel.Ok && Bento.Badge;           // a coloured card: a badge beside a low one
+        float ny = by, nr = c.Right - pw - 5 - (dot ? 22 : 0), dy = by - ps * DigitH / 2;     // the name 6 px from a badge
         if (style == 2)
         {
             TextAt(pct, c.X, by, pw + 4, pc, ps, FontWeight.Bold, TextAlignment.Leading, Theme.Display);
@@ -1480,8 +1526,9 @@ public sealed partial class WristPanel
         float used = ValueUnit(r.X + pad, r.Y + SBase, iw - fw, value, n < 0 || fc != null ? null : "here", Hero, 20, vc);
         const float dot = 7, pitch = 11;
         int fit = (int)((iw - dot) / pitch) + 1, shown = n < 0 ? fit : Math.Min(n, fit);
+        uint other = Bento.Ok == Bento.Text ? Bento.Faint : Sub;     // a coloured card: the friends in its text colour, the rest fainter
         for (int i = 0; i < shown; i++)
-            _p.Circle(r.X + pad + dot / 2 + i * pitch, r.Bottom - 14, dot / 2, n < 0 ? Bento.Track : i < f ? Bento.Ok : Sub);
+            _p.Circle(r.X + pad + dot / 2 + i * pitch, r.Bottom - 14, dot / 2, n < 0 ? Bento.Track : i < f ? Bento.Ok : other);
         if (fc == null) return;
         float fx = r.X + pad + used + 6;
         _p.Icon(Person, new RectangleF(fx - 1, r.Y + SBase - 16, 18, 18), Bento.Ok, 15);
@@ -1779,19 +1826,23 @@ public sealed partial class WristPanel
         float budget = 1000f / Math.Max(1, v.DisplayHz), top = budget * 2;
         int n = v.FrameCount;
         float step = g.Width / VrStats.FrameHistory;
+        // the look's colours: on a filled card the bars in its text colour (fainter, a flagged one full); a flag in the text
+        // colour where the bars are the flag's hue (amber over budget on amber bars would vanish)
+        ref readonly var L = ref Bento.Cur;
+        uint bar = L.GraphBar != 0 ? L.GraphBar : tint;
         for (int i = 0; i < n; i++)
         {
             int idx = (v.FrameHead - n + i + VrStats.FrameHistory) % VrStats.FrameHistory;
             float ms = v.FrameMs[idx];
             byte flag = v.FrameFlag[idx];
             float h = Math.Clamp(ms / top, 0.03f, 1) * g.Height;
-            // on a coloured card the bars are the text colour: over budget full, the rest fainter (its caption's dot says how bad)
-            uint col = Bento.Badge ? (flag != 0 || ms > budget ? Bento.Text : Bento.Faint) : flag == 2 ? Bento.Bad : flag == 1 || ms > budget ? Bento.Warn : tint;
+            uint col = flag == 2 ? L.FlagBad : flag == 1 || ms > budget ? L.FlagWarn : bar;
             float x = g.Right - (n - i) * step;
             _p.Fill(new RectangleF(x, g.Bottom - h, MathF.Max(1, step - 0.4f), h), col);
         }
         float by = g.Bottom - g.Height * (budget / top);
-        _p.Line(g.X, by, g.Right, by, Theme.WithAlpha(Bento.Text, 0.4f), 1.5f);      // the budget: dark on a light card
+        // the budget: white at 40 % (dark on a light card)
+        _p.Line(g.X, by, g.Right, by, Bento.Text == Bento.White ? 0x66FFFFFFu : Theme.WithAlpha(Bento.Text, 0.4f), 1.5f);
     }
 
     // ================= Windows 95 =================
