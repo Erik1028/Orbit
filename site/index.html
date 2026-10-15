@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrbitOverlay – a wrist watch, your desktop and a keyboard in SteamVR</title>
+<meta name="description" content="OrbitOverlay is a free, open-source SteamVR overlay for Windows: a customizable wrist watch, your monitors and windows as curved screens with a laser mouse, a VR keyboard and VRChat extras.">
+<meta property="og:title" content="OrbitOverlay – SteamVR overlay">
+<meta property="og:description" content="A wrist watch, your desktop and a keyboard – floating in SteamVR. Free and open source.">
+<meta property="og:image" content="img/watch-widgets.png">
+<meta name="theme-color" content="#0b0d13">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#0b0d13; --bg2:#10131c; --card:#181c29; --card2:#1f2434; --line:#262b3b;
+  --text:#eef0f6; --dim:#a9b0c2; --mute:#7d859a;
+  --accent:#ff6fae; --accent2:#ff9ec6; --blue:#6cc4ff; --green:#5ad38a; --amber:#f2c14e; --violet:#a78bfa;
+  --radius:22px; --max:1180px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:var(--accent2);text-decoration:none}
+a:hover{color:#ffffff}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:6px}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
+.eyebrow{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--mute);font-weight:600}
+h1,h2,h3{line-height:1.15;margin:0;letter-spacing:-0.02em}
+h2{font-size:clamp(30px,4vw,44px)}
+h3{font-size:21px}
+p{margin:0}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:20;background:rgba(11,13,19,0.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:700;font-size:18px}
+.nav nav{display:flex;gap:22px;margin-left:auto}
+.nav nav a{color:var(--dim);font-size:15px}
+.nav nav a:hover{color:var(--text)}
+.nav .gh{display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;color:var(--text);font-size:14px}
+.nav .gh:hover{border-color:var(--mute)}
+@media (max-width:860px){.nav nav{display:none}.nav .gh{margin-left:auto}}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 26px;border-radius:999px;font-weight:700;font-size:17px;border:0;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:var(--accent);color:#1a0b14;box-shadow:0 10px 30px rgba(255,111,174,0.35)}
+.btn-primary:hover{color:#1a0b14;box-shadow:0 14px 36px rgba(255,111,174,0.5)}
+.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--line)}
+.btn-ghost:hover{color:var(--text);border-color:var(--mute)}
+
+/* hero */
+.hero{position:relative;overflow:hidden;padding:84px 0 64px}
+.hero::before{content:"";position:absolute;inset:-20% -10% auto -10%;height:720px;background:radial-gradient(50% 50% at 70% 30%,rgba(108,196,255,0.16),transparent 70%),radial-gradient(40% 45% at 25% 20%,rgba(255,111,174,0.18),transparent 70%);pointer-events:none}
+.hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+.hero h1{font-size:clamp(40px,5.6vw,66px);font-weight:800}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--accent),var(--violet) 55%,var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{margin-top:22px;font-size:20px;color:var(--dim);max-width:560px}
+.hero .ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:22px;color:var(--mute);font-size:14px}
+.meta span{display:flex;align-items:center;gap:7px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.shot{border-radius:var(--radius);border:1px solid var(--line);background:var(--bg2);box-shadow:0 30px 80px rgba(0,0,0,0.55);overflow:hidden}
+.hero .shot{transform:perspective(1400px) rotateY(-8deg) rotateX(3deg);transform-origin:left center}
+.hero .shot img{width:100%}
+@media (max-width:960px){.hero .wrap{grid-template-columns:1fr}.hero .shot{transform:none}}
+
+/* sections */
+section{padding:88px 0}
+.head{display:flex;flex-direction:column;gap:12px;max-width:680px;margin-bottom:40px}
+.head p{color:var(--dim);font-size:18px}
+
+/* bento features */
+.bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(190px,auto);gap:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.tile::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent)}
+.tile p{color:var(--dim);font-size:15.5px}
+.tile ul{margin:4px 0 0;padding-left:18px;color:var(--dim);font-size:15px}
+.tile li{margin:3px 0}
+.tag{align-self:flex-start;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;padding:4px 10px;border-radius:999px}
+.ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center}
+.span2{grid-column:span 2}.row2{grid-row:span 2}
+.tile.feature{background:linear-gradient(160deg,#222842,#161a28)}
+.tile .mini{margin-top:auto;border-radius:14px;border:1px solid var(--line);overflow:hidden;aspect-ratio:2.84/1}
+.tile .mini img{width:100%;height:100%;object-fit:cover;object-position:top center}
+@media (max-width:960px){.bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.bento{grid-template-columns:1fr}.span2{grid-column:auto}.row2{grid-row:auto}}
+
+/* gallery */
+.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.gallery figure{margin:0;display:flex;flex-direction:column;gap:12px}
+.gallery figcaption{color:var(--dim);font-size:15px}
+.gallery .shot{aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;background:#0f121a}
+.gallery .shot img{width:100%;height:100%;object-fit:contain}
+.gallery figcaption b{color:var(--text)}
+@media (max-width:760px){.gallery{grid-template-columns:1fr}}
+
+/* install */
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;counter-reset:s}
+.step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column;gap:10px}
+.step::before{counter-increment:s;content:counter(s);width:36px;height:36px;border-radius:50%;background:var(--accent);color:#1a0b14;font-weight:800;display:flex;align-items:center;justify-content:center}
+.step p{color:var(--dim);font-size:15.5px}
+.note{margin-top:14px;display:flex;gap:14px;align-items:flex-start;background:#2a2412;border:1px solid #5a4a1c;border-radius:var(--radius);padding:18px 22px;color:#f4e3b5;font-size:15.5px}
+.reqs{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px}
+.reqs span{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:14px;color:var(--dim)}
+@media (max-width:860px){.steps{grid-template-columns:1fr}}
+
+/* controls */
+.table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.table th,.table td{text-align:left;padding:15px 22px;border-bottom:1px solid var(--line);font-size:16px}
+.table th{color:var(--mute);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600}
+.table tr:last-child td{border-bottom:0}
+.table td:first-child{font-weight:600;white-space:nowrap}
+.table td:last-child{color:var(--dim)}
+kbd{font-family:inherit;font-size:14px;background:var(--card2);border:1px solid var(--line);border-bottom-width:2px;border-radius:7px;padding:2px 8px;color:var(--text)}
+.scroll{overflow-x:auto}
+
+/* faq */
+.faq{display:flex;flex-direction:column;gap:10px}
+.faq details{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:0 22px}
+.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-weight:600;display:flex;justify-content:space-between;gap:16px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--mute);font-size:22px;line-height:1}
+.faq details[open] summary::after{content:"–"}
+.faq details p{color:var(--dim);padding-bottom:18px;font-size:16px}
+
+/* changelog */
+.log{display:flex;flex-direction:column;gap:12px}
+.ver{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px}
+.ver header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:10px}
+.ver .v{font-size:13px;font-weight:700;color:#1a0b14;background:var(--accent2);border-radius:999px;padding:3px 10px}
+.ver h3{font-size:19px}
+.ver ul{margin:0;padding-left:20px;color:var(--dim);font-size:15.5px}
+.ver li{margin:5px 0}
+.older{align-self:flex-start}
+
+/* footer */
+footer{border-top:1px solid var(--line);padding:40px 0 56px;color:var(--mute);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;justify-content:space-between}
+footer p{max-width:620px}
+</style>
+</head>
+<body>
+
+<header class="nav">
+<div class="wrap">
+<a class="brand" href="#top" aria-label="OrbitOverlay home"><img src="favicon.svg" width="28" height="28" alt="">OrbitOverlay</a>
+<nav aria-label="Sections"><a href="#features">Features</a><a href="#screens">Screenshots</a><a href="#install">Install</a><a href="#faq">FAQ</a><a href="#changelog">What's new</a></nav>
+<a class="gh" href="https://github.com/Erik1028/Orbit"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>GitHub</a>
+</div>
+</header>
+
+<main id="top">
+<section class="hero">
+<div class="wrap">
+<div>
+<span class="eyebrow">Free SteamVR overlay for Windows</span>
+<h1 style="margin-top:14px">Your desktop, a watch and a keyboard. <em>Floating in VR.</em></h1>
+<p class="lead">OrbitOverlay puts a fully customizable watch on your wrist, your monitors and app windows around you as curved screens with a laser mouse, and a VR keyboard that shows up when you need it.</p>
+<div class="ctas">
+<a class="btn btn-primary" id="dl" href="https://github.com/Erik1028/Orbit/releases/latest/download/OrbitSetup.exe"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12M6 10l6 6 6-6M4 21h16"/></svg>Download for Windows</a>
+<a class="btn btn-ghost" href="https://github.com/Erik1028/Orbit">View source</a>
+</div>
+<div class="meta">
+<span><i class="dot"></i><b id="ver" style="color:var(--text)">Latest release</b><span id="verdate"></span></span>
+<span>Windows 10 &amp; 11</span><span>SteamVR</span><span>MIT license</span>
+</div>
+</div>
+<div class="shot"><img src="img/watch-widgets.png" width="1328" height="472" alt="The OrbitOverlay watch with widgets: analog clock, time, date, batteries, now playing, frame graph and performance numbers"></div>
+</div>
+</section>
+
+<section id="features" style="padding-top:40px">
+<div class="wrap">
+<div class="head"><span class="eyebrow">Features</span><h2>Everything you reach for, without taking the headset off.</h2><p>Turn your wrist to see the watch. Point at a screen to use your PC. Everything stays where you put it.</p></div>
+<div class="bento">
+
+<article class="tile feature span2 row2">
+<span class="tag" style="background:rgba(255,111,174,0.15);color:var(--accent2)">Wrist watch</span>
+<h3>A watch you design yourself</h3>
+<p>Build your face from widgets on a grid, give each one its own style and colour, and spread them over several pages. Tap any widget to open it big.</p>
+<ul><li>Clocks in many designs: flip, segment, words, Swiss station, squircle…</li><li>Batteries for headset, controllers and trackers</li><li>Now playing, volume, timer, stopwatch, calendar</li><li>Frame time, reprojection, GPU, CPU and memory</li><li>Microphone, notifications, button groups – and Minesweeper</li></ul>
+<div class="mini"><img src="img/watch-faces.png" width="1352" height="952" alt="Several OrbitOverlay watch faces side by side" loading="lazy"></div>
+</article>
+
+<article class="tile span2">
+<span class="tag" style="background:rgba(108,196,255,0.14);color:var(--blue)">Desktop in VR</span>
+<h3>Your monitors and windows, around you</h3>
+<p>Every monitor or single app window as a curved screen. The laser is your mouse: trigger to click, stick to scroll, grip to move. Smart frame rate keeps what you look at smooth.</p>
+</article>
+
+<article class="tile">
+<span class="ic" style="background:rgba(167,139,250,0.16)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg></span>
+<h3>Theater mode</h3>
+<p>One tap: your screen grows huge in front of you and the world dims behind it.</p>
+</article>
+
+<article class="tile">
+<span class="ic" style="background:rgba(90,211,138,0.15)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5ad38a" stroke-width="2" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h1M10 10h1M14 10h1M7 14h10"/></svg></span>
+<h3>VR keyboard</h3>
+<p>Follows your Windows layout and pops up by itself when you click a text field.</p>
+</article>
+
+<article class="tile span2">
+<span class="tag" style="background:rgba(181,174,240,0.15);color:#c9c3ff">VRChat</span>
+<h3>Made for VRChat nights</h3>
+<ul><li>See who is in your instance and get a card when a friend arrives</li><li>Type straight into the chatbox, or show what you are listening to</li><li>No stray clicks: the game ignores your trigger while you point at a panel</li><li>XSOverlay-compatible notifications and avatar parameters</li></ul>
+</article>
+
+<article class="tile">
+<span class="ic" style="background:rgba(242,193,78,0.15)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f2c14e" stroke-width="2" aria-hidden="true"><path d="M3 9h18M5 9v10M19 9v10M8 9V5h8v4"/></svg></span>
+<h3>Layout profiles</h3>
+<p>Desk, Bed and Couch each remember where everything was. In bed, the screens come above you.</p>
+</article>
+
+<article class="tile">
+<span class="ic" style="background:rgba(255,111,174,0.15)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff9ec6" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+<h3>Stream dock</h3>
+<p>An Ajazz AKP03 run by Hexpad appears in VR: press keys and turn knobs with the laser.</p>
+</article>
+
+<article class="tile span2">
+<span class="tag" style="background:rgba(255,255,255,0.08);color:var(--dim)">Looks</span>
+<h3>Bento – or 1995</h3>
+<p>The modern Bento look with any accent colour, a font of your choice and night mode. Or switch everything – settings, watch, keyboard, notifications – to a pixel-perfect Windows 95 style.</p>
+</article>
+
+<article class="tile span2">
+<span class="tag" style="background:rgba(90,211,138,0.14);color:var(--green)">Privacy</span>
+<h3>No account. No telemetry.</h3>
+<p>OrbitOverlay only talks to SteamVR and to apps on your own PC. The one internet request is the update check when you press it. Settings and logs stay on your computer.</p>
+</article>
+
+</div>
+</div>
+</section>
+
+<section id="screens" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+<div class="wrap">
+<div class="head"><span class="eyebrow">Screenshots</span><h2>A closer look</h2></div>
+<div class="gallery">
+<figure><div class="shot"><img src="img/keyboard.png" width="1480" height="676" alt="The VR keyboard with a shortcut bar for copy, paste, undo and the VRChat chatbox" loading="lazy"></div><figcaption><b>VR keyboard.</b> Shortcut bar, sticky modifiers, key repeat and a chatbox mode for VRChat.</figcaption></figure>
+<figure><div class="shot"><img src="img/settings-look.png" width="1500" height="960" alt="The settings window on the Look tab with accent colours, themes and laser options" loading="lazy"></div><figcaption><b>Settings, in VR or on the desktop.</b> Accent and panel colours, themes, laser and night mode.</figcaption></figure>
+<figure><div class="shot"><img src="img/watch-faces.png" width="1352" height="952" alt="Built-in watch faces: full, analog, minimal and time only" loading="lazy"></div><figcaption><b>Watch faces.</b> Start from a ready face or build your own from widgets.</figcaption></figure>
+<figure><div class="shot"><img src="img/windows95.png" width="790" height="520" alt="The settings and watch drawn in the Windows 95 style" loading="lazy"></div><figcaption><b>Windows 95 style.</b> Property sheets, 3D bevels and a Date/Time window on your wrist.</figcaption></figure>
+</div>
+</div>
+</section>
+
+<section id="install">
+<div class="wrap">
+<div class="head"><span class="eyebrow">Install</span><h2>Up and running in a minute</h2></div>
+<div class="steps">
+<div class="step"><h3>Download</h3><p>Get <b style="color:var(--text)">OrbitSetup.exe</b> from the button above. It always points to the latest release.</p></div>
+<div class="step"><h3>Run the installer</h3><p>It installs for your user only – no admin needed – and can start OrbitOverlay together with SteamVR.</p></div>
+<div class="step"><h3>Put on your headset</h3><p>Turn your left wrist towards you to see the watch. Point at it with the other hand to use it.</p></div>
+</div>
+<div class="note" role="note"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f2c14e" stroke-width="2" style="flex:none;margin-top:2px" aria-hidden="true"><path d="M12 3L2 20h20zM12 10v4M12 17v.5"/></svg><span>The installer isn't code-signed yet, so Windows SmartScreen may warn you. Click <b>More info → Run anyway</b>. The first start asks once for administrator rights so the VR mouse can click into admin windows – you can say no and everything else still works.</span></div>
+<div class="reqs"><span>Windows 10 (2004+) or 11</span><span>DirectX 11 GPU</span><span>SteamVR</span><span>Virtual Desktop: choose SteamVR as the runtime</span></div>
+</div>
+</section>
+
+<section id="controls" style="padding-top:20px">
+<div class="wrap">
+<div class="head"><span class="eyebrow">Controls</span><h2>Point, pull, done</h2></div>
+<div class="scroll">
+<table class="table">
+<thead><tr><th scope="col">In VR</th><th scope="col">Does</th></tr></thead>
+<tbody>
+<tr><td>Point at a panel</td><td>Laser – on a screen it moves the real mouse cursor</td></tr>
+<tr><td><kbd>Trigger</kbd></td><td>Click</td></tr>
+<tr><td><kbd>B</kbd> / <kbd>Y</kbd></td><td>Right click</td></tr>
+<tr><td><kbd>Stick</kbd> up / down</td><td>Scroll</td></tr>
+<tr><td><kbd>Grip</kbd> on a panel</td><td>Grab and move it – stick for distance, the other hand's grip to resize</td></tr>
+<tr><td>Both grips, twice quickly</td><td>Hide or show your screens and keyboard</td></tr>
+<tr><td>Look at your wrist</td><td>The watch appears</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section id="faq" style="padding-top:20px">
+<div class="wrap">
+<div class="head"><span class="eyebrow">FAQ</span><h2>Questions</h2></div>
+<div class="faq">
+<details><summary>Does it work with Quest, Pico or Virtual Desktop?</summary><p>Yes, as long as the game runs through SteamVR. With Virtual Desktop, pick SteamVR as the runtime instead of VDXR / OpenXR, otherwise overlays can't show.</p></details>
+<details><summary>Why does it ask for administrator rights?</summary><p>Only so the laser mouse can also click into windows that run as administrator. You can say no – everything else still works.</p></details>
+<details><summary>How do I update?</summary><p>Settings › General › Check for updates. An installed copy updates itself from the GitHub releases, and a "What's new" window shows what changed.</p></details>
+<details><summary>Does it collect any data?</summary><p>No. There is no account and no telemetry. The only internet request is the update check, and only when you press it.</p></details>
+<details><summary>Is it compatible with my XSOverlay add-ons?</summary><p>Notifications use XSOverlay's format (UDP 42069), so apps like VRCX can send them, and the VRChat avatar parameters work with DXOverlay and similar add-ons.</p></details>
+<details><summary>How was it made?</summary><p>OrbitOverlay is written largely with an AI assistant, from a human's ideas and testing in VR. It's open source under the MIT license, so you can read every line.</p></details>
+<details><summary>How do I uninstall it?</summary><p>Windows Settings › Apps › OrbitOverlay › Uninstall.</p></details>
+</div>
+</div>
+</section>
+
+<section id="changelog" style="padding-top:20px">
+<div class="wrap">
+<div class="head"><span class="eyebrow">What's new</span><h2>Recent updates</h2><p>The same notes the app shows after an update.</p></div>
+<div class="log" id="log"><p style="color:var(--dim)">See all changes on <a href="https://github.com/Erik1028/Orbit/blob/main/docs/CHANGELOG.md">GitHub</a>.</p></div>
+</div>
+</section>
+</main>
+
+<footer>
+<div class="wrap">
+<p>OrbitOverlay is free and open source under the MIT license. It is an independent project and is not affiliated with or endorsed by Valve, VRChat or any headset maker.</p>
+<span><a href="https://github.com/Erik1028/Orbit">GitHub</a> · <a href="https://github.com/Erik1028/Orbit/releases">All releases</a> · <a href="https://github.com/Erik1028/Orbit/issues">Report a problem</a></span>
+</div>
+</footer>
+
+<script>
+(function () {
+  // Latest release: version and date on the hero (the download link works without this).
+  fetch('https://api.github.com/repos/Erik1028/Orbit/releases/latest')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rel) {
+      if (!rel) return;
+      document.getElementById('ver').textContent = rel.tag_name || rel.name || 'Latest release';
+      if (rel.published_at) {
+        var d = new Date(rel.published_at);
+        document.getElementById('verdate').textContent = '· ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+    })
+    .catch(function () {});
+
+  // What's new: built from docs/CHANGELOG.md, copied next to this page by the Pages workflow.
+  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function inline(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`(.+?)`/g, '<kbd>$1</kbd>'); }
+  fetch('CHANGELOG.md')
+    .then(function (r) { return r.ok ? r.text() : null; })
+    .then(function (md) {
+      if (!md) return;
+      var versions = [], cur = null, point = null;
+      md.split(/\r?\n/).forEach(function (line) {
+        var h = /^##\s+([^|]+)\|\s*(.+)$/.exec(line);
+        if (h) { cur = { v: h[1].trim(), t: h[2].trim(), pts: [] }; versions.push(cur); point = null; return; }
+        if (!cur) return;
+        if (/^- /.test(line)) { point = line.slice(2).trim(); cur.pts.push(point); return; }
+        if (/^\s+\S/.test(line) && cur.pts.length) { cur.pts[cur.pts.length - 1] += ' ' + line.trim(); }
+      });
+      if (!versions.length) return;
+      var log = document.getElementById('log');
+      log.innerHTML = '';
+      function render(list) {
+        list.forEach(function (x) {
+          var el = document.createElement('article');
+          el.className = 'ver';
+          el.innerHTML = '<header><span class="v">' + esc(x.v) + '</span><h3>' + esc(x.t) + '</h3></header><ul>' +
+            x.pts.map(function (p) { return '<li>' + inline(p) + '</li>'; }).join('') + '</ul>';
+          log.insertBefore(el, more);
+        });
+      }
+      var more = document.createElement('button');
+      more.className = 'btn btn-ghost older';
+      more.textContent = 'Show older updates';
+      log.appendChild(more);
+      render(versions.slice(0, 4));
+      var rest = versions.slice(4);
+      if (!rest.length) more.remove();
+      more.addEventListener('click', function () { render(rest); more.remove(); });
+    })
+    .catch(function () {});
+})();
+</script>
+</body>
+</html>
