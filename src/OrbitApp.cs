@@ -63,6 +63,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     bool _theaterKb;                 // theater mode put the keyboard away (it comes back after)
     readonly List<ITheaterScreen> _screens = new(), _theaterChoices = new();
     TheaterBar _theaterBar;
+    WhatsNewPanel _whatsNewPanel;
     readonly VrSession _vr = new();
     readonly FramePacer _pacer = new();
     bool _awake = true;
@@ -109,6 +110,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockFaces = new HexpadFaces();
         _dockPanel = new DockPanel(_gpu, _painter, _cfg, _hexpad, _dockFaces);
         _roomPanel = new RoomPanel(_gpu, _painter, _cfg);
+        _whatsNewPanel = new WhatsNewPanel(_gpu, _painter) { OnOk = DismissWhatsNew };
         _theater = new Theater(_gpu, _painter);
         _theaterBar = new TheaterBar(_gpu, _painter, _cfg)
         {
@@ -474,6 +476,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _settingsPanel.Update(_vr, now, dt);
             UpdateDock(now, dt);
             UpdateRoom(now, dt);
+            // after an update: what changed, in front of you once the headset is on (a moment after connecting)
+            _whatsNewPanel.Update(_vr, dt, WhatsNewList, WhatsNewSub,
+                awake && _vr.HeadsetWorn && _data.VrSince is { } since && (DateTime.Now - since).TotalSeconds > 3);
             Perf(4, ref t);
             _screens.Clear();
             _screens.AddRange(_desktops);
@@ -558,7 +563,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     List<IPointerTarget> Targets()
     {
         if (_targets != null) return _targets;
-        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _roomPanel, _wrist, _kb, _theaterBar };
+        _targets = new List<IPointerTarget>(_desktops.Count + _windowPanels.Count + 4) { _settingsPanel, _dockPanel, _roomPanel, _whatsNewPanel, _wrist, _kb, _theaterBar };
         _targets.AddRange(_windowPanels);
         _targets.AddRange(_desktops);
         return _targets;
@@ -605,6 +610,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _settingsPanel.CreateOverlay(_vr);
         _dockPanel.CreateOverlay(_vr);
         _roomPanel.CreateOverlay(_vr);
+        _whatsNewPanel.CreateOverlay(_vr);
         _theater.CreateOverlay();
         _theaterBar.CreateOverlay();
         _notifyPanel.CreateOverlay();
@@ -723,6 +729,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _settingsPanel.DestroyOverlay();
         _dockPanel.DestroyOverlay();
         _roomPanel.DestroyOverlay();
+        _whatsNewPanel.DestroyOverlay();
         if (_theater.On) StopTheater(glide: false);
         _theater.DestroyOverlay();
         _theaterBar.DestroyOverlay();
@@ -1445,14 +1452,47 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         {
             Log.Info($"updated: {last} -> {now}");
             Updates.NoteUpdated(last);
-            _notifyIn.Incoming.Enqueue(new Notification
+            if (WhatsNew.Since(last).Count > 0)
             {
-                Source = "OrbitOverlay", Title = "OrbitOverlay updated",
-                Content = $"Now running {now} (was {last}).", Timeout = 8,
-            });
+                // "What's new" until OK; two updates before you close it: it shows both (keeps the older version)
+                string pending = C.General.WhatsNewFrom;
+                if (pending == null || (Version.TryParse(pending, out var a) && Version.TryParse(last, out var b) && b < a))
+                    C.General.WhatsNewFrom = last;
+            }
+            else
+                _notifyIn.Incoming.Enqueue(new Notification
+                {
+                    Source = "OrbitOverlay", Title = "OrbitOverlay updated",
+                    Content = $"Now running {now} (was {last}).", Timeout = 8,
+                });
         }
         C.General.LastVersion = now;
         _cfg.MarkDirty();
+    }
+
+    // "What's new" after an update: the same list in the VR panel and over the settings window
+    List<WhatsNew.Entry> _wnList = new();
+    string _wnFor;
+
+    public IReadOnlyList<WhatsNew.Entry> WhatsNewList
+    {
+        get
+        {
+            string from = C.General.WhatsNewFrom;
+            if (from != _wnFor) { _wnFor = from; _wnList = from == null ? new() : WhatsNew.Since(from); }
+            return _wnList;
+        }
+    }
+
+    public string WhatsNewSub => C.General.WhatsNewFrom == null ? "" : $"Updated to {Updater.Current.ToString(3)} from {C.General.WhatsNewFrom}";
+
+    public void DismissWhatsNew()
+    {
+        if (C.General.WhatsNewFrom == null) return;
+        C.General.WhatsNewFrom = null;
+        Log.Info("what's new: closed");
+        _cfg.MarkDirty();
+        _win.Dirty = true;
     }
 
     public void TestNotification() => _notifyIn.Incoming.Enqueue(new Notification
@@ -1717,7 +1757,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _cfg.SaveIfDue(force: true);
         foreach (var d in _desktops) d.Dispose();
         foreach (var w in _windowPanels) w.Dispose();
-        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose();
+        _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose(); _whatsNewPanel?.Dispose();
         _room.Dispose();
         _pacer.Dispose();
         _hexpad.Dispose();

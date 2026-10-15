@@ -551,6 +551,22 @@ public sealed class Painter : IDisposable
         return width;
     }
 
+    // the height of wrapped text in a column of this width (laid out once, kept)
+    readonly Dictionary<(string, float, FontWeight, float, string), float> _heights = new();
+    public float MeasureHeight(string s, float size, FontWeight w, float width, string family = null)
+    {
+        if (string.IsNullOrEmpty(s) || width <= 0) return 0;
+        family ??= Theme.Font;
+        var key = (s, size, w, width, family);
+        if (_heights.TryGetValue(key, out float cached)) return cached;
+        var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, true);
+        using var layout = _g.DWrite.CreateTextLayout(s, f, width, 100000);
+        float h = layout.Metrics.Height;
+        if (_heights.Count > 1000) _heights.Clear();
+        _heights[key] = h;
+        return h;
+    }
+
     // premultiplied BGRA pixels -> bitmap (album art, icons)
     public unsafe ID2D1Bitmap CreateBitmap(uint[] px, int w, int h)
     {

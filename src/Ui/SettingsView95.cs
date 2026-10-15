@@ -44,6 +44,10 @@ public sealed partial class SettingsView
     public void Draw95(Ui ui)
     {
         var p = ui.P;
+        // "What's new" over the sheet (after an update until OK, or from General): the sheet is only a picture
+        var wn = WhatsNewShown;
+        bool modal = wn != null && wn.Count > 0;
+        ui.Inert = modal;
         var all = new RectangleF(0, 0, W95W, W95H);
         p.Fill(all, Theme.W95Face);
         p.Bevel(all, Painter.Edge.Window);
@@ -89,6 +93,11 @@ public sealed partial class SettingsView
         {
             _h.Cfg.SaveIfDue(force: true);
             close?.Invoke();
+        }
+        if (modal)
+        {
+            ui.Inert = false;
+            if (WhatsNewView.Draw95(ui, new RectangleF(155, 66, 440, 340), wn, WhatsNewSubShown)) CloseWhatsNew();
         }
         if (ui.Changed) _h.Cfg.MarkDirty();
     }
@@ -666,6 +675,7 @@ public sealed partial class SettingsView
         }
         if (!string.IsNullOrEmpty(umsg))
             ui.Text95(Fit95(ui, umsg, 196), new RectangleF(524, 191, 200, 13), us == Updater.State.Failed ? 0xFF800000 : Grey95);
+        if (ui.Button95("g95.whatsnew", new RectangleF(388, 212, 130, 23), "&What's New...")) { _whatsNewManual = true; }
 
         ui.Group95(new RectangleF(376, 242, 358, 188), "Notifications");
         b = g.Notifications;

@@ -151,6 +151,7 @@ public sealed class GeneralConfig
     public bool HighGpuPriority { get; set; } = true; // Orbit's small GPU jobs go ahead of the game's frames (admin)
     public string Raycast { get; set; } = "shadow";    // steamvr | shadow (compare, log) | local (no IPC)
     public string LastVersion { get; set; }            // the version that ran last: tells when an update happened
+    public string WhatsNewFrom { get; set; }           // updated from this version, "What's new" not closed yet (null = nothing)
     public bool NotificationSound { get; set; } = true;
     public float NotificationAngle { get; set; } = 20f;  // degrees below the centre of view (first card)
     public int LaserSmoothing { get; set; } = 2;      // 0 off, 1 low, 2 medium, 3 high

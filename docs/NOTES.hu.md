@@ -196,6 +196,24 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.9.3 – „What's new” frissítés után (2026-10-15)
+
+Erik listájáról: „Frissítés után egy popup hogy mi változott”.
+
+- **`docs/CHANGELOG.md`** (angol, felhasználói nyelven, a GitHub kiadási jegyzetekből tömörítve, 1.3.0-tól) beépítve
+  az exébe (`whatsnew/CHANGELOG.md` erőforrás, nem a `files/` alatt, így a telepítő nem bontja ki). Formátum:
+  `## <verzió> | <cím>`, `- ` pontok, behúzott sor = folytatás. `Sys/WhatsNew.cs`: Parse, `Since(from)` (from < v <=
+  futó), `Latest(n)`. **Minden kiadásnál új szakasz kell bele.**
+- `NoteVersion`: frissítéskor `General.WhatsNewFrom` = a régi verzió (ha két frissítés jön OK nélkül, a régebbit
+  tartja); ha nincs bejegyzés, marad a régi kártya. OK után null.
+- **VR**: `Panels/WhatsNewPanel.cs` – 0,8 m-re előtted, kicsit lejjebb (`GazeFrame`, mert magától jelenik meg, nem az
+  óráról), 3 s-mal a csatlakozás után, ha a headset rajtad van; megfogható, stick görget, OK eltünteti; a helye nem
+  mentődik. **Asztal / VR beállítások / dashboard**: `SettingsView` modális ablak (`Ui.Inert` az oldal alatt), modern
+  kártya elsötétített háttérrel, 95-ben „What's New in OrbitOverlay” párbeszédablak `List95`-tel (valódi 95-ös
+  görgetősáv), szótördelés a 95 betűvel (a vastag címek is). General fül: „What's new” / „What's New...” gomb (az
+  utolsó 4 verzió). Közös rajzoló: `Ui/WhatsNewView.cs`; `Painter.MeasureHeight` (tördelt szöveg magassága, gyorsítótárral).
+- Snapshot: `settings_whatsnew(_95).png`, `whatsnew_panel(_95).png`.
+
 ## 1.9.2 – a hangerő widget a VR hangeszközét állítja (2026-10-15)
 
 Erik: „valamiért a hangerő widgetek nem működnek” – „csak VR-ban a Virtual Desktop Audio driver a fő driver, azt

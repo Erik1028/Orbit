@@ -43,6 +43,9 @@ public interface IOrbitHost
     string RoomStatus { get; }             // VRChat log / VRCX found?
     void ToggleRoom();
     void TheaterEdited();          // theater settings changed in the window: a screen that plays follows at once
+    IReadOnlyList<WhatsNew.Entry> WhatsNewList { get; }    // after an update until OK: what changed (empty = nothing)
+    string WhatsNewSub { get; }
+    void DismissWhatsNew();
     void TestNotification();
     Updater Updates { get; }
     void SwitchLayout(string name);
@@ -82,9 +85,25 @@ public sealed partial class SettingsView
 
     Config C => _h.Cfg.Data;
 
+    // "What's new": after an update (until OK), or opened from General
+    bool _whatsNewManual;
+    float _wnScroll;
+    IReadOnlyList<WhatsNew.Entry> WhatsNewShown => _whatsNewManual ? WhatsNew.Latest(4) : _h.WhatsNewList;
+    string WhatsNewSubShown => _whatsNewManual ? $"OrbitOverlay {Updater.Current.ToString(3)} and the versions before it" : _h.WhatsNewSub;
+
+    void CloseWhatsNew()
+    {
+        if (_whatsNewManual) _whatsNewManual = false;
+        else _h.DismissWhatsNew();
+        _wnScroll = 0;
+    }
+
     public void Draw(Ui ui)
     {
         var p = ui.P;
+        var wn = WhatsNewShown;
+        bool modal = wn != null && wn.Count > 0;
+        ui.Inert = modal;
         p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
         DrawHeader(ui);
         if (Theme.Classic) DrawNavClassic(ui);
@@ -100,6 +119,12 @@ public sealed partial class SettingsView
             case TabLook: DrawLook(ui); break;
             case TabVrchat: DrawVrchat(ui); break;
             default: DrawGeneral(ui); break;
+        }
+        if (modal)
+        {
+            ui.Inert = false;
+            p.Fill(new RectangleF(0, 0, W, H), 0x99000000);
+            if (WhatsNewView.DrawModern(ui, new RectangleF(160, 40, 680, 560), wn, WhatsNewSubShown, ref _wnScroll, Theme.Panel)) CloseWhatsNew();
         }
         if (ui.Changed) _h.Cfg.MarkDirty();
     }
@@ -881,7 +906,8 @@ public sealed partial class SettingsView
         }
         y += 28;
         if (!string.IsNullOrEmpty(umsg))
-            p.Text(umsg, new RectangleF(rx + 100, y - 2, 266, 20), us == Updater.State.Failed ? Theme.Warn : Theme.Dim, 12);
+            p.Text(umsg, new RectangleF(rx + 100, y - 2, 176, 20), us == Updater.State.Failed ? Theme.Warn : Theme.Dim, 12);
+        if (ui.Button("g.whatsnew", new RectangleF(rx + 276, y - 4, 90, 26), "What's new", null, false, true, 12)) { _whatsNewManual = true; _wnScroll = 0; }
 
         ui.Section(new RectangleF(rx, 268, 360, 20), "Notifications");
         b = g.Notifications;

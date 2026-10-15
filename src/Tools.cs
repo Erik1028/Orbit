@@ -49,6 +49,9 @@ static class Tools
         public string RoomStatus => "12 in Midnight Rooftop · VRCX: 120 friends";
         public void ToggleRoom() { }
         public void TheaterEdited() { }
+        public IReadOnlyList<WhatsNew.Entry> WhatsNewList { get; set; } = Array.Empty<WhatsNew.Entry>();
+        public string WhatsNewSub { get; set; } = "";
+        public void DismissWhatsNew() => WhatsNewList = Array.Empty<WhatsNew.Entry>();
         public void TestNotification() { }
         List<WindowInfo> _open;
         public IReadOnlyList<WindowInfo> OpenWindows() => _open ??= WindowList.Enumerate();
@@ -162,6 +165,31 @@ static class Tools
         var ui = new Ui(painter);
         using var surf = new Surface(gpu, 1500, 960);
         var ptr = new PointerState();
+        // "What's new" after an update from 1.8.2: over the settings (General tab) and as the VR panel
+        void WhatsNewShots(string st)
+        {
+            host.WhatsNewList = WhatsNew.Since("1.8.2");
+            host.WhatsNewSub = $"Updated to {Updater.Current.ToString(3)} from 1.8.2";
+            Log.Info($"what's new since 1.8.2: {host.WhatsNewList.Count} versions, {WhatsNew.All.Count} in the file");
+            int keep = view.Tab;
+            view.Tab = SettingsView.TabGeneral;
+            ui.ResetAnimations();
+            if (st == "")
+            {
+                ui.Begin(ptr, 1.5f);
+                painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
+                view.Draw(ui);
+                painter.End();
+                ui.End();
+            }
+            else view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_whatsnew{st}.png"));
+            using var wnp = new WhatsNewPanel(gpu, painter);
+            wnp.DrawFor(host.WhatsNewList, host.WhatsNewSub);
+            wnp.Surf.SavePng(gpu, Path.Combine(dir, $"whatsnew_panel{st}.png"));
+            host.WhatsNewList = Array.Empty<WhatsNew.Entry>();
+            view.Tab = keep;
+        }
         // a used "Bed" profile with night mode for the Layouts tab
         cfg.Data.Layouts[1].Saved = new DateTime(2026, 10, 13, 23, 40, 0);
         cfg.Data.Layouts[1].NightMode = true;
@@ -184,6 +212,7 @@ static class Tools
             ui.End();
             surf.SavePng(gpu, Path.Combine(dir, $"settings{t}.png"));
         }
+        WhatsNewShots("");
         // the floating in-VR settings panel (has a close button), General tab
         // Windows tab with two mirrored windows (one hidden), then the picker on top of them
         var open = host.OpenWindows();
@@ -479,6 +508,7 @@ static class Tools
             view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
             surf.SavePng(gpu, Path.Combine(dir, $"settings{t}_95.png"));
         }
+        WhatsNewShots("_95");
         // a drop-down list opened by a click (General: Smoothing), then the panel version
         view.Tab = SettingsView.TabGeneral;
         var combo = new System.Numerics.Vector2(170 * 2, 114 * 2);
