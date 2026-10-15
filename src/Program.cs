@@ -38,7 +38,7 @@ static class Program
         int uf = Array.IndexOf(args, "--updated-from");
         if (uf >= 0 && uf + 1 < args.Length) UpdatedFrom = args[uf + 1];
         bool has(string a) => args.Contains(a);
-        bool tool = has("--snapshot") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest");
+        bool tool = has("--snapshot") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest") || has("--voltest");
         if (tool) return RunTool(args);
 
         // install / uninstall (the same exe: named "OrbitSetup.exe" it is the installer)
@@ -117,6 +117,29 @@ static class Program
         }
     }
 
+    // dev: the watch's volume control on this PC's default speakers (per-app on Virtual Desktop's); "dip": 5 % down for 2 s, then back
+    static int VolTest(bool dip)
+    {
+        var v = new SystemVolume();
+        v.Sample(0);
+        Log.Info($"voltest: '{v.DeviceName}' level {v.Level:0.00} muted {v.Muted} per-app {v.PerApp}");
+        if (v.Level < 0) return 1;
+        float l0 = v.Level;
+        v.Set(l0);
+        if (dip)
+        {
+            v.Set(l0 - 0.05f);
+            Thread.Sleep(2000);
+            v.Sample(10);
+            Log.Info($"voltest: after the dip level {v.Level:0.00} (want {l0 - 0.05f:0.00})");
+            v.Set(l0);
+        }
+        v.Sample(20);
+        Log.Info($"voltest: back at {v.Level:0.00} (want {l0:0.00})");
+        v.Dispose();
+        return 0;
+    }
+
     static int RunTool(string[] args)
     {
         ApplicationConfiguration.Initialize();
@@ -144,6 +167,8 @@ static class Program
                 int i = Array.IndexOf(args, "--roomtest");
                 return Tools.RoomTest(i + 1 < args.Length ? args[i + 1] : "roomtest");
             }
+            if (args.Contains("--voltest"))
+                return VolTest(args.Contains("dip"));
             if (args.Contains("--capturetest"))
                 return CaptureTest.Run();
             if (args.Contains("--pacertest"))

@@ -196,6 +196,20 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.12.1 – hangerő Virtual Desktoppal (2026-10-15)
+
+Erik: „maga a windows hangerő állítás nem megy”. Mérve (`scratchpad/volprobe.ps1`, `sessprobe.ps1`): a
+„Speakers (Virtual Desktop Audio)” `QueryHardwareSupport` = 0x1 (hardveres hangerő), a végponti hangerő beállítható
+és megmarad (0,95 olvasható vissza), de a meghajtó nem alkalmazza – ezért a Windows saját csúszkája sem hat.
+
+- **`SystemVolume` app-mód**: ha az eszköz neve „Virtual Desktop”, `IAudioSessionManager2` → minden munkamenet
+  `ISimpleAudioVolume`-ja (a hangerőkeverő app-csúszkái, a hangmotor a meghajtó ELŐTT alkalmazza): egy szint
+  mindre; az első nézés a leghangosabb app szintjét veszi át; másodpercenként az új appok is megkapják
+  (`GetSessionInstanceIdentifier` szerint); a némítás is appokra. `PerApp` jelzi. `--voltest [dip]`: olvas, (dip:
+  2 s-ra −5%), visszaállít.
+- **Mikrofon**: a COM-kasztolás `as` (1.12.0: „Specified cast is not valid”, a widget sosem látta a mikrofont);
+  hiba esetén a napló a helyet is írja.
+
 ## 1.12.0 – oldalak, új widgetek, óra-stílusok, Bento 3. lépés (2026-10-15)
 
 Erik: „gyorsan végezni annyi felírt ötlettel amennyivel csak lehet”, „még ne legyen kiadás, majd ha mindennel

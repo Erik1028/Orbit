@@ -3,6 +3,12 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.12.1 | Volume in VR with Virtual Desktop
+- The watch's volume now works with Virtual Desktop's speakers. That device ignores Windows' own volume (the Windows
+  slider does nothing there either), so the watch sets the volume of every app playing on it instead - one level for
+  all of them, and an app that starts playing later gets it too.
+- The Microphone widget works with Virtual Desktop's microphone.
+
 ## 1.12.0 | Watch pages, new widgets and clock designs
 - Your custom watch face can have several pages. Swipe sideways with the laser or tap the dots at the bottom (in the
   Windows 95 style: the page buttons along the bottom).
