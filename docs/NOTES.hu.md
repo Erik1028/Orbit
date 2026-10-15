@@ -196,6 +196,18 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.12.2 – a szoba és a Hexpad az órán nyílik ki (2026-10-15)
+
+Erik: „az órán a vrchat szoba is egy kiugró widget legyen, nem külön ablak”, „a hexpad is lehetne órán lévő kiugró
+widget”. Ág `room-popout` (worktree `Orbit-room`): a room és a dock widget koppintásra a megnyitott nézetbe nő ki
+(mint az aknakereső; 95-ben az 1995-ös zoom-keret), X / mellé koppintás visszazsugorítja.
+- Szoba: a `RoomPanel` adatai és sorrendje (néhány segédje megosztva), két oszlop, a kar görget; 95: „Room - világ”
+  lista-ablak állapotsorral. A RoomPanel a beállításokból még nyílik (ott vannak a csillagok).
+- Hexpad: a `DockPanel` bemenet-kezelése változatlanul a közös `DockInput` osztályba került; az óra ugyanazt az egy
+  `HexpadLink` kapcsolatot használja. 6 gomb (136 px-es arcok), 3 kerek gomb, 3 tekerő csúszkaként; 95: képkeretek +
+  trackbar-csoportok. A DockPanel csak akkor látszik, ha a configban nyitva maradt. `--docktest` előtte/utána 52 kép
+  pixelre azonos.
+
 ## 1.12.1 – hangerő Virtual Desktoppal (2026-10-15)
 
 Erik: „maga a windows hangerő állítás nem megy”. Mérve (`scratchpad/volprobe.ps1`, `sessprobe.ps1`): a

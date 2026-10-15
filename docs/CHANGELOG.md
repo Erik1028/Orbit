@@ -3,6 +3,12 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.12.2 | Room and Hexpad open on the watch
+- The VRChat room widget opens right on the watch: tap it and it grows into the list of who is in the world, your
+  friends, how long you have been there and who left lately (the stick scrolls). No separate window any more.
+- The Hexpad widget opens on the watch too: tap it and it grows into the whole dock - keys to press, knobs to drag
+  and the page you are on.
+
 ## 1.12.1 | Volume in VR with Virtual Desktop
 - The watch's volume now works with Virtual Desktop's speakers. That device ignores Windows' own volume (the Windows
   slider does nothing there either), so the watch sets the volume of every app playing on it instead - one level for
