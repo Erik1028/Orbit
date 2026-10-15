@@ -1034,6 +1034,25 @@ static partial class Tools
         cfg.Data.Wrist.Face = "custom";
         LayoutCheckRun(wrist, data, cfg, painter, gpu, dir, "modern", true);
         StylesRun(wrist, data, painter, cfg, gpu, dir, variantsOnly: true);
+        // and in every font of Look > Font (in fonts/<font>; ORBIT_SNAP_FONTS=0 leaves them out)
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_FONTS") != "0")
+        {
+            int total = 0;
+            var notes = new List<string>();
+            foreach (var font in Theme.FontsInstalled)
+            {
+                cfg.Data.Appearance = new AppearanceConfig { Clock24h = false, Font = font };
+                Theme.Apply(cfg.Data.Appearance);
+                string fdir = Path.Combine(dir, "fonts", font.Replace(' ', '_'));
+                int n = LayoutCheckRun(wrist, data, cfg, painter, gpu, fdir, "modern " + font, true) +
+                        StylesRun(wrist, data, painter, cfg, gpu, fdir, " " + font, true);
+                total += n;
+                notes.Add($"{font} {n}");
+            }
+            Log.Info($"clockshot fonts: {total} problem(s) in {Theme.FontsInstalled.Length} fonts ({string.Join(", ", notes)})");
+            cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
+            Theme.Apply(cfg.Data.Appearance);
+        }
         CultureInfo.CurrentCulture = culture0;
         Log.Info("clockshot written to " + dir);
         return 0;

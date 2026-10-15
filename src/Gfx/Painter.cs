@@ -941,6 +941,26 @@ public sealed class Painter : IDisposable
         return pads;
     }
 
+    // How far digits' ink reaches above and below the baseline, per px of the size asked for, as Text draws them (a list font's scale and
+    // figures included): a clock fitting its digits to a box in any font (the clock designs, WristClocks)
+    readonly Dictionary<(string, FontWeight), (float above, float below)> _digitInk = new();
+    public (float above, float below) DigitInk(FontWeight w, string family = null)
+    {
+        FontCheck();
+        family ??= Theme.Font;
+        if (_digitInk.TryGetValue((family, w), out var m)) return m;
+        const string s = "0123456789";
+        var f = Format(family, 100, w, TextAlignment.Leading, ParagraphAlignment.Near, false);
+        using var lay = _g.DWrite.CreateTextLayout(s, f, 10000, 1000);
+        if (Tabular(family, s)) Figures(lay, s, family, 100, w);
+        var lm = new LineMetrics[1];
+        lay.GetLineMetrics(lm, out _);
+        var o = lay.OverhangMetrics;          // past the 10000 x 1000 box: its top (ink above it) and bottom
+        m = ((lm[0].Baseline + o.Top) / 100, (1000 + o.Bottom - lm[0].Baseline) / 100);
+        _digitInk[(family, w)] = m;
+        return m;
+    }
+
     // how far the ink of a text sticks out of its box, laid out the way Text / TrackedText lay it out (--snapshot's fit check):
     // the most on any side, in px (0 or less: inside)
     public float Overhang(string s, RectangleF r, float size, FontWeight w, string family, bool wrap, TextAlignment h, ParagraphAlignment v,

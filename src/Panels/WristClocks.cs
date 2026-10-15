@@ -32,6 +32,22 @@ public sealed partial class WristPanel
         }
     }
 
+    // The bold digits' top and their top-to-bottom span (in em), and where their middle is: Segoe UI's constants for the default
+    // font (it draws as it always did), a chosen font's own measured (Look > Font: its scale and figures included); h: the top for
+    // what lines up with it
+    (float top, float span, float mid, float h) Ink()
+    {
+        if (Theme.UserFont == null) return (DigitTop, DigitSpan, DigitH / 2, DigitH);
+        var (a, b) = _p.DigitInk(FontWeight.Bold, Theme.Display);
+        return (a, a + b, (a - b) / 2, a);
+    }
+
+    // drawn shapes (not text) start at least this far under a header look's band (4 px clear of its edge, plus 'more'), whatever a
+    // chosen font made the date (the default font's layout already is: it stays exactly as it was)
+    static readonly WatchWidgets.Kind TimeKind = WatchWidgets.Find("time");
+    float BelowBand(RectangleF r, WatchWidget w, float y, float more = 0) =>
+        Theme.UserFont == null ? y : MathF.Max(y, r.Y + BandHeight(TimeKind, w, r) + 4 + more);
+
     // the clock's header on a card wider than a 1x1 (TimeOrbit's): the date, the time in VR at its right; returns where the space
     // under it starts (10 px under the date's descenders)
     float ClockHead(RectangleF r, WatchWidget w, PanelData d)
@@ -64,7 +80,7 @@ public sealed partial class WristPanel
         string hh = now.ToString(h24 ? "HH" : "%h", culture), mm = now.ToString("mm", culture);
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2;
         float pad = PadX(r);
-        float top = small ? ClockCaption(r, ampm) : ClockHead(r, w, d) + (tall ? 2 : 0);
+        float top = small ? ClockCaption(r, ampm) : BelowBand(r, w, ClockHead(r, w, d) + (tall ? 2 : 0));
         var area = RectangleF.FromLTRB(r.X + pad, top, r.Right - pad, r.Bottom - (tall ? 14 : 10));
         // AM / PM beside the minutes (a 1x1 has it in its caption row)
         string side = small ? null : ampm;
@@ -73,29 +89,31 @@ public sealed partial class WristPanel
         // a card: the digits and a fifth of their size each side, at least about as tall as it is wide; the digits 60 % of it at most
         float k = _p.MeasureWidth("00", 100, FontWeight.Bold, Theme.Display) / 100;
         float fill0 = tall ? 0.6f : 0.68f;             // how much of a card's height its digits may take
-        float size = MathF.Min(area.Height * fill0 / DigitH, (area.Width - sw) / (2 * k + 0.9f));
+        var ink = Ink();
+        float dh = Theme.UserFont == null ? DigitH : ink.span;      // the digits' height, in em
+        float size = MathF.Min(area.Height * fill0 / dh, (area.Width - sw) / (2 * k + 0.9f));
         size = MathF.Max(14, MathF.Floor(size * 2) / 2);
         float cw = (k + 0.4f) * size, gap = MathF.Max(4, size * 0.1f);
-        float ch = MathF.Min(area.Height, MathF.Max(size * DigitH / fill0, cw * 0.95f));
+        float ch = MathF.Min(area.Height, MathF.Max(size * dh / fill0, cw * 0.95f));
         float x0 = MathF.Round(area.X + (area.Width - (2 * cw + gap + sw)) / 2), y0 = MathF.Round(area.Y + (area.Height - ch) / 2);
         // the cards: darker than the widget's (white digits), a touch darker on a light one (dark digits); glass: a dark veil
         uint mid = Theme.Mix(Bento.Cur.Fill0, Bento.Cur.Fill1, 0.5f);
         bool seeThrough = (mid >> 24) < 0xF0;
         uint fill = seeThrough ? 0x52000000 : Bento.Lum(Bento.Text) > 0.4f ? Theme.Mix(mid, 0xFF000000, 0.42f) : Bento.Tile;
         uint split = seeThrough ? 0x8C000000 : mid;
-        FlipCard(new RectangleF(x0, y0, cw, ch), hh, size, Ui.Id("wflh", id), fill, split);
-        FlipCard(new RectangleF(x0 + cw + gap, y0, cw, ch), mm, size, Ui.Id("wflm", id), fill, split);
+        FlipCard(new RectangleF(x0, y0, cw, ch), hh, size, ink.mid, Ui.Id("wflh", id), fill, split);
+        FlipCard(new RectangleF(x0 + cw + gap, y0, cw, ch), mm, size, ink.mid, Ui.Id("wflm", id), fill, split);
         if (side != null) TextAt(side, x0 + 2 * cw + gap + 8, y0 + ch - MathF.Max(6, ch * 0.1f), sw, Sub, ss, FontWeight.SemiBold);
     }
 
     // one card: its digits centred on the split; a change folds down - the old top half falls onto the split (squashed), then the
     // new bottom half opens from it - in FlipTime, the only time it asks for frames (_rolling)
-    void FlipCard(RectangleF c, string s, float size, string key, uint fill, uint split)
+    void FlipCard(RectangleF c, string s, float size, float inkMid, string key, uint fill, uint split)
     {
         if (!_rolls.TryGetValue(key, out var ro)) _rolls[key] = ro = new Roll { From = s, To = s };
         else if (ro.To != s) { ro.From = ro.To; ro.To = s; ro.Start = Clock.Now; }
         float rad = MathF.Max(5, MathF.Min(c.Width, c.Height) * 0.1f), mid = MathF.Round(c.Y + c.Height / 2);
-        float by = mid + size * DigitH / 2;
+        float by = mid + size * inkMid;
         void Digits(string str) => TextAt(str, c.X, by, c.Width, Bento.Text, size, FontWeight.Bold, TextAlignment.Center, Theme.Display);
         _p.Fill(c, fill, rad);
         float t = (float)((Clock.Now - ro.Start) / FlipTime);
@@ -137,7 +155,7 @@ public sealed partial class WristPanel
         string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture);
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2;
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
-        float top = small ? ClockCaption(r, ampm) : ClockHead(r, w, d) + 3;      // geometry: clear of a header band's edge
+        float top = small ? ClockCaption(r, ampm) : BelowBand(r, w, ClockHead(r, w, d) + 3, 3);      // geometry (its stroke too): clear of a header band's edge
         float bottom = r.Bottom - (tall ? 16 : 12);
         float w100 = g.OutlineWidth(h24 ? "00:00" : "12:00", 100, OutlineWeight, OutlineFont);      // the widest time decides
         string sec = small ? null : now.ToString("ss", culture);
@@ -167,6 +185,13 @@ public sealed partial class WristPanel
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2, stack = r.Width <= r.Height * 1.6f;
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         float top = small ? r.Y + 12 : ClockHead(r, w, d);
+        if (small && Bento.Cur.Band != 0)
+        {
+            // a header look's band: the caption row on it (with AM / PM), the digits under it
+            top = ClockCaption(r, ampm);
+            ampm = null;
+        }
+        var (dTop, dSpan, _, dH) = Ink();
         float bottom = r.Bottom - (tall ? 16 : 12), ah = bottom - top;
         uint hc = Bento.Text, mc = Bento.Cur.AccentText;
         float k = _p.MeasureWidth("00", 100, FontWeight.Bold, Theme.Display) / 100;
@@ -187,24 +212,24 @@ public sealed partial class WristPanel
         if (stack)
         {
             const float Gap = 0.12f;
-            float size = MathF.Min(ah / (2 * DigitSpan + Gap), (iw - sideW) / k);
+            float size = MathF.Min(ah / (2 * dSpan + Gap), (iw - sideW) / k);
             size = MathF.Max(16, MathF.Floor(size * 2) / 2);
-            float y0 = top + (ah - size * (2 * DigitSpan + Gap)) / 2;
-            float b1 = y0 + size * DigitTop, b2 = b1 + size * (DigitSpan + Gap);
+            float y0 = top + (ah - size * (2 * dSpan + Gap)) / 2;
+            float b1 = y0 + size * dTop, b2 = b1 + size * (dSpan + Gap);
             ValueText(x, b1, hh, size, hc, Ui.Id("wsth", id));
             ValueText(x, b2, mm, size, mc, Ui.Id("wstm", id));
-            Side(x + k * size + 8, b1 - size * DigitH, b2);
+            Side(x + k * size + 8, b1 - size * dH, b2);
             return;
         }
         {
             const float Gap = 0.22f;
-            float size = MathF.Min(ah / DigitSpan, (iw - sideW) / (2 * k + Gap));
+            float size = MathF.Min(ah / dSpan, (iw - sideW) / (2 * k + Gap));
             size = MathF.Max(16, MathF.Floor(size * 2) / 2);
-            float by = top + size * DigitTop + (ah - size * DigitSpan) / 2;
+            float by = top + size * dTop + (ah - size * dSpan) / 2;
             float hw = ValueText(x, by, hh, size, hc, Ui.Id("wsth", id));
             float mx = x + hw + Gap * size;
             float mw = ValueText(mx, by, mm, size, mc, Ui.Id("wstm", id));
-            Side(mx + mw + 8, by - size * DigitH, by);
+            Side(mx + mw + 8, by - size * dH, by);
         }
     }
 
@@ -230,7 +255,7 @@ public sealed partial class WristPanel
             ClockArt.SegText(g, t, x, top + (avail - h1) / 2, h1, on, off);
             return;
         }
-        float head = ClockHead(r, w, d) + 3, bottom = r.Bottom - (tall ? 16 : 12), ah = bottom - head;       // clear of a header band's edge
+        float head = BelowBand(r, w, ClockHead(r, w, d) + 3), bottom = r.Bottom - (tall ? 16 : 12), ah = bottom - head;       // clear of a header band's edge
         string sec = now.ToString("ss", culture);
         const float Sr = 0.45f, Sg = 0.22f;               // the seconds' height, and the gap before them, of the digits' height
         float wSec = ClockArt.SegWidth("00", 1) * Sr;
@@ -468,12 +493,13 @@ static class ClockArt
         }
         if (numerals)
         {
-            float ns = MathF.Max(14, MathF.Round(rad * 0.2f));
+            // the serif at its own size: Georgia is also a Look > Font choice, which the painter draws smaller (no wider than Segoe UI)
+            float ns0 = MathF.Max(14, MathF.Round(rad * 0.2f)), ns = ns0 / p.FontScale(Serif);
             var (b, lh) = p.TextLine(ns, FontWeight.Normal, Serif);
             for (int i = 0; i < 4; i++)
             {
                 var c = At(cx, cy, i / 4f, rad * 0.66f);
-                float by = c.Y + ns * 0.34f;
+                float by = c.Y + ns0 * 0.34f;
                 p.Text(RomanNumerals[i], new RectangleF(c.X - ns * 1.5f, by - b, ns * 3, lh), ink, ns, FontWeight.Normal, TextAlignment.Center,
                     ParagraphAlignment.Near, Serif);
             }
