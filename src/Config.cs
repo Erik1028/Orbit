@@ -195,6 +195,10 @@ public sealed class GeneralConfig
     public AlertsConfig Alerts { get; set; }          // low battery / low frame rate: a card + a buzz (null = the defaults)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string DoublePress { get; set; }           // B / Y pressed twice on an Orbit panel: null = keyboard | off | watch
+    // 1.14, the Windows volume in VR (AudioMixer): which output devices' apps follow the Windows volume - null / "auto" = the ones known
+    // to ignore their own volume (Virtual Desktop's), "on" = every device that says it sets its volume itself, "off" = none
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string VolumeToApps { get; set; }
 }
 
 // General > Alerts (Sys/Alerts.cs). Null in GeneralConfig = all of these defaults.

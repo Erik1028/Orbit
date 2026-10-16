@@ -780,6 +780,13 @@ public sealed class Painter : IDisposable
         Dc.Transform = Matrix3x2.CreateTranslation(dx, dy) * Dc.Transform;
     }
 
+    // draw through m, then what is set, until PopScale (the mixer's standing trackbar: a skin's own trackbar, transposed)
+    public void PushMatrix(Matrix3x2 m)
+    {
+        _transforms.Push(Dc.Transform);
+        Dc.Transform = m * Dc.Transform;
+    }
+
     int _fades;
 
     // everything until PopFade at this opacity (a layer: only while something animates)

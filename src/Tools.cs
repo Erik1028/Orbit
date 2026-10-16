@@ -120,6 +120,7 @@ static partial class Tools
         wrist.Mic.Fake = true;                          // never the real microphone: a tap flips a made-up one
         wrist.Mic.Present = true;
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "pages") return PagesRun(wrist, data, cfg, painter, gpu, dir, null, null, null);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "mixer") return MixerOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -575,6 +576,8 @@ static partial class Tools
             }
             RoomViewTools.Run(wrist, data, cfg, gpu, dir, tag);      // the room opened: its cases, a tap opens it (not the Room panel)
             DockViewTools.Run(wrist, data, cfg, painter, gpu, dir, tag);      // the dock opened, on made-up data (not the Hexpad panel)
+            if (tag == "") MixerViewTools.MasterChecks();                     // the Windows volume in VR, on a made-up device
+            MixerViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the volume mixer, on made-up apps
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -1550,7 +1553,8 @@ static partial class Tools
     // Every widget kind at every size, alone on a watch with no background ("cards"), and every opened view
     // without its clip: anything drawn outside the card sticks out (a non-transparent pixel there), and in the
     // modern style anything within a few pixels of the card's edge is too close to it. Logged, one line each.
-    static int LayoutCheckRun(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir, string style, bool variantsOnly = false)
+    static int LayoutCheckRun(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir, string style, bool variantsOnly = false,
+        string onlyKind = null)
     {
         var wcfg = cfg.Data.Wrist;
         bool classic = Theme.Classic;
@@ -1631,6 +1635,7 @@ static partial class Tools
         if (classic) sized.AddRange(WatchWidgets.Kinds.Where(kd => kd.Extra != null).SelectMany(kd => kd.Extra.Select(s => (kd, s.W, s.H))));
         foreach (var (kind, w, h) in sized)
         {
+            if (onlyKind != null && kind.Id != onlyKind) continue;
             wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
             wrist.Settle();
             wrist.Draw(data);
@@ -1660,6 +1665,7 @@ static partial class Tools
         foreach (var kind in WatchWidgets.Kinds)
             foreach (var (w, h) in WatchWidgets.Sizes43(kind))
             {
+                if (onlyKind != null && kind.Id != onlyKind) continue;
                 wcfg.Grid = "4x3";
                 wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
                 wcfg.Pages = classic ? new List<WatchPage> { new() { Grid = "4x3" } } : null;
@@ -1696,7 +1702,7 @@ static partial class Tools
         wrist.LayoutTest = true;
         foreach (var kind in WatchWidgets.Kinds)
         {
-            if (kind.Button) continue;
+            if (kind.Button || (onlyKind != null && kind.Id != onlyKind)) continue;
             var (w, h) = kind.Sizes[kind.Default];
             wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
             wrist.Settle();
@@ -1719,6 +1725,12 @@ static partial class Tools
             wrist.CloseForTest();
         }
         wrist.LayoutTest = false;
+        if (onlyKind != null)
+        {
+            wcfg.Background = "panel";
+            Log.Info($"layout {style} ({onlyKind} only): {problems} problem(s)");
+            return problems;
+        }
         var bats0 = new List<(string, float, bool)>(data.Vr.Batteries);
         var fake0 = data.FakeMedia;
         void Shot(string type, int w, int h, string name, bool open)
