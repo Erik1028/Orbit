@@ -336,6 +336,14 @@ public sealed class Painter : IDisposable
         Dc.FillRectangle(Raw(r), _checker);
     }
 
+    // r made see-through again (a style's opening animation on a canvas that was cleared to a colour)
+    public void ClearRect(RectangleF r)
+    {
+        PushClip(r);
+        Dc.Clear(ToColor(0));
+        PopClip();
+    }
+
     // a little pixel pattern ('k' = a pixel in colour c) - the check mark, the caption buttons' glyphs
     public void Pixels(string[] map, float x, float y, uint c)
     {

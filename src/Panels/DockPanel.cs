@@ -168,12 +168,13 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         _in.Timers(now);
         if (_in.TakeDirty()) _dirty = true;
         bool flashing = now - _s.EchoAt < 0.4;
-        if (_dirty || flashing || now >= _nextDraw || _ui.Animating)
+        // a style's opening / closing shows on every frame of the fade
+        if (_dirty || flashing || now >= _nextDraw || _ui.Animating || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw(now);
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
-            _nextDraw = now + 1;
+            _nextDraw = Math.Min(now + 1, AnimWake.Take());
         }
         Ov.Show();
     }

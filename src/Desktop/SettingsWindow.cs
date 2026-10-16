@@ -255,6 +255,7 @@ public sealed class SettingsWindow : Form
             _ui.End();
         }
         _swap.Present(0, PresentFlags.None);
+        _nextRefresh = Math.Min(_nextRefresh, AnimWake.Take());       // a style's animation wants its next frame (AnimWake.cs)
         if (_ui.Interacting || _ui.Changed || _ui.Animating || _ui.Pressed || _ui.Released) Dirty = true;
     }
 

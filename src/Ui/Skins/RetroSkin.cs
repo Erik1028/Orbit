@@ -124,6 +124,19 @@ public abstract class RetroSkin
     // ---- icons: true when the skin drew this one itself (else W95Icons' picture) ----
     public abstract bool Icon(Painter p, W95Icons.Id id, float x, float y, int scale);
 
+    // ---- motion: a style's own animations (Motion.Level says which may run). Windows 95 has none of these: they do nothing ----
+
+    // true: a whole panel fading in or out (its 0.18 s) is drawn every frame, so the style's opening / closing shows on it
+    // (the Terminal's CRT switching on and off, the Mac's zoom rectangles)
+    public virtual bool AnimatesFade => false;
+    // the window zoom of an opened watch widget, t 0..1 from 'from' to 'to' (closing: the other way round): true when the style
+    // drew its own (else the 1995 grey outline)
+    public virtual bool WindowZoom(Painter p, RectangleF from, RectangleF to, float t) => false;
+    // a drop-down list's row was picked and the list closes (the Mac's menu blinks the item first)
+    public virtual void MenuPicked(Ui ui, RectangleF list, string[] items, int row) { }
+    // every frame a page draws its popups without an open list: what is left of a closing one (the blink)
+    public virtual void MenuClosing(Ui ui) { }
+
     // ---- helpers for every skin ----
 
     public float LabelWidth(Painter p, string s, bool bold = false) => TextWidth(p, Ui.Amp(s).text, bold, Ui.F95);

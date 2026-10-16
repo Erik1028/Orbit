@@ -32,7 +32,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
     public VrOverlay Ov { get; private set; }
     float _vis, _lastSize, _wheelAcc, _drawnDim = -1;
     bool _dirty = true, _wasOn, _theater, _drawnCurved, _drawnKb;
-    double _showUntil, _holdUntil;
+    double _showUntil, _holdUntil, _wake = double.PositiveInfinity;    // _wake: a style's animation wants its next frame then
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
     readonly List<ITheaterScreen> _choices = new();
@@ -158,13 +158,15 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
         }
         Ov.SetAbsolute(_world);
         Ov.SetAlpha(e);
-        if (_dirty || _ui.Animating)
+        // a style's opening / closing (the Mac's Control Strip sliding) shows on every frame of the fade
+        if (_dirty || _ui.Animating || now >= _wake || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw();
             Ov.SetTexture(_surf.Tex);
             _retired?.Dispose();
             _retired = null;
             _dirty = _ui.Interacting || _ui.Changed;
+            _wake = AnimWake.Take();
         }
         Ov.Show();
     }

@@ -529,7 +529,8 @@ public sealed partial class WristPanel
             // (Minesweeper, the room) the zoom outline back into its tile, then it is gone
             if (t >= 1) { _open = null; _closing = false; return; }
             var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
-            _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
+            if (!Theme.RetroSkin.WindowZoom(_p, win, WatchWidgets.Rect(_open, true, _grid), (float)t))      // a style's own zoom
+                _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
             return;
         }
@@ -537,7 +538,8 @@ public sealed partial class WristPanel
         {
             // the 1995 window zoom: an outline growing from the widget to the window
             var z = Lerp(WatchWidgets.Rect(_open, true, _grid), win, (float)t);
-            _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
+            if (!Theme.RetroSkin.WindowZoom(_p, WatchWidgets.Rect(_open, true, _grid), win, (float)t))      // a style's own zoom
+                _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
             return;
         }

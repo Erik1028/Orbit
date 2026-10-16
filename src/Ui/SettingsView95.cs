@@ -14,6 +14,11 @@ public sealed partial class SettingsView
 {
     public const int W95W = 750, W95H = 480;
     public Action OnClose95;      // the desktop window's own "close" (the VR panel uses OnClose)
+    // the VR panel's fade, for a style's opening / closing animation: when it came into view, how far in (0..1), going away.
+    // The desktop window leaves them be (always there).
+    public double ShownAt = -10;
+    public float Vis = 1;
+    public bool Closing;
 
     const uint K95 = 0xFF000000, W95 = 0xFFFFFFFF, Grey95 = 0xFF808080;
     const float RowH = 21;        // a drop-down list / text box row

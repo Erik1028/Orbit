@@ -22,6 +22,7 @@ public sealed partial class WristPanel
     partial void FaceMac(PanelData d, ref bool done)
     {
         done = true;
+        MBeginFrame();
         var m = Mac;
         string face = C.Face ?? "full";
         var now = DateTime.Now;
@@ -33,9 +34,12 @@ public sealed partial class WristPanel
         float h = 22 + top + (media ? 52 : 0) + (tools ? 34 : 0) + (perf ? (graph ? 32 : 20) : 0) + 3;
         float wy = MathF.Floor((TH95 - h) / 2);
         var win = new RectangleF(0, wy, TW95, h);
+        if (MZoom(win)) return;                 // zooming out of the middle as it comes, back in after the close box
+        float shade = MShade(win);              // rolled up into its title bar after the collapse box
+        if (shade < win.Height) _p.PushClip(new RectangleF(win.X, win.Y, win.Width, shade));
         m.MacWindow(_p, win, "Clock");
-        if (_ui.CaptionClose95("w95.x", MacSkin.CloseX(win), MacSkin.BoxY(win))) _dismissReq = true;
-        if (_ui.CaptionMin95("w95.min", MacSkin.CollapseX(win), MacSkin.BoxY(win))) _dismissReq = true;     // the window shade
+        if (_ui.CaptionClose95("w95.x", MacSkin.CloseX(win), MacSkin.BoxY(win))) { _dismissReq = true; _mCloseAt = Clock.Now; }
+        if (_ui.CaptionMin95("w95.min", MacSkin.CollapseX(win), MacSkin.BoxY(win))) { _dismissReq = true; _mShadeAt = Clock.Now; }   // the window shade
 
         float y = wy + 22;
         bool h24 = _cfg.Data.Appearance.Clock24h;
@@ -92,6 +96,11 @@ public sealed partial class WristPanel
                 m.EtchedLine(_p, 8, TW95 - 8, y);
                 StatusMac(d, new RectangleF(10, y + 3, TW95 - 20, 14));
             }
+        }
+        if (shade < win.Height)
+        {
+            _p.PopClip();
+            MShadeEdge(win, shade);
         }
     }
 
@@ -357,6 +366,9 @@ public sealed partial class WristPanel
             case "minesweeper":
                 MinesWidgetMac(m.WidgetFrame(_p, r, w.H >= 2 ? k.Title95 : null), w);
                 break;
+            case "dock" when !DockShows(d) && d.Dock?.State == HexpadLink.LinkState.Connecting:
+                MacDockWait(r, m.WidgetFrame(_p, r, w.H >= 2 ? k.Title95 : null), d, w, id);
+                break;
             case "session":
             {
                 var c = m.WidgetFrame(_p, r, w.H >= 2 ? k.Title95 : null);
@@ -454,7 +466,7 @@ public sealed partial class WristPanel
     {
         var g = _mines[0];
         int secs = (int)Math.Min(999, g.Seconds(Clock.Now));
-        var face = MinesFace95(g);
+        var face = MacFace(g, MinesFace95(g));
         const float cw = MacSkin.Mines.SmallW, chh = MacSkin.Mines.SmallH;
         if (w.H < 2)
         {

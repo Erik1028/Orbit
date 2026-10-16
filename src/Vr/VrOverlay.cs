@@ -104,7 +104,9 @@ public sealed class VrOverlay : IDisposable
     public void SetSortOrder(uint o) { if (o != _sort) { _sort = o; Ov.SetOverlaySortOrder(Handle, o); } }
     public void SetFlag(VROverlayFlags f, bool on) => Ov.SetOverlayFlag(Handle, f, on);
 
-    public void Show() { if (!_visible) { _visible = true; Ov.ShowOverlay(Handle); } }
+    public void Show() { if (!_visible) { _visible = true; ShownAt = Clock.Now; Ov.ShowOverlay(Handle); } }
+    // when it last came into view (Clock.Now; a style's opening animation starts from it)
+    public double ShownAt { get; private set; } = -10;
     public void Hide() { if (_visible) { _visible = false; Ov.HideOverlay(Handle); } }
     public void SetVisible(bool v) { if (v) Show(); else Hide(); }
 

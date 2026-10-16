@@ -19,6 +19,7 @@ public sealed partial class RoomPanel
         _ui.Canvas95 = new SizeF(W95, H95);
         _p.BeginPixel(_canvas95.Bitmap, 0x00000000);
         var win = new RectangleF(0, 0, W95, H95);
+        if (MacZoom(win)) { MacPresent(); return; }          // zooming out of its middle as it comes, back in as it goes
         m.MacWindow(_p, win, _s.InRoom && _s.World.Length > 0 ? Fit95(_s.World, W95 - 60) : "Room");
         if (_ui.CaptionClose95("rm95.x", MacSkin.CloseX(win), MacSkin.BoxY(win), true, 6)) Toggle();
 
@@ -81,6 +82,7 @@ public sealed partial class DockPanel
         _ui.Canvas95 = new SizeF(W95, H95);
         _p.BeginPixel(_canvas95.Bitmap, 0x00000000);
         var win = new RectangleF(0, 0, W95, H95);
+        if (MacZoom(win)) { MacPresent(); return; }          // zooming out of its middle as it comes, back in as it goes
         string title = string.IsNullOrEmpty(_s.Profile) ? "Hexpad" : $"Hexpad - {_s.Profile}";
         m.MacWindow(_p, win, Fit95(title, W95 - 60));
         if (_ui.CaptionClose95("dk95.x", MacSkin.CloseX(win), MacSkin.BoxY(win), true, 6)) Toggle();
@@ -90,7 +92,8 @@ public sealed partial class DockPanel
         {
             var msg = new RectangleF(8, 27, 228, 149);
             m.Well(_p, msg);
-            W95Icons.Draw(_p, W95Icons.Id.Info32, msg.X + 14, msg.Y + 16);
+            if (_s.State == HexpadLink.LinkState.Connecting) MacSkin.WatchCursor(_p, msg.X + 14, msg.Y + 16, 2);     // being looked for
+            else W95Icons.Draw(_p, W95Icons.Id.Info32, msg.X + 14, msg.Y + 16);
             _ui.Text95(StateLine() + ".", new RectangleF(msg.X + 54, msg.Y + 18, msg.Width - 64, msg.Height - 30), Blk95, false,
                 TextAlignment.Leading, true, true);
         }

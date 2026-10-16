@@ -89,7 +89,8 @@ public sealed partial class WristPanel
         {
             var msg = new RectangleF(win.X + 6, win.Y + 28, win.Width - 12, win.Height - 34);
             m.Well(_p, msg);
-            W95Icons.Draw(_p, W95Icons.Id.Dock, msg.X + 14, msg.Y + 16, 2);
+            if (d.Dock?.State == HexpadLink.LinkState.Connecting) MacSkin.WatchCursor(_p, msg.X + 14, msg.Y + 16, 2);     // being looked for
+            else W95Icons.Draw(_p, W95Icons.Id.Dock, msg.X + 14, msg.Y + 16, 2);
             string line = d.Dock == null ? "Hexpad is not connected." : I.StateLine() + ".";
             _ui.Text95(line, new RectangleF(msg.X + 54, msg.Y + 18, msg.Width - 64, msg.Height - 30), MacBlack, false, TextAlignment.Leading, true, true);
             return;
@@ -153,7 +154,7 @@ public sealed partial class WristPanel
         int secs = (int)Math.Min(999, g.Seconds(now));
         bool rise = press >= 0 && prog > 0, had = rise && g.IsFlag(press);
         int rows = rise ? (int)MathF.Round((had ? 1 - prog : prog) * (MineArt.FlagBottom - MineArt.FlagTop)) : 0;
-        var face = faceHeld ? MineArt.Face.Smile : MinesFace95(g);
+        var face = faceHeld ? MineArt.Face.Smile : MacFace(g, MinesFace95(g));
         MacSkin.Mines.Draw(_p, g, cl, secs, face, faceHeld, i => rise && i == press ? (had || _mFlagMode ? MineArt.Sq.Hidden : MineArt.Sq.Open) : Square95(g, i, press, chord),
             press, rows);
         if (cl.Bottom < win.Bottom)

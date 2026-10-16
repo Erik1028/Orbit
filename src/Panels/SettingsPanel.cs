@@ -82,6 +82,7 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
     {
         if (Ov == null) return;
         float target = _open ? 1 : 0;
+        if (_vis <= 0 && target > 0) _view.ShownAt = now;          // coming into view (a style's opening animation)
         _vis = Math.Clamp(_vis + Math.Sign(target - _vis) * dt / 0.18f, 0, 1);
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
@@ -92,16 +93,19 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
         float e = 1 - MathF.Pow(1 - _vis, 3);                 // ease-out cubic
         Ov.SetAlpha(e);
         Ov.SetWidth(C.Width * (0.92f + 0.08f * e));
-        bool redraw = _dirty || now >= _nextDraw || _ui.Animating;
+        bool fading = _vis < 1 && Theme.RetroSkin.AnimatesFade;        // a style's opening / closing shows on every frame of the fade
+        bool redraw = _dirty || now >= _nextDraw || _ui.Animating || fading;
         if (redraw)
         {
             _beforeDraw?.Invoke(_view);
+            _view.Vis = _vis;
+            _view.Closing = !_open;
             DrawFrame(_ptr);
             Ov.SetTexture(Surf.Tex);
             // a press / release frame always gets one more frame: what the click changed (picker closed,
             // new theme, other card selected) was drawn before the click was handled
             _dirty = _ui.Interacting || _ui.Changed || _ui.Pressed || _ui.Released;
-            _nextDraw = now + 0.5;
+            _nextDraw = Math.Min(now + 0.5, AnimWake.Take());
         }
         Ov.Show();
     }

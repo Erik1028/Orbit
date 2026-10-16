@@ -55,6 +55,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
     bool _dirty = true;
     int _themeVersion = -1;
     float _vis;                                              // show/hide animation 0..1
+    double _wake = double.PositiveInfinity;                  // a style's animation wants its next frame then (AnimWake.cs)
     readonly System.Collections.Generic.Dictionary<Key, float> _flash = new();   // press glow per key
     float _lastDt = 1 / 90f;
 
@@ -355,11 +356,13 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         Ov.SetWidth(C.Width * (0.9f + 0.1f * e));
         if (!Ov.Visible) { _dirty = true; _sounds.Reopen(); }   // follow the current default audio device
         Ov.Show();
-        if (_dirty || _flash.Count > 0)
+        // a style's opening / closing shows on every frame of the fade
+        if (_dirty || _flash.Count > 0 || now >= _wake || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw();
             Ov.SetTexture(Surf.Tex);
             _dirty = false;
+            _wake = AnimWake.Take();
         }
     }
 
