@@ -819,8 +819,10 @@
     var word = S.mic ? 'Muted' : 'Live', by = r.y + SBASE, mid = by - HERO * DIGH / 2;
     icon(S.mic ? 'micoff' : 'mic', x + HERO / 2, mid, HERO, S.mic ? L.badInk : L.text);
     var tx = x + HERO + 8, room = r.x + r.w - pad - tx;
-    if (mw(word, SMALL, S.mic ? 700 : 600) <= room) text(word, tx, by, S.mic ? L.text : L.sub, SMALL, S.mic ? 700 : 600);
-    if (S.mic) return;
+    var wt = S.mic ? 700 : 600, below = mw(word, SMALL, wt) > room;
+    if (!below) text(word, tx, by, S.mic ? L.text : L.sub, SMALL, wt);
+    else text(ell(word, iw, SMALL, wt), x, r.y + r.h - 12, S.mic ? L.text : L.sub, SMALL, wt);
+    if (S.mic || below) return;
     var f = Math.min(1, Math.sqrt(S.micPeak));
     rect(x, r.y + r.h - 16, iw, 4, L.track, 2);
     if (f > 0.01) rect(x, r.y + r.h - 16, Math.max(4, iw * f), 4, L.ok, 2);
@@ -2093,13 +2095,19 @@
   var cascade = !reduce;
   if (cascade && 'IntersectionObserver' in window) {
     root.classList.add('wd-wait');
-    var io = new IntersectionObserver(function (es) {
-      if (!es[0].isIntersecting) return;
+    var started = false;
+    var intro = function () {
+      if (started) return;
+      started = true;
       io.disconnect();
       root.classList.remove('wd-wait');
       root.classList.add('wd-intro');
-    }, { threshold: 0.35 });
+      setTimeout(function () { root.classList.remove('wd-intro'); }, 1400);     // done; nothing left waiting on an animation
+    };
+    var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) intro(); }, { threshold: 0.35 });
     io.observe(root);
+    // in view but no word from the observer (a throttled frame): show it anyway
+    setTimeout(function () { var b = root.getBoundingClientRect(); if (!started && b.top < innerHeight && b.bottom > 0) intro(); }, 2500);
   }
 
   var lastSec = -1, inView = true;
