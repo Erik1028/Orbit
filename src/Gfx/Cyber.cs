@@ -242,6 +242,13 @@ static class CyberHud
         p.PopClip();
     }
 
+    // a whole panel (the watch page, the keyboard, the Room and Hexpad panels): near black, the olive frame, all four corners cut
+    public static void PanelFrame(Painter p, RectangleF all, uint fill, float cut = 18)
+    {
+        p.FillCut(all, fill, cut, cut, cut, cut);
+        p.StrokeCut(RectangleF.Inflate(all, -1.5f, -1.5f), Frame, 2, cut - 1, cut - 1, cut - 1, cut - 1);
+    }
+
     // a little window in the style picker: the page, a card with its tag, a cyan line
     public static void Chip(Painter p, RectangleF r)
     {

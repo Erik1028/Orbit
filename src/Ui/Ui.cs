@@ -287,7 +287,9 @@ public sealed partial class Ui
         // ease-out-back feel: the knob slightly overshoots on the way
         float kx = track.X + sh / 2 + (sw - sh) * k;
         float kr = sh / 2 - 4 + 1.5f * MathF.Sin(MathF.PI * k);
-        P.Circle(kx, track.Y + sh / 2, kr, enabled ? Theme.Mix(Theme.Dim, Theme.OnAccent, k) : Theme.Dim);
+        uint kc = enabled ? Theme.Mix(Theme.Dim, Theme.OnAccent, k) : Theme.Dim;
+        if (Theme.Cyber) P.FillCut(new RectangleF(kx - kr, track.Y + sh / 2 - kr, 2 * kr, 2 * kr), kc, 0, 0, MathF.Round(kr * 0.7f), 0);   // a square knob
+        else P.Circle(kx, track.Y + sh / 2, kr, kc);
         uint fg = enabled ? Theme.Text : Theme.Faint;
         if (hint == null)
             P.Text(label, new RectangleF(r.X + 10, r.Y, r.Width - sw - 30, r.Height), fg, 15);
@@ -340,6 +342,13 @@ public sealed partial class Ui
         P.Fill(track, Theme.Panel3, 3);
         P.Fill(new RectangleF(track.X, track.Y, track.Width * t2, track.Height), enabled ? Theme.Accent : Theme.Faint, 3);
         float kx = track.X + track.Width * t2;
+        if (Theme.Cyber)
+        {
+            // a bar across the track, its corner cut
+            if (h > 0.01f && enabled) P.Fill(new RectangleF(kx - 9 - 3 * h, track.Y - 11 - 3 * h, 18 + 6 * h, 28 + 6 * h), Theme.WithAlpha(Theme.Accent, 0.18f));
+            P.FillCut(new RectangleF(kx - 5 - h / 2, track.Y - 8 - h, 10 + h, 22 + 2 * h), enabled ? Theme.Text : Theme.Faint, 0, 0, 4, 0);
+            return changed;
+        }
         if (h > 0.01f && enabled) P.Circle(kx, track.Y + 3, 8 + 7 * h, Theme.WithAlpha(Theme.Accent, 0.18f));
         P.Circle(kx, track.Y + 3, 8 + h, enabled ? Theme.Text : Theme.Faint);
         return changed;
@@ -444,6 +453,7 @@ public sealed partial class Ui
 
     public void Section(RectangleF r, string title)
     {
+        if (Theme.Cyber) { CyberHud.Tag(P, r.X, r.Y + (r.Height - 18) / 2, title.ToUpperInvariant(), size: 12, h: 18); return; }    // a yellow tag
         if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
         // a group box title: bold black, an etched line running on after it
         string t = char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();

@@ -1276,7 +1276,8 @@ static partial class Tools
     // --faceshot DIR: your own watch face, without VR - from a COPY of the config (the real one is only read), drawn in the
     // modern style with your look, then once more with the Bento theme's colours (accent #FF5D93, panel #0A0B10): before /
     // after pictures of a redesign. The numbers are the snapshot's made-up ones (plus a made-up room and Hexpad), the clock,
-    // CPU, RAM and the system volume are live, dates in this PC's language.
+    // CPU, RAM and the system volume are live, dates in this PC's language. The pages are drawn in Windows 95 and Cyber too
+    // (face_page*_95, face_page*_cyber).
     public static int FaceShot(string dir)
     {
         dir = Path.GetFullPath(dir);
@@ -1402,16 +1403,16 @@ static partial class Tools
             PagesData(data);
             a.Accent = accent0;
             a.PanelColor = panel0;
-            foreach (bool classic in new[] { false, true })
+            foreach (var (style, suffix) in new[] { ("modern", ""), ("classic", "_95"), (CyberHud.Id, "_cyber") })
             {
-                a.Style = classic ? "classic" : "modern";
+                a.Style = style;
                 Theme.Apply(a);
                 for (int i = 0; i < WatchPages.Count(wc); i++)
                 {
                     wc.Page = i;
                     wrist.Settle();
                     for (int f = 0; f < 8; f++) { wrist.Draw(data); Thread.Sleep(50); }      // a new cover fades in
-                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{(classic ? "_95" : "")}.png"));
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{suffix}.png"));
                 }
             }
             a.Style = "modern";

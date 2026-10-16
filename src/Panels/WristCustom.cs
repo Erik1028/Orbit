@@ -10,6 +10,8 @@ namespace Orbit;
 // Modern: the Bento look (Bento.cs) - rounded cards with a caption, the value big and bold, colours by role - and motion
 // (widgets cascade in when you look at the watch, spring into a new place, digits roll, lines fill).
 // Windows 95: little 95 windows on a teal desktop (or windows only), no motion - 1995 had none.
+// Cyber (Look > Style): the modern face, its cards, captions, lines and buttons in Cyber's forms and the concept's own designs
+// (WristCyber.cs); a widget's own look (Style / Color) does not apply there.
 public sealed partial class WristPanel
 {
     bool _layoutChecked, _layoutSeen;
@@ -455,7 +457,8 @@ public sealed partial class WristPanel
         SampleSources();
         Bento.Reset();
         bool cards = C.Background == "cards";
-        if (!cards)
+        if (!cards && Theme.Cyber) CyberPage();         // Cyber: the olive frame (WristCyber.cs)
+        else if (!cards)
         {
             _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, Bento.PageRadius);
             _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), Bento.PageLine, Bento.PageEdge, Bento.PageRadius - 1);
@@ -531,7 +534,8 @@ public sealed partial class WristPanel
                 if (alpha < 0.999f) _p.PushFade(alpha);
             }
             // its look while it draws (a muted volume or microphone is the danger card, in the default look)
-            bool danger = (muted && k.Id == "volume") || (micMuted && k.Id == "mic"), styled = Styled(w) && !danger;
+            // (Cyber: one look, the concept's - a widget's own Style / Color does not apply)
+            bool danger = (muted && k.Id == "volume") || (micMuted && k.Id == "mic"), styled = Styled(w) && !danger && !Theme.Cyber;
             if (styled)
             {
                 var look = LookOf(w, k.Id, d.NightMode, cards);
@@ -542,6 +546,7 @@ public sealed partial class WristPanel
             // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card; the
             // 4 x 3 now playing is its cover's colours
             if (CoverCard(k, w, styled)) CoverBack(r, d);
+            else if (!k.Button && Theme.Cyber) CyberCard(r, k, w, cards, danger);
             else if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
             if (!Backgrounds)
             {
@@ -559,6 +564,7 @@ public sealed partial class WristPanel
 
     void Widget(int i, int id, WatchWidget w, WatchWidgets.Kind k, RectangleF r, PanelData d, DateTime now)
     {
+        if (Theme.Cyber && CyberWidget(id, w, k, r, d, now)) return;       // the concept's own designs (WristCyber.cs)
         if (_big && Widget43(id, w, k, r, d)) return;          // the designs made for the 4 x 3 page's bigger cards
         switch (k.Id)
         {
@@ -679,6 +685,7 @@ public sealed partial class WristPanel
     // that needs attention is a dot after it - its value keeps the card's text colour (a red value on a red card would vanish).
     float Caption(float x, RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok, uint color = 0)
     {
+        if (Theme.Cyber) return CyberCaption(x, r, maxW, forms);      // a yellow tag
         bool dot = badge != StatLevel.Ok && Bento.CapBadge;
         if (dot) maxW -= DotW;
         foreach (var f in forms)
@@ -716,6 +723,7 @@ public sealed partial class WristPanel
     // how wide the first form of a caption that fits maxW is (-1: none fits)
     float CaptionWidth(string[] forms, float maxW)
     {
+        if (Theme.Cyber) return CyberCaptionWidth(forms, maxW);
         foreach (var f in forms)
         {
             if (string.IsNullOrEmpty(f)) continue;
@@ -728,6 +736,7 @@ public sealed partial class WristPanel
     // caption-style text (UPPERCASE already), its baseline at 'by' - also the opened views' small headings; Trailing: it ends at x
     void CapText(string s, float x, float by, float w, uint c, TextAlignment al = TextAlignment.Leading)
     {
+        if (Theme.Cyber) { CyberCapText(s, x, by, w, c, al); return; }
         var (b, h) = _p.TextLine(CapSize, FontWeight.SemiBold);
         if (al == TextAlignment.Trailing)
         {
@@ -744,6 +753,7 @@ public sealed partial class WristPanel
 
     void CaptionRow(RectangleF r, float x, float right, string note, uint noteColor, string[] forms, StatLevel badge = StatLevel.Ok)
     {
+        if (Theme.Cyber) { CyberCaptionRow(r, x, right, note, noteColor, forms); return; }
         float iw = right - x;
         float nw = string.IsNullOrEmpty(note) ? 0 : _p.MeasureWidth(note, SmallText, FontWeight.SemiBold);
         float cw = Caption(x, r, nw > 0 ? MathF.Max(iw * 0.4f, iw - nw - 10) : iw, forms, badge);
@@ -795,6 +805,7 @@ public sealed partial class WristPanel
     // A plain line: the track and, from the left, the value in colour (it glides when the value changes)
     void Meter(RectangleF bar, float frac, uint tint, string key)
     {
+        if (Theme.Cyber) { CyberMeter(bar, frac, tint, key); return; }      // segments
         float f = _ui.Spring(key, frac < 0 ? 0 : Math.Clamp(frac, 0, 1), 140, 20, 0.08f);
         float h = bar.Height;
         _p.Fill(bar, Bento.Track, h / 2);
@@ -950,6 +961,7 @@ public sealed partial class WristPanel
     bool Press(string id, RectangleF r, string icon, string label, bool on, bool enabled = true, float iconSize = 24, bool circle = false,
         bool accentFill = true, uint fill = 0)
     {
+        if (Theme.Cyber) return CyberPress(id, r, icon, label, on, enabled, iconSize, accentFill, fill);
         bool click = _ui.Clickable(id, MinHit(r), out bool hover, out bool held) && enabled;
         float s = _ui.Spring(Ui.Id(id, "#s"), held && enabled ? 0.9f : 1f, 420, 18);
         var b = new RectangleF(r.X + r.Width * (1 - s) / 2, r.Y + r.Height * (1 - s) / 2, r.Width * s, r.Height * s);
@@ -1248,7 +1260,7 @@ public sealed partial class WristPanel
                 if (today)
                 {
                     float d2 = MathF.Min(cw, rh) - 1;
-                    _p.Circle(cr.X + cw / 2, cr.Y + rh / 2, d2 / 2, Bento.AccentFill);
+                    TodayMark(cr.X + cw / 2, cr.Y + rh / 2, d2 / 2);
                 }
                 _p.Text(DayNumber(dd), cr, today ? Bento.OnAccent : weekend ? Sub : Bento.Text, CapSize, today ? FontWeight.Bold : FontWeight.SemiBold,
                     TextAlignment.Center);
@@ -1274,11 +1286,19 @@ public sealed partial class WristPanel
             float x = r.X + pad + c * cw;
             bool today = day == now.Date, weekend = day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
             _p.Text(DayHead(culture, day.DayOfWeek), new RectangleF(x, r.Y + 36, cw, 20), Sub, CapSize, FontWeight.SemiBold, TextAlignment.Center);
-            if (today) _p.Circle(x + cw / 2, r.Y + 72, 12, Bento.AccentFill);
+            if (today) TodayMark(x + cw / 2, r.Y + 72, 12);
             uint c2 = today ? Bento.OnAccent : day.Month != now.Month ? Bento.Faint : weekend ? Sub : Bento.Text;
             _p.Text(DayNumber(day.Day), new RectangleF(x, r.Y + 60, cw, 24), c2, SmallText, today ? FontWeight.Bold : FontWeight.SemiBold,
                 TextAlignment.Center);
         }
+    }
+
+    // today in a calendar: a filled circle in the accent (Cyber: a square with a cut corner)
+    void TodayMark(float cx, float cy, float rad)
+    {
+        if (!Theme.Cyber) { _p.Circle(cx, cy, rad, Bento.AccentFill); return; }
+        float s = MathF.Round(rad * 1.8f);
+        _p.FillCut(new RectangleF(MathF.Round(cx - s / 2), MathF.Round(cy - s / 2), s, s), Bento.AccentFill, 0, 0, MathF.Round(s * 0.3f), 0);
     }
 
     // "1" .. "31", made once; the month grid's weekday heads ("H", "SZE"), UPPERCASE, two letters at most

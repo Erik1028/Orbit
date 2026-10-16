@@ -375,9 +375,10 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         }
         if (Theme.Classic) { Draw95(); return; }
         _p.Begin(Surf.Bitmap, 0x00000000);
-        _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 26);
+        if (Theme.Cyber) CyberHud.PanelFrame(_p, new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 22);    // the olive frame
+        else _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 26);
         if (Theme.Classic) _p.Bevel(new RectangleF(0, 0, TW, TH), Painter.Edge.Window);
-        else _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
+        else if (!Theme.Cyber) _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
         bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
         // press glow fades out after the key is let go
         foreach (var key in new System.Collections.Generic.List<Key>(_flash.Keys))
@@ -447,6 +448,9 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
                 if (!down && glow > 0) bg = Theme.Mix(bg, Theme.Accent, glow);
                 kr = down ? RectangleF.Inflate(k.R, -3, -3) : k.R;     // pressed keys sink a little
                 _p.Fill(kr, bg, 12);
+                // Cyber: a hairline round every key (the actions' cyan, like the watch's buttons)
+                if (Theme.Cyber && !down && modState != 2)
+                    _p.Stroke(RectangleF.Inflate(kr, -0.6f, -0.6f), k.Kind == Kind.Action ? CyberHud.CyanDim : CyberHud.Line, 1.25f, 11.4f);
                 if (modState == 1) _p.Stroke(kr, Theme.Accent, 3, 12);
                 fg = down || modState == 2 ? Theme.OnAccent : Theme.Text;
             }
@@ -455,7 +459,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
                 // icon + label, centred
                 float tw = _p.MeasureWidth(k.Fixed, 22, FontWeight.SemiBold);
                 float x0 = k.R.X + (k.R.Width - (28 + 10 + tw)) / 2;
-                _p.Icon(k.Icon, new RectangleF(x0, k.R.Y, 28, k.R.Height), fg, 24);
+                _p.Icon(k.Icon, new RectangleF(x0, k.R.Y, 28, k.R.Height), Theme.Cyber && fg == Theme.Text ? CyberHud.Cyan : fg, 24);
                 _p.Text(k.Fixed, new RectangleF(x0 + 38, k.R.Y, tw + 6, k.R.Height), fg, 22, FontWeight.SemiBold);
             }
             else if (k.Icon != null)

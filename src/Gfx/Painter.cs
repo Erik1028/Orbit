@@ -54,6 +54,9 @@ static class Theme
     // its own token layer, type and cut corners; the watch's widgets have their Cyber designs (WristCyber.cs)
     public static bool Cyber { get; private set; }
 
+    // a panel's outline: 25 % white (Cyber: the olive frame)
+    public static uint PanelLine => Cyber ? CyberHud.Frame : 0x40FFFFFF;
+
     // the modern text colours are constants (used as default arguments); under the skin they are drawn as
     // the 1995 ones - RGB swapped, alpha kept; then the style's own colour map (Win95: none)
     public static uint Skin(uint c)

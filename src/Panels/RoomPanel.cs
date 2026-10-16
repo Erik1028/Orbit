@@ -211,8 +211,12 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         var all = new RectangleF(0, 0, TW, TH);
-        _p.Fill(all, Theme.OverlayBg, 30);
-        _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        if (Theme.Cyber) CyberHud.PanelFrame(_p, all, Theme.OverlayBg);
+        else
+        {
+            _p.Fill(all, Theme.OverlayBg, 30);
+            _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        }
         uint sub = Theme.Mix(Theme.Text, Theme.OverlayBg, 0.42f);
 
         _p.Text("Room", new RectangleF(Pad + 4, 14, 100, 38), Theme.Text, 22, FontWeight.SemiBold);

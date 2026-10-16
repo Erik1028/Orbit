@@ -21,7 +21,7 @@ namespace Orbit;
 public sealed partial class WristPanel
 {
     const uint CyY = CyberHud.Yellow, CyC = CyberHud.Cyan, CyR = CyberHud.Red, CyW = CyberHud.White, CyG = CyberHud.Grey, CyInk = CyberHud.Ink;
-    const uint CyDial = 0xFF0E0D11, CyRing = 0xFF302C30, CyTick = 0xFF5E5954, CyNum = 0xFFB9B4AA, CyOther = 0xFF6E6964, CyTimeEdge = 0xFFE0574C;
+    const uint CyDial = 0xFF0E0D11, CyRing = 0xFF302C30, CyTick = 0xFF5E5954, CyNumeral = 0xFFB9B4AA, CyOther = 0xFF6E6964, CyTimeEdge = 0xFFE0574C;
     // the caption tag: 8 px in, 9 px down - clear of the 3-8 px band along a card's edge the layout check keeps for the card itself
     const float CyTagX = 8, CyTagY = 9;
     const float CyNote = 14;                          // notes, units, names: monospace 14 px (the concept's small text)
@@ -42,9 +42,7 @@ public sealed partial class WristPanel
     // the page: near black, an olive frame with its four corners cut
     void CyberPage()
     {
-        var all = new RectangleF(0, 0, TW, TH);
-        _p.FillCut(all, Theme.OverlayBg, 18, 18, 18, 18);
-        _p.StrokeCut(RectangleF.Inflate(all, -1.5f, -1.5f), CyberHud.Frame, 2, 17, 17, 17, 17);
+        CyberHud.PanelFrame(_p, new RectangleF(0, 0, TW, TH), Theme.OverlayBg);
     }
 
     // the page dots: short bars, the page in view a longer yellow one
@@ -226,8 +224,9 @@ public sealed partial class WristPanel
         return MathF.Max(8, MathF.Floor(s * 2) / 2);
     }
 
+    // Trailing: the text ends at x (its box is the w px before it)
     void CyMono(string s, float x, float by, float w, uint c, float size = CyNote, FontWeight wt = FontWeight.SemiBold, TextAlignment al = TextAlignment.Leading) =>
-        CyberHud.MonoAt(_p, s, x, by, w, c, size, wt, al);
+        CyberHud.MonoAt(_p, s, al == TextAlignment.Trailing ? x - w : x, by, w, c, size, wt, al);
 
     float CyMonoW(string s, float size = CyNote, FontWeight wt = FontWeight.SemiBold) => CyberHud.MonoWidth(_p, s, size, wt);
 
@@ -338,9 +337,11 @@ public sealed partial class WristPanel
             secS = _big ? 22 : 18;
             sideW = MathF.Max(CyMonoW("00", secS, FontWeight.Bold), ampm == null ? 0 : CyMonoW(ampm, CyNote, FontWeight.Bold)) + 8;
         }
-        float slack = 8;                                   // the offset copies and the slice reach this far past the digits
-        float size = MathF.Min((bottom - top) / cap, 100 * (iw - sideW - slack) / w100);
+        // the offset copies and the slice reach 2.4 offsets past the digits (CyGlitch: at most 10 px)
+        float size = MathF.Min((bottom - top) / cap, 100 * (iw - sideW - 4) / (w100 + 7.5f));
         size = MathF.Max(16, MathF.Floor(size * 2) / 2);
+        float slack = MathF.Max(8, MathF.Min(12, MathF.Ceiling(size * 0.075f)));
+        size = MathF.Max(16, MathF.Floor(MathF.Min(size, 100 * (iw - sideW - slack) / w100) * 2) / 2);
         float by = top + (bottom - top + size * cap) / 2;  // the digits centred between the two
         float dw = CyGlitch(t, x, by, size, y);
         if (sideW > 0 && !small)
@@ -382,7 +383,7 @@ public sealed partial class WristPanel
     // slice through their middle shifted right. Returns the digits' width.
     float CyGlitch(string s, float x, float by, float size, RectangleF card)
     {
-        float o = MathF.Max(1.5f, MathF.Round(size * 0.03f * 2) / 2);
+        float o = Math.Clamp(MathF.Round(size * 0.03f * 2) / 2, 1.5f, 4);
         var (b, h) = _p.TextLine(size, FontWeight.Bold, Theme.Display);
         float w = _p.MeasureWidth(s, size, FontWeight.Bold, Theme.Display);
         void Layers(float dx)
@@ -448,7 +449,7 @@ public sealed partial class WristPanel
             for (int i = 0; i < 4; i++)
             {
                 float a = i / 4f * MathF.Tau, nx = cx + rad * 0.6f * MathF.Sin(a), ny = cy - rad * 0.6f * MathF.Cos(a);
-                CyMono(nums[i], nx - 30, ny + nb, 60, CyNum, ns, FontWeight.SemiBold, TextAlignment.Center);
+                CyMono(nums[i], nx - 30, ny + nb, 60, CyNumeral, ns, FontWeight.SemiBold, TextAlignment.Center);
             }
         }
         var (ht, mt, st) = ClockArt.Turns(now);
@@ -591,7 +592,7 @@ public sealed partial class WristPanel
             if (nw > 0)
             {
                 float nx = right - nw;
-                if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, by0 - 15, 16, 17), CyC, 14); nx += 14; }
+                if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, by0 - 13, 14, 15), CyC, 12); nx += 12; }
                 CyMono(name, nx, by0, right - nx + 2, CyG);
             }
             CyberMeter(bar0, b.pct, CyBattery(b.pct, lv), Ui.Id("wbt", id * 8), 5);
@@ -620,8 +621,8 @@ public sealed partial class WristPanel
         }
         // columns: as many as fit 40 px each (the emptiest ones)
         {
-            const float gapX = 10;
-            int maxCols = Math.Max(1, Math.Min(4, (int)((iw + gapX) / (40 + gapX))));
+            const float gapX = 8;
+            int maxCols = Math.Max(1, Math.Min(4, (int)((iw + gapX) / (34 + gapX))));
             var pick = PickBatteries(bats, maxCols);
             int n = pick.Count;
             float cw = (iw - (n - 1) * gapX) / n;
@@ -634,7 +635,7 @@ public sealed partial class WristPanel
                 var lv = BatteryLevel(shown);
                 string name = Upper(b.label);
                 float nx = cx;
-                if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, nb - 15, 16, 17), CyC, 14); nx += 14; }
+                if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, nb - 13, 14, 15), CyC, 12); nx += 12; }
                 if (CyMonoW(name) > cx + cw - nx) name = Upper(b.label.Split('×')[0]);
                 if (CyMonoW(name) <= cx + cw - nx) CyMono(name, nx, nb, cx + cw - nx + 2, CyG);
                 string pct = Pct(shown);
@@ -658,7 +659,7 @@ public sealed partial class WristPanel
         float pw = CyValueW(pct, ts);
         CyValue(c.Right - pw, by, pct, ts, lv == StatLevel.Ok ? CyW : CyR);
         float nx = c.X, ns = MathF.Max(17, ts - 4);
-        if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, by - ns, 18, ns + 2), CyC, ns - 1); nx += 17; }
+        if (b.charging) { float bs = MathF.Min(14, ns - 4); _p.Icon(Bolt, new RectangleF(nx - 2, by - bs - 1, bs + 4, bs + 2), CyC, bs); nx += bs + 4; }
         float room = c.Right - pw - 10 - nx;
         TextAt(Ellipsize(Upper(b.label), room, ns, FontWeight.SemiBold, Theme.Display), nx, by, room + 2, CyW, ns, FontWeight.SemiBold,
             TextAlignment.Leading, Theme.Display);
@@ -1015,8 +1016,8 @@ public sealed partial class WristPanel
             CyMono(Ellipsize("NO NOTIFICATIONS", iw, CyNote, FontWeight.SemiBold, CyberHud.Mono), x, r.Y + MathF.Min(64, r.Height * 0.5f + 14), iw + 2, CyG);
             return;
         }
-        float top = r.Y + 34, bottom = r.Bottom - 9;
-        int slots = Math.Max(1, (int)((bottom - top) / 28));
+        float top = r.Y + 32, bottom = r.Bottom - 6;          // a one-row card: two rows (the concept's)
+        int slots = Math.Max(1, (int)((bottom - top) / 26));
         float rh = (bottom - top) / slots;
         var now = DateTime.Now;
         for (int i = 0; i < Math.Min(slots, _cyNotes.Count); i++)

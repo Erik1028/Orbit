@@ -233,7 +233,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(_surf.Bitmap, 0x00000000);
         _p.Fill(new RectangleF(0, 0, _tw, _th), Theme.OverlayBg, _th / 2f);
-        _p.Stroke(new RectangleF(1, 1, _tw - 2, _th - 2), 0x40FFFFFF, 2, _th / 2f - 1);
+        _p.Stroke(new RectangleF(1, 1, _tw - 2, _th - 2), Theme.PanelLine, 2, _th / 2f - 1);
         float x = Pad, ch = _th - 2 * Pad;
         ITheaterScreen pick = null;
         bool go = false, exit = false;
