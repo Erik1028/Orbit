@@ -338,19 +338,21 @@ public sealed partial class WristPanel
         _rolls.Clear();
         _wordFades.Clear();
         _settled = true;
+        CyberSettleFx();
     }
     bool _settled;               // Settle() was just called: the next frame shows what changed as it is (no cover fading in)
 
-    // replays the cascade (the watch just came into view) - only with Look > Motion on Full
+    // replays the cascade (the watch just came into view) - only with Look > Motion on Full; Cyber: the HUD boots instead
     public void Intro()
     {
+        if (Theme.Cyber) { CyberBoot(); return; }       // Cyber: the HUD boots instead (WristCyberFx.cs; Full only, it asks Motion)
         if (Motion.Full) _introStart = Clock.Now;
         _dirty = true;
     }
 
     public bool IntroRunning => Clock.Now - _introStart < 1.2;      // --snapshot's Motion check
 
-    public bool Animating => _ui.Animating || _rolling || Clock.Now - _introStart < 1.2;
+    public bool Animating => _ui.Animating || _rolling || Clock.Now - _introStart < 1.2 || CyberAnimating;
 
     // A charging bolt's ink: it breathes, slow and soft (0.55..1 over 2.4 s; Motion full only - the watch then draws 30 times a second
     // while one shows: AnimWake, WristPanel.Update), else steady. --snapshot holds it still.
@@ -575,6 +577,7 @@ public sealed partial class WristPanel
             }
             _halo = Bento.Halo;
             _haloCard = RectangleF.Empty;
+            if (Theme.Cyber) CyCardBegin(id, w, k, r);       // Cyber: the boot's clip (WristCyberFx.cs)
             // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card; the
             // 4 x 3 now playing is its cover's colours
             if (CoverCard(k, w, styled)) CoverBack(r, d, id);
@@ -586,6 +589,7 @@ public sealed partial class WristPanel
                 Widget(i, id, w, k, r, d, now);
             }
             if (veil > 0.004f) _p.Fill(r, Theme.WithAlpha(0x10FFFFFF, veil), CardRadius);      // hover / press: a light veil
+            if (Theme.Cyber) CyCardEnd(id, r);              // Cyber: the boot's lines, a scan sweep
             if (styled) Bento.Reset();
             if (anim)
             {

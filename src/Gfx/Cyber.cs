@@ -149,13 +149,40 @@ static class CyberHud
     public static float TagWidth(Painter p, string s, float size = TagSize) =>
         p.MeasureWidth(s, size, FontWeight.Bold, Mono) + 2 * TagPad + TagSlant - 2;
 
-    public static float Tag(Painter p, float x, float y, string s, uint fill = Yellow, uint ink = Ink, float size = TagSize, float h = TagH)
+    public static float Tag(Painter p, float x, float y, string s, uint fill = Yellow, uint ink = Ink, float size = TagSize, float h = TagH) =>
+        Tag(p, x, y, s, 1, 1, fill, ink, size, h);
+
+    // The tag drawn in (CyberFx): its body wiped in from the left (wipe 0..1), then its letters typed one by one (type 0..1) with a
+    // block cursor after the last one. 1, 1: the tag as it is.
+    public static float Tag(Painter p, float x, float y, string s, float wipe, float type, uint fill = Yellow, uint ink = Ink, float size = TagSize,
+        float h = TagH)
     {
         float tw = p.MeasureWidth(s, size, FontWeight.Bold, Mono), w = tw + 2 * TagPad + TagSlant - 2, sl = TagSlant * h / TagH;
-        p.Polygon(new[] { new Vector2(x, y), new Vector2(x + w, y), new Vector2(x + w - sl, y + h), new Vector2(x, y + h) }, fill);
-        MonoAt(p, s, x + TagPad, y + (h + CapH(p, size, FontWeight.Bold)) / 2, tw + 4, ink, size, FontWeight.Bold);
+        if (wipe <= 0) return w;
+        bool wiping = wipe < 1;
+        if (wiping) p.PushClip(new RectangleF(x - 1, y - 1, w * wipe + 1, h + 2));
+        _tagPts[0] = new Vector2(x, y); _tagPts[1] = new Vector2(x + w, y); _tagPts[2] = new Vector2(x + w - sl, y + h); _tagPts[3] = new Vector2(x, y + h);
+        p.Polygon(_tagPts, 4, fill);
+        float by = y + (h + CapH(p, size, FontWeight.Bold)) / 2;
+        if (type >= 1) MonoAt(p, s, x + TagPad, by, tw + 4, ink, size, FontWeight.Bold);
+        else if (type > 0 && s.Length > 0)
+        {
+            // monospace: every letter as wide as the next - the first n of them, and the cursor where the next one goes
+            float cw = tw / s.Length;
+            int n = Math.Clamp((int)(type * s.Length), 0, s.Length);
+            if (n > 0)
+            {
+                p.PushClip(new RectangleF(x, y, TagPad + n * cw, h));
+                MonoAt(p, s, x + TagPad, by, tw + 4, ink, size, FontWeight.Bold);
+                p.PopClip();
+            }
+            if (n < s.Length) { float ch = CapH(p, size, FontWeight.Bold); p.Fill(new RectangleF(x + TagPad + n * cw + 0.5f, by - ch, MathF.Max(2, cw - 1.5f), ch), ink); }
+        }
+        if (wiping) p.PopClip();
         return w;
     }
+
+    static readonly Vector2[] _tagPts = new Vector2[4];
 
     // how tall a monospace capital / digit is at this size (its ink above the baseline)
     public static float CapH(Painter p, float size, FontWeight w = FontWeight.SemiBold, string family = null) =>
@@ -221,17 +248,19 @@ static class CyberHud
         }
     }
 
-    // hazard stripes: black bars leaning right across r (the time card's bottom edge), clipped to it
-    public static void Hazard(Painter p, RectangleF r, uint ink = Ink, float pitch = 0)
+    // hazard stripes: black bars leaning right across r (the time card's bottom edge), clipped to it; 'phase' px further right
+    // (CyberFx: they crawl - 0..pitch, the same picture again at pitch)
+    public static void Hazard(Painter p, RectangleF r, uint ink = Ink, float pitch = 0, float phase = 0)
     {
         if (pitch <= 0) pitch = MathF.Max(8, r.Height * 1.25f);
         float w = pitch * 0.5f, h = r.Height;
-        int n = (int)((r.Width + h + pitch) / pitch) + 1;
+        phase -= MathF.Floor(phase / pitch) * pitch;
+        int n = (int)((r.Width + h + pitch) / pitch) + 2;
         if (_quads.Length < 4 * n) _quads = new Vector2[4 * n];
         int k = 0;
         for (int i = 0; i < n; i++)
         {
-            float x = r.X - h + i * pitch;
+            float x = r.X - h - pitch + phase + i * pitch;
             _quads[k++] = new Vector2(x + h, r.Y);
             _quads[k++] = new Vector2(x + h + w, r.Y);
             _quads[k++] = new Vector2(x + w, r.Bottom);

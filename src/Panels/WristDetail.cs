@@ -111,6 +111,7 @@ public sealed partial class WristPanel
         var r = Lerp(WatchWidgets.Rect(_open, false, _grid), target, e);
         _p.Fill(r, Bento.Card, CardRadius);
         _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), Bento.Edge, Bento.EdgeWidth, CardRadius - 0.6f);
+        if (Theme.Cyber) CyberUnfold(WatchWidgets.Rect(_open, false, _grid), target, e);     // brackets leading it (WristCyberFx.cs)
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
         // Minesweeper grows out of its tile: its game is in the card from the start, scaled with it (and back on closing) - the
         // same widget getting bigger; playable once it is big
@@ -138,7 +139,7 @@ public sealed partial class WristPanel
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
         if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
-            CyberHud.Tag(_p, E.X + 24, E.Y + 23, Upper(k.Name), size: 18, h: 26);           // Cyber: a yellow tag
+            CyberDetailTag(E, Upper(k.Name));           // Cyber: a yellow tag (it types in: WristCyberFx.cs)
         else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);

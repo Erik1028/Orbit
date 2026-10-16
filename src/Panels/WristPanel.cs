@@ -148,7 +148,8 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             // the time in VR (its card, the clock's header) moves on a whole minute after SteamVR came on: just after that too
             if (!Theme.Classic && C.Face == "custom" && d.VrSince is { } since && (HasWidget("session") || HasWidget("time")))
                 _nextDraw = Math.Min(_nextDraw, now + 60.02 - (DateTime.Now - since).TotalSeconds % 60);
-            // an animation wants its next frame by a time (AnimWake.cs): a style's (a blink, a sweep, a fade), the charging bolt's breath
+            // an animation wants its next frame by a time (AnimWake.cs): a style's (a blink, a sweep, a fade; Cyber's scheduled effects),
+            // the charging bolt's breath
             _nextDraw = Math.Min(_nextDraw, AnimWake.Take());
         }
     }
