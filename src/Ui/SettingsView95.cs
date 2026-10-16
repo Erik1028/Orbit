@@ -628,7 +628,8 @@ public sealed partial class SettingsView
         b = rm.NotifyEveryone;
         ui.Check95("vc95.ne", 388, 154, "... and &everyone", ref b, rm.Enabled);
         rm.NotifyEveryone = b;
-        if (ui.Button95("vc95.open", new RectangleF(388, 186, 140, 23), rm.Visible ? "Hide Room &panel" : "Show Room &panel", _h.VrConnected && rm.Enabled))
+        string roomL = rm.Visible ? "Hide Room &panel" : "Show Room &panel";
+        if (ui.Button95("vc95.open", new RectangleF(388, 186, Btn95(ui, roomL, 140), 23), roomL, _h.VrConnected && rm.Enabled))
             _h.ToggleRoom();
         Gesture95(ui);                // B / Y twice (SettingsView95.Extras.cs)
     }

@@ -427,7 +427,7 @@ public sealed partial class SettingsView
         for (int i = 0; i < n; i++)
         {
             var r = new RectangleF(x + i * (tw + gap), y, tw, h);
-            string name = WatchPages.Name(wc, i);
+            string name = WatchPages.Label(wc, i);
             string label = Cut(p, name, tw - 16, 13);
             if (ui.Button(Ui.Id("wpg", i), r, label, null, i == cur, true, 13) && i != cur) ShowPage(i);
         }
@@ -627,7 +627,7 @@ public sealed partial class SettingsView
         // the pages: the one edited (the watch shows it), a new one from "From", remove it (a second click confirms)
         int n = WatchPages.Count(w), ep = EditPage;
         var pageNames = new string[n];
-        for (int i = 0; i < n; i++) pageNames[i] = $"{i + 1}  {WatchPages.Name(w, i)}";
+        for (int i = 0; i < n; i++) pageNames[i] = $"{i + 1}  {WatchPages.Label(w, i)}";
         Lbl(ui, 16, 327, "Pa&ge:");
         bool before = ui.Changed;
         int pi = ep;

@@ -18,7 +18,7 @@ static partial class Tools
         string xdir = Path.Combine(dir, "extras");
         Directory.CreateDirectory(xdir);
         var culture0 = CultureInfo.CurrentCulture;
-        CultureInfo.CurrentCulture = new CultureInfo("en-US");
+        CultureInfo.CurrentCulture = SnapCulture;
         var look0 = cfg.Data.Appearance;
         var wcfg = cfg.Data.Wrist;
         string face0 = wcfg.Face;

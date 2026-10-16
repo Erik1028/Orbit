@@ -15,8 +15,10 @@ namespace Orbit;
 //    An ALL CAPS text is found by its letters and comes back in the language's capitals (NOW PLAYING -> MOST SZÓL).
 //  - text made of parts is translated where it is made: Lang.F("{0} monitors", n) - the pattern is the table's key.
 //  - code that cuts or measures pieces of a text (an ellipsis, a typewriter, a 95 access key) translates it first: Lang.T(s).
-//  - Windows' own controls (the tray menu) ask L.T themselves, again when the language changes (Changed).
-// Names and data (windows, songs, people) are never keys of a table, so they stay as they are.
+//  - Windows' own controls (the tray menu) ask Lang.T themselves, again when the language changes (Changed).
+// Names and data (windows, songs, people) are never keys of a table, so they stay as they are (a single letter never is: the
+// keyboard's keys go through the same painter). A word with two meanings in English has a line "context|word" (Lang.C); a
+// language's shorter form for where its whole text does not fit, "short|text" (Lang.Short: the cut helpers try it first).
 // Dates and numbers: the language's culture on the UI thread (Magyar: hu-HU); English keeps what Windows says, as before.
 public static class Lang
 {

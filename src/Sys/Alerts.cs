@@ -79,23 +79,23 @@ public sealed class Alerts
     {
         BatteryDevice.Left => "Left controller",
         BatteryDevice.Right => "Right controller",
-        BatteryDevice.Tracker => trackerNo > 0 ? $"Tracker {trackerNo}" : "Tracker",
+        BatteryDevice.Tracker => trackerNo > 0 ? Lang.F("Tracker {0}", trackerNo) : "Tracker",
         _ => "Controller",
     };
 
     public static Notification BatteryCard(BatteryDevice d, int trackerNo, int thresholdPct) => new()
     {
         Source = "Battery",
-        Title = $"{DeviceName(d, trackerNo)}: {Math.Round(d.Pct * 100):0} %",
-        Content = $"Under {thresholdPct} % - time to charge it.",
+        Title = $"{Lang.T(DeviceName(d, trackerNo))}: {Math.Round(d.Pct * 100):0} %",
+        Content = Lang.F("Under {0} % - time to charge it.", thresholdPct),
         Timeout = 6, Volume = 0.8f, Icon = Theme.Classic ? null : BatteryIcon(),       // a retro card keeps its own icon
     };
 
     public static Notification FpsCard(float fps, float hz, int pct) => new()
     {
         Source = "Frame rate",
-        Title = $"Frame rate low: {Math.Round(fps):0} fps",
-        Content = $"Under {pct} % of the headset's {Math.Round(hz):0} Hz for {LowFor:0} s.",
+        Title = Lang.F("Frame rate low: {0:0} fps", Math.Round(fps)),
+        Content = Lang.F("Under {0} % of the headset's {1:0} Hz for {2:0} s.", pct, Math.Round(hz), LowFor),
         Timeout = 6, Volume = 0.8f, Icon = Theme.Classic ? null : FpsIcon(),
     };
 

@@ -114,20 +114,20 @@ public sealed partial class OrbitApp
         if (r.Layout != null && r.Layout != C.ActiveLayout && C.Layouts.Any(l => l.Name == r.Layout))
         {
             SwitchLayout(r.Layout);
-            did.Add($"the {r.Layout} layout");
+            did.Add(Lang.F("the {0} layout", Lang.T(r.Layout)));
         }
         var w = C.Wrist;
         if (r.Page is int p && w.Face == "custom" && p >= 0 && p < WatchPages.Count(w) && p != _wrist.PageNow)
         {
             _wrist.GoToPage(p, animate: true);
-            did.Add($"the {WatchPages.Name(w, p)} page");
+            did.Add(Lang.F("the {0} page", WatchPages.Label(w, p)));
         }
         string app = _scene.Name ?? SceneApp.Label(r);
         Log.Info($"per game: {app} started -> {(did.Count == 0 ? "nothing to change" : string.Join(", ", did))}");
         if (did.Count == 0) return;
         _notifyIn.Incoming.Enqueue(new Notification
         {
-            Source = "OrbitOverlay", Title = $"{app} started", Content = "Switched to " + string.Join(" and ", did) + ".", Timeout = 4, Volume = 0.4f,
+            Source = "OrbitOverlay", Title = Lang.F("{0} started", app), Content = Lang.F("Switched to {0}.", string.Join(Lang.T(" and "), did)), Timeout = 4, Volume = 0.4f,
         });
         _cfg.MarkDirty();
         _win.Dirty = true;

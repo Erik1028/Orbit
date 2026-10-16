@@ -162,7 +162,7 @@ public static class FaceShare
     public static bool Add(WristConfig w, WatchPage page, out string error)
     {
         error = null;
-        if (WatchPages.Count(w) >= MaxPages) { error = $"The watch has {MaxPages} pages already: remove one first."; return false; }
+        if (WatchPages.Count(w) >= MaxPages) { error = Lang.F("The watch has {0} pages already: remove one first.", MaxPages); return false; }
         w.Widgets ??= WatchPages.Grid(w, 0).Is43 ? WatchWidgets.PagePreset("everyday", GridSpec.G43) : WatchWidgets.Seed(w, "full");
         (w.Pages ??= new List<WatchPage>()).Add(page);
         return true;
@@ -205,7 +205,7 @@ public static class FaceShare
             if (fi.Length > MaxBytes) { error = "That file is too big for a watch page."; return null; }
             return File.ReadAllText(path);
         }
-        catch (Exception e) { error = "That file could not be read: " + e.Message; return null; }
+        catch (Exception e) { error = Lang.F("That file could not be read: {0}", e.Message); return null; }
     }
 
     // the files the in-VR import offers: Folder's .json files, newest first

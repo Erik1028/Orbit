@@ -200,7 +200,7 @@ public sealed partial class WristPanel
         for (int i = 0; i < count; i++)
         {
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
-            string name = Ui.Esc95(Fit(WatchPages.Name(C, i), bw - 10));
+            string name = Ui.Esc95(Fit(WatchPages.Label(C, i), bw - 10));
             if (_ui.Button95(Ui.Id("wtb", i), b, name, true, false, i == cur)) GoToPage(i);
         }
     }

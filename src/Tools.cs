@@ -1857,7 +1857,7 @@ static partial class Tools
         if (onlyKind != null)
         {
             wcfg.Background = "panel";
-            Log.Info($"layout {style} ({onlyKind} only): {problems} problem(s)");
+            Log.Info($"layout {style} ({onlyKind} only){LangTag}: {problems} problem(s)");
             return problems;
         }
         var bats0 = new List<(string, float, bool)>(data.Vr.Batteries);

@@ -110,9 +110,9 @@ public sealed class SettingsWindow : Form
         try
         {
             try { System.IO.Directory.CreateDirectory(FaceShare.Folder); } catch { }
-            using FileDialog d = save ? new SaveFileDialog { FileName = name, OverwritePrompt = true, DefaultExt = "json", Title = "Export the watch page" }
-                : new OpenFileDialog { CheckFileExists = true, Title = "Import a watch page" };
-            d.Filter = "Watch page (*.json)|*.json|All files (*.*)|*.*";
+            using FileDialog d = save ? new SaveFileDialog { FileName = name, OverwritePrompt = true, DefaultExt = "json", Title = Lang.T("Export the watch page") }
+                : new OpenFileDialog { CheckFileExists = true, Title = Lang.T("Import a watch page") };
+            d.Filter = Lang.T("Watch page (*.json)|*.json|All files (*.*)|*.*");
             d.InitialDirectory = FaceShare.Folder;
             if (d.ShowDialog(this) == DialogResult.OK) path = d.FileName;
         }

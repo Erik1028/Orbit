@@ -843,7 +843,7 @@ public sealed partial class WristPanel
         for (int i = 0; i < count; i++)
         {
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
-            string name = T.Up(WatchPages.Name(C, i));          // (already in the language picked)
+            string name = T.Up(WatchPages.Label(C, i));          // (already in the language picked)
             string label = T.W($"F{i + 1} {name}") <= bw - 6 ? $"F{i + 1} {name}" : TFit($"{i + 1}:{name}", bw - 6);
             if (TKey(Ui.Id("wtb", i), b, label, i == cur)) GoToPage(i);
         }

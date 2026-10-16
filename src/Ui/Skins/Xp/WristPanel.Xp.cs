@@ -614,7 +614,7 @@ public sealed partial class WristPanel
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
             bool click = _ui.Clickable(Ui.Id("wtb", i), b, out bool hover, out bool held);
             bool on = i == cur;
-            TaskButtonXp(b, Fit(WatchPages.Name(C, i), bw - 12), on, hover, held);
+            TaskButtonXp(b, Fit(WatchPages.Label(C, i), bw - 12), on, hover, held);
             if (click) GoToPage(i);
         }
     }

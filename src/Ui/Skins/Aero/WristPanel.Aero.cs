@@ -635,7 +635,7 @@ public sealed partial class WristPanel
                 _p.Smooth(false);
                 _p.PopRoundedClip();
             }
-            string name = Fit(WatchPages.Name(C, i), bw - 10);
+            string name = Fit(WatchPages.Label(C, i), bw - 10);
             Ae.GlowLight(_p, name, b);
             if (click) GoToPage(i);
         }
