@@ -1,110 +1,131 @@
-// Windows 95 style for the whole website, like the app's own Settings > Look > Style.
-// The "95" button in the top bar switches it on; the Start menu switches it off. Remembered per browser.
-// A tiny script in each page's <head> sets data-style="95" before the first paint, so there is no flash.
+// "95" mode: the website as a 1990s homepage (a 1996 space-themed fan page).
+// The 95 button in the top bar switches it on; "Back to 2026" in its own nav bar switches it off.
+// Remembered per browser; a #win95 link opens it directly. A tiny script in each page's <head> sets
+// data-style="95" before the first paint, so there is no flash. Every number shown is real:
+// the counter is the GitHub download count, "last updated" is this page's own date.
 (function () {
   var html = document.documentElement;
   var HU = (html.lang || '').slice(0, 2) === 'hu';
   var base = (document.querySelector('meta[name="site-root"]') || {}).content || '';
   var KEY = 'orbit-style';
+  var onGuide = /guide\.html$/.test(location.pathname);
+  var home = onGuide ? base + './' : '';
   var L = HU ? {
-    on: 'Windows 95 stílus', start: 'Start', watch: 'Az óra', desktop: 'Asztal', keyboard: 'Billentyűzet',
-    install: 'Telepítés', guide: 'Útmutató', github: 'Forráskód (GitHub)', lang: 'English', langHref: base + './',
-    off: 'Vissza a modern stílusra…', exit: 'Modern nézet', welcome: 'Üdvözlet', task: 'OrbitOverlay'
+    toggle: '1990-es évekbeli honlap', welcome: 'Üdvözöllek az OrbitOverlay honlapján!',
+    marquee: function (v) { return '*** Üdvözöllek az OrbitOverlay honlapján! *** ' + (v ? 'Megjelent a ' + v + '! ' : '') + 'Ingyenes letöltés lent! *** Óra a csuklódon, asztal a VR-ben *** Köszönöm, hogy benéztél! ***'; },
+    nav: [['', 'Kezdőlap'], ['#ora', 'Az óra'], ['#asztal', 'Asztal'], ['#telepites', 'Letöltés'], ['guide', 'Útmutató'], ['#kerdesek', 'GYIK']],
+    lang: ['English', base + './'], back: 'Vissza 2026-ba',
+    modem: function (mb) { var h = Math.round(mb * 8 * 1048.576 / 56 / 3600 * 2) / 2; return '(' + String(mb).replace('.', ',') + ' MB · 56k modemmel kb. ' + String(h).replace('.', ',') + ' óra)'; },
+    counter: 'Letöltések eddig:', guest: 'Írj a vendégkönyvembe!', guestNote: '(GitHub Issues)',
+    best: 'Bármilyen böngészővel, 800 × 600-as felbontásban a legszebb.', updated: 'Utoljára frissítve: ',
+    sign: 'ÉPÍTÉS ALATT', signNote: 'Ez az oldal folyamatosan bővül.'
   } : {
-    on: 'Windows 95 style', start: 'Start', watch: 'The watch', desktop: 'Desktop', keyboard: 'Keyboard',
-    install: 'Install', guide: 'Guide', github: 'Source code (GitHub)', lang: 'Magyar', langHref: base + 'hu/',
-    off: 'Back to the modern look…', exit: 'Modern look', welcome: 'Welcome', task: 'OrbitOverlay'
+    toggle: '1990s homepage', welcome: 'Welcome to the OrbitOverlay homepage!',
+    marquee: function (v) { return '*** Welcome to the OrbitOverlay homepage! *** ' + (v ? v + ' is out now! ' : '') + 'Free download below! *** A watch on your wrist and your desktop in VR *** Thanks for stopping by! ***'; },
+    nav: [['', 'Home'], ['#watch', 'The Watch'], ['#desktop', 'Desktop'], ['#install', 'Download'], ['guide', 'Guide'], ['#faq', 'FAQ']],
+    lang: ['Magyar', base + 'hu/'], back: 'Back to 2026',
+    modem: function (mb) { var h = Math.round(mb * 8 * 1048.576 / 56 / 3600 * 2) / 2; return '(' + mb + ' MB · about ' + h + ' hour' + (h === 1 ? '' : 's') + ' on a 56k modem)'; },
+    counter: 'Downloads so far:', guest: 'Sign my guestbook!', guestNote: '(GitHub Issues)',
+    best: 'Best viewed with any browser at 800 × 600.', updated: 'Last updated: ',
+    sign: 'UNDER CONSTRUCTION', signNote: 'This page is always growing.'
   };
-  var home = /guide\.html$/.test(location.pathname) ? base + './' : '';
-  var ids = HU ? { watch: 'ora', desktop: 'asztal', keyboard: 'billentyuzet', install: 'telepites' }
-               : { watch: 'watch', desktop: 'desktop', keyboard: 'keyboard', install: 'install' };
 
-  function save(on) { try { if (on) localStorage.setItem(KEY, '95'); else localStorage.removeItem(KEY); } catch (e) {} }
+  function el(tag, cls, inner) { var e = document.createElement(tag); if (cls) e.className = cls; if (inner != null) e.innerHTML = inner; return e; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function isOn() { return html.getAttribute('data-style') === '95'; }
 
-  // ---- every section becomes a window: its heading moves into the title bar ----
-  var sections = document.querySelectorAll('main > section, main > .page-head');
-  Array.prototype.forEach.call(sections, function (s) {
-    var h = s.querySelector('h2') || null;
-    var title = h ? h.textContent : (s.getAttribute('aria-label') || (s.classList.contains('intro') ? L.welcome : (s.querySelector('h1') || {}).textContent || ''));
-    if (h) h.classList.add('w95-ht');
-    if (s.classList.contains('page-head')) { var h1 = s.querySelector('h1'); if (h1) h1.classList.add('w95-ht'); }
-    s.setAttribute('data-w95-title', title.trim());
-  });
-
-  // ---- the switch in the top bar ----
+  // ---- the switch in the modern top bar ----
   var nav = document.querySelector('.top nav');
-  var toggle = document.createElement('button');
+  var toggle = el('button', 'lang w95-toggle', '95');
   toggle.type = 'button';
-  toggle.className = 'lang w95-toggle';
-  toggle.textContent = '95';
-  toggle.title = L.on;
-  toggle.setAttribute('aria-label', L.on);
+  toggle.title = L.toggle;
+  toggle.setAttribute('aria-label', L.toggle);
   if (nav) nav.insertBefore(toggle, nav.querySelector('.lang'));
   toggle.addEventListener('click', function () { set(true); window.scrollTo(0, 0); });
 
-  // ---- taskbar, Start menu, clock ----
-  var bar = document.createElement('div');
-  bar.className = 'w95-taskbar';
-  bar.innerHTML =
-    '<button type="button" class="w95-start" aria-expanded="false" aria-controls="w95-menu"><img src="' + base + 'favicon.svg" width="18" height="18" alt=""><b>' + L.start + '</b></button>' +
-    '<a class="w95-task" href="#top"><img src="' + base + 'favicon.svg" width="16" height="16" alt="">' + L.task + '</a>' +
-    '<button type="button" class="w95-exit" title="' + L.off + '">' + L.exit + ' ✕</button>' +
-    '<span class="w95-tray"><time class="w95-clock"></time></span>';
-  var menu = document.createElement('div');
-  menu.className = 'w95-menu';
-  menu.id = 'w95-menu';
-  menu.hidden = true;
-  var item = function (href, text, extra) { return '<a role="menuitem" href="' + href + '"' + (extra || '') + '>' + text + '</a>'; };
-  menu.innerHTML =
-    '<span class="w95-banner" aria-hidden="true"><b>Orbit</b>Overlay<i>95</i></span><div role="menu">' +
-    item(home + '#' + ids.watch, L.watch) + item(home + '#' + ids.desktop, L.desktop) + item(home + '#' + ids.keyboard, L.keyboard) +
-    item(home + '#' + ids.install, L.install) + item(base + 'guide.html', L.guide, HU ? ' hreflang="en"' : '') +
-    item('https://github.com/Erik1028/OrbitOverlay', L.github) + item(L.langHref, L.lang) +
-    '<hr><button type="button" role="menuitem" class="w95-off">' + L.off + '</button></div>';
-  document.body.appendChild(menu);
-  document.body.appendChild(bar);
-
-  var startBtn = bar.querySelector('.w95-start');
-  bar.querySelector('.w95-exit').addEventListener('click', function () { set(false); openMenu(false); window.scrollTo(0, 0); });
-  function openMenu(open) {
-    menu.hidden = !open;
-    startBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) { var first = menu.querySelector('[role="menuitem"]'); if (first) first.focus(); }
-  }
-  startBtn.addEventListener('click', function (e) { e.stopPropagation(); openMenu(menu.hidden); });
-  menu.addEventListener('click', function (e) {
-    if (e.target.closest('.w95-off')) { set(false); openMenu(false); window.scrollTo(0, 0); return; }
-    if (e.target.closest('a')) openMenu(false);
+  // ---- the 1990s parts (hidden by CSS unless the mode is on) ----
+  var main = document.querySelector('main');
+  var marquee = el('div', 'r90 r90-marquee', '<span></span>');
+  marquee.setAttribute('aria-hidden', 'true');
+  var links = L.nav.map(function (n) {
+    var href = n[0] === 'guide' ? base + 'guide.html' : (n[0] === '' ? (onGuide ? base + './' : '#top') : home + n[0]);
+    return '<a href="' + href + '">' + n[1] + '</a>';
   });
-  document.addEventListener('click', function (e) { if (!menu.hidden && !menu.contains(e.target)) openMenu(false); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !menu.hidden) { openMenu(false); startBtn.focus(); }
-    if (!menu.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
-      var i = items.indexOf(document.activeElement);
-      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
-      e.preventDefault();
-    }
-  });
+  links.push('<a href="' + L.lang[1] + '">' + L.lang[0] + '</a>');
+  var r90nav = el('nav', 'r90 r90-nav', '[ ' + links.join(' | ') + ' ]<br>[ <button type="button" class="r90-back">★ ' + L.back + ' ★</button> ]');
+  r90nav.setAttribute('aria-label', 'Retro');
+  if (main) { main.insertBefore(r90nav, main.firstChild); main.insertBefore(marquee, main.firstChild); }
+  r90nav.querySelector('.r90-back').addEventListener('click', function () { set(false); window.scrollTo(0, 0); });
 
-  var clock = bar.querySelector('.w95-clock');
-  function tick() {
-    var d = new Date(), h = d.getHours(), m = d.getMinutes();
-    clock.textContent = HU ? h + ':' + (m < 10 ? '0' : '') + m : (h % 12 || 12) + ':' + (m < 10 ? '0' : '') + m + ' ' + (h < 12 ? 'AM' : 'PM');
-    clock.setAttribute('datetime', d.toISOString());
+  function setMarquee(v) { marquee.firstChild.textContent = L.marquee(v) + '   ' + L.marquee(v); }
+  setMarquee('');
+
+  // next to the download button: NEW! and the size in modem minutes
+  var get = document.querySelector('.get');
+  var newBadge = el('span', 'r90 r90-blink', 'NEW!');
+  var modem = el('span', 'r90 r90-modem', '');
+  if (get) {
+    var mono = get.querySelector('.mono');
+    if (mono) mono.appendChild(document.createTextNode(' '));
+    if (mono) mono.appendChild(newBadge);
+    get.appendChild(modem);
   }
-  tick();
-  setInterval(tick, 10000);
+
+  // guide page: the sign
+  var head = document.querySelector('.page-head');
+  if (head) head.appendChild(el('div', 'r90 r90-sign', '<b>' + L.sign + '</b>'));
+  if (head) head.appendChild(el('p', 'r90 r90-small', L.signNote));
+
+  // bottom of the page: counter, guestbook, buttons, "best viewed", last updated
+  var updated = new Date(document.lastModified);
+  var upd = isNaN(updated) ? '' : updated.toLocaleDateString(HU ? 'hu-HU' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  var badges = [['SteamVR', 'ready', '#000080', '#ff0'], ['Made with', 'AI', '#000', '#0f0'], ['MIT', 'license', '#800000', '#fff'],
+    ['No', 'tracking', '#006000', '#fff'], ['VR', 'overlay', '#303030', '#f0f'], ['Free', 'download', '#004060', '#0ff']];
+  var foot = el('div', 'r90 r90-foot',
+    '<div class="r90-counter"><span>' + L.counter + '</span><span class="r90-digits" aria-live="polite"></span></div>' +
+    '<div><a href="https://github.com/Erik1028/OrbitOverlay/issues">' + L.guest + '</a> <span class="r90-small">' + L.guestNote + '</span></div>' +
+    '<div class="r90-badges" aria-hidden="true">' + badges.map(function (b) {
+      return '<span style="background:' + b[2] + ';color:' + b[3] + '">' + esc(b[0]) + '<br>' + esc(b[1]) + '</span>';
+    }).join('') + '</div>' +
+    '<div class="r90-small">' + L.best + (upd ? '<br>' + L.updated + upd : '') + '</div>');
+  if (main) main.appendChild(foot);
+  var digits = foot.querySelector('.r90-digits');
+  function setCount(n) {
+    var s = String(n);
+    while (s.length < 6) s = '0' + s;
+    digits.innerHTML = s.split('').map(function (d) { return '<i>' + d + '</i>'; }).join('');
+    digits.setAttribute('aria-label', String(n));
+  }
+  setCount(0);
+
+  // real numbers from GitHub, fetched once the mode is on
+  var fetched = false;
+  function load() {
+    if (fetched) return;
+    fetched = true;
+    fetch('https://api.github.com/repos/Erik1028/OrbitOverlay/releases?per_page=100')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (list) {
+        if (!list || !list.length) return;
+        var total = 0, rel = list.filter(function (x) { return !x.draft && !x.prerelease; })[0] || list[0], size = 0;
+        list.forEach(function (x) { (x.assets || []).forEach(function (a) { if (/setup\.exe$/i.test(a.name)) total += a.download_count || 0; }); });
+        (rel.assets || []).forEach(function (a) { if (/^OrbitOverlaySetup\.exe$/i.test(a.name)) size = a.size; });
+        setCount(total);
+        setMarquee(rel.tag_name || '');
+        if (size) modem.textContent = L.modem(Math.round(size / 1048576 * 10) / 10);
+      })
+      .catch(function () {});
+  }
 
   var theme = document.querySelector('meta[name="theme-color"]');
+  function save(on) { try { if (on) localStorage.setItem(KEY, '95'); else localStorage.removeItem(KEY); } catch (e) {} }
   function set(on) {
     if (on) html.setAttribute('data-style', '95'); else html.removeAttribute('data-style');
     save(on);
-    // a #win95 link only switches it on; once switched off, drop it so a reload stays modern
     if (!on && location.hash === '#win95' && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
     toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
-    if (theme) theme.setAttribute('content', on ? '#008080' : '#171a24');
+    if (theme) theme.setAttribute('content', on ? '#000000' : '#171a24');
+    if (on) load();
     document.dispatchEvent(new CustomEvent('orbit-style'));
   }
   if (location.hash === '#win95') set(true);
