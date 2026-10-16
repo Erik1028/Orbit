@@ -132,7 +132,7 @@ public abstract class RetroSkin
     public virtual void BeginCanvas(Painter p, object canvas) { }
     // true: a whole panel fading in or out (its 0.18 s) is drawn every frame, so the style's opening / closing shows on it
     // (the Terminal's CRT switching on and off, the Mac's zoom rectangles)
-    public virtual bool AnimatesFade => false;
+    public virtual bool AnimatesFade => Theme.Cyber && CyberFx.Any;      // (Windows 95's skin is the one in place while Cyber is on: its reveals, CyberReveal)
     // the watch's opened widget window zooming between its tile and the window: how long (0: at once), and how it is drawn -
     // WindowZoom at each step, t 0..1 from 'from' to 'to' (closing: from the window back to its tile): true when the style drew
     // its own (XP's title bar flying, the Mac's dotted rectangles; false: 95's grey outline) - or LiveZoom: the window itself all

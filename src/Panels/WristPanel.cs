@@ -56,7 +56,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public WristPanel(Gpu g, Painter p, ConfigStore cfg)
     {
         _p = p; _cfg = cfg;
-        _ui = new Ui(p);
+        _ui = new Ui(p) { Hud = false };      // Cyber: the watch keeps its own designs (WristCyber.cs), not the settings' HUD controls
         Surf = new Surface(g, TW, TH);
     }
 
