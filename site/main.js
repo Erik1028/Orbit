@@ -24,6 +24,11 @@
         list.forEach(function (x) { (x.assets || []).forEach(function (a) { if (/setup\.exe$/i.test(a.name)) total += a.download_count || 0; }); });
         if (total >= SHOW_DOWNLOADS_FROM) extra += ' · ' + total.toLocaleString(HU ? 'hu-HU' : 'en-GB') + (HU ? ' letöltés' : ' downloads');
         document.getElementById('verdate').textContent = extra;
+        // the installer's size, as GitHub has it (the page says "49 MB" until this arrives)
+        var size = document.getElementById('size');
+        (rel.assets || []).forEach(function (a) {
+          if (size && /^OrbitOverlaySetup\.exe$/i.test(a.name) && a.size) size.textContent = Math.round(a.size / 1048576) + ' MB';
+        });
       })
       .catch(function () {});
   }
