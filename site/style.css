@@ -1,0 +1,313 @@
+/* OrbitOverlay website. Layout: a plain manual for the app, one column of parts, each part = what it is + how you
+   use it in VR + a real screenshot. Colours and type come from the app itself (Bento panels, default pink accent,
+   Segoe UI), so on Windows the page looks like the program. */
+:root{
+  color-scheme:dark;
+  --bg:#171a24;      /* app window */
+  --panel:#21263a;   /* watch tile */
+  --line:#2d3347;
+  --text:#e8ebf2;
+  --dim:#9aa2b6;
+  --accent:#ff5d93;  /* Config.Accent default, 0xFFFF5D93 */
+  --ok:#4ade80;
+  --warn:#f5b82e;
+  --sans:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --display:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+img{max-width:100%;height:auto;display:block}
+a{color:var(--text);text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
+a:hover{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+h2{font-size:clamp(26px,3.4vw,34px);font-weight:700}
+h3{font-size:18px;font-weight:600}
+p{margin:0}
+code{font-family:var(--mono);font-size:.88em;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 6px;overflow-wrap:anywhere}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+.mono{font-family:var(--mono);font-size:14px}
+kbd{font-family:var(--mono);font-size:13.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 7px;white-space:nowrap}
+
+/* top bar */
+.top .wrap{display:flex;align-items:center;gap:20px;padding-block:18px}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:700;font-size:19px;text-decoration:none}
+.top nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-size:15px}
+.top nav a{text-decoration:none;color:var(--dim)}
+.top nav a:hover,.top nav a[aria-current="page"]{color:var(--text)}
+.top nav .lang{font-family:var(--mono);font-size:13px;border:1px solid var(--line);border-radius:8px;padding:3px 9px;color:var(--text)}
+.top nav .lang:hover{border-color:var(--dim)}
+@media (max-width:760px){.top nav .opt{display:none}}
+
+/* intro */
+.intro{padding-block:56px 36px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px 48px;align-items:end}
+.intro h1{font-size:clamp(40px,6.4vw,76px);font-weight:700;letter-spacing:-0.02em}
+.intro p{font-size:clamp(18px,2vw,21px);color:var(--dim);max-width:34em;margin-top:16px}
+.get{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.btn{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#1b0a12;font-weight:700;font-size:17px;text-decoration:none;padding:13px 22px;border-radius:12px}
+.btn:hover{color:#1b0a12;background:#ff7aa6}
+.get .mono{color:var(--dim)}
+.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+@media (max-width:820px){.intro{grid-template-columns:1fr}}
+
+/* the try-it watch next to its notes */
+.try{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,15em);gap:24px 40px;align-items:start}
+.try aside{display:flex;flex-direction:column;gap:12px;color:var(--dim);font-size:15.5px;padding-top:6px}
+.try aside b{color:var(--text)}
+.try aside ul{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:6px}
+.try aside .note{font-size:14px;border-top:1px solid var(--line);padding-top:12px}
+@media (max-width:900px){.try{grid-template-columns:1fr}}
+
+.cap{margin-top:12px;color:var(--dim);font-size:14.5px}
+
+/* the stage: the try-it watch floats over SteamVR's grid floor, like the watch in an empty VR room */
+body{background:radial-gradient(1100px 620px at 42% 420px,#232a40 0%,rgba(35,42,64,0) 70%) no-repeat,var(--bg)}
+.try{position:relative;isolation:isolate;padding-bottom:40px}
+.try .watch{position:relative}
+/* sized so that even its near, perspective-widened edge stays inside the watch's own width: nothing to clip */
+.try .watch::before{content:"";position:absolute;z-index:-2;left:10%;width:80%;top:calc(100% - 64px);height:220px;
+  background-image:radial-gradient(ellipse 40% 30% at 50% 0,rgba(255,93,147,.22),transparent 70%),
+    linear-gradient(rgba(160,180,240,.55) 2px,transparent 2px),linear-gradient(90deg,rgba(160,180,240,.55) 2px,transparent 2px);
+  background-size:auto,56px 56px,56px 56px;background-position:0 0,center 0,center 0;
+  transform:perspective(800px) rotateX(62deg);transform-origin:50% 0;
+  -webkit-mask-image:radial-gradient(ellipse 50% 95% at 50% 0,#000 35%,transparent 100%);mask-image:radial-gradient(ellipse 50% 95% at 50% 0,#000 35%,transparent 100%)}
+.try .watch::after{content:"";position:absolute;z-index:-1;left:10%;right:10%;bottom:18px;height:60px;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(0,0,0,.65),transparent 72%);animation:shade 7s ease-in-out infinite}
+.wd,.wd95{animation:hover 7s ease-in-out infinite}
+@keyframes hover{50%{transform:translateY(-8px)}}
+@keyframes shade{50%{transform:scaleX(.9);opacity:.7}}
+@media (prefers-reduced-motion:reduce){.wd,.wd95,.try .watch::after{animation:none}}
+@media (max-width:900px){.try .watch::before{height:120px}.try aside{margin-top:18px}}
+html[data-style="95"] .try .watch::before,html[data-style="95"] .try .watch::after{display:none}
+html[data-style="95"] .wd95{animation:none}
+
+
+.clip{margin:72px 0 0}
+.clip video{display:block;width:100%;height:auto}
+
+/* parts */
+.part{padding-block:72px 0;display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:28px 56px;align-items:start}
+.part .txt{display:flex;flex-direction:column;gap:14px}
+.part .txt>p{color:var(--dim)}
+.shot{border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#0f1118}
+.shots{display:flex;flex-direction:column;gap:14px}
+.part ul.plain{margin:0;padding-left:1.1em;color:var(--dim)}
+.part ul.plain li{margin:4px 0}
+@media (max-width:860px){.part{grid-template-columns:1fr;padding-top:56px}}
+
+/* controls */
+.ctl{width:100%;border-collapse:collapse;font-size:16px}
+.ctl td{padding:11px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.ctl tr:first-child td{border-top:1px solid var(--line)}
+.ctl td:first-child{width:42%;padding-right:20px}
+.ctl td:last-child{color:var(--dim)}
+
+/* lists of short facts (also in the box, questions) */
+.facts{padding-block:72px 0}
+.facts dl{margin:24px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 40px}
+.facts.two dl{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:56px}
+.facts dt{font-weight:600}
+.facts dd{margin:6px 0 0;color:var(--dim);font-size:16px}
+@media (max-width:860px){.facts dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.facts dl,.facts.two dl{grid-template-columns:1fr}}
+
+/* features: three cards, one picture and one sentence each */
+.features{padding-block:64px 0}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:24px}
+.card{display:flex;flex-direction:column;gap:10px;min-width:0}
+.card .shot{aspect-ratio:16/10;max-width:100%;display:flex;align-items:center;justify-content:center}
+.card .shot img{width:100%;height:100%;object-fit:contain}
+.card p{color:var(--dim);font-size:16px}
+.extras{margin-top:24px;color:var(--dim);font-size:15.5px}
+.all{margin-top:14px;font-size:15.5px}
+@media (max-width:820px){.cards{grid-template-columns:1fr}}
+
+/* install */
+.install{padding-block:72px 0;display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:28px 56px}
+.install ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:14px}
+.install ol li::marker{font-family:var(--mono);color:var(--accent)}
+.install .aside{color:var(--dim);font-size:15.5px;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.install .aside b{color:var(--text)}
+@media (max-width:860px){.install{grid-template-columns:1fr}}
+
+/* changelog */
+.log{padding-block:72px 0}
+#log{margin-top:24px;display:flex;flex-direction:column}
+.ver{display:grid;grid-template-columns:minmax(0,7em) minmax(0,1fr);gap:4px 24px;padding-block:20px;border-top:1px solid var(--line)}
+.ver .v{font-family:var(--mono);font-size:15px;color:var(--accent);padding-top:2px}
+.ver ul{margin:8px 0 0;padding-left:1.1em;color:var(--dim);font-size:15.5px}
+.ver li{margin:4px 0}
+.more{margin-top:8px;align-self:flex-start;background:none;border:1px solid var(--line);color:var(--text);font:inherit;font-size:15px;padding:9px 16px;border-radius:10px;cursor:pointer}
+.more:hover{border-color:var(--dim)}
+@media (max-width:560px){.ver{grid-template-columns:1fr}}
+
+/* guide page */
+.page-head{padding-block:48px 8px;max-width:44em}
+.page-head h1{font-size:clamp(34px,5vw,52px);font-weight:700;letter-spacing:-0.01em}
+.page-head p{color:var(--dim);margin-top:12px;font-size:18px}
+.toc{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:18px;font-size:15.5px}
+.wtable-wrap{overflow-x:auto;margin-top:24px}
+.wtable{width:100%;border-collapse:collapse;font-size:16px;min-width:600px}
+.wtable th{text-align:left;font-weight:600;color:var(--dim);font-size:14px;padding:0 16px 10px 0}
+.wtable td{padding:12px 16px 12px 0;border-top:1px solid var(--line);vertical-align:top}
+.wtable td:first-child{font-weight:600;white-space:nowrap}
+.wtable td:nth-child(2){color:var(--dim)}
+.wtable td.sz{font-family:var(--mono);font-size:13.5px;color:var(--dim);white-space:nowrap}
+.wtable tr.group td{border-top:0;padding-top:28px;font-family:var(--display);font-size:20px;font-weight:700;color:var(--text)}
+.fix{padding-block:22px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:8px 40px}
+.fix h3{font-size:18px}
+.fix div{color:var(--dim);font-size:16px;display:flex;flex-direction:column;gap:8px}
+.fix ol,.fix ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px}
+@media (max-width:760px){.fix{grid-template-columns:1fr}}
+
+footer{margin-top:88px;border-top:1px solid var(--line)}
+footer .wrap{padding-block:32px 48px;display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;color:var(--dim);font-size:14.5px}
+footer p{max-width:40em}
+
+/* ---------- the try-it watch (watch-demo.js) ----------
+   The app's 640 x 440 watch face drawn as SVG, scaled to the column; its cards float on their own like the app's "Cards only"
+   background. In the 1990s mode a 320 x 220 canvas, doubled without smoothing, like the app's Windows 95 face. */
+.watch{position:relative;max-width:780px;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.watch>img{display:block;width:100%;height:auto}
+.wd{display:block;width:100%;height:auto;overflow:hidden;touch-action:pan-y;outline:none}
+.wd:focus-visible{outline:2px solid var(--accent);outline-offset:6px;border-radius:24px}
+.wd text{white-space:pre}
+.wd .t{font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+.wd .d{font-family:"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+.wd-wait .wd-w{opacity:0}
+.wd-intro .wd-w{animation:wdin .42s cubic-bezier(.34,1.45,.6,1) both;animation-delay:var(--d,0ms)}
+@keyframes wdin{from{opacity:0;transform:scale(.82)}}
+.wd-toast{position:absolute;left:50%;bottom:6.5%;transform:translateX(-50%);background:rgba(10,12,18,.92);border:1px solid rgba(255,255,255,.14);color:#f2f3f7;
+  font-size:14px;line-height:1.3;padding:7px 14px;border-radius:10px;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.wd95{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:pan-y;outline:none}
+.wd95:focus-visible{outline:2px dotted #fff;outline-offset:4px}
+@media (prefers-reduced-motion:reduce){.wd-intro .wd-w{animation:none}.wd-wait .wd-w{opacity:1}}
+
+/* ---------- 1990s homepage style (win95.js) ----------
+   The site as a 1996 space-themed fan page: tiled starfield, Times, cyan links, rainbow rules,
+   3D ball bullets, a marquee, a hit counter (the real download count) and 88x31 buttons.
+   The try-it watch keeps the app's own Windows 95 look, like a demo applet on the page. */
+.r90{display:none}
+html[data-style="95"] .r90-nopic{display:none}
+.w95-toggle{background:none;font:inherit;font-family:var(--mono);font-size:13px;cursor:pointer}
+html[data-style="95"]{
+  --bg:#000; --text:#fff; --dim:#ddd; --line:#808080; --panel:#000; --accent:#ffff00;
+  --sans:"Times New Roman",Times,serif; --display:Arial,Helvetica,sans-serif; --mono:"Courier New",Courier,monospace;
+  --raised:inset -1px -1px #0a0a0a,inset 1px 1px #fff,inset -2px -2px #808080,inset 2px 2px #dfdfdf;
+  --sunken:inset -1px -1px #fff,inset 1px 1px #808080,inset -2px -2px #dfdfdf,inset 2px 2px #0a0a0a;
+  --rainbow:linear-gradient(90deg,#f00,#ff8000,#ff0,#0f0,#0ff,#00f,#f0f);
+  scroll-behavior:auto;
+}
+html[data-style="95"] body{background:#000 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Ccircle cx='231' cy='238' r='0.9' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='94' cy='243' r='1.1' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='48' cy='228' r='0.7' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='46' cy='21' r='1.1' fill='%23fff' fill-opacity='0.9'/%3E%3Ccircle cx='231' cy='80' r='1.1' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='32' cy='30' r='0.5' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='123' cy='15' r='0.9' fill='%23fff' fill-opacity='0.7'/%3E%3Ccircle cx='225' cy='100' r='1.1' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='150' cy='255' r='0.5' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='234' cy='142' r='0.9' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='130' cy='161' r='0.6' fill='%23fff' fill-opacity='0.7'/%3E%3Ccircle cx='15' cy='35' r='1.1' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='205' cy='55' r='0.7' fill='%23fff' fill-opacity='0.9'/%3E%3Ccircle cx='34' cy='8' r='0.5' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='107' cy='26' r='0.9' fill='%23fff' fill-opacity='0.9'/%3E%3Ccircle cx='203' cy='214' r='0.5' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='138' cy='172' r='0.5' fill='%23fff' fill-opacity='0.7'/%3E%3Ccircle cx='170' cy='7' r='0.9' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='68' cy='126' r='0.5' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='30' cy='238' r='0.9' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='96' cy='229' r='1.1' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='67' cy='214' r='0.9' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='202' cy='215' r='0.6' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='138' cy='155' r='0.5' fill='%23fff' fill-opacity='0.5'/%3E%3Ccircle cx='95' cy='201' r='1.1' fill='%23fff' fill-opacity='0.35'/%3E%3Ccircle cx='21' cy='74' r='0.6' fill='%23fff' fill-opacity='0.9'/%3E%3Cpath d='M190 66L191 69L194 70L191 71L190 74L189 71L186 70L189 69Z' fill='%23fff' fill-opacity='.8'/%3E%3C/svg%3E") repeat;font-size:17px;line-height:1.45;-webkit-font-smoothing:auto}
+html[data-style="95"] .r90{display:block}
+html[data-style="95"] .top{display:none}
+html[data-style="95"] a{color:#0ff;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:auto}
+html[data-style="95"] a:visited{color:#f0f}
+html[data-style="95"] a:hover{color:#ff0}
+html[data-style="95"] :focus-visible{outline:1px dotted #fff;outline-offset:2px;border-radius:0}
+html[data-style="95"] .wrap{max-width:780px}
+html[data-style="95"] main{padding-block:10px 0}
+html[data-style="95"] h1,html[data-style="95"] h2,html[data-style="95"] h3{font-family:Arial,Helvetica,sans-serif;text-wrap:wrap}
+html[data-style="95"] h2{font-size:26px;color:#ff0;display:flex;align-items:center;gap:10px}
+html[data-style="95"] h2::before{content:"";flex:none;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 12%,#f44 30%,#900 75%,#300)}
+html[data-style="95"] h3{font-size:18px;color:#0f0}
+
+/* everything in one centred column, sections separated by rainbow rules */
+html[data-style="95"] main > section,html[data-style="95"] main > .page-head{display:block;padding:26px 0 0;margin:26px 0 0;border-top:4px solid;border-image:var(--rainbow) 1;max-width:none}
+html[data-style="95"] .part .txt,html[data-style="95"] .install > div,html[data-style="95"] .try aside{display:flex;flex-direction:column;gap:12px}
+html[data-style="95"] .part > div + div,html[data-style="95"] .install > div + div{margin-top:18px}
+html[data-style="95"] .part .txt>p,html[data-style="95"] .intro p,html[data-style="95"] .facts dd,html[data-style="95"] .ver ul,html[data-style="95"] .install .aside,html[data-style="95"] .try aside,html[data-style="95"] .fix div,html[data-style="95"] .page-head p,html[data-style="95"] .part ul.plain,html[data-style="95"] .ctl td:last-child,html[data-style="95"] .wtable td:nth-child(2),html[data-style="95"] .wtable td.sz,html[data-style="95"] .wtable th,html[data-style="95"] .cap{color:#fff}
+html[data-style="95"] ul{list-style:none;padding-left:26px}
+html[data-style="95"] li{position:relative}
+html[data-style="95"] .part ul.plain li::before,html[data-style="95"] .try aside li::before,html[data-style="95"] .ver li::before,html[data-style="95"] .fix li::before{content:"";position:absolute;left:-22px;top:.38em;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 12%,#4af 32%,#036 80%)}
+html[data-style="95"] .install ol{padding-left:1.6em}
+html[data-style="95"] .install ol li::marker{color:#ff0;font-family:Arial,sans-serif;font-weight:700}
+
+/* intro: the classic centred welcome */
+html[data-style="95"] .intro{display:flex;flex-direction:column;align-items:center;text-align:center;border-top:0;margin-top:0;padding-top:8px;gap:14px}
+html[data-style="95"] .intro h1{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:clamp(34px,7vw,58px);letter-spacing:0;line-height:1.05;
+  background:var(--rainbow);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(3px 3px 0 #333)}
+html[data-style="95"] .intro p{max-width:34em;margin:0 auto;font-size:19px}
+html[data-style="95"] .get{align-items:center}
+html[data-style="95"] .get .mono{color:#ccc;font-size:15px}
+html[data-style="95"] .live{display:none}
+html[data-style="95"] .btn{background:#c0c0c0;color:#000;border:0;border-radius:0;box-shadow:var(--raised);font-family:Arial,sans-serif;font-weight:700;font-size:20px;padding:14px 24px;text-decoration:none}
+html[data-style="95"] .btn:visited{color:#000}
+html[data-style="95"] .btn:hover{background:#c0c0c0;color:#00f}
+html[data-style="95"] .btn:active,html[data-style="95"] .more:active{box-shadow:var(--sunken)}
+html[data-style="95"] .more{background:#c0c0c0;color:#000;border:0;border-radius:0;box-shadow:var(--raised);font-family:Arial,sans-serif;font-size:14px}
+
+/* pictures and tables with borders, like border=2 / border=1 */
+html[data-style="95"] .shot{border:3px ridge #c0c0c0;border-radius:0;background:#000;padding:0}
+html[data-style="95"] .shots{gap:18px}
+html[data-style="95"] .ctl,html[data-style="95"] .wtable{border:3px ridge #c0c0c0;border-collapse:separate;border-spacing:2px;background:#000}
+html[data-style="95"] .ctl td,html[data-style="95"] .wtable td,html[data-style="95"] .wtable th{border:1px inset #808080;padding:6px 8px}
+html[data-style="95"] .ctl tr:first-child td{border-top:1px inset #808080}
+html[data-style="95"] .ctl td:first-child{color:#0f0}
+html[data-style="95"] .wtable th{color:#ff0;font-family:Arial,sans-serif}
+html[data-style="95"] .wtable tr.group td{border:0;color:#ff0;font-family:Arial,sans-serif}
+html[data-style="95"] .wtable td.sz{white-space:normal;min-width:7em}
+html[data-style="95"] kbd,html[data-style="95"] code{background:none;border:0;border-radius:0;padding:0;color:#0f0;font-family:"Courier New",monospace;font-size:1em;font-weight:700}
+
+html[data-style="95"] .facts dl{display:block;margin-top:14px}
+html[data-style="95"] .facts dl>div{margin-top:14px}
+html[data-style="95"] .facts dt{color:#0f0;font-family:Arial,sans-serif;font-weight:700}
+html[data-style="95"] .facts dd{margin:2px 0 0 24px}
+html[data-style="95"] .try{display:block}
+html[data-style="95"] .try aside{margin-top:16px}
+html[data-style="95"] .try aside .note,html[data-style="95"] .install .aside{border-top:0;padding-top:0}
+html[data-style="95"] .try aside b,html[data-style="95"] .install .aside b{color:#ff0}
+html[data-style="95"] .ver{display:block;border-top:1px dashed #808080}
+html[data-style="95"] .card p,html[data-style="95"] .extras{color:#fff}
+html[data-style="95"] .ver .v{color:#ff0;font-family:"Courier New",monospace;font-weight:700}
+html[data-style="95"] .fix{display:block;border-top:1px dashed #808080}
+html[data-style="95"] .fix div{margin-top:6px}
+html[data-style="95"] .page-head{border-top:0;margin-top:0}
+html[data-style="95"] .page-head h1{color:#ff0;font-family:"Arial Black",Arial,sans-serif;text-align:center}
+html[data-style="95"] .page-head p{text-align:center}
+html[data-style="95"] .toc{justify-content:center}
+
+/* the injected 1990s parts */
+.r90-marquee{overflow:hidden;white-space:nowrap;background:#000080;color:#ff0;font-family:Arial,sans-serif;font-weight:700;font-size:16px;border:2px inset #808080;padding:4px 0;margin-top:16px}
+.r90-marquee span{display:inline-block;padding-left:100%;animation:r90scroll 22s linear infinite}
+@keyframes r90scroll{to{transform:translateX(-100%)}}
+.r90-nav{text-align:center;font-family:Arial,sans-serif;font-size:15px;margin-top:12px;line-height:1.9}
+.r90-nav a{white-space:nowrap}
+.r90-nav button{background:none;border:0;padding:0;font:inherit;color:#0ff;text-decoration:underline;cursor:pointer}
+.r90-nav button:hover{color:#ff0}
+html[data-style="95"] .r90-blink{display:inline}
+.r90-blink{color:#f00;font-family:Arial,sans-serif;font-weight:900;font-size:14px;background:#ff0;padding:0 4px;animation:r90blink 1s steps(1) infinite;vertical-align:2px}
+@keyframes r90blink{50%{visibility:hidden}}
+.r90-modem{font-size:14px;color:#ccc;font-style:italic}
+.r90-sign{text-align:center;margin:12px auto 0;max-width:420px;background:repeating-linear-gradient(-45deg,#000 0 14px,#fc0 14px 28px);padding:6px}
+.r90-sign b{display:block;background:#fc0;color:#000;font-family:"Arial Black",Arial,sans-serif;font-size:17px;padding:6px 10px}
+html[data-style="95"] .r90-foot{display:flex}
+.r90-foot{text-align:center;flex-direction:column;align-items:center;gap:14px;padding-top:26px;margin-top:30px;border-top:4px solid;border-image:var(--rainbow) 1}
+.r90-counter{font-family:Arial,sans-serif;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+.r90-digits{display:inline-flex;gap:1px;background:#333;border:2px inset #808080;padding:2px}
+.r90-digits i{font-style:normal;font-family:"Courier New",monospace;font-weight:700;font-size:20px;line-height:1;color:#0f0;background:#000;padding:3px 4px}
+.r90-badges{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.r90-badges span{width:88px;height:31px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Verdana,Arial,sans-serif;font-size:9px;font-weight:700;line-height:1.1;text-align:center;border:1px solid #fff;box-shadow:inset -1px -1px #000;text-transform:uppercase;letter-spacing:.3px}
+.r90-small{font-size:13px;color:#ccc;font-family:Arial,sans-serif}
+html[data-style="95"] footer{border-top:0;margin-top:20px}
+html[data-style="95"] footer .wrap{color:#ccc;justify-content:center;text-align:center;font-family:Arial,sans-serif;font-size:13px}
+@media (prefers-reduced-motion:reduce){.r90-marquee span{animation:none;padding-left:12px}.r90-blink{animation:none}}
+
+
+/* the watch in the app's Windows 95 style (watch-demo.js draws it on the canvas) */
+html[data-style="95"] .wd-toast{background:#ffffe1;border:1px solid #000;border-radius:0;color:#000;font-family:"Microsoft Sans Serif","MS Sans Serif",Tahoma,Arial,sans-serif;font-size:13px;bottom:14%}
+
+/* scroll motion (motion.js): only when the script runs and motion is allowed */
+.motion [data-reveal]{transition:opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0ms)}
+.motion [data-reveal].pre{opacity:0;transform:translateY(40px)}
+/* the title lifts away as you scroll, and the watch steps back a little once you scroll past it */
+html.motion .intro{transform:translateY(calc(var(--sy,0) * -.15px));opacity:calc(1 - var(--sy,0) / 620)}
+html.motion .try .watch{--q:min(1, max(0, (var(--sy,0) - 180) / 560));transform:scale(calc(1 - var(--q) * .06));opacity:calc(1 - var(--q) * .3);transform-origin:50% 30%}
+.motion .card.done{transition:none}
+/* the 1990s mode stays a 1990s page: no scroll motion there */
+html.motion[data-style="95"] .intro,html.motion[data-style="95"] .try .watch{transform:none;opacity:1}
+html.motion[data-style="95"] [data-reveal]{opacity:1!important;transform:none!important;transition:none!important}
