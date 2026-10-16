@@ -30,9 +30,9 @@ public sealed partial class RoomPanel
         // the header strip: how many, the friends, VRCX
         int friends = _s.Here.FindAll(p => p.Friend).Count;
         float third = MathF.Floor((W95 - 16) / 3f);
-        _ui.Text95(_s.InRoom ? (people.Count == 1 ? "1 person" : $"{people.Count} people") : "Not in a world", new RectangleF(10, 24, third, 15));
-        _ui.Text95(friends == 1 ? "1 friend" : $"{friends} friends", new RectangleF(8 + third, 24, third, 15), Blk95, false, TextAlignment.Center);
-        _ui.Text95(Fit95(_s.VrcxFound ? $"VRCX: {_s.Friends} friends" : "VRCX not found", third - 4), new RectangleF(W95 - 10 - third, 24, third, 15),
+        _ui.Text95(_s.InRoom ? PeopleText(people.Count) : "Not in a world", new RectangleF(10, 24, third, 15));
+        _ui.Text95(FriendsText(friends), new RectangleF(8 + third, 24, third, 15), Blk95, false, TextAlignment.Center);
+        _ui.Text95(Fit95(_s.VrcxFound ? Lang.F("VRCX: {0} friends", _s.Friends) : "VRCX not found", third - 4), new RectangleF(W95 - 10 - third, 24, third, 15),
             Blk95, false, TextAlignment.Trailing);
         m.EtchedLine(_p, 2, W95 - 2, 41);
         var head = new RectangleF(8, 45, W95 - 16, 16);
@@ -43,7 +43,7 @@ public sealed partial class RoomPanel
         if (lines.Count == 0)
         {
             m.Well(_p, box);
-            _ui.Text95(Empty() + ".", new RectangleF(box.X + 8, box.Y + 6, box.Width - 16, 16));
+            _ui.Text95(Lang.T(Empty()) + ".", new RectangleF(box.X + 8, box.Y + 6, box.Width - 16, 16));
         }
         else
         {
@@ -52,9 +52,9 @@ public sealed partial class RoomPanel
                 var (p, gone) = lines[i];
                 uint fg = on ? 0xFFFFFFFF : gone ? Gry95 : Blk95;
                 _ui.Text95(Starred(p) ? "★" : "☆", new RectangleF(r.X + 4, r.Y, 14, r.Height), on ? fg : Starred(p) ? Blk95 : Gry95);
-                string name = p.Name + (p.Friend ? "  (friend)" : "");
+                string name = p.Name + (p.Friend ? Lang.T("  (friend)") : "");
                 _ui.Text95(Fit95(name, r.Width - 22 - 104), new RectangleF(r.X + 22, r.Y, r.Width - 126, r.Height), fg, p.Friend && !gone);
-                string when = gone ? "left " + Ago(p.Left, now) : Ago(p.Joined, now);
+                string when = gone ? LeftText(p.Left, now, 0) : Ago(p.Joined, now);
                 _ui.Text95(Fit95(when, 96), new RectangleF(r.Right - 98, r.Y, 96, r.Height), fg);
             });
             if (hit >= 0)
@@ -121,8 +121,8 @@ public sealed partial class DockPanel
         for (int k = 0; k < Knobs.Length; k++)
             SliderGroup95(Knobs[k], new RectangleF(243, 24 + k * 63, 152, 61), show, now);
         // the page, the name and the state as placards along the bottom (the Finder's)
-        string pages = _s.InFolder ? (_s.FolderPages > 1 ? $"Folder {_s.FolderPage + 1} of {_s.FolderPages}" : "Folder")
-            : $"Page {_s.Page + 1} of {_s.Pages}";
+        string pages = _s.InFolder ? (_s.FolderPages > 1 ? Lang.F("Folder {0} of {1}", _s.FolderPage + 1, _s.FolderPages) : "Folder")
+            : Lang.F("Page {0} of {1}", _s.Page + 1, _s.Pages);
         string name = _s.InFolder ? _s.FolderName : _s.PageName;
         string state = Live ? (_s.Ambient ? "Idle" : "Connected") : StateLine();
         if (show)
@@ -147,7 +147,7 @@ public sealed partial class DockPanel
         var box = new RectangleF(W95 / 2 - 130, H95 / 2 - 52, 260, 104);
         MacSkin.AlertFrame(_p, box);
         MacSkin.Caution(_p, box.X + 14, box.Y + 14);
-        _ui.Text95(Fit95($"Run \"{label}\"?", box.Width - 70), new RectangleF(box.X + 56, box.Y + 14, box.Width - 66, 16), Blk95, true);
+        _ui.Text95(Fit95(Lang.F("Run \"{0}\"?", label), box.Width - 70), new RectangleF(box.X + 56, box.Y + 14, box.Width - 66, 16), Blk95, true);
         _ui.Text95("It could end your VR session.", new RectangleF(box.X + 56, box.Y + 32, box.Width - 66, 16));
         if (_ui.Button95("dk95.no", new RectangleF(box.Right - 14 - 75 - 10 - 75, box.Bottom - 35, 75, 23), "No")) _in.ConfirmNo();
         if (_ui.Button95("dk95.yes", new RectangleF(box.Right - 12 - 75, box.Bottom - 37, 75, 26), "Yes", true, true)) _in.ConfirmYes();

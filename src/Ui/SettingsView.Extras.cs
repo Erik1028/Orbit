@@ -79,8 +79,8 @@ public sealed partial class SettingsView
         }
         string hint = di == 0 ? "Off: B / Y does nothing more on the panels."
             : !g.BlockGameInput ? "Needs \"Keep clicks from the game\" (above): only then can VRChat never get the presses."
-            : (di == 1 ? "Shows / hides the keyboard" : "Pins the watch (always visible) / lets it go") +
-              " - pressed quickly with the laser on an OrbitOverlay panel. Not on a monitor: B / Y is its right click.";
+            : Lang.T(di == 1 ? "Shows / hides the keyboard" : "Pins the watch (always visible) / lets it go") +
+              Lang.T(" - pressed quickly with the laser on an OrbitOverlay panel. Not on a monitor: B / Y is its right click.");
         ui.Label(new RectangleF(lx + 10, y + 44, cw - 20, 52), hint, !g.BlockGameInput && di > 0 ? Theme.Warn : Theme.Dim, 12, FontWeight.Normal, true);
     }
 
@@ -121,20 +121,20 @@ public sealed partial class SettingsView
     string RulesSummary()
     {
         var r = C.GameRules;
-        if (r == null || r.Count == 0) return "none";
-        string first = $"{SceneApp.Label(r[0])}: {RuleWhat(r[0])}";
-        return r.Count == 1 ? first : $"{first} + {r.Count - 1} more";
+        if (r == null || r.Count == 0) return Lang.T("none");
+        string first = $"{Lang.T(SceneApp.Label(r[0]))}: {RuleWhat(r[0])}";
+        return r.Count == 1 ? first : Lang.F("{0} + {1} more", first, r.Count - 1);
     }
 
     string RuleWhat(GameRule r)
     {
         var parts = new List<string>();
-        if (r.Layout != null) parts.Add(r.Layout);
+        if (r.Layout != null) parts.Add(Lang.T(r.Layout));
         if (r.Page is int pg) parts.Add(PageLabel(pg));
-        return parts.Count == 0 ? "nothing" : string.Join(", ", parts);
+        return parts.Count == 0 ? Lang.T("nothing") : string.Join(", ", parts);
     }
 
-    string PageLabel(int pg) => pg < WatchPages.Count(C.Wrist) ? WatchPages.Name(C.Wrist, pg) : $"Page {pg + 1}";
+    string PageLabel(int pg) => pg < WatchPages.Count(C.Wrist) ? WatchPages.Label(C.Wrist, pg) : Lang.F("Page {0}", pg + 1);
 
     // the rules that can still be added: the app running now, VRChat, any other app
     List<(string key, string name)> RuleChoices()
@@ -186,7 +186,7 @@ public sealed partial class SettingsView
     // under the profile: what Per game does now, a click opens it
     void PerGameButton(Ui ui, float wx, float cw, float y)
     {
-        string label = C.GameRules is { Count: > 0 } ? $"Per game: {RulesSummary()}" : "Per game: switch when an app starts";
+        string label = C.GameRules is { Count: > 0 } ? Lang.F("Per game: {0}", RulesSummary()) : "Per game: switch when an app starts";
         if (ui.Button("lay.games", new RectangleF(wx + 10, y, cw - 10, 38), Fit(ui.P, label, cw - 70, 14, FontWeight.SemiBold), "\uE7FC", false, true, 14))
             OpenRules(true);
     }
@@ -209,11 +209,11 @@ public sealed partial class SettingsView
             p.Text(Fit(p, SceneApp.Label(r), cw - 70, 15, FontWeight.SemiBold), new RectangleF(card.X + 12, y + 2, cw - 70, 24), Theme.Text, 15, FontWeight.SemiBold);
             if (ui.Button(Ui.Id("rule.rm.", i), new RectangleF(card.Right - 34, y + 4, 30, 24), null, Theme.IcoDelete, false, true, 11)) gone = r;
             float bw = (card.Width - 30) / 2;
-            if (ui.Button(Ui.Id("rule.lay.", i), new RectangleF(card.X + 10, y + 27, bw, 28), Fit(p, "Layout: " + (r.Layout ?? "keep"), bw - 12, 13, FontWeight.SemiBold),
+            if (ui.Button(Ui.Id("rule.lay.", i), new RectangleF(card.X + 10, y + 27, bw, 28), Fit(p, Lang.F("Layout: {0}", Lang.T(r.Layout ?? "keep")), bw - 12, 13, FontWeight.SemiBold),
                     null, r.Layout != null, true, 13))
                 NextLayout(r);
             if (ui.Button(Ui.Id("rule.pg.", i), new RectangleF(card.X + 20 + bw, y + 27, bw, 28),
-                    Fit(p, "Watch: " + (r.Page is int pg ? PageLabel(pg) : "keep"), bw - 12, 13, FontWeight.SemiBold), null, r.Page != null, C.Wrist.Face == "custom", 13))
+                    Fit(p, Lang.F("Watch: {0}", r.Page is int pg ? PageLabel(pg) : Lang.T("keep")), bw - 12, 13, FontWeight.SemiBold), null, r.Page != null, C.Wrist.Face == "custom", 13))
                 NextPage(r);
             y += 66;
         }
@@ -293,19 +293,19 @@ public sealed partial class SettingsView
             AskFile(true, suggested, path =>
             {
                 if (path == null) return;
-                try { FaceShare.SaveTo(path, w, Math.Min(page, WatchPages.Count(w) - 1)); Say($"Saved: {Path.GetFileName(path)}"); }
-                catch (Exception e) { Say("It could not be saved: " + e.Message, true); }
+                try { FaceShare.SaveTo(path, w, Math.Min(page, WatchPages.Count(w) - 1)); Say(Lang.F("Saved: {0}", Path.GetFileName(path))); }
+                catch (Exception e) { Say(Lang.F("It could not be saved: {0}", e.Message), true); }
             });
             return;
         }
         try
         {
             string path = FaceShare.SaveToFolder(w, page, DateTime.Now);
-            Say($"Saved to {FaceShare.Short(path)}");
+            Say(Lang.F("Saved to {0}", FaceShare.Short(path)));
             _h.Notify("Watch page exported", FaceShare.Short(path));
             _shareFilesAt = -10;
         }
-        catch (Exception e) { Say("It could not be saved: " + e.Message, true); }
+        catch (Exception e) { Say(Lang.F("It could not be saved: {0}", e.Message), true); }
     }
 
     void CopyPage()
@@ -314,8 +314,13 @@ public sealed partial class SettingsView
         if (WatchPages.Widgets(w, EditPage) == null) WatchLayout();
         string text = FaceShare.ClipboardText(w, EditPage);
         bool code = text.StartsWith(FaceShare.CodePrefix);
-        try { FaceShare.SetClipboard(text); Say($"Copied{(code ? " as a short code" : "")} ({text.Length} characters): paste it where you share it - Discord, a note."); }
-        catch (Exception e) { Say("The clipboard is busy: " + e.Message, true); }
+        try
+        {
+            FaceShare.SetClipboard(text);
+            Say(Lang.F(code ? "Copied as a short code ({0} characters): paste it where you share it - Discord, a note."
+                : "Copied ({0} characters): paste it where you share it - Discord, a note.", text.Length));
+        }
+        catch (Exception e) { Say(Lang.F("The clipboard is busy: {0}", e.Message), true); }
     }
 
     // a page from text: added after the others and shown; the editor says what was left out
@@ -329,8 +334,8 @@ public sealed partial class SettingsView
         bool keep = _wshare;
         ShowPage(at);
         _wshare = keep;
-        Say($"Added from {from} as page {at + 1}{(page.Name != null ? $" ({page.Name})" : "")}" +
-            (dropped > 0 ? $"; {dropped} widget{(dropped == 1 ? "" : "s")} this version cannot show left out." : "."));
+        Say((page.Name != null ? Lang.F("Added from {0} as page {1} ({2})", Lang.T(from), at + 1, Lang.T(page.Name)) : Lang.F("Added from {0} as page {1}", Lang.T(from), at + 1)) +
+            (dropped > 0 ? Lang.F(dropped == 1 ? "; {0} widget this version cannot show left out." : "; {0} widgets this version cannot show left out.", dropped) : "."));
     }
 
     void ImportFile()
@@ -355,7 +360,7 @@ public sealed partial class SettingsView
     {
         string text;
         try { text = FaceShare.GetClipboard(); }
-        catch (Exception e) { Say("The clipboard is busy: " + e.Message, true); return; }
+        catch (Exception e) { Say(Lang.F("The clipboard is busy: {0}", e.Message), true); return; }
         if (string.IsNullOrWhiteSpace(text)) { Say("The clipboard has no text: copy a page first.", true); return; }
         ImportText(text, "the clipboard");
     }
@@ -368,7 +373,7 @@ public sealed partial class SettingsView
         var w = C.Wrist;
         int ep = EditPage;
         ui.Section(new RectangleF(rx, 84, rw, 22), "Share this page");
-        p.Text(Fit(p, $"{WatchPages.Name(w, ep)}  ·  {WatchPages.GridId(w, ep).Replace("x", " × ")}", rw, 13), new RectangleF(rx, 106, rw, 20), Theme.Dim, 13);
+        p.Text(Fit(p, $"{WatchPages.Label(w, ep)}  ·  {WatchPages.GridId(w, ep).Replace("x", " × ")}", rw, 13), new RectangleF(rx, 106, rw, 20), Theme.Dim, 13);
         if (ui.Button("ws.export", new RectangleF(rx, 130, rw, 36), InVr ? "Save to Documents" : "Export to a file", "\uE74E", false, true, 13)) ExportPage();
         if (ui.Button("ws.copy", new RectangleF(rx, 172, rw, 36), "Copy as text", "\uE8C8", false, true, 13)) CopyPage();
         ui.Section(new RectangleF(rx, 222, rw, 22), "Add a page from");
@@ -399,7 +404,7 @@ public sealed partial class SettingsView
         }
         if (ui.Button("ws.paste", new RectangleF(rx, y, rw, 36), "Paste text (the clipboard)", "\uE77F", false, room, 13)) PastePage();
         y += 44;
-        string msg = !room ? $"The watch has {FaceShare.MaxPages} pages: remove one to add another." : _shareMsg ??
+        string msg = !room ? Lang.F("The watch has {0} pages: remove one to add another.", FaceShare.MaxPages) : _shareMsg ??
             "A page goes as a small file or as text - its widgets, grid, name and looks. Adding one never changes your other pages.";
         ui.Label(new RectangleF(rx, y, rw, Math.Max(40, 568 - y)), msg, _shareBad || !room ? Theme.Warn : _shareMsg != null ? Theme.Good : Theme.Dim, 13, FontWeight.Normal, true);
     }

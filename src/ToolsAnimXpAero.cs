@@ -45,7 +45,7 @@ static partial class Tools
         var mines = (MinesGame[])typeof(WristPanel).GetField("_mines", Priv)!.GetValue(wrist);
         var setUpd = typeof(Updater).GetMethod("Set", Priv)!;
         var culture = System.Globalization.CultureInfo.CurrentCulture;
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Globalization.CultureInfo.CurrentCulture = Tools.SnapCulture;
 
         double off = 0;           // each scene later than the one before (the animations' state is kept by time); 62.4 s: whole loops
         foreach (var sk in new[] { Skins.Xp, Skins.Aero })

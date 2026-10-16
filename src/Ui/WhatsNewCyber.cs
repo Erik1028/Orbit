@@ -22,7 +22,7 @@ public static partial class WhatsNewView
         p.Line(f.Right - 1, f.Bottom - 1 - c, f.Right - 1 - c, f.Bottom - 1, CyberHud.Yellow, 3);
         float pad = 26;
         float tw = CyberHud.Tag(p, r.X + pad, r.Y + 20, "PATCH NOTES", size: 12, h: 18);
-        CyberHud.MonoAt(p, "BUILD " + Updater.Current.ToString(3), r.X + pad + tw + 10, r.Y + 34, 200, CyberHud.Grey, 11, FontWeight.SemiBold);
+        CyberHud.MonoAt(p, Lang.F("BUILD {0}", Updater.Current.ToString(3)), r.X + pad + tw + 10, r.Y + 34, 200, CyberHud.Grey, 11, FontWeight.SemiBold);
         var (title, ts) = ui.HudFit("What's new", r.Width - 2 * pad, 26, FontWeight.Bold, Theme.Display);
         p.Text(title, new RectangleF(r.X + pad - 1, r.Y + 42, r.Width - 2 * pad, 34), CyberHud.White, ts, FontWeight.Bold, TextAlignment.Leading,
             ParagraphAlignment.Center, Theme.Display);

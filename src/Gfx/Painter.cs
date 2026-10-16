@@ -904,8 +904,10 @@ public sealed class Painter : IDisposable
         string family = null, bool wrap = false)
     {
         if (string.IsNullOrEmpty(s) || NoText) return;
+        s = Lang.T(s);                       // the language picked in General (English: s itself)
         TextSpy?.Invoke(s, r, c, size, w, family);
         FitSpy?.Invoke(s, r, size, w, family ?? Theme.Font, wrap, h, v, 0);
+        FitAll?.Invoke(this, s, r, size, w, family ?? Theme.Font, wrap, h, v, 0);
         FontCheck();
         family ??= Theme.Font;
         // a retro style's own type (RetroSkin.MapFont / PixelFont): a bitmap font, or another family / size
@@ -956,9 +958,11 @@ public sealed class Painter : IDisposable
         TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center, string family = null)
     {
         if (string.IsNullOrEmpty(s) || NoText) return;
+        s = Lang.T(s);
         if (PixelMode || tracking == 0 || s.Length < 2) { Text(s, r, c, size, w, h, v, family); return; }
         TextSpy?.Invoke(s, r, c, size, w, family);
         FitSpy?.Invoke(s, r, size, w, family ?? Theme.Font, false, h, v, tracking);
+        FitAll?.Invoke(this, s, r, size, w, family ?? Theme.Font, false, h, v, tracking);
         FontCheck();
         family ??= Theme.Font;
         var f = Format(family, size, w, h, v, false);
@@ -976,8 +980,12 @@ public sealed class Painter : IDisposable
         Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
     }
 
-    public float MeasureTracked(string s, float size, FontWeight w, float tracking, string family = null) =>
-        string.IsNullOrEmpty(s) ? 0 : MeasureWidth(s, size, w, family) + (PixelMode ? 0 : tracking * (s.Length - 1));
+    public float MeasureTracked(string s, float size, FontWeight w, float tracking, string family = null)
+    {
+        if (string.IsNullOrEmpty(s)) return 0;
+        s = Lang.T(s);
+        return MeasureWidth(s, size, w, family) + (PixelMode ? 0 : tracking * (s.Length - 1));
+    }
 
     // ---- line metrics: where the baseline sits, so a value and its unit share one ----
     readonly Dictionary<(float, FontWeight, string), (float baseline, float height)> _lines = new();
@@ -1013,6 +1021,8 @@ public sealed class Painter : IDisposable
 
     // --snapshot's fit check: every text drawn - the family it is drawn in, whether it wraps, its alignment and letter spacing
     public Action<string, RectangleF, float, FontWeight, string, bool, TextAlignment, ParagraphAlignment, float> FitSpy;
+    // the same for every painter at once (--snapshot's text fit in both languages, ToolsLang.cs)
+    public static Action<Painter, string, RectangleF, float, FontWeight, string, bool, TextAlignment, ParagraphAlignment, float> FitAll;
 
     // the chosen font changed: what was laid out and measured for the last one goes (a pick is rare, the caches are big)
     void FontCheck()
@@ -1144,6 +1154,7 @@ public sealed class Painter : IDisposable
         float tracking = 0)
     {
         if (string.IsNullOrEmpty(s)) return 0;
+        s = Lang.T(s);
         FontCheck();
         family ??= Theme.Font;
         var f = Format(family, size, w, h, v, wrap);
@@ -1162,6 +1173,7 @@ public sealed class Painter : IDisposable
     public float MeasureWidth(string s, float size, FontWeight w = FontWeight.Normal, string family = null)
     {
         if (string.IsNullOrEmpty(s)) return 0;
+        s = Lang.T(s);
         FontCheck();
         family ??= Theme.Font;
         if (PixelMode && Theme.Classic)
@@ -1188,6 +1200,7 @@ public sealed class Painter : IDisposable
     public float MeasureHeight(string s, float size, FontWeight w, float width, string family = null)
     {
         if (string.IsNullOrEmpty(s) || width <= 0) return 0;
+        s = Lang.T(s);
         FontCheck();
         family ??= Theme.Font;
         if (PixelMode && Theme.Classic)

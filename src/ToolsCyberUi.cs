@@ -231,7 +231,7 @@ static partial class Tools
     {
         cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true, Motion = Environment.GetEnvironmentVariable("ORBIT_ANIM_MOTION") };
         Theme.Apply(cfg.Data.Appearance);
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Globalization.CultureInfo.CurrentCulture = SnapCulture;
         string qa = Path.Combine(dir, "qa");
         Directory.CreateDirectory(qa);
         void Frame()
@@ -319,8 +319,8 @@ static partial class Tools
             Spy("theater_bar_screen", () => bar.DrawFor(new List<ITheaterScreen>(), null));
         }
         File.WriteAllLines(Path.Combine(qa, "cyberui_misfits.txt"), bad);
-        foreach (var l in bad.Take(12)) Log.Warn("layout cyber ui: " + l);
-        Log.Info($"layout cyber ui: {bad.Count} problem(s) in {texts} texts");
+        foreach (var l in bad.Take(12)) Log.Warn($"layout cyber ui{LangTag}: " + l);
+        Log.Info($"layout cyber ui{LangTag}: {bad.Count} problem(s) in {texts} texts");
     }
 
     // ---- the motion, as frames (CyberFx live for this alone) ----

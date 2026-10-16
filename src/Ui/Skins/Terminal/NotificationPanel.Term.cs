@@ -22,8 +22,8 @@ public sealed partial class NotificationPanel
         float x = r.X + 10, w = r.Width - 20, ty = r.Y + 8;
         var now = DateTime.Now;
         string from = string.IsNullOrEmpty(c.Source) ? "orbit" : c.Source;
-        string head = $"Broadcast message from {from} (tty1) ({now.ToString("ddd MMM d HH:mm", CultureInfo.InvariantCulture)}):";
-        if (T.W(head) > w) head = $"Broadcast message from {from}:";
+        string head = Lang.F("Broadcast message from {0} (tty1) ({1}):", from, now.ToString("ddd MMM d HH:mm", CultureInfo.InvariantCulture));
+        if (T.W(head) > w) head = Lang.F("Broadcast message from {0}:", from);
         if (T.W(head) > w) head = sk.Fit(_p, head, w);
         string title = string.IsNullOrEmpty(c.Title) ? null : sk.Fit(_p, T.Up(c.Title), w);
         // the motion: since it came (its first frame is half-way through its fade-in), how far it is gone; the message typed in

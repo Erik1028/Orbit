@@ -157,7 +157,10 @@ public abstract class RetroSkin
     // s cut with "..." to w (the panels' Fit)
     public string Fit(Painter p, string s, float w, float size = Ui.F95, bool bold = false)
     {
+        string sh = Lang.Short(s);
+        s = Lang.T(s);                     // cut in the language picked (its short form first, where it has one)
         if (string.IsNullOrEmpty(s) || TextWidth(p, s, bold, size) <= w) return s;
+        if (sh != null && TextWidth(p, s = sh, bold, size) <= w) return s;
         int n = s.Length;
         while (n > 1 && TextWidth(p, s[..n] + "...", bold, size) > w) n--;
         if (n > 1 && char.IsHighSurrogate(s[n - 1])) n--;

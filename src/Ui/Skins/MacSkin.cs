@@ -77,14 +77,17 @@ public sealed partial class MacSkin : Win95Skin
         return weight >= FontWeight.SemiBold || size >= 15.5f ? Chicago : Geneva;
     }
 
-    // Chicago s times as big, Scale2x / Scale3x smoothing its stairs (ASCII only: the clocks and big numbers)
+    // Chicago s times as big, Scale2x / Scale3x smoothing its stairs (ASCII, and the accented letters of the languages OrbitOverlay
+    // speaks: a big Magyar word - "Kész!" on a timer - in Chicago too, not in hollow boxes)
+    const string BigExtra = "áéíóöőúüűÁÉÍÓÖŐÚÜŰ";
+
     static PixelFont Big(int s)
     {
         if (_big.TryGetValue(s, out var f)) return f;
         var glyphs = new Dictionary<char, string[]>();
         foreach (var (ch, rows) in ChicagoGlyphs)
         {
-            if (ch > 126) continue;
+            if (ch > 126 && BigExtra.IndexOf(ch) < 0) continue;
             var g = new string[13];
             int w = rows[0].Length;
             for (int y = 0; y < 13; y++) g[y] = y < rows.Length ? rows[y] : new string('.', w);

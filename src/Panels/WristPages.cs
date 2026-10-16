@@ -200,7 +200,7 @@ public sealed partial class WristPanel
         for (int i = 0; i < count; i++)
         {
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
-            string name = Ui.Esc95(Fit(WatchPages.Name(C, i), bw - 10));
+            string name = Ui.Esc95(Fit(WatchPages.Label(C, i), bw - 10));
             if (_ui.Button95(Ui.Id("wtb", i), b, name, true, false, i == cur)) GoToPage(i);
         }
     }
@@ -290,7 +290,7 @@ public sealed partial class WristPanel
         var s = d.Room;
         if (s == null || !s.InRoom) return;
         int n = s.Here.Count;
-        _roomMeta = n == 1 ? "1 here" : $"{n} here";
+        _roomMeta = n == 1 ? Lang.T("1 here") : Lang.F("{0} here", n);
         foreach (var p in s.Here) if (p.Friend && _roomOrder.Count < 6) _roomOrder.Add((p.Name, true));
         foreach (var p in s.Here) if (!p.Friend && _roomOrder.Count < 6) _roomOrder.Add((p.Name, false));
         var names = new List<string>(2);
@@ -682,8 +682,8 @@ public sealed partial class WristPanel
             float fh = MathF.Max(bw, bar.Height * Math.Clamp(b.pct, 0, 1));
             if (b.pct > 0.005f) _p.Fill(new RectangleF(bar.X, bar.Bottom - fh, bw, fh), Bento.Level(lv, Bento.Ok), bw / 2);
             if (b.charging) _p.Icon(Bolt, new RectangleF(cx - 8, bar.Y + 1, 16, 16), BoltInk(Bento.Text), 12);
-            float ls = MathF.Max(14, FitSize(b.label, colW - 2, 15, FontWeight.SemiBold, null));
-            TextAt(b.label, cx - colW / 2, r.Bottom - 12, colW, ls >= 15 ? Sub : Bento.Badge ? Bento.Text : Theme.Mix(Sub, Bento.Text, 0.35f), ls,
+            float ls = MathF.Max(14, FitSize(Bat(b.label), colW - 2, 15, FontWeight.SemiBold, null));
+            TextAt(Bat(b.label), cx - colW / 2, r.Bottom - 12, colW, ls >= 15 ? Sub : Bento.Badge ? Bento.Text : Theme.Mix(Sub, Bento.Text, 0.35f), ls,
                 FontWeight.SemiBold, TextAlignment.Center);
         }
     }
@@ -762,6 +762,7 @@ public sealed partial class WristPanel
     static readonly string[] CapGraph30 = { "Frame time · 30 s", "Frame time", "Frames" };
     readonly Vector2[] _gp = new Vector2[VrStats.LongBuckets + 2];
     float _gBudget = -1, _gFpsV = -9, _gHz = -9, _gLowV = -9, _gRpV = -9;
+    int _gBudgetLang = -1;
     string _gBudgetText, _gFps, _gFpsUnit, _gLow, _gRp;
 
     // The slowest frame of every tenth of a second (GPU ms) as a line with the area under it, the budget (1000 / the headset's Hz)
@@ -773,7 +774,7 @@ public sealed partial class WristPanel
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         float hz = v.DisplayHz, budget = 1000f / Math.Max(1, hz);
         bool tall = w.H >= 2;
-        if (budget != _gBudget) { _gBudget = budget; _gBudgetText = $"{budget:0.0} ms budget"; }
+        if (budget != _gBudget || _gBudgetLang != Lang.Version) { _gBudget = budget; _gBudgetLang = Lang.Version; _gBudgetText = Lang.F("{0:0.0} ms budget", budget); }
         bool coloured = Bento.Badge || Bento.CapBadge;           // a filled card or a band: amber would not read there
         CaptionRow(r, x, r.Right - pad, _gBudgetText, coloured ? Bento.Cap : Bento.WarnInk, CapGraph30);
         var g = RectangleF.FromLTRB(x, r.Y + 40, r.Right - pad, tall ? r.Bottom - 72 : r.Bottom - 12);
@@ -918,9 +919,12 @@ public sealed partial class WristPanel
         if (n > 0) _notesCount = n.ToString(CultureInfo.InvariantCulture);
     }
 
-    static readonly string[] AgeM = MakeAges("m", 60), AgeH = MakeAges("h", 24);
+    static string[] AgeM, AgeH;
+    static int _agesLang = -1;
+    // the units in the language picked (a letter by itself is no line of the table: "age|m" is)
     static string[] MakeAges(string u, int n)
     {
+        u = Lang.C("age", u);
         var a = new string[n];
         for (int i = 0; i < n; i++) a[i] = i.ToString(CultureInfo.InvariantCulture) + " " + u;
         return a;
@@ -930,10 +934,11 @@ public sealed partial class WristPanel
     static string Age(DateTime at, DateTime now)
     {
         double s = (now - at).TotalSeconds;
-        if (s < 60) return "now";
+        if (s < 60) return Lang.T("now");
+        if (_agesLang != Lang.Version) { AgeM = MakeAges("m", 60); AgeH = MakeAges("h", 24); _agesLang = Lang.Version; }
         if (s < 3600) return AgeM[(int)(s / 60)];
         if (s < 86400) return AgeH[(int)(s / 3600)];
-        return ((int)(s / 86400)).ToString(CultureInfo.InvariantCulture) + " d";
+        return ((int)(s / 86400)).ToString(CultureInfo.InvariantCulture) + " " + Lang.C("age", "d");
     }
 
     void NotesOrbit(RectangleF r, WatchWidget w, PanelData d, int id)

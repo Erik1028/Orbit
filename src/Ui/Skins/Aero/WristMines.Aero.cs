@@ -101,7 +101,7 @@ public sealed partial class WristPanel
         }
         _ui.Text95(body, new RectangleF(sx, ty, sw, 32), 0xFF1E1E1E, false, TextAlignment.Leading, true, true);
         int best = MinesBestOf(0);
-        _ui.Text95(best > 0 ? $"Best time: {best} s" : "Best time: none", new RectangleF(sx, cl.Bottom - 8 - 15, sw, 15), 0xFF4C4C4C);
+        _ui.Text95(best > 0 ? Lang.F("Best time: {0} s", best) : "Best time: none", new RectangleF(sx, cl.Bottom - 8 - 15, sw, 15), 0xFF4C4C4C);
     }
 
     // ---- 7's reveal ripple: the squares a tap opens turn over one after the other, outwards from the tapped one (a lost game's

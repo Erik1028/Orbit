@@ -38,7 +38,7 @@ public sealed partial class SettingsView
         var close = OnClose ?? OnClose95;
 
         // the title line, the help and close boxes where the 95 caption has them
-        string title = $"ORBITOVERLAY SETUP UTILITY  v{Updater.Current.ToString(3)}";
+        string title = Lang.F("ORBITOVERLAY SETUP UTILITY  v{0}", Updater.Current.ToString(3));
         sk.Put(p, title, MathF.Floor((W95W - T.W(title, 1, true)) / 2), 7, T.INK, 1, true);
         T.Dashes(p, 9, W95W - 9, 23, T.FAINT);
         if (ui.CaptionHelp95("p95.help", W95W - 5 - 16 - 2 - 16, 5)) Tab = TabGeneral;   // "What's this?" -> About
@@ -100,6 +100,7 @@ public sealed partial class SettingsView
         bool lit = (held || TFlashing(id)) && enabled;
         if (lit) T.Lit(p, r);
         else if (hover && enabled) T.Box(p, r, T.INK);
+        word = Lang.T(word);                // measured as it is drawn
         string s = key + " " + word;
         float x = MathF.Floor(r.X + (r.Width - T.W(s)) / 2), y = MathF.Floor(r.Y + (r.Height - 7) / 2) - 2;
         T.It.Put(p, key, x, y, lit ? T.BG : !enabled ? T.DIM : T.HOT);
@@ -207,8 +208,8 @@ public sealed partial class SettingsView
         string era = "the real pixel size of its day";
         string text = _tRow switch
         {
-            0 => $"How OrbitOverlay looks: the settings, the watch, the keyboard and the notifications.\n\nChoices: MODERN, WINDOWS 95, XP, 7, CLASSIC MAC, TERMINAL.\n\n" +
-                 $"{Theme.RetroSkin.Name} is drawn at {era}, enlarged without smoothing. The change shows in VR at once.",
+            0 => Lang.F("How OrbitOverlay looks: the settings, the watch, the keyboard and the notifications.\n\nChoices: MODERN, WINDOWS 95, XP, 7, CLASSIC MAC, TERMINAL.\n\n" +
+                 "{0} is drawn at {1}, enlarged without smoothing. The change shows in VR at once.", Lang.T(Theme.RetroSkin.Name), Lang.T(era)),
             1 => "The colour of the laser beam in VR.\n\nPHOSPHOR: the style's own green. The others are the Modern accent colours.",
             2 => "How thick the beam is: 1.5 to 8 mm.",
             3 => "ENABLED: the beam always shows.\n\nDISABLED: only while it points at a panel.",

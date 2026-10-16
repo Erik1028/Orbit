@@ -26,7 +26,7 @@ public sealed partial class Ui
 
     void CyberSection(RectangleF r, string title)
     {
-        string s = title.ToUpperInvariant();
+        string s = Lang.Upper(title);          // translated before its letters type
         float wipe = 1, type = 1;
         if (CyberFx.Full)
         {

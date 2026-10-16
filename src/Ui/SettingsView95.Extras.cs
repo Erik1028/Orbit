@@ -130,7 +130,7 @@ public sealed partial class SettingsView
         { sel.Layout = li == 0 ? null : C.Layouts[li - 1].Name; _h.Cfg.MarkDirty(); }
         var wc = C.Wrist;
         var pageNames = new List<string> { "(keep)" };
-        for (int i = 0; i < WatchPages.Count(wc); i++) pageNames.Add($"{i + 1}  {Ui.Esc95(WatchPages.Name(wc, i))}");
+        for (int i = 0; i < WatchPages.Count(wc); i++) pageNames.Add($"{i + 1}  {Ui.Esc95(WatchPages.Label(wc, i))}");
         int pi = sel?.Page is int sp && sp < WatchPages.Count(wc) ? sp + 1 : 0, pi0 = pi;
         bool custom = wc.Face == "custom";
         Lbl(ui, x + 180, ry, "Watch &page:", sel != null && custom);
@@ -143,7 +143,7 @@ public sealed partial class SettingsView
         bool room = rules.Count < MaxRules;
         var (rk, rn) = _h.RunningApp;
         bool running = !string.IsNullOrEmpty(rk) && choices.Any(ch => ch.key == rk);
-        if (ui.Button95("r95.run", new RectangleF(bx, by, 150, 23), running ? Fit95(ui, "Add " + Ui.Esc95(rn ?? rk), 140) : "Add r&unning app", room && running))
+        if (ui.Button95("r95.run", new RectangleF(bx, by, 150, 23), running ? Fit95(ui, Lang.F("Add {0}", Ui.Esc95(rn ?? rk)), 140) : "Add r&unning app", room && running))
             AddRule(rk, rn);
         bx += 156;
         if (ui.Button95("r95.vrc", new RectangleF(bx, by, 90, 23), "Add &VRChat", room && choices.Any(ch => ch.key == GameRuleEngine.VrchatKey)))
@@ -153,7 +153,7 @@ public sealed partial class SettingsView
             AddRule(GameRuleEngine.AnyOther, null);
         bx += 116;
         if (ui.Button95("r95.rm", new RectangleF(bx, by, 75, 23), "&Remove", sel != null)) RemoveRule(sel);
-        ui.Text95("\"Any other app\": every app without a rule of its own. (keep): that one is left as it is. Up to " + MaxRules + " rules.",
+        ui.Text95(Lang.F("\"Any other app\": every app without a rule of its own. (keep): that one is left as it is. Up to {0} rules.", MaxRules),
             new RectangleF(x, by + 34, w, 28), K95, false, TextAlignment.Leading, true, true);
         if (ui.Button95("r95.ok", new RectangleF(c.Right - 10 - 75, c.Bottom - 31, 75, 23), "OK", true, isDefault: true)) OpenRules(false);
     }
@@ -174,7 +174,7 @@ public sealed partial class SettingsView
         var c = Window95(ui, new RectangleF(150, 66, 450, 360), "Share Watch Page");
         float x = c.X + 10, cw = c.Width - 20, y = c.Y + 8;
         W95Icons.Draw(ui.P, W95Icons.Id.Clock, x, y);
-        ui.Text95(Fit95(ui, $"Page {ep + 1}: {WatchPages.Name(w, ep)} ({WatchPages.GridId(w, ep).Replace("x", " x ")})", cw - 26), new RectangleF(x + 22, y + 2, cw - 24, 15), K95, true);
+        ui.Text95(Fit95(ui, Lang.F("Page {0}: {1} ({2})", ep + 1, WatchPages.Label(w, ep), WatchPages.GridId(w, ep).Replace("x", " x ")), cw - 26), new RectangleF(x + 22, y + 2, cw - 24, 15), K95, true);
         bool room = WatchPages.Count(w) < FaceShare.MaxPages;
 
         ui.Group95(new RectangleF(x, y + 26, cw, 52), "This page");
@@ -203,7 +203,7 @@ public sealed partial class SettingsView
             if (ui.Button95("ws95.paste", new RectangleF(x + 170, gy + 20, 150, 23), "&Paste text", room)) PastePage();
             gy += 60;
         }
-        string msg = !room ? $"The watch has {FaceShare.MaxPages} pages: remove one to add another." : _shareMsg ??
+        string msg = !room ? Lang.F("The watch has {0} pages: remove one to add another.", FaceShare.MaxPages) : _shareMsg ??
             "A page goes as a small file or as text: its widgets, grid, name and looks. Adding one never changes your other pages.";
         ui.Text95(msg, new RectangleF(x, gy, cw, c.Bottom - 36 - gy), _shareBad || !room ? 0xFF800000 : K95, false, TextAlignment.Leading, true, true);
         if (ui.Button95("ws95.close", new RectangleF(c.Right - 10 - 75, c.Bottom - 31, 75, 23), "Close", true, isDefault: true)) OpenShare(false);

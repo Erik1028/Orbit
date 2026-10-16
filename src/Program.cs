@@ -113,7 +113,7 @@ static class Program
         catch (Exception e)
         {
             Log.Error("fatal: " + e);
-            MessageBox.Show(e.Message, "OrbitOverlay crashed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(e.Message, Lang.T("OrbitOverlay crashed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
     }
@@ -152,6 +152,10 @@ static class Program
         try
         {
             Motion.Still = !args.Contains("--perfbench") && !args.Contains("--animstrip");     // pictures: loops held at rest
+            // --lang hu (or ORBIT_SNAP_LANG): the pictures in another language (ToolsLang.cs); never written to a config
+            int lg = Array.IndexOf(args, "--lang");
+            string lang = lg >= 0 && lg + 1 < args.Length ? args[lg + 1] : Environment.GetEnvironmentVariable("ORBIT_SNAP_LANG");
+            if (!string.IsNullOrEmpty(lang)) Lang.Set(lang);
             if (args.Contains("--animstrip"))       // the styles' animations as frames (ToolsAnim.cs) - --only-style modern|95|xp|aero
             {
                 int i = Array.IndexOf(args, "--animstrip"), o = Array.IndexOf(args, "--only-style");

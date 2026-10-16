@@ -179,7 +179,7 @@ public sealed partial class WristPanel
             var b = bats[i];
             float y = inner.Y + i * pitch;
             bool low = b.pct <= 0.2f && !b.charging;
-            _ui.Text95(b.label, new RectangleF(inner.X, y, 30, 12));
+            _ui.Text95(Bat(b.label), new RectangleF(inner.X, y, 30, 12));
             var bar = new RectangleF(inner.X + 31, y + 2, inner.Width - 31 - 29, 9);
             _ui.Progress95(bar, b.pct, low ? 0xFF800000 : Theme.W95Navy);
             if (b.charging) _p.Pixels(BoltGlyph, bar.Right + 2, y + 3, 0xFF1F2F5A);
@@ -366,12 +366,12 @@ public sealed partial class WristPanel
         if (w.W >= 2 && (k.Id is "cpu" or "ram" or "vram") && frac >= 0)
         {
             // Task Manager's way: the number, the bar under it
-            string s = Fit($"{value}{(unit == "GB" ? " GB" : "")} {cap}", c.Width - 8);
+            string s = Fit($"{value}{(unit == "GB" ? " GB" : "")} {Lang.T(cap)}", c.Width - 8);
             _ui.Text95(s, new RectangleF(c.X + 4, c.Y + 2, c.Width - 8, 13), color == XpNavy ? Blk95 : color, true);
             _ui.Progress95(new RectangleF(c.X + 4, c.Y + 17, c.Width - 8, MathF.Min(12, c.Height - 19)), frac, color == XpBad ? 0xFF800000 : Theme.W95Navy);
             return;
         }
-        if (k.Id == "fps" && w.W >= 2) cap = v.DisplayHz > 0 ? $"fps of {v.DisplayHz:0} Hz" : "fps";
+        if (k.Id == "fps" && w.W >= 2) cap = v.DisplayHz > 0 ? Lang.F("fps of {0:0} Hz", v.DisplayHz) : "fps";
         ValueXp(c, value, cap, color);
     }
 
@@ -430,7 +430,7 @@ public sealed partial class WristPanel
             bool low = b.pct <= 0.2f && !b.charging;
             string pct = $"{b.pct * 100:0}%";
             float pw = _ui.Width95(pct, true) + 2;
-            _ui.Text95(Fit(b.charging ? b.label + " +" : b.label, c.Width - 8 - pw - 4), new RectangleF(c.X + 4, y, c.Width - 8 - pw, 12));
+            _ui.Text95(Fit(b.charging ? Bat(b.label) + " +" : Bat(b.label), c.Width - 8 - pw - 4), new RectangleF(c.X + 4, y, c.Width - 8 - pw, 12));
             _ui.Text95(pct, new RectangleF(c.Right - 4 - pw, y, pw, 12), low ? XpBad : b.charging ? XpBlueText : Blk95, true, TextAlignment.Trailing);
             _ui.Progress95(new RectangleF(c.X + 4, y + 13, c.Width - 8, 10), b.pct, low ? 0xFF800000 : Theme.W95Navy);
         }
@@ -614,7 +614,7 @@ public sealed partial class WristPanel
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
             bool click = _ui.Clickable(Ui.Id("wtb", i), b, out bool hover, out bool held);
             bool on = i == cur;
-            TaskButtonXp(b, Fit(WatchPages.Name(C, i), bw - 12), on, hover, held);
+            TaskButtonXp(b, Fit(WatchPages.Label(C, i), bw - 12), on, hover, held);
             if (click) GoToPage(i);
         }
     }

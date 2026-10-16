@@ -34,11 +34,11 @@ public sealed class StatusLine
             parts.Add("\U0001F3B5 " + media.title.Trim() + (string.IsNullOrWhiteSpace(media.artist) ? "" : " – " + media.artist.Trim()));
         if (c.ShowTime)
             parts.Add("\U0001F552 " + (h24 ? now.ToString("HH:mm", CultureInfo.InvariantCulture)
-                : now.ToString("h:mm", CultureInfo.InvariantCulture) + (now.Hour < 12 ? " AM" : " PM")));
+                : now.ToString("h:mm", CultureInfo.InvariantCulture) + Lang.T(now.Hour < 12 ? " AM" : " PM")));
         if (c.ShowVrTime && vrSince is { } since)
         {
             var span = now - since;
-            parts.Add("⏱ " + (span.TotalHours >= 1 ? $"{(int)span.TotalHours}:{span.Minutes:00}" : $"{Math.Max(0, (int)span.TotalMinutes)} min") + " in VR");
+            parts.Add("⏱ " + Lang.F("{0} in VR", span.TotalHours >= 1 ? $"{(int)span.TotalHours}:{span.Minutes:00}" : Lang.F("{0} min", Math.Max(0, (int)span.TotalMinutes))));
         }
         string s = string.Join("  ·  ", parts);
         if (s.Length > Max)

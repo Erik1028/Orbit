@@ -32,6 +32,7 @@ public sealed partial class Ui
 
     public static (string text, int key) Amp(string s)
     {
+        s = Lang.T(s);                  // the language picked first: the access key is its own
         if (string.IsNullOrEmpty(s) || s.IndexOf('&') < 0) return (s, -1);
         if (_amp.TryGetValue(s, out var v)) return v;
         var sb = new System.Text.StringBuilder(s.Length);

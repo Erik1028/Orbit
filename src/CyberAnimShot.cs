@@ -26,7 +26,7 @@ static class CyberAnimShot
         // ORBIT_ANIM_MOTION=reduced / off: the same frames at that Look > Motion (what still moves)
         cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true, Motion = Environment.GetEnvironmentVariable("ORBIT_ANIM_MOTION") };
         Theme.Apply(cfg.Data.Appearance);
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Globalization.CultureInfo.CurrentCulture = Tools.SnapCulture;
         CyberFx.Live = true;
         wrist.CyberLive = true;
         bool still = Motion.Still;
@@ -198,7 +198,7 @@ static class CyberAnimShot
         var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
         cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true };
         Theme.Apply(cfg.Data.Appearance);
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Globalization.CultureInfo.CurrentCulture = Tools.SnapCulture;
         using var gpu = new Gpu(-1);
         using var painter = new Painter(gpu);
         var data = new PanelData { VrConnected = true, VramTotalGB = 16, FakeGpuLoad = 63, FakeVram = 9.4f, VrSince = DateTime.Now.AddMinutes(-83) };

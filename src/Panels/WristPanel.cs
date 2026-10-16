@@ -206,7 +206,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             foreach (var b in d.Vr.Batteries)
             {
                 if (shown++ >= 4) break;
-                DrawBattery(new RectangleF(400, y, 214, 30), b.label, b.pct, b.charging);
+                DrawBattery(new RectangleF(400, y, 214, 30), Bat(b.label), b.pct, b.charging);
                 y += 36;
             }
             if (shown == 0)
@@ -232,6 +232,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     string DateText(DateTime now)
     {
         var culture = CultureInfo.CurrentCulture;
+        if (Lang.Has("date|long")) return now.ToString(Lang.T("date|long"), culture);       // the language's own order (Magyar: "péntek, okt. 16.")
         return now.ToString(culture.DateTimeFormat.MonthDayPattern, culture) + ", " + now.ToString("dddd", culture);
     }
 
@@ -298,7 +299,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         var v = d.Vr;
         float cw = (TW - 56) / 4f;
         uint fpsCol = v.AppFps < 0 ? Theme.Text : v.AppFps < v.DisplayHz * 0.85f ? Theme.Warn : Theme.Text;
-        Stat(0, cw, v.AppFps < 0 ? "–" : $"{v.AppFps:0}", $"fps / {v.DisplayHz:0}", fpsCol);
+        Stat(0, cw, v.AppFps < 0 ? "–" : $"{v.AppFps:0}", Lang.F("fps / {0:0}", v.DisplayHz), fpsCol);
         uint rpCol = v.ReprojPct < 0 ? Theme.Text : v.ReprojPct > 25 ? Theme.Bad : v.ReprojPct > 8 ? Theme.Warn : Theme.Text;
         Stat(1, cw, v.ReprojPct < 0 ? "–" : $"{v.ReprojPct:0}%", "reprojected", rpCol);
         float budget = 1000f / Math.Max(1, v.DisplayHz);
@@ -306,7 +307,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         Stat(2, cw, v.GpuMs < 0 ? "–" : $"{v.GpuMs:0.0}", "GPU ms", msCol);
         float vram = d.VramUsed;
         // no GPU %: the WDDM engine counters badly under-read AMD cards (2 % at a real 99 %)
-        string vramCap = d.VramTotalGB > 0 ? $"GB VRAM / {d.VramTotalGB:0}" : "GB VRAM";
+        string vramCap = d.VramTotalGB > 0 ? Lang.F("GB VRAM / {0:0}", d.VramTotalGB) : "GB VRAM";
         uint vrCol = vram > 0 && d.VramTotalGB > 0 && vram > d.VramTotalGB * 0.92f ? Theme.Warn : Theme.Text;
         Stat(3, cw, vram < 0 ? "–" : $"{vram:0.0}", vramCap, vrCol);
     }
@@ -334,7 +335,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         }
         _p.Line(r.X + 6, by, r.Right - 6, by, 0x80FFFFFF, 1.5f);
         string label = v.AppFps < 0 ? "waiting for frames" :
-            $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms GPU · {Math.Max(0, v.ReprojPct):0}% reprojected";
+            Lang.F("{0:0} fps · {1:0.0} ms GPU · {2:0}% reprojected", v.AppFps, v.GpuMs, Math.Max(0, v.ReprojPct));
         _p.Text(label, new RectangleF(r.X + 10, r.Y + 4, r.Width - 20, 24), Theme.Text, 16, FontWeight.SemiBold);
         _p.Text($"{budget:0.0} ms", new RectangleF(r.Right - 80, by - 22, 72, 20), Theme.Dim, 15, FontWeight.Normal, TextAlignment.Trailing);
     }
@@ -365,7 +366,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         }
         _p.Fill(new RectangleF(inner.X, by, inner.Width, 1), 0xFFFFFFFF);
         string label = v.AppFps < 0 ? "waiting for frames" :
-            $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms GPU · {Math.Max(0, v.ReprojPct):0}% reprojected";
+            Lang.F("{0:0} fps · {1:0.0} ms GPU · {2:0}% reprojected", v.AppFps, v.GpuMs, Math.Max(0, v.ReprojPct));
         _p.Text(label, new RectangleF(inner.X + 6, inner.Y + 2, inner.Width - 12, 22), green, 15, FontWeight.Bold);
         _p.Text($"{budget:0.0} ms", new RectangleF(inner.Right - 80, by - 20, 74, 18), green, 13, FontWeight.Normal, TextAlignment.Trailing);
     }

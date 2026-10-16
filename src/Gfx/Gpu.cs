@@ -101,8 +101,11 @@ public sealed class Surface : IDisposable
     }
 
     // Reads the texture back and writes a PNG (alpha un-premultiplied). Used by --snapshot.
+    public static Action<string> Saved;          // --snapshot: a picture was written (ToolsLang.cs's text fit names its finds by it)
+
     public unsafe void SavePng(Gpu gpu, string path, bool premultiplied = true)
     {
+        Saved?.Invoke(path);
         using var staging = gpu.Device.CreateTexture2D(new Texture2DDescription
         {
             Width = (uint)W, Height = (uint)H, MipLevels = 1, ArraySize = 1,

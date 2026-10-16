@@ -92,7 +92,24 @@ public sealed partial class SettingsView
     bool _whatsNewManual;
     float _wnScroll;
     IReadOnlyList<WhatsNew.Entry> WhatsNewShown => _whatsNewManual ? WhatsNew.Latest(4) : _h.WhatsNewList;
-    string WhatsNewSubShown => _whatsNewManual ? $"OrbitOverlay {Updater.Current.ToString(3)} and the versions before it" : _h.WhatsNewSub;
+    string WhatsNewSubShown => _whatsNewManual ? Lang.F("OrbitOverlay {0} and the versions before it", Updater.Current.ToString(3)) : WhatsNewSub(_h.WhatsNewSub);
+
+    // "Updated to 1.13.1 from 1.8.2" (OrbitApp says it in English) in the language picked
+    static string WhatsNewSub(string s)
+    {
+        if (Lang.English || string.IsNullOrEmpty(s) || !s.StartsWith("Updated to ")) return s;
+        int from = s.IndexOf(" from ", StringComparison.Ordinal);
+        return from < 0 ? s : Lang.F("Updated to {0} from {1}", s[11..from], s[(from + 6)..]);
+    }
+
+    // a mirrored window's state (WindowPanel / OrbitApp say it in English) in the language picked
+    static string WinStatus(string st)
+    {
+        if (Lang.English || string.IsNullOrEmpty(st)) return st;
+        if (st.StartsWith("live · ", StringComparison.Ordinal)) return Lang.F("live · {0}", st[7..]);
+        if (st.StartsWith("can't capture it: ", StringComparison.Ordinal)) return Lang.F("can't capture it: {0}", st[18..]);
+        return Lang.T(st);
+    }
 
     void CloseWhatsNew()
     {
@@ -297,7 +314,7 @@ public sealed partial class SettingsView
             p.Fill(r, fill, 8);
             p.Stroke(r, sel ? Theme.Accent : Theme.Border, sel ? 2.5f : 1, 8);
             p.Text(n.ToString(), new RectangleF(r.X, r.Y + 6, r.Width, r.Height * 0.5f), en ? Theme.Text : Theme.Dim, 22, FontWeight.SemiBold, TextAlignment.Center);
-            p.Text(m.Name + (m.Virtual ? " (virtual)" : ""), new RectangleF(r.X + 4, r.Y + r.Height * 0.5f, r.Width - 8, r.Height * 0.4f),
+            p.Text(m.Virtual ? Lang.F("{0} (virtual)", m.Name) : m.Name, new RectangleF(r.X + 4, r.Y + r.Height * 0.5f, r.Width - 8, r.Height * 0.4f),
                 Theme.Dim, 12, FontWeight.Normal, TextAlignment.Center);
             if (dc != null && dc.Group != null && _h.GroupSize(dc) > 1)
                 p.Icon(Theme.IcoLink, new RectangleF(r.Right - 26, r.Y + 4, 22, 22), Theme.Accent, 13);
@@ -310,7 +327,7 @@ public sealed partial class SettingsView
         if (cfg == null) return;
         int gs = _h.GroupSize(cfg);
         p.Text($"{mon.Name}", new RectangleF(232, 232, 420, 30), Theme.Text, 19, FontWeight.SemiBold);
-        p.Text($"{mon.W}×{mon.H}  ·  {mon.Device.Replace(@"\\.\", "")}{(mon.Primary ? "  ·  primary" : "")}{(gs > 1 ? $"  ·  joined row of {gs}" : "")}",
+        p.Text($"{mon.W}×{mon.H}  ·  {mon.Device.Replace(@"\\.\", "")}{(mon.Primary ? "  ·  " + Lang.T("primary") : "")}{(gs > 1 ? "  ·  " + Lang.F("joined row of {0}", gs) : "")}",
             new RectangleF(232, 260, 460, 22), Theme.Dim, 13);
         bool en2 = cfg.Enabled;
         if (ui.Toggle("d.en", new RectangleF(714, 234, 270, 46), "Show in VR", ref en2))
@@ -319,7 +336,7 @@ public sealed partial class SettingsView
         float lx = 222, rx = 608, cw = 376;
         float y = 292;
         float v = cfg.Width;
-        if (ui.Slider("d.w", new RectangleF(lx, y, cw, 58), "Size", ref v, 0.3f, 3f, f => $"{f:0.00} m wide", cfg.Enabled))
+        if (ui.Slider("d.w", new RectangleF(lx, y, cw, 58), "Size", ref v, 0.3f, 3f, f => Lang.F("{0:0.00} m wide", f), cfg.Enabled))
         {
             cfg.Width = v;
             _h.DesktopEdited(cfg);
@@ -329,7 +346,7 @@ public sealed partial class SettingsView
         v = cfg.Curvature;
         float width = cfg.Width;
         if (ui.Slider("d.c", new RectangleF(lx, y + 124, cw, 58), "Curvature", ref v, 0f, 0.5f,
-                f => f < 0.005f ? "flat" : $"bend radius {width / (2 * MathF.PI * f):0.00} m", cfg.Enabled))
+                f => f < 0.005f ? "flat" : Lang.F("bend radius {0:0.00} m", width / (2 * MathF.PI * f)), cfg.Enabled))
         {
             cfg.Curvature = v < 0.005f ? 0 : v;
             _h.DesktopEdited(cfg);
@@ -391,9 +408,9 @@ public sealed partial class SettingsView
             wins = l.Panels.Count(s => s.Kind == "window" && s.Enabled && Window(s.Id));
             night = l.NightMode;
         }
-        var parts = new List<string> { mons == 1 ? "1 monitor" : $"{mons} monitors" };
-        if (wins > 0) parts.Add(wins == 1 ? "1 window" : $"{wins} windows");
-        if (night) parts.Add("night mode");
+        var parts = new List<string> { mons == 1 ? Lang.T("1 monitor") : Lang.F("{0} monitors", mons) };
+        if (wins > 0) parts.Add(wins == 1 ? Lang.T("1 window") : Lang.F("{0} windows", wins));
+        if (night) parts.Add(Lang.T("night mode"));
         return string.Join("  ·  ", parts);
     }
 
@@ -430,9 +447,9 @@ public sealed partial class SettingsView
         var sel = list.First(l => l.Name == _selLayout);
         bool isActive = sel.Name == C.ActiveLayout;
         p.Text(sel.Name, new RectangleF(wx + 10, 78, cw - 10, 30), Theme.Text, 20, FontWeight.SemiBold);
-        p.Text(isActive ? "in use now" : sel.Saved is { } t ? $"last used {t:MMM d, HH:mm}" : "not used yet",
+        p.Text(isActive ? "in use now" : sel.Saved is { } t ? Lang.F("last used {0:MMM d, HH:mm}", t) : "not used yet",
             new RectangleF(wx + 10, 106, cw - 10, 20), Theme.Dim, 13);
-        if (ui.Button("lay.use", new RectangleF(wx + 10, 140, cw - 10, 46), isActive ? "In use" : $"Switch to {sel.Name}",
+        if (ui.Button("lay.use", new RectangleF(wx + 10, 140, cw - 10, 46), isActive ? "In use" : Lang.F("Switch to {0}", Lang.T(sel.Name)),
                 isActive ? Theme.IcoCheck : Theme.IcoLayouts, !isActive, !isActive, 15))
             _h.SwitchLayout(sel.Name);
         bool onWrist = sel.OnWrist;
@@ -467,7 +484,7 @@ public sealed partial class SettingsView
         if (ui.Slider("th.dim", new RectangleF(wx, 470, cw, 58), "Dim the world", ref v, 0, 0.9f, f => f < 0.005f ? "off" : $"{f * 100:0}%"))
         { t.Dim = v; _h.TheaterEdited(); }
         v = t.Width;
-        if (ui.Slider("th.size", new RectangleF(wx, 532, cw, 58), "Screen size", ref v, Theater.MinWidth, Theater.MaxWidth, f => $"{f:0.0} m wide"))
+        if (ui.Slider("th.size", new RectangleF(wx, 532, cw, 58), "Screen size", ref v, Theater.MinWidth, Theater.MaxWidth, f => Lang.F("{0:0.0} m wide", f)))
         { t.Width = v; _h.TheaterEdited(); }
     }
 
@@ -493,7 +510,9 @@ public sealed partial class SettingsView
             var r = new RectangleF(lx, y, lw, 52);
             if (ui.Card(Ui.Id("win.", wc.Id), r, wc.Id == _selWin && !Picking, out _)) { _selWin = wc.Id; Picking = false; }
             string st = _h.WindowStatus(wc);
-            p.Circle(r.X + 20, r.Y + 26, 5, st.StartsWith("live") ? Theme.Good : wc.Enabled ? Theme.Warn : Theme.Faint);
+            bool live = st.StartsWith("live");
+            st = WinStatus(st);
+            p.Circle(r.X + 20, r.Y + 26, 5, live ? Theme.Good : wc.Enabled ? Theme.Warn : Theme.Faint);
             p.Text(Fit(p, string.IsNullOrEmpty(wc.Title) ? wc.Process : wc.Title, lw - 50, 15, FontWeight.SemiBold),
                 new RectangleF(r.X + 36, r.Y + 5, lw - 44, 24), wc.Enabled ? Theme.Text : Theme.Dim, 15, FontWeight.SemiBold);
             p.Text(Fit(p, $"{wc.Process}  ·  {st}", lw - 50, 12), new RectangleF(r.X + 36, r.Y + 28, lw - 44, 18), Theme.Dim, 12);
@@ -540,7 +559,7 @@ public sealed partial class SettingsView
             }
             p.Text(Fit(p, w.Title, rw - (mirrored ? 60 : 28), 14, FontWeight.SemiBold), new RectangleF(r.X + 14, r.Y + 4, rw - 28, 22),
                 mirrored ? Theme.Dim : Theme.Text, 14, FontWeight.SemiBold);
-            p.Text(mirrored ? w.Process + "  ·  already mirrored" : w.Process, new RectangleF(r.X + 14, r.Y + 26, rw - 28, 17), Theme.Dim, 12);
+            p.Text(mirrored ? w.Process + "  ·  " + Lang.T("already mirrored") : w.Process, new RectangleF(r.X + 14, r.Y + 26, rw - 28, 17), Theme.Dim, 12);
             if (mirrored) p.Icon(Theme.IcoCheck, new RectangleF(r.Right - 38, r.Y, 26, r.Height), Theme.Accent, 15);
         }
         float by = 106 + per * 54 + 2;
@@ -560,17 +579,17 @@ public sealed partial class SettingsView
         float wx = 602, cw = 382;
         p.Text(Fit(p, string.IsNullOrEmpty(wc.Title) ? wc.Process : wc.Title, cw - 10, 18, FontWeight.SemiBold),
             new RectangleF(wx + 10, 78, cw - 10, 28), Theme.Text, 18, FontWeight.SemiBold);
-        p.Text(Fit(p, $"{wc.Process}  ·  {_h.WindowStatus(wc)}", cw - 10, 13), new RectangleF(wx + 10, 104, cw - 10, 20), Theme.Dim, 13);
+        p.Text(Fit(p, $"{wc.Process}  ·  {WinStatus(_h.WindowStatus(wc))}", cw - 10, 13), new RectangleF(wx + 10, 104, cw - 10, 20), Theme.Dim, 13);
         bool en = wc.Enabled;
         if (ui.Toggle("wn.en", new RectangleF(wx, 132, cw, 44), "Show in VR", ref en)) _h.SetWindowEnabled(wc, en);
         float v = wc.Width;
-        if (ui.Slider("wn.w", new RectangleF(wx, 180, cw, 58), "Size", ref v, 0.15f, 3f, f => $"{f:0.00} m wide", wc.Enabled)) wc.Width = v;
+        if (ui.Slider("wn.w", new RectangleF(wx, 180, cw, 58), "Size", ref v, 0.15f, 3f, f => Lang.F("{0:0.00} m wide", f), wc.Enabled)) wc.Width = v;
         v = wc.Opacity;
         if (ui.Slider("wn.o", new RectangleF(wx, 240, cw, 58), "Opacity", ref v, 0.2f, 1f, f => $"{f * 100:0}%", wc.Enabled)) wc.Opacity = v;
         v = wc.Curvature;
         float width = wc.Width;
         if (ui.Slider("wn.c", new RectangleF(wx, 300, cw, 58), "Curvature", ref v, 0f, 0.5f,
-                f => f < 0.005f ? "flat" : $"bend radius {width / (2 * MathF.PI * f):0.00} m", wc.Enabled))
+                f => f < 0.005f ? "flat" : Lang.F("bend radius {0:0.00} m", width / (2 * MathF.PI * f)), wc.Enabled))
             wc.Curvature = v < 0.005f ? 0 : v;
         ui.Label(new RectangleF(wx + 10, 364, cw, 22), "Attached to");
         int ai = Math.Max(0, Array.IndexOf(AttachIds, wc.Place.Attach ?? "world"));
@@ -595,6 +614,7 @@ public sealed partial class SettingsView
     string Fit(Painter p, string s, float maxW, float size, FontWeight w = FontWeight.Normal)
     {
         if (string.IsNullOrEmpty(s)) return s;
+        s = Lang.T(s);                     // cut in the language picked
         if (_fitLook != Theme.Version) { _fit.Clear(); _fitLook = Theme.Version; }     // another font measures differently
         var key = (s, maxW, size, w);
         if (_fit.TryGetValue(key, out var r)) return r;
@@ -687,7 +707,7 @@ public sealed partial class SettingsView
         bool b = k.Visible;
         if (ui.Toggle("k.vis", new RectangleF(lx, 84, cw, 50), "Show keyboard", ref b)) _h.ToggleKeyboard();
         float v = k.Width;
-        if (ui.Slider("k.size", new RectangleF(lx, 144, cw, 58), "Size", ref v, 0.3f, 1.2f, f => $"{f * 100:0} cm wide")) k.Width = v;
+        if (ui.Slider("k.size", new RectangleF(lx, 144, cw, 58), "Size", ref v, 0.3f, 1.2f, f => Lang.F("{0:0} cm wide", f * 100))) k.Width = v;
         ui.Label(new RectangleF(rx + 10, 86, cw, 22), "Attached to");
         int ai = Math.Max(0, Array.IndexOf(AttachIds, k.Place.Attach ?? "world"));
         if (ai == 3) ai = 0;
@@ -699,7 +719,7 @@ public sealed partial class SettingsView
         b = k.Sounds;
         if (ui.Toggle("k.snd", new RectangleF(lx, 210, cw, 50), "Key sounds", ref b)) k.Sounds = b;
         int si = k.SoundStyle == "muted" ? 1 : 0;
-        if (ui.Segmented("k.style", new RectangleF(rx + 10, 216, 190, 38), new[] { "Click", "Muted" }, ref si, k.Sounds))
+        if (ui.Segmented("k.style", new RectangleF(rx + 10, 216, 190, 38), new[] { "Click", Lang.C("keyboard", "Muted") }, ref si, k.Sounds))
         {
             k.SoundStyle = si == 1 ? "muted" : "click";
             _h.Keyboard.PlayClick(false);
@@ -783,10 +803,10 @@ public sealed partial class SettingsView
             if (click) _stylesOpen = true;
         }
         if (Theme.Classic)
-            ui.Label(new RectangleF(lx, 556, 356, 40), $"{Theme.RetroSkin.Name} has its own colours; the ones above are for Modern.",
+            ui.Label(new RectangleF(lx, 556, 356, 40), Lang.F("{0} has its own colours; the ones above are for Modern.", Lang.T(Theme.RetroSkin.Name)),
                 Theme.Dim, 12, FontWeight.Normal, true);
         else if (Theme.Cyber)
-            ui.Label(new RectangleF(lx, 556, 356, 40), $"{CyberHud.Name} has its own colours and fonts; the ones above (and Font) are for Modern.",
+            ui.Label(new RectangleF(lx, 556, 356, 40), Lang.F("{0} has its own colours and fonts; the ones above (and Font) are for Modern.", CyberHud.Name),
                 Theme.Dim, 12, FontWeight.Normal, true);
         else
         {
@@ -1035,6 +1055,19 @@ public sealed partial class SettingsView
             _h.ToggleRoom();
     }
 
+    // General > Language: English (null in the config, nothing written) or another one; every panel is drawn again in it
+    static readonly string[] LanguageNames = Lang.Names();
+
+    void SetLanguage(Ui ui, int i)
+    {
+        string code = Lang.Languages[Math.Clamp(i, 0, Lang.Languages.Length - 1)].Code;
+        if (code == Lang.Code) return;
+        C.General.Language = code;
+        Lang.Set(code);
+        ui.Changed = true;
+        _h.AppearanceChanged();
+    }
+
     void DrawGeneral(Ui ui)
     {
         var p = ui.P;
@@ -1054,7 +1087,7 @@ public sealed partial class SettingsView
         if (ui.Toggle("g.quick", new RectangleF(lx, 242, cw, 54), "Double-tap both grips", ref b, "hides / shows the monitors and the keyboard")) g.QuickToggle = b;
         b = g.Osc;
         if (ui.Toggle("g.osc", new RectangleF(lx, 298, cw, 54), "VRChat avatar parameters (OSC)", ref b,
-                $"XSOverlay-style, for DXOverlay · 127.0.0.1:{g.OscPort}")) g.Osc = b;
+                Lang.F("XSOverlay-style, for DXOverlay · 127.0.0.1:{0}", g.OscPort))) g.Osc = b;
         b = g.AutoStart;
         if (ui.Toggle("g.auto", new RectangleF(lx, 354, cw, 54), "Start with SteamVR", ref b,
                 b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start OrbitOverlay yourself"))
@@ -1067,15 +1100,20 @@ public sealed partial class SettingsView
         b = g.PauseWhenOff;
         if (ui.Toggle("g.pause", new RectangleF(lx, 466, cw, 46), "Pause when the headset is off", ref b)) g.PauseWhenOff = b;
         float by = 520;
-        if (g.RunAsAdmin && !_h.IsElevated)
-        {
-            if (ui.Button("g.elevate", new RectangleF(lx + 10, by, 200, 38), "Restart as admin", Theme.IcoRecenter, true, true, 14))
-                _h.RestartElevated();
-            by += 48;
-        }
-        if (ui.Button("g.folder", new RectangleF(lx + 10, by, 200, 38), "Open config folder", Theme.IcoFolder, false, true, 14))
+        bool elevate = g.RunAsAdmin && !_h.IsElevated;
+        // not elevated yet: its restart button beside the folder one (the language takes the row under them)
+        if (elevate && ui.Button("g.elevate", new RectangleF(lx + 10, by, 178, 38), "Restart as admin", Theme.IcoRecenter, true, true, 14))
+            _h.RestartElevated();
+        if (ui.Button("g.folder", elevate ? new RectangleF(lx + 196, by, 170, 38) : new RectangleF(lx + 10, by, 200, 38), "Open config folder",
+                Theme.IcoFolder, false, true, 14))
             _h.OpenConfigFolder();
-        if (ui.Button("g.whatsnew", new RectangleF(lx + 220, by, 146, 38), "What's new", "", false, true, 14)) { _whatsNewManual = true; _wnScroll = 0; }
+        // What's new beside the folder button (it sat on Check for updates); while the restart button is there it takes that place
+        if (!elevate && ui.Button("g.whatsnew", new RectangleF(lx + 220, by, 146, 38), "What's new", "\uE946", false, true, 14))
+        { _whatsNewManual = true; _wnScroll = 0; }
+        // the language of every screen, each choice in its own words: it applies at once
+        ui.Label(new RectangleF(lx + 10, 572, 100, 38), "Language");
+        int lg = Lang.Index(Lang.Code);
+        if (ui.Segmented("g.lang", new RectangleF(lx + 110, 572, cw - 120, 38), LanguageNames, ref lg)) SetLanguage(ui, lg);
 
         float rx = 618, y = 88;
         void Row(string k, string v)
@@ -1104,7 +1142,7 @@ public sealed partial class SettingsView
             Updater.State.Checking => "Checking...",
             Updater.State.Downloading => $"{uprog * 100:0}%",
             Updater.State.Starting => "Installing...",
-            Updater.State.Available => $"Update to {ulatest}",
+            Updater.State.Available => Lang.F("Update to {0}", ulatest),
             _ => "Check for updates",
         };
         if (ui.Button("g.upd", new RectangleF(rx + 176, y - 3, 190, 32), ulabel, avail ? Theme.IcoDownload : Theme.IcoRecenter, avail,
@@ -1127,7 +1165,7 @@ public sealed partial class SettingsView
             _h.TestNotification();
         float na = g.NotificationAngle;
         if (ui.Slider("g.nang", new RectangleF(rx - 10, 392, 376, 58), "Height", ref na, 5, 35,
-                f => $"{Math.Round(f):0}° below eye level", g.Notifications))
+                f => Lang.F("{0:0}° below eye level", Math.Round(f)), g.Notifications))
             g.NotificationAngle = MathF.Round(na);
         DrawAlerts(ui, rx, 460);          // low battery / frame rate (SettingsView.Extras.cs; the controls' summary is on the VRChat tab now)
     }

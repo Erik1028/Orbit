@@ -103,7 +103,7 @@ public sealed partial class KeyboardPanel
         float by = y + h / 2 + 7;
         string lang = "--";
         foreach (var k in _keys) if (k.Action == "lang") { lang = k.Fixed ?? "--"; break; }
-        x = CyReadout(x, by, "LAYOUT", lang, CyberHud.White);
+        x = CyReadout(x, by, Lang.C("kbd", "LAYOUT"), lang, CyberHud.White);     // the keys' layout (not the watch's: "kbd|LAYOUT")
         x = CyReadout(x, by, "MODE", _chat ? "CHATBOX" : "TYPE", _chat ? CyberHud.Cyan : CyberHud.White);
         // the lamps: right-aligned, before the hazard chip
         float hx = TW - Pad - 6 - 96;

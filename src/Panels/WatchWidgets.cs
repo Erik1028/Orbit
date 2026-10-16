@@ -83,7 +83,7 @@ public static class WatchWidgets
     public static Kind[] Palette => DockAvailable ? Kinds : _noDock;
     // the editor's list (the Modern / Cyber buttons, the 95 family's list box) in ABC order of the names shown (Erik, 10-16)
     public static Kind[] PaletteAbc(Func<Kind, string> shown = null) =>
-        Palette.OrderBy(k => shown?.Invoke(k) ?? k.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        Palette.OrderBy(k => shown?.Invoke(k) ?? Lang.T(k.Name), StringComparer.CurrentCultureIgnoreCase).ToArray();
 
     public static Kind Find(string id) => Array.Find(Kinds, k => k.Id == id);
 
@@ -474,6 +474,14 @@ public static class WatchPages
     {
         string n = i <= 0 ? c.Name : c.Pages[i - 1].Name;
         return string.IsNullOrWhiteSpace(n) ? $"Page {i + 1}" : n;
+    }
+
+    // the name as the screens write it, in the language picked: the built-in pages' names ("Performance") and "Page 2" (a name of
+    // your own stays as it is; Name stays English - a file's name, the tools' checks)
+    public static string Label(WristConfig c, int i)
+    {
+        string n = i <= 0 ? c.Name : c.Pages[i - 1].Name;
+        return string.IsNullOrWhiteSpace(n) ? Lang.F("Page {0}", i + 1) : Lang.T(n);
     }
 
     // a page's list (null: page 1 never set up)

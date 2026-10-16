@@ -229,7 +229,7 @@ public sealed partial class WristPanel
         if (Press("wdmv", new RectangleF(x, vy, 52, 52), muted ? MuteGlyph : "\uE767", null, muted, ok, 20, true, accentFill: false, fill: Bento.Bad))
             Volume.ToggleMute();
         var bar = new RectangleF(x + 72, vy + 19, w - 72 - 22, 14);
-        _p.Text(ok ? (muted ? "Muted" : "Volume " + VolumePct(lvl)) : "No output device", new RectangleF(bar.X, vy - 26, bar.Width, 26),
+        _p.Text(ok ? (muted ? "Muted" : Lang.F("Volume {0}", VolumePct(lvl))) : "No output device", new RectangleF(bar.X, vy - 26, bar.Width, 26),
             ok && muted ? Bento.Bad : Sub, SmallText, FontWeight.SemiBold);
         Slider("wdmb", bar, lvl, muted ? Bento.Faint : Bento.Accent, ok, Volume.Set);
     }
@@ -250,7 +250,7 @@ public sealed partial class WristPanel
             var b = bats[0];
             int shown = ShownPct(b.pct);
             var lv = BatteryLevel(shown);
-            Gauge(c, b.pct, Bento.Level(lv, Bento.Ok), Ui.Id("wdb", 0), Pct(shown), Upper(b.label), Bento.Level(lv, Bento.Text),
+            Gauge(c, b.pct, Bento.Level(lv, Bento.Ok), Ui.Id("wdb", 0), Pct(shown), Upper(Bat(b.label)), Bento.Level(lv, Bento.Text),
                 unitIcon: b.charging ? Bolt : null);
             return;
         }
@@ -284,20 +284,20 @@ public sealed partial class WristPanel
         // a long date ("Október 15., csütörtök") gets smaller to fit whole, down to the 17 px floor, before anything is cut
         float ds = MathF.Max(SmallText, FitSize(_dateLine, w, 22, FontWeight.SemiBold, null));
         _p.Text(Ellipsize(_dateLine, w, ds, FontWeight.SemiBold), new RectangleF(x, top + 92, w, 32), Bento.Text, ds, FontWeight.SemiBold);
-        _p.Text(Ellipsize($"Week {ISOWeek.GetWeekOfYear(now)} · day {now.DayOfYear} of {(DateTime.IsLeapYear(now.Year) ? 366 : 365)}", w, SmallText,
+        _p.Text(Ellipsize(Lang.F("Week {0} · day {1} of {2}", ISOWeek.GetWeekOfYear(now), now.DayOfYear, DateTime.IsLeapYear(now.Year) ? 366 : 365), w, SmallText,
             FontWeight.Normal), new RectangleF(x, top + 126, w, 26), Sub, SmallText);
         float y = top + 176;
         if (d.VrSince is { } since)
         {
             CapText("IN VR", x, y + 16, w, Sub);
-            _p.Text(Ellipsize($"{SessionText(d)}  ·  since {ShortClock(since)}", w, 22, FontWeight.SemiBold), new RectangleF(x, y + 22, w, 32),
+            _p.Text(Ellipsize($"{SessionText(d)}  ·  {Lang.F("since {0}", ShortClock(since))}", w, 22, FontWeight.SemiBold), new RectangleF(x, y + 22, w, 32),
                 Bento.Text, 22, FontWeight.SemiBold);
             y += 66;
         }
         if (timing)
         {
             CapText("TIMER", x, y + 16, w, Sub);
-            _p.Text(Ellipsize($"{Clock2(TimerLeft(Clock.Now))} left{(_timer == TimerState.Paused ? " (paused)" : "")}", w, 22, FontWeight.SemiBold),
+            _p.Text(Ellipsize(Lang.F(_timer == TimerState.Paused ? "{0} left (paused)" : "{0} left", Clock2(TimerLeft(Clock.Now))), w, 22, FontWeight.SemiBold),
                 new RectangleF(x, y + 22, w, 32), Bento.Accent, 22, FontWeight.SemiBold);
         }
     }
@@ -361,7 +361,7 @@ public sealed partial class WristPanel
         // the time big over its line, the state under it; the presets and the controls on the right
         float rad = c.Height / 2 - 8, cx = c.X + rad + 8;
         string txt = done ? "Done" : Clock2(left);
-        string state = _timer switch { TimerState.Running => "running", TimerState.Paused => "paused", TimerState.Done => "time is up", _ => $"{_timerTotal / 60} min" };
+        string state = _timer switch { TimerState.Running => "running", TimerState.Paused => "paused", TimerState.Done => "time is up", _ => Lang.F("{0} min", _timerTotal / 60) };
         Gauge(new RectangleF(c.X, c.Y, 2 * rad + 16, c.Height), frac, tint, "wdtr", txt, state, vc, 0, "wdtx");
         // quick starts, then - / start-pause / + / reset
         float x = cx + rad + 36, w = c.Right - x;
@@ -415,7 +415,7 @@ public sealed partial class WristPanel
             double split = _laps[i] - (i > 0 ? _laps[i - 1] : 0);
             var rr = new RectangleF(c.X, y + row * 34, c.Width, 30);
             _p.Fill(new RectangleF(rr.X, rr.Bottom, rr.Width, 1), Theme.WithAlpha(Theme.Border, 0.8f));
-            _p.Text($"Lap {i + 1}", rr, Sub, 18);
+            _p.Text(Lang.F("Lap {0}", i + 1), rr, Sub, 18);
             _p.Text(StopwatchText(split, true), new RectangleF(rr.X, rr.Y, rr.Width / 2, rr.Height), Bento.Text, 20, FontWeight.SemiBold, TextAlignment.Trailing);
             _p.Text(StopwatchText(_laps[i], true), rr, Sub, 18, FontWeight.Normal, TextAlignment.Trailing);
         }
@@ -450,7 +450,7 @@ public sealed partial class WristPanel
             if (v.FrameFlag[idx] == 2) dropped++;
         }
         if (n > 0)
-            _p.Text(Ellipsize($"avg {sum / n:0.0} ms · worst {worst:0.0} ms · {dropped} dropped",
+            _p.Text(Ellipsize(Lang.F("avg {0:0.0} ms · worst {1:0.0} ms · {2} dropped", sum / n, worst, dropped),
                     g.Width - 32 - _p.MeasureWidth(FrameNote(v).text, SmallText, FontWeight.SemiBold) - 16, SmallText, FontWeight.Normal),
                 new RectangleF(g.X + 16, g.Y + 6, g.Width - 32, 24), Sub, SmallText, FontWeight.Normal, TextAlignment.Trailing);
     }
@@ -483,11 +483,11 @@ public sealed partial class WristPanel
             peak = MathF.Max(peak, v);
         }
         bool any = Stats.CpuCount > 0;
-        Facts(c.X + tx, "CPU", any ? $"avg {avg * 100:0}%" : "–", any ? $"peak {peak * 100:0}%" : "");
+        Facts(c.X + tx, "CPU", any ? Lang.F("avg {0:0}%", avg * 100) : "–", any ? Lang.F("peak {0:0}%", peak * 100) : "");
         Gauge(new RectangleF(c.X + half, c.Y - 6, gs, gs), rf, Bento.Level(rl, ramC), "wdsr", rv, ru, rv == "–" ? Bento.Faint : Bento.Level(rl, Bento.Text));
         float total = Stats.RamTotalGB, used = Stats.RamUsedGB;
         bool ram = total > 0 && used >= 0;
-        Facts(c.X + half + tx, "MEMORY", ram ? $"{total - used:0.0} GB free" : "–", ram ? $"of {total:0} GB" : "");
+        Facts(c.X + half + tx, "MEMORY", ram ? Lang.F("{0:0.0} GB free", total - used) : "–", ram ? Lang.F("of {0:0} GB", total) : "");
         // the last minute of CPU load, in the CPU's purple (amber / red where it was high, the card's thresholds)
         var g = new RectangleF(c.X, c.Y + 150, c.Width, c.Height - 150);
         CapText("CPU, LAST MINUTE", g.X, g.Y + 16, g.Width, Sub);
@@ -635,10 +635,10 @@ public sealed partial class WristPanel
             var b = bats[i];
             float y = inner.Y + i * pitch + MathF.Floor((pitch - 15) / 2);
             bool low = b.pct <= 0.2f && !b.charging;
-            _ui.Text95(b.label, new RectangleF(inner.X, y, 50, 15));
+            _ui.Text95(Bat(b.label), new RectangleF(inner.X, y, 50, 15));
             _ui.Progress95(new RectangleF(inner.X + 52, y + 1, inner.Width - 52 - 110, 13), b.pct, low ? 0xFF800000 : Theme.W95Navy);
             _ui.Text95($"{b.pct * 100:0}%", new RectangleF(inner.Right - 104, y, 34, 15), low ? 0xFF800000 : Blk95, true, TextAlignment.Trailing);
-            string state = b.charging ? "Charging" : b.pct <= 0.2f ? "Low" : "";
+            string state = b.charging ? "Charging" : b.pct <= 0.2f ? Lang.C("battery", "Low") : "";
             _ui.Text95(state, new RectangleF(inner.Right - 64, y, 64, 15), b.charging ? Blk95 : 0xFF800000);
         }
     }
@@ -703,7 +703,7 @@ public sealed partial class WristPanel
         _ui.Text95("Preset:", new RectangleF(c.X, c.Y + 58, 44, 15));
         int[] presets = { 1, 3, 5, 10, 15, 30 };
         for (int i = 0; i < presets.Length; i++)
-            if (_ui.Button95(Ui.Id("wd95tp", i), new RectangleF(c.X + 44 + i * 41, c.Y + 54, 38, 22), $"{presets[i]}m")) TimerPreset(presets[i]);
+            if (_ui.Button95(Ui.Id("wd95tp", i), new RectangleF(c.X + 44 + i * 41, c.Y + 54, 38, 22), Lang.F("{0}m", presets[i]))) TimerPreset(presets[i]);
         float by = c.Y + 88;
         if (_ui.Button95("wd95tg", new RectangleF(c.X, by, 70, 23), _timer == TimerState.Running ? "&Pause" : "&Start")) TimerTap();
         if (_ui.Button95("wd95tr", new RectangleF(c.X + 76, by, 60, 23), "&Reset", _timer != TimerState.Idle)) TimerReset();
@@ -723,7 +723,7 @@ public sealed partial class WristPanel
         {
             int li = n - 1 - i;
             double split = _laps[li] - (li > 0 ? _laps[li - 1] : 0);
-            _ui.Text95($"Lap {li + 1}", new RectangleF(r.X + 4, r.Y, 60, r.Height));
+            _ui.Text95(Lang.F("Lap {0}", li + 1), new RectangleF(r.X + 4, r.Y, 60, r.Height));
             _ui.Text95(StopwatchText(split, true), new RectangleF(r.X + 70, r.Y, 70, r.Height));
             _ui.Text95(StopwatchText(_laps[li], true), new RectangleF(r.Right - 80, r.Y, 76, r.Height), Gry95, false, TextAlignment.Trailing);
         });
@@ -744,11 +744,11 @@ public sealed partial class WristPanel
             float h = MathF.Max(1, MathF.Round(Stats.CpuHistory[idx] * gi.Height));
             _p.Fill(new RectangleF(MathF.Floor(gi.Right - (Stats.CpuCount - i) * step), gi.Bottom - h, MathF.Max(1, MathF.Ceiling(step) - 1), h), 0xFF00FF00);
         }
-        string cpuLabel = Stats.Cpu >= 0 ? $"CPU usage: {Stats.Cpu * 100:0}%" : "CPU usage: --";
+        string cpuLabel = Stats.Cpu >= 0 ? Lang.F("CPU usage: {0:0}%", Stats.Cpu * 100) : Lang.T("CPU usage: --");
         _p.Fill(new RectangleF(gi.X, gi.Y, _ui.Width95(cpuLabel) + 8, 15), Blk95);
         _ui.Text95(cpuLabel, new RectangleF(gi.X + 3, gi.Y + 1, 120, 13), 0xFF00FF00);
         float frac = Stats.RamTotalGB > 0 ? Stats.RamUsedGB / Stats.RamTotalGB : 0;
-        _ui.Text95(Stats.RamTotalGB > 0 ? $"Memory: {Stats.RamUsedGB:0.0} of {Stats.RamTotalGB:0} GB" : "Memory: --", new RectangleF(c.X, c.Bottom - 38, c.Width, 15));
+        _ui.Text95(Stats.RamTotalGB > 0 ? Lang.F("Memory: {0:0.0} of {1:0} GB", Stats.RamUsedGB, Stats.RamTotalGB) : "Memory: --", new RectangleF(c.X, c.Bottom - 38, c.Width, 15));
         _ui.Progress95(new RectangleF(c.X, c.Bottom - 20, c.Width, 16), frac, Navy95c);
     }
 

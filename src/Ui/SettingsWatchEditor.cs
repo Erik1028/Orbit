@@ -117,7 +117,8 @@ public sealed partial class SettingsView
         SetPage(p, next, grid);
         _wselW = null;
         _wcell = (-1, -1);
-        _wmsg = dropped > 0 ? $"{dropped} widget{(dropped == 1 ? "" : "s")} did not fit on the {grid.Replace("x", " × ")} grid (switch back to keep {(dropped == 1 ? "it" : "them")})." : null;
+        _wmsg = dropped > 0 ? Lang.F(dropped == 1 ? "{0} widget did not fit on the {1} grid (switch back to keep it)." : "{0} widgets did not fit on the {1} grid (switch back to keep them).",
+            dropped, grid.Replace("x", " × ")) : null;
         ui.Changed = true;
     }
 
@@ -358,7 +359,7 @@ public sealed partial class SettingsView
                 var k = pal[i];
                 var r = new RectangleF(222 + i % 6 * 81, PaletteY + i / 6 * PalettePitch, 77, PalettePitch - 3);
                 // the icon only when it fits with the name and a margin on both sides
-                string icon = 11 + 8 + p.MeasureWidth(k.Name, 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
+                string icon = 11 + 8 + p.MeasureWidth(Lang.T(k.Name), 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
                 if (ui.Button(Ui.Id("wpal", i), r, k.Name, icon, false, true, 11)) AddWidget(ui, list, k, false);
             }
         }
@@ -370,7 +371,7 @@ public sealed partial class SettingsView
         {
             // the page shown: its grid, remove it; the background (all pages); start this page over
             int n = WatchPages.Count(w), ep = EditPage;
-            ui.Section(new RectangleF(rx, 84, rw, 22), n > 1 ? $"Page {ep + 1} of {n}" : "This page");
+            ui.Section(new RectangleF(rx, 84, rw, 22), n > 1 ? Lang.F("Page {0} of {1}", ep + 1, n) : "This page");
             int gi = EditGridSpec.Is43 ? 1 : 0;
             if (ui.Segmented("we.grid", new RectangleF(rx, 108, rw, 34), new[] { "6 × 4 grid", "4 × 3 grid" }, ref gi))
                 ChangeGrid(ui, gi == 1 ? "4x3" : "6x4");
@@ -433,7 +434,7 @@ public sealed partial class SettingsView
         for (int i = 0; i < n; i++)
         {
             var r = new RectangleF(x + i * (tw + gap), y, tw, h);
-            string name = WatchPages.Name(wc, i);
+            string name = WatchPages.Label(wc, i);
             string label = Cut(p, name, tw - 16, 13);
             if (ui.Button(Ui.Id("wpg", i), r, label, null, i == cur, true, 13) && i != cur) ShowPage(i);
         }
@@ -447,6 +448,7 @@ public sealed partial class SettingsView
 
     static string Cut(Painter p, string s, float maxW, float size)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (p.MeasureWidth(s, size, FontWeight.SemiBold) <= maxW) return s;
         int n = s.Length;
         while (n > 1 && p.MeasureWidth(s[..n] + "…", size, FontWeight.SemiBold) > maxW) n--;
@@ -473,7 +475,7 @@ public sealed partial class SettingsView
     {
         var items = sel.Items ??= new List<string>(WatchWidgets.GroupDefault);
         items.RemoveAll(s => Array.IndexOf(WatchWidgets.GroupKinds, s) < 0);
-        ui.Label(new RectangleF(x, y, 486, 18), $"Buttons in this group: {items.Count} (2 to 6)", Theme.Dim, 13);
+        ui.Label(new RectangleF(x, y, 486, 18), Lang.F("Buttons in this group: {0} (2 to 6)", items.Count), Theme.Dim, 13);
         for (int i = 0; i < WatchWidgets.GroupKinds.Length; i++)
         {
             string id = WatchWidgets.GroupKinds[i];
@@ -632,7 +634,7 @@ public sealed partial class SettingsView
         // the pages: the one edited (the watch shows it), a new one from "From", remove it (a second click confirms)
         int n = WatchPages.Count(w), ep = EditPage;
         var pageNames = new string[n];
-        for (int i = 0; i < n; i++) pageNames[i] = $"{i + 1}  {WatchPages.Name(w, i)}";
+        for (int i = 0; i < n; i++) pageNames[i] = $"{i + 1}  {WatchPages.Label(w, i)}";
         Lbl(ui, 16, 327, "Pa&ge:");
         bool before = ui.Changed;
         int pi = ep;
