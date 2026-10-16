@@ -81,6 +81,7 @@ static class Theme
 
     public static void Apply(AppearanceConfig a)
     {
+        Motion.Apply(a);
         Retro = Skins.Parse(a.Style);
         Classic = Retro != RetroStyle.None;
         Cyber = !Classic && a.Style == CyberHud.Id;

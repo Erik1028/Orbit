@@ -206,6 +206,8 @@ public sealed class AppearanceConfig
     public float NightBrightness { get; set; } = 0.45f;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string Font { get; set; }                   // Look > Font (modern only): one of Theme.FontChoices; null = Segoe UI Variable
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Motion { get; set; }                 // Look > Motion: null = full | reduced | off (see Gfx/Motion.cs)
 }
 
 // One saved arrangement ("Desk", "Bed", ...): where every panel was, its size and curve, night mode.
