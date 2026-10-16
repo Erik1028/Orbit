@@ -35,6 +35,7 @@ public sealed partial class WristPanel
         "room" => "room",
         "dock" => "dock",
         "mixer" => "mixer",
+        "notifications" => "notifications",
         _ => null,
     };
 
@@ -47,6 +48,7 @@ public sealed partial class WristPanel
         _openStart = Clock.Now;
         _calOffset = 0;
         _roomScroll = 0;
+        NotesFromTop();
         DockLetGo();
         _ui.SpringFrom(OpenKey, 0);
         _dirty = true;
@@ -73,6 +75,7 @@ public sealed partial class WristPanel
         _closing = false;
         _openStart = -10;
         _roomScroll = 0;
+        NotesFromTop();
         _ui.SpringFrom(OpenKey, 1);
         return true;
     }
@@ -140,7 +143,7 @@ public sealed partial class WristPanel
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
         if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
-            CyberDetailTag(E, Upper(k.Name));           // Cyber: a yellow tag (it types in: WristCyberFx.cs)
+            CyberDetailTag(E, Upper(kind == "notifications" ? "Incoming" : k.Name));      // Cyber: a yellow tag (it types in: WristCyberFx.cs)
         else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
@@ -163,6 +166,7 @@ public sealed partial class WristPanel
             case "mines": MinesDetail(E); break;
             case "room": RoomDetail(E, d); break;
             case "dock": DockDetail(E, d); break;
+            case "notifications": NotesDetail(E, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -583,6 +587,7 @@ public sealed partial class WristPanel
             case "system": System95Detail(c); break;
             case "volume": Volume95Detail(c); break;
             case "mixer": Mixer95Detail(c); break;
+            case "notifications": Notes95Detail(c, d); break;
         }
     }
 
