@@ -265,6 +265,7 @@ footer p{max-width:40em}
    3D ball bullets, a marquee, a hit counter (the real download count) and 88x31 buttons.
    The try-it watch keeps the app's own Windows 95 look, like a demo applet on the page. */
 .r90{display:none}
+html[data-style="95"] .r90-nopic{display:none}
 .w95-toggle{background:none;font:inherit;font-family:var(--mono);font-size:13px;cursor:pointer}
 html[data-style="95"]{
   --bg:#000; --text:#fff; --dim:#ddd; --line:#808080; --panel:#000; --accent:#ffff00;
