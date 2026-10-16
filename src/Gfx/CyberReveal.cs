@@ -58,6 +58,15 @@ static class CyberReveal
         return st;
     }
 
+    // Begin would draw something now (a panel that caches its picture draws it all while it does)
+    public static bool Running(double shownAt, float vis, bool closing)
+    {
+        if (!Theme.Cyber || !CyberFx.Any) return false;
+        if (closing && vis < 1) return CyberFx.Full;
+        double t = Clock.Now - shownAt;
+        return t >= 0 && t < OpenTime + 0.12;
+    }
+
     // where the opening's scan line is (texture px; it has not started: the top)
     public static float ScanY(in State st) =>
         st.All.Y + st.All.Height * CyberFx.EaseInOut(CyberFx.Ramp(st.T, 0.05, OpenTime - 0.05));

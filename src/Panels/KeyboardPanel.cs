@@ -715,5 +715,5 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
     public bool GrabSnapPreview => false;
     public void GrabEnd() { }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); _sounds.Dispose(); _canvas95?.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); _sounds.Dispose(); _canvas95?.Dispose(); _cyBase?.Dispose(); }
 }
