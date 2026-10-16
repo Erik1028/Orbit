@@ -53,13 +53,13 @@ public sealed partial class TheaterBar
         _p.Fill(new RectangleF(x + 3, 5, 1, H95 - 10), Theme.WithAlpha(0xFFFFFFFF, 0.65f));
         x += 8;
         bool changed = false;
-        sk.GlowText(_p, "Dim:", new RectangleF(x, 10, 28, 15), 0xFF000000, Ui.F95);
-        x += 26;
+        sk.GlowText(_p, "Dim:", new RectangleF(x, 10, DimW95 + 2, 15), 0xFF000000, Ui.F95);
+        x += DimW95;
         float dim = C.Dim;
         if (_ui.Track95("thb95.dim", new RectangleF(x, 4, Track95W, 28), ref dim, 0, 0.9f, true, 10)) { C.Dim = dim; changed = true; }
         x += Track95W + 8;
-        sk.GlowText(_p, "Size:", new RectangleF(x, 10, 32, 15), 0xFF000000, Ui.F95);
-        x += 30;
+        sk.GlowText(_p, "Size:", new RectangleF(x, 10, SizeW95 + 2, 15), 0xFF000000, Ui.F95);
+        x += SizeW95;
         float size = SizeNow;
         if (_ui.Track95("thb95.size", new RectangleF(x, 4, Track95W, 28), ref size, Theater.MinWidth, Theater.MaxWidth, true, 10)) { C.Width = size; changed = true; }
         x += Track95W + 8;
@@ -120,7 +120,7 @@ public static partial class WhatsNewView
         var lines = new List<(string text, bool bold, float indent)>();
         foreach (var e in list)
         {
-            foreach (var l in Wrap95(ui, $"Version {e.Version.ToString(3)} - {e.Title}", textW + 10, true)) lines.Add((l, true, 2));
+            foreach (var l in Wrap95(ui, Lang.F("Version {0} - {1}", e.Version.ToString(3), e.Title), textW + 10, true)) lines.Add((l, true, 2));
             foreach (var pt in e.Points)
             {
                 bool first = true;

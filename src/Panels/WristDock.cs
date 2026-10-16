@@ -229,7 +229,7 @@ public sealed partial class WristPanel
         var card = new RectangleF(E.X + E.Width / 2 - 220, E.Y + E.Height / 2 - 96, 440, 192);
         _p.Fill(card, Bento.Card, 22);
         _p.Stroke(RectangleF.Inflate(card, -0.6f, -0.6f), Theme.Border, 1.2f, 22);
-        string q = $"Run “{label}”?";
+        string q = Lang.F("Run “{0}”?", label);
         float qs = MathF.Max(18, FitSize(q, card.Width - 48, 24, FontWeight.SemiBold, null));
         _p.Text(Ellipsize(q, card.Width - 48, qs, FontWeight.SemiBold), new RectangleF(card.X + 24, card.Y + 20, card.Width - 48, 40), Bento.Text, qs,
             FontWeight.SemiBold);
@@ -255,7 +255,7 @@ public sealed partial class WristPanel
         bool show = DockShown(I, d);
         string name = s.InFolder ? s.FolderName : s.PageName;
         string pages = s.InFolder ? (s.FolderPages > 1 ? $"{s.FolderPage + 1}/{s.FolderPages}" : "") : $"{s.Page + 1}/{s.Pages}";
-        string title = show ? $"Hexpad - {name}{(pages.Length > 0 ? $" ({pages})" : "")}{(s.Ambient ? " - Idle" : "")}" : "Hexpad";
+        string title = show ? $"Hexpad - {name}{(pages.Length > 0 ? $" ({pages})" : "")}{(s.Ambient ? " - " + Lang.T("Idle") : "")}" : "Hexpad";
         _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), Fit(title, win.Width - 6 - 21 - 40, Ui.F95, true), W95Icons.Id.Dock);
         _dockClose95 = new RectangleF(win.Right - 5 - 16, win.Y + 5, 16, 14);
         if (_ui.CaptionClose95("wdk95x", win.Right - 5 - 16, win.Y + 5, true, 6)) { CloseDetail(); return; }
@@ -266,7 +266,7 @@ public sealed partial class WristPanel
             _p.Fill(msg, Wht95);
             _p.Bevel(msg, Painter.Edge.Sunken);
             W95Icons.Draw(_p, W95Icons.Id.Info32, msg.X + 14, msg.Y + 16);
-            string line = d.Dock == null ? "Hexpad is not connected." : I.StateLine() + ".";
+            string line = d.Dock == null ? "Hexpad is not connected." : Lang.T(I.StateLine()) + ".";
             _ui.Text95(line, new RectangleF(msg.X + 54, msg.Y + 18, msg.Width - 64, msg.Height - 30), Blk95, false, TextAlignment.Leading, true, true);
             return;
         }
@@ -357,7 +357,7 @@ public sealed partial class WristPanel
         _p.Bevel(box, Painter.Edge.Window);
         _ui.Caption95(new RectangleF(box.X + 3, box.Y + 3, box.Width - 6, 18), "Hexpad");
         W95Icons.Draw(_p, W95Icons.Id.Info32, box.X + 12, box.Y + 32);
-        _ui.Text95(Fit($"Run \"{label}\"?", box.Width - 64, Ui.F95, true), new RectangleF(box.X + 52, box.Y + 30, box.Width - 60, 16), Blk95, true);
+        _ui.Text95(Fit(Lang.F("Run \"{0}\"?", label), box.Width - 64, Ui.F95, true), new RectangleF(box.X + 52, box.Y + 30, box.Width - 60, 16), Blk95, true);
         _ui.Text95("It could end your VR session.", new RectangleF(box.X + 52, box.Y + 48, box.Width - 60, 16));
         if (_ui.Button95("wdk95yes", new RectangleF(box.X + box.Width / 2 - 80, box.Bottom - 32, 75, 23), "&Yes", true, true)) I.ConfirmYes();
         if (_ui.Button95("wdk95no", new RectangleF(box.X + box.Width / 2 + 5, box.Bottom - 32, 75, 23), "&No")) I.ConfirmNo();

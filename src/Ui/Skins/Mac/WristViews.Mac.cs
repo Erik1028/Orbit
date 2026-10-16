@@ -48,8 +48,8 @@ public sealed partial class WristPanel
         if (count == 0)
         {
             m.Well(_p, box);
-            string why = s == null ? "Not following VRChat. Turn on \"Follow VRChat's log\" in Settings." : RoomPanel.EmptyText(s) + ".";
-            if (s != null && s.LogFound && !s.VrcxFound) why += " Install VRCX to see your friends first.";
+            string why = s == null ? Lang.T("Not following VRChat. Turn on \"Follow VRChat's log\" in Settings.") : Lang.T(RoomPanel.EmptyText(s)) + ".";
+            if (s != null && s.LogFound && !s.VrcxFound) why += Lang.T(" Install VRCX to see your friends first.");
             _ui.Text95(why, new RectangleF(box.X + 8, box.Y + 6, box.Width - 16, box.Height - 12), MacBlack, false, TextAlignment.Leading, true, true);
             return;
         }
@@ -62,8 +62,8 @@ public sealed partial class WristPanel
             _ui.Text95(star ? "★" : "☆", new RectangleF(r.X + 4, r.Y, 14, r.Height), star ? MacBlack : Gry95);
             bool bold = p.Friend && !g;
             float nw = r.Width - 20 - JoinW - 4;
-            _ui.Text95(Fit(p.Name + (p.Friend ? "  (friend)" : ""), nw, Ui.F95, bold), new RectangleF(r.X + 22, r.Y, nw, r.Height), fg, bold);
-            string when = g ? "left " + RoomPanel.Ago(p.Left, now) : RoomPanel.Ago(p.Joined, now);
+            _ui.Text95(Fit(p.Name + (p.Friend ? Lang.T("  (friend)") : ""), nw, Ui.F95, bold), new RectangleF(r.X + 22, r.Y, nw, r.Height), fg, bold);
+            string when = g ? RoomPanel.LeftText(p.Left, now, 0) : RoomPanel.Ago(p.Joined, now);
             float jw = MathF.Min(JoinW - 2, r.Right - (head.Right - JoinW) - 2);
             _ui.Text95(Fit(when, jw), new RectangleF(head.Right - JoinW + 4, r.Y, jw, r.Height), fg);
         });
@@ -81,7 +81,7 @@ public sealed partial class WristPanel
         bool show = DockShown(I, d);
         string name = s.InFolder ? s.FolderName : s.PageName;
         string pages = s.InFolder ? (s.FolderPages > 1 ? $"{s.FolderPage + 1}/{s.FolderPages}" : "") : $"{s.Page + 1}/{s.Pages}";
-        string title = show ? $"Hexpad - {name}{(pages.Length > 0 ? $" ({pages})" : "")}{(s.Ambient ? " - Idle" : "")}" : "Hexpad";
+        string title = show ? $"Hexpad - {name}{(pages.Length > 0 ? $" ({pages})" : "")}{(s.Ambient ? " - " + Lang.T("Idle") : "")}" : "Hexpad";
         m.MacWindow(_p, win, Fit(title, win.Width - 60, Ui.F95, true));
         _dockClose95 = new RectangleF(MacSkin.CloseX(win), MacSkin.BoxY(win), 16, 14);
         if (_ui.CaptionClose95("wdk95x", MacSkin.CloseX(win), MacSkin.BoxY(win), true, 6)) { CloseDetail(); return; }
@@ -91,7 +91,7 @@ public sealed partial class WristPanel
             m.Well(_p, msg);
             if (d.Dock?.State == HexpadLink.LinkState.Connecting) MacSkin.WatchCursor(_p, msg.X + 14, msg.Y + 16, 2);     // being looked for
             else W95Icons.Draw(_p, W95Icons.Id.Dock, msg.X + 14, msg.Y + 16, 2);
-            string line = d.Dock == null ? "Hexpad is not connected." : I.StateLine() + ".";
+            string line = d.Dock == null ? "Hexpad is not connected." : Lang.T(I.StateLine()) + ".";
             _ui.Text95(line, new RectangleF(msg.X + 54, msg.Y + 18, msg.Width - 64, msg.Height - 30), MacBlack, false, TextAlignment.Leading, true, true);
             return;
         }
@@ -130,7 +130,7 @@ public sealed partial class WristPanel
         var box = new RectangleF(MathF.Floor(win.X + win.Width / 2 - 130), MathF.Floor(win.Y + win.Height / 2 - 52), 260, 104);
         MacSkin.AlertFrame(_p, box);
         MacSkin.Caution(_p, box.X + 14, box.Y + 14);
-        _ui.Text95(Fit($"Run \"{label}\"?", box.Width - 70, Ui.F95, true), new RectangleF(box.X + 56, box.Y + 14, box.Width - 66, 16), MacBlack, true);
+        _ui.Text95(Fit(Lang.F("Run \"{0}\"?", label), box.Width - 70, Ui.F95, true), new RectangleF(box.X + 56, box.Y + 14, box.Width - 66, 16), MacBlack, true);
         _ui.Text95("It could end your VR session.", new RectangleF(box.X + 56, box.Y + 32, box.Width - 66, 16));
         if (_ui.Button95("wdk95no", new RectangleF(box.Right - 14 - 75 - 10 - 75, box.Bottom - 35, 75, 23), "No")) I.ConfirmNo();
         if (_ui.Button95("wdk95yes", new RectangleF(box.Right - 12 - 75, box.Bottom - 37, 75, 26), "Yes", true, true)) I.ConfirmYes();
@@ -186,6 +186,6 @@ public sealed partial class WristPanel
                 break;
         }
         int best = MinesBestOf(0);
-        _ui.Text95(best > 0 ? $"Best time: {best} s" : "Best time: none", new RectangleF(x0, sw.Bottom - 8 - 15, w, 15));
+        _ui.Text95(best > 0 ? Lang.F("Best time: {0} s", best) : "Best time: none", new RectangleF(x0, sw.Bottom - 8 - 15, w, 15));
     }
 }

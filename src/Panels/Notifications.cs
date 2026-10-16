@@ -34,7 +34,9 @@ public sealed class NotificationListener : IDisposable
 {
     public const int Port = 42069, IconSize = 96;
     public readonly ConcurrentQueue<Notification> Incoming = new();
-    public string Status { get; private set; } = "off";
+    // off / listening / busy - Status says it in the language picked (the log in English)
+    int _st;
+    public string Status => _st == 1 ? Lang.F("listening on UDP {0}", Port) : _st == 2 ? Lang.F("UDP {0} is busy (XSOverlay running?)", Port) : Lang.T("off");
     UdpClient _udp;
     Thread _t;
 
@@ -45,7 +47,7 @@ public sealed class NotificationListener : IDisposable
     public void SetEnabled(bool on)
     {
         if (on == (_udp != null)) return;
-        if (!on) { Stop(); Status = "off"; _retryAt = 0; _warned = false; return; }
+        if (!on) { Stop(); _st = 0; _retryAt = 0; _warned = false; return; }
         double now = Clock.Now;
         if (now < _retryAt) return;
         UdpClient u = null;
@@ -57,15 +59,15 @@ public sealed class NotificationListener : IDisposable
             _warned = false;
             _t = new Thread(Run) { IsBackground = true, Name = "notifications" };
             _t.Start();
-            Status = $"listening on UDP {Port}";
-            Log.Info("notifications: " + Status);
+            _st = 1;
+            Log.Info($"notifications: listening on UDP {Port}");
         }
         catch (SocketException e)
         {
             u?.Dispose();
             _udp = null;
             _retryAt = now + 10;
-            Status = $"UDP {Port} is busy (XSOverlay running?)";
+            _st = 2;
             if (!_warned) { _warned = true; Log.Warn("notifications: " + e.Message); }
         }
     }

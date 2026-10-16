@@ -225,14 +225,15 @@ public sealed partial class TerminalSkin : Win95Skin
 
     // ---- drawing helpers (the screens in Terminal/ use them too) ----
 
-    public static float W(string s, int n = 1, bool bold = false) => FontAt(n).Measure(s, bold);
+    public static float W(string s, int n = 1, bool bold = false) => FontAt(n).Measure(Lang.T(s), bold);
 
     // text in r with the dot-matrix font at n x (Consolas' glyphs for letters it does not have)
     public void Put(Painter p, string s, RectangleF r, uint c, int n = 1, bool bold = false, TextAlignment h = TextAlignment.Leading,
         ParagraphAlignment v = ParagraphAlignment.Center, bool wrap = false)
     {
         if (string.IsNullOrEmpty(s)) return;
-        s = Tty(s);
+        s = Tty(Lang.T(s));                 // the language picked (the dot-matrix font has its letters)
+        Painter.FitAll?.Invoke(p, s, r, SizeOf(n), bold ? FontWeight.Bold : FontWeight.Normal, Font, wrap, h, v, 0);
         if (Covers(s, n)) { FontAt(n).Draw(p, s, r, c, bold, h, v, wrap); return; }
         _plain++;
         try { p.Text(s, r, c, SizeOf(n), bold ? FontWeight.Bold : FontWeight.Normal, h, v, "Consolas", wrap); }
@@ -321,7 +322,7 @@ public sealed partial class TerminalSkin : Win95Skin
     public override void Text(Painter p, string s, RectangleF r, uint c, bool bold, TextAlignment al, bool enabled, bool wrap, float size)
     {
         if (string.IsNullOrEmpty(s)) return;
-        s = Tty(s);
+        s = Tty(Lang.T(s));
         bool plain = !Covers(s, ScaleOf(size));
         if (plain) _plain++;
         try { base.Text(p, s, r, c, bold, al, enabled, wrap, size); }

@@ -99,6 +99,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             adapter = _vr.AdapterIndex;
         _gpu = new Gpu(adapter);
         _painter = new Painter(_gpu);
+        Lang.Set(C.General.Language);          // General > Language (null: English, nothing looked up)
         Theme.Apply(C.Appearance);
         CyberFx.Live = true;                // the Cyber style's effects may start by themselves here (not in the --snapshot tools)
         // 1.12, the watch pages: a new install starts on the VRChat and Performance pages; an older config gets them once, after its
@@ -953,7 +954,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
               ?? (ITheaterScreen)_windowPanels.FirstOrDefault(w => w.Playable);
         if (screen == null)
         {
-            _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = "Theater", Content = "There is no monitor or window to show.", Timeout = 4 });
+            _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = Lang.T("Theater"), Content = Lang.T("There is no monitor or window to show."), Timeout = 4 });
             return;
         }
         _theaterKb = C.Keyboard.Visible;
@@ -1402,7 +1403,10 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         if (_vr.Connected) ApplyAutoStart();
     }
 
-    public string AutoStartStatus { get; private set; } = "applied when SteamVR runs";
+    // what the auto-start did, in English (the log's words); AutoStartStatus says it in the language picked
+    string _autoStart = "applied when SteamVR runs";
+    public string AutoStartStatus => _autoStart.StartsWith("SteamVR refused: ", StringComparison.Ordinal)
+        ? Lang.F("SteamVR refused: {0}", _autoStart[17..]) : Lang.T(_autoStart);
 
     // Registers orbit.vrmanifest (SteamVR then starts "Orbit.exe --steamvr", which hops to the admin task)
     // and switches its auto-launch on/off. Re-registers if the exe moved since the last registration.
@@ -1434,15 +1438,15 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 }
                 if (e == EVRApplicationError.None && !apps.GetApplicationAutoLaunch(AppKey))
                     e = apps.SetApplicationAutoLaunch(AppKey, true);
-                AutoStartStatus = e == EVRApplicationError.None ? "on: SteamVR starts OrbitOverlay and closes it on exit" : "SteamVR refused: " + e;
+                _autoStart = e == EVRApplicationError.None ? "on: SteamVR starts OrbitOverlay and closes it on exit" : "SteamVR refused: " + e;
             }
             else if (installed)
             {
                 apps.SetApplicationAutoLaunch(AppKey, false);
                 e = apps.RemoveApplicationManifest(VrManifest);
-                AutoStartStatus = "off";
+                _autoStart = "off";
             }
-            else AutoStartStatus = "off";
+            else _autoStart = "off";
             Log.Info($"auto-start wanted={C.General.AutoStart} installed={installed} path='{path}' -> {e}, autolaunch={apps.GetApplicationAutoLaunch(AppKey)}");
         }
         catch (Exception ex) { Log.Warn("auto-start: " + ex.Message); }
@@ -1515,8 +1519,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             else
                 _notifyIn.Incoming.Enqueue(new Notification
                 {
-                    Source = "OrbitOverlay", Title = "OrbitOverlay updated",
-                    Content = $"Now running {now} (was {last}).", Timeout = 8,
+                    Source = "OrbitOverlay", Title = Lang.T("OrbitOverlay updated"),
+                    Content = Lang.F("Now running {0} (was {1}).", now, last), Timeout = 8,
                 });
         }
         C.General.LastVersion = now;
@@ -1537,7 +1541,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         }
     }
 
-    public string WhatsNewSub => C.General.WhatsNewFrom == null ? "" : $"Updated to {Updater.Current.ToString(3)} from {C.General.WhatsNewFrom}";
+    public string WhatsNewSub => C.General.WhatsNewFrom == null ? "" : Lang.F("Updated to {0} from {1}", Updater.Current.ToString(3), C.General.WhatsNewFrom);
 
     public void DismissWhatsNew()
     {
@@ -1550,8 +1554,8 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
 
     public void TestNotification() => _notifyIn.Incoming.Enqueue(new Notification
     {
-        Source = "OrbitOverlay", Title = "Test notification",
-        Content = "Notifications from VRCX and other tools appear here.", Timeout = 4,
+        Source = "OrbitOverlay", Title = Lang.T("Test notification"),
+        Content = Lang.T("Notifications from VRCX and other tools appear here."), Timeout = 4,
     });
 
     public void SetRunAsAdmin(bool on)
@@ -1697,7 +1701,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             case "media.prev": _media.Command("prev"); break;
             case "media.play": _media.Command("play"); break;
             case "timer.done":
-                _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = "Timer", Content = "Time is up.", Timeout = 6 });
+                _notifyIn.Incoming.Enqueue(new Notification { Source = "OrbitOverlay", Title = Lang.T("Timer"), Content = Lang.T("Time is up."), Timeout = 6 });
                 break;
             case "media.next": _media.Command("next"); break;
             case "mines.flag":
@@ -1761,12 +1765,12 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
                 var who = Array.FindAll(ev.People, Known);
                 if (who.Length == 0) continue;
                 string names = string.Join(", ", Array.ConvertAll(who.Length > 4 ? who[..4] : who, p => p.Name)) + (who.Length > 4 ? $" +{who.Length - 4}" : "");
-                RoomCard(who.Length == 1 ? $"{who[0].Name} is here" : $"{who.Length} people you know are here", names + (world.Length > 0 ? " · " + world : ""));
+                RoomCard(who.Length == 1 ? Lang.F("{0} is here", who[0].Name) : Lang.F("{0} people you know are here", who.Length), names + (world.Length > 0 ? " · " + world : ""));
                 continue;
             }
             var p = ev.People[0];
             if (!(r.NotifyEveryone || Known(p))) continue;
-            RoomCard(ev.Kind == RoomWatcher.Kind.Joined ? $"{p.Name} joined" : $"{p.Name} left", world);
+            RoomCard(ev.Kind == RoomWatcher.Kind.Joined ? Lang.F("{0} joined", p.Name) : string.Format(Lang.C("room", "{0} left"), p.Name), world);
         }
         _roomPanel.Update(_vr, now, dt, _roomSnap);
     }
@@ -1788,10 +1792,10 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         get
         {
             var s = _roomSnap;
-            if (!_vr.Connected) return "follows the log while SteamVR runs";
-            if (!s.LogFound) return "no VRChat log found";
-            string where = s.InRoom ? $"{s.Here.Count} in {(s.World.Length > 28 ? s.World[..27] + "\u2026" : s.World)}" : "not in a world";
-            return where + (s.VrcxFound ? $" · VRCX: {s.Friends} friends" : " · VRCX not found");
+            if (!_vr.Connected) return Lang.T("follows the log while SteamVR runs");
+            if (!s.LogFound) return Lang.T("no VRChat log found");
+            string where = s.InRoom ? Lang.F("{0} in {1}", s.Here.Count, s.World.Length > 28 ? s.World[..27] + "\u2026" : s.World) : Lang.T("not in a world");
+            return where + (s.VrcxFound ? Lang.F(" · VRCX: {0} friends", s.Friends) : Lang.T(" · VRCX not found"));
         }
     }
 

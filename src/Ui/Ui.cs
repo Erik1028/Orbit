@@ -469,6 +469,7 @@ public sealed partial class Ui
         if (Theme.Cyber) { CyberSection(r, title); return; }    // a yellow tag (it slides in: UiCyber.cs)
         if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
         // a group box title: bold black, an etched line running on after it
+        title = Lang.T(title);
         string t = char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();
         P.Text(t, r, Theme.W95Dark, 13, FontWeight.Bold);
         float tw = P.MeasureWidth(t, 13, FontWeight.Bold);

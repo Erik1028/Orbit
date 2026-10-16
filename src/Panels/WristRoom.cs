@@ -38,17 +38,13 @@ public sealed partial class WristPanel
     static string RoomStay(RoomWatcher.Snapshot s, DateTime now)
     {
         if (s == null || !s.InRoom || s.Since == default) return null;
-        return now - s.Since < TimeSpan.FromMinutes(1) ? "just arrived" : "here for " + RoomPanel.Ago(s.Since, now);
+        return now - s.Since < TimeSpan.FromMinutes(1) ? Lang.T("just arrived") : Lang.F("here for {0}", RoomPanel.Ago(s.Since, now));
     }
 
-    static string RoomWhen(DateTime t, DateTime now)
-    {
-        string a = RoomPanel.Ago(t, now);
-        return a == "just now" ? a : a + " ago";
-    }
+    static string RoomWhen(DateTime t, DateTime now) => RoomPanel.AgoText(t, now);
 
-    static string RoomCountText(int n) => n == 1 ? "1 person" : $"{n} people";
-    static string RoomFriendsText(int f) => f == 1 ? "1 friend" : $"{f} friends";
+    static string RoomCountText(int n) => RoomPanel.PeopleText(n);
+    static string RoomFriendsText(int f) => RoomPanel.FriendsText(f);
 
     // ================= Modern =================
 
@@ -138,7 +134,7 @@ public sealed partial class WristPanel
         }
         // along the bottom: VRCX (where the friends come from); how many more are under the list
         float fb = E.Bottom - 22;
-        string more = below > 0 ? $"+{below} more · the stick scrolls" : null;
+        string more = below > 0 ? Lang.F("+{0} more · the stick scrolls", below) : null;
         float mw = more == null ? 0 : MathF.Min(L.Width * 0.55f, _p.MeasureWidth(more, SmallText, FontWeight.SemiBold) + 2);
         if (more != null) TextAt(Ellipsize(more, mw, SmallText, FontWeight.SemiBold), L.Right - mw, fb, mw + 2, Sub, SmallText, FontWeight.SemiBold,
             TextAlignment.Trailing);
@@ -173,7 +169,7 @@ public sealed partial class WristPanel
             TextAt("·", x, mb, 12, Sub, SmallText, FontWeight.Normal);
             x += _p.MeasureWidth("·", SmallText, FontWeight.Normal) + 7;
         }
-        string when = gone ? "left " + RoomWhen(p.Left, now) : RoomWhen(p.Joined, now);
+        string when = gone ? RoomPanel.LeftText(p.Left, now, 2) : RoomWhen(p.Joined, now);
         if (r.Right - x > 20) TextAt(Ellipsize(when, r.Right - x, SmallText, FontWeight.Normal), x, mb, r.Right - x + 2, Sub, SmallText, FontWeight.Normal);
     }
 
@@ -187,7 +183,7 @@ public sealed partial class WristPanel
         bool inRoom = s != null && s.InRoom;
         _p.Fill(win, Theme.W95Face);
         _p.Bevel(win, Painter.Edge.Window);
-        string title = inRoom && s.World.Length > 0 ? "Room - " + s.World : "Room";
+        string title = inRoom && s.World.Length > 0 ? Lang.F("Room - {0}", s.World) : "Room";
         _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), Fit(title, win.Width - 6 - 21 - 40, Ui.F95, true), W95Icons.Id.People);
         _roomClose95 = new RectangleF(win.Right - 5 - 16, win.Y + 5, 16, 14);
         if (_ui.CaptionClose95("wr95x", win.Right - 5 - 16, win.Y + 5, true, 6)) { CloseDetail(); return; }
@@ -207,8 +203,8 @@ public sealed partial class WristPanel
         {
             _p.Fill(box, Wht95);
             _p.Bevel(box, Painter.Edge.Sunken);
-            string why = s == null ? "Not following VRChat. Turn on \"Follow VRChat's log\" in Settings." : RoomPanel.EmptyText(s) + ".";
-            if (s != null && s.LogFound && !s.VrcxFound) why += " Install VRCX to see your friends first.";
+            string why = s == null ? Lang.T("Not following VRChat. Turn on \"Follow VRChat's log\" in Settings.") : Lang.T(RoomPanel.EmptyText(s)) + ".";
+            if (s != null && s.LogFound && !s.VrcxFound) why += Lang.T(" Install VRCX to see your friends first.");
             _ui.Text95(why, new RectangleF(box.X + 8, box.Y + 6, box.Width - 16, box.Height - 12), Blk95, false, TextAlignment.Leading, true, true);
         }
         else
@@ -221,8 +217,8 @@ public sealed partial class WristPanel
                 _ui.Text95(star ? "★" : "☆", new RectangleF(r.X + 2, r.Y, 16, r.Height), star ? 0xFF808000 : Gry95);
                 bool bold = p.Friend && !g;
                 float nw = r.Width - 20 - JoinW - 4;
-                _ui.Text95(Fit(p.Name + (p.Friend ? "  (friend)" : ""), nw, Ui.F95, bold), new RectangleF(r.X + 20, r.Y, nw, r.Height), fg, bold);
-                string when = g ? "left " + RoomPanel.Ago(p.Left, now) : RoomPanel.Ago(p.Joined, now);
+                _ui.Text95(Fit(p.Name + (p.Friend ? Lang.T("  (friend)") : ""), nw, Ui.F95, bold), new RectangleF(r.X + 20, r.Y, nw, r.Height), fg, bold);
+                string when = g ? RoomPanel.LeftText(p.Left, now, 0) : RoomPanel.Ago(p.Joined, now);
                 // the last column is under the scroll bar's header part when there is one: the time stays whole in what is left
                 float jw = MathF.Min(JoinW - 2, r.Right - (head.Right - JoinW) - 2);
                 _ui.Text95(Fit(when, jw), new RectangleF(head.Right - JoinW + 2, r.Y, jw, r.Height), fg);

@@ -14,14 +14,31 @@ public sealed class Tray : IDisposable
     {
         AppIcon = MakeIcon(64);
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Settings", null, (_, _) => settings());
-        menu.Items.Add("Recenter desktops", null, (_, _) => recenter());
-        menu.Items.Add("Show / hide desktops", null, (_, _) => toggleDesktops());
-        menu.Items.Add("Keyboard", null, (_, _) => toggleKeyboard());
+        _items = new[]
+        {
+            menu.Items.Add("Settings", null, (_, _) => settings()),
+            menu.Items.Add("Recenter desktops", null, (_, _) => recenter()),
+            menu.Items.Add("Show / hide desktops", null, (_, _) => toggleDesktops()),
+            menu.Items.Add("Keyboard", null, (_, _) => toggleKeyboard()),
+        };
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => exit());
+        _exit = menu.Items.Add("Exit", null, (_, _) => exit());
         _icon = new NotifyIcon { Icon = MakeIcon(32), Text = "OrbitOverlay (SteamVR overlay)", Visible = true, ContextMenuStrip = menu };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) settings(); };
+        Relabel();
+        Lang.Changed += Relabel;
+    }
+
+    // the menu in the language picked in General (English: as written above)
+    static readonly string[] Labels = { "Settings", "Recenter desktops", "Show / hide desktops", "Keyboard" };
+    readonly ToolStripItem[] _items;
+    readonly ToolStripItem _exit;
+
+    void Relabel()
+    {
+        for (int i = 0; i < _items.Length; i++) _items[i].Text = Lang.T(Labels[i]);
+        _exit.Text = Lang.T("Exit");
+        _icon.Text = Lang.T("OrbitOverlay (SteamVR overlay)");
     }
 
     // Erik's logo (orbitoverlay.svg, 64 x 64 units; the same picture as assets\orbit.ico, the exe's icon): a dark rounded
@@ -53,6 +70,7 @@ public sealed class Tray : IDisposable
 
     public void Dispose()
     {
+        Lang.Changed -= Relabel;
         _icon.Visible = false;
         _icon.Dispose();
     }

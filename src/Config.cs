@@ -189,6 +189,8 @@ public sealed class GeneralConfig
     public bool NotificationSound { get; set; } = true;
     public float NotificationAngle { get; set; } = 20f;  // degrees below the centre of view (first card)
     public int LaserSmoothing { get; set; } = 2;      // 0 off, 1 low, 2 medium, 3 high
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Language { get; set; }              // General > Language: null = English | hu (src/Lang/Lang.cs); written only once set
 }
 
 public sealed class AppearanceConfig

@@ -67,6 +67,7 @@ public sealed partial class WristPanel
     // a title over two lines: as many words as fit on the first, the rest (cut if it must be) on the second
     (string, string) TwoLines(string s, float maxW, float size, FontWeight wt)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (_p.MeasureWidth(s, size, wt) <= maxW) return (s, "");
         int cut = -1;
         for (int i = s.IndexOf(' '); i > 0; i = s.IndexOf(' ', i + 1))
@@ -81,7 +82,10 @@ public sealed partial class WristPanel
     // "A long song ti…" (never splits an emoji)
     string Ellipsize(string s, float maxW, float size, FontWeight wt, string family = null)
     {
+        string sh = Lang.Short(s);
+        s = Lang.T(s);                     // cut in the language picked (its short form first, where it has one)
         if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, wt, family) <= maxW) return s;
+        if (sh != null && _p.MeasureWidth(s = sh, size, wt, family) <= maxW) return s;
         int lo = 0, hi = s.Length - 1;
         while (lo < hi)
         {
@@ -243,24 +247,30 @@ public sealed partial class WristPanel
 
     static uint OnColor(uint fill) => Theme.Luma(fill) > 0.55f ? 0xFF0B1220 : 0xFFFFFFFF;
 
-    static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0], CultureInfo.CurrentCulture) + s[1..];
+    // (English writes "October 15, Thursday"; a language that writes its months and days small - Magyar: "csütörtök, okt. 15." - keeps them)
+    static string Capital(string s) => string.IsNullOrEmpty(s) || Lang.Has("date|small") ? s : char.ToUpper(s[0], CultureInfo.CurrentCulture) + s[1..];
 
     // UPPERCASE forms, made once (captions, device names): a ToUpper per caption per frame was most of a frame's garbage
     static readonly Dictionary<string, string> _upper = new();
     static CultureInfo _upperCulture;
+    static int _upperLang = -1;
 
+    // (in the language picked: a caption measured, cut or typed letter by letter is the translated one)
     static string Upper(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
         var culture = CultureInfo.CurrentCulture;
-        if (!ReferenceEquals(culture, _upperCulture)) { _upper.Clear(); _upperCulture = culture; }
+        if (!ReferenceEquals(culture, _upperCulture) || _upperLang != Lang.Version) { _upper.Clear(); _upperCulture = culture; _upperLang = Lang.Version; }
         if (!_upper.TryGetValue(s, out var u))
         {
             if (_upper.Count > 256) _upper.Clear();
-            _upper[s] = u = s.ToUpper(culture);
+            _upper[s] = u = Lang.T(s).ToUpper(culture);
         }
         return u;
     }
+
+    // a battery's label as the watch writes it ("L" / "R" are letters of the language: the table's "battery|L")
+    static string Bat(string label) => Lang.C("battery", label);
 
     // "0%" .. "100%", made once
     static readonly string[] PctText = MakePct();
@@ -295,6 +305,7 @@ public sealed partial class WristPanel
     // The words of the date widgets, made when the day (or the language) changes - not on every frame
     DateTime _wordsDay;
     CultureInfo _wordsCulture;
+    int _wordsLang = -1;
     string _dateLine, _dayName, _monthDay, _weekNote, _weekYear, _year, _dayNum;
     readonly string[] _capMonth = new string[2], _capWeekday = new string[3], _capDayDate = new string[2], _dateForms = new string[3],
         _monthNames = new string[2];
@@ -302,14 +313,15 @@ public sealed partial class WristPanel
     void Words(DateTime now)
     {
         var culture = CultureInfo.CurrentCulture;
-        if (now.Date == _wordsDay && ReferenceEquals(culture, _wordsCulture)) return;
+        if (now.Date == _wordsDay && ReferenceEquals(culture, _wordsCulture) && _wordsLang == Lang.Version) return;
         _wordsDay = now.Date;
         _wordsCulture = culture;
+        _wordsLang = Lang.Version;
         _dateLine = Capital(DateText(now));
         _dayName = Capital(now.ToString("dddd", culture));
         string md = culture.DateTimeFormat.MonthDayPattern, mdShort = md.Replace("MMMM", "MMM");
         _monthDay = now.ToString(md, culture);
-        _weekNote = $"week {ISOWeek.GetWeekOfYear(now)}";
+        _weekNote = Lang.F("week {0}", ISOWeek.GetWeekOfYear(now));
         _year = now.Year.ToString(culture);
         _weekYear = $"{_weekNote} · {_year}";
         _dayNum = now.Day.ToString(culture);
@@ -325,7 +337,7 @@ public sealed partial class WristPanel
         _capDayDate[1] = ddd;
         // the clock's header, longest first: the date as the watch writes it ("October 15, Thursday"), shorter, the date alone
         _dateForms[0] = _dateLine;
-        _dateForms[1] = Capital(now.ToString(mdShort, culture) + ", " + ddd);
+        _dateForms[1] = Capital(Lang.Has("date|middle") ? now.ToString(Lang.T("date|middle"), culture) : now.ToString(mdShort, culture) + ", " + ddd);
         _dateForms[2] = Capital(now.ToString(mdShort, culture));
     }
 
@@ -666,23 +678,23 @@ public sealed partial class WristPanel
         {
             case "fps":
                 float fps = v.AppFps;
-                return (fps < 0 ? -1 : fps / Math.Max(1, hz), fps < 0 ? "–" : $"{fps:0}", "fps", $"of {hz:0} Hz", FpsLevel(fps, hz));
+                return (fps < 0 ? -1 : fps / Math.Max(1, hz), fps < 0 ? "–" : $"{fps:0}", "fps", Lang.F("of {0:0} Hz", hz), FpsLevel(fps, hz));
             case "reproj":
                 float rp = v.ReprojPct;
-                return (rp < 0 ? -1 : MathF.Min(1, rp / 50), rp < 0 ? "–" : $"{rp:0}%", "reproj.", "of frames", ReprojLevel(rp));
+                return (rp < 0 ? -1 : MathF.Min(1, rp / 50), rp < 0 ? "–" : $"{rp:0}%", "reproj.", Lang.T("of frames"), ReprojLevel(rp));
             case "gpu":
                 float ms = v.GpuMs;
-                return (ms < 0 ? -1 : MathF.Min(1, ms / budget), ms < 0 ? "–" : $"{ms:0.0}", "ms", $"of {budget:0.0} ms", GpuLevel(ms, budget));
+                return (ms < 0 ? -1 : MathF.Min(1, ms / budget), ms < 0 ? "–" : $"{ms:0.0}", "ms", Lang.F("of {0:0.0} ms", budget), GpuLevel(ms, budget));
             case "vram":
                 float vram = d.VramUsed, vt = d.VramTotalGB;
-                return (vram < 0 || vt <= 0 ? -1 : vram / vt, vram < 0 ? "–" : $"{vram:0.0}", "GB", vt > 0 ? $"of {vt:0} GB" : "in use",
+                return (vram < 0 || vt <= 0 ? -1 : vram / vt, vram < 0 ? "–" : $"{vram:0.0}", "GB", vt > 0 ? Lang.F("of {0:0} GB", vt) : Lang.T("in use"),
                     VramLevel(vram, vt));
             case "cpu":
                 float c = Stats.Cpu;
-                return (c, c < 0 ? "–" : $"{c * 100:0}%", "CPU", "total load", CpuLevel(c));
+                return (c, c < 0 ? "–" : $"{c * 100:0}%", "CPU", Lang.T("total load"), CpuLevel(c));
             default:
                 float used = Stats.RamUsedGB, total = Stats.RamTotalGB;
-                return (used < 0 || total <= 0 ? -1 : used / total, used < 0 ? "–" : $"{used:0.0}", "GB", total > 0 ? $"of {total:0} GB" : "in use",
+                return (used < 0 || total <= 0 ? -1 : used / total, used < 0 ? "–" : $"{used:0.0}", "GB", total > 0 ? Lang.F("of {0:0} GB", total) : Lang.T("in use"),
                     RamLevel(used, total));
         }
     }
@@ -725,7 +737,7 @@ public sealed partial class WristPanel
         if (Theme.Cyber) return CyberCaption(x, r, maxW, forms);      // a yellow tag
         bool dot = badge != StatLevel.Ok && Bento.CapBadge;
         if (dot) maxW -= DotW;
-        foreach (var f in forms)
+        foreach (var f in ShortForms(forms))
         {
             if (string.IsNullOrEmpty(f)) continue;
             string s = Upper(f);
@@ -742,6 +754,21 @@ public sealed partial class WristPanel
 
     float Caption(RectangleF r, float maxW, string[] forms, StatLevel badge = StatLevel.Ok, uint color = 0) =>
         Caption(r.X + PadX(r), r, maxW, forms, badge, color);
+
+    // a caption's forms, and after them a shorter one a language has of the last ("short|Volume": Magyar "Hang" where "Hangerő" does
+    // not fit a 1x1) - English: the forms as they are
+    static readonly Dictionary<string[], string[]> _shortForms = new();
+    static int _shortLang = -1;
+    static string[] ShortForms(string[] forms)
+    {
+        if (Lang.English || forms == null || forms.Length == 0) return forms;
+        if (_shortLang != Lang.Version) { _shortForms.Clear(); _shortLang = Lang.Version; }
+        if (_shortForms.TryGetValue(forms, out var all)) return all;
+        string key = "short|" + forms[^1];
+        all = Lang.Has(key) ? System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Append(forms, Lang.T(key))) : forms;
+        _shortForms[forms] = all;
+        return all;
+    }
 
     const float DotW = 17;                     // a status badge after a caption, with its gap
 
@@ -761,7 +788,7 @@ public sealed partial class WristPanel
     float CaptionWidth(string[] forms, float maxW)
     {
         if (Theme.Cyber) return CyberCaptionWidth(forms, maxW);
-        foreach (var f in forms)
+        foreach (var f in ShortForms(forms))
         {
             if (string.IsNullOrEmpty(f)) continue;
             float w = _p.MeasureTracked(Upper(f), CapSize, FontWeight.SemiBold, CapTrack);
@@ -1108,6 +1135,8 @@ public sealed partial class WristPanel
     }
 
     // a tile's name: the kind's, shorter on a 1x1
+    // (a language's own short name for a 1x1 where it has one: "tile|Keyboard")
+    // (a language's shorter one where the whole does not fit: "short|Keyboard" - Ellipsize / Fit try it)
     static string TileName(WatchWidgets.Kind k, bool wide) => wide ? k.Name : k.Id switch { "night" => "Night", "status" => "Status", _ => k.Name };
 
     void ButtonCell(int id, WatchWidget w, WatchWidgets.Kind k, RectangleF r, PanelData d)
@@ -1563,13 +1592,13 @@ public sealed partial class WristPanel
     // "14:20" or "2:20 PM", the way the clock widgets write it
     string ShortClock(DateTime t) =>
         _cfg.Data.Appearance.Clock24h ? t.ToString("HH:mm", CultureInfo.CurrentCulture)
-            : t.ToString("h:mm", CultureInfo.CurrentCulture) + (t.Hour < 12 ? " AM" : " PM");
+            : t.ToString("h:mm", CultureInfo.CurrentCulture) + Lang.T(t.Hour < 12 ? " AM" : " PM");
 
     static string SessionText(PanelData d)
     {
         if (d.VrSince is not { } since) return "–";
         var span = DateTime.Now - since;
-        return span.TotalHours >= 1 ? $"{(int)span.TotalHours}:{span.Minutes:00}" : $"{Math.Max(0, (int)span.TotalMinutes)} min";
+        return span.TotalHours >= 1 ? $"{(int)span.TotalHours}:{span.Minutes:00}" : Lang.F("{0} min", Math.Max(0, (int)span.TotalMinutes));
     }
 
     // The time in VR as a value and a unit - "1:23", or "42" "min" in the first hour - and as hours and minutes ("1" h "23" min;
@@ -1607,7 +1636,8 @@ public sealed partial class WristPanel
             float by = r.Y + MBase;
             if (off) { ValueText(x, by, val, 40, vc, null); return; }
             // as big as fits (40 px, down to 30): every part measured at 100 px once
-            float uw = _p.MeasureWidth("h", SmallText, FontWeight.SemiBold), mw = _p.MeasureWidth("min", SmallText, FontWeight.SemiBold);
+            string hu = Lang.C("unit", "h");           // "1 h 23 min" - the hour's unit by itself is no text of the table (a key's letter)
+            float uw = _p.MeasureWidth(hu, SmallText, FontWeight.SemiBold), mw = _p.MeasureWidth("min", SmallText, FontWeight.SemiBold);
             float nw = (_sessH != null ? _p.MeasureWidth(_sessH, 100, FontWeight.Bold, Theme.Display) : 0) +
                        _p.MeasureWidth(_sessM, 100, FontWeight.Bold, Theme.Display);
             float units = (_sessH != null ? uw + 4 + 10 : 0) + 4 + mw;
@@ -1615,7 +1645,7 @@ public sealed partial class WristPanel
             if (_sessH != null)
             {
                 x += ValueText(x, by, _sessH, vs, vc, Ui.Id("wseh", id)) + 4;
-                TextAt("h", x, by, uw + 2, Sub, SmallText, FontWeight.SemiBold);
+                TextAt(hu, x, by, uw + 2, Sub, SmallText, FontWeight.SemiBold);
                 x += uw + 10;
             }
             x += ValueText(x, by, _sessM, vs, vc, Ui.Id("wsem", id)) + 4;
@@ -1629,16 +1659,18 @@ public sealed partial class WristPanel
     // "since 7:08 AM" and a shorter "since 7:08", made when the start or the clock style changes
     DateTime _sinceAt;
     bool _since24;
+    int _sinceLang = -1;
     readonly string[] _sinceNote = new string[2];
     string[] SinceNote(DateTime since)
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        if (since != _sinceAt || h24 != _since24 || _sinceNote[0] == null)
+        if (since != _sinceAt || h24 != _since24 || _sinceNote[0] == null || _sinceLang != Lang.Version)
         {
             _sinceAt = since;
             _since24 = h24;
-            _sinceNote[0] = "since " + ShortClock(since);
-            _sinceNote[1] = "since " + since.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture);
+            _sinceLang = Lang.Version;
+            _sinceNote[0] = Lang.F("since {0}", ShortClock(since));
+            _sinceNote[1] = Lang.F("since {0}", since.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture));
         }
         return _sinceNote;
     }
@@ -1705,7 +1737,7 @@ public sealed partial class WristPanel
             var b = bats[Emptiest(bats)];
             int shown = ShownPct(b.pct);
             var lv = BatteryLevel(shown);
-            string name = Upper(b.label);
+            string name = Upper(Bat(b.label));
             float meta = _p.MeasureWidth(name, CapSize, FontWeight.SemiBold) + (b.charging ? 14 : 0);
             float mx = r.X + pad;
             if (CaptionWidth(CapBattery, iw - meta - 8) >= 0)
@@ -1773,7 +1805,7 @@ public sealed partial class WristPanel
             TextAt(pct, c.Right - pw - 4, by, pw + 4, pc, ps, FontWeight.Bold, TextAlignment.Trailing, Theme.Display);
             if (dot) StatusDot(c.Right - pw - 4 - 10, dy, lv);
         }
-        DeviceName(c.X, ny, Upper(b.label), b.charging, nr - c.X);
+        DeviceName(c.X, ny, Upper(Bat(b.label)), b.charging, nr - c.X);
         Meter(bar, b.pct, Bento.Level(lv, Bento.Ok), key);
     }
 
@@ -1786,7 +1818,7 @@ public sealed partial class WristPanel
         {
             var b = bats[i];
             float need = _p.MeasureWidth(Pct(ShownPct(b.pct)), ts, FontWeight.SemiBold, Theme.Display) + 8 + (b.charging ? RowBolt(ts) : 0) +
-                _p.MeasureWidth(Upper(b.label), RowName(ts), FontWeight.SemiBold);
+                _p.MeasureWidth(Upper(Bat(b.label)), RowName(ts), FontWeight.SemiBold);
             if (need > iw) ts = MathF.Max(SmallText, MathF.Floor(ts * iw / need * 0.95f * 2) / 2);
         }
         return ts;
@@ -1802,7 +1834,7 @@ public sealed partial class WristPanel
         const float ip = 10;
         int shown = ShownPct(b.pct);
         var lv = BatteryLevel(shown);
-        string pct = Pct(shown), name = Upper(b.label);
+        string pct = Pct(shown), name = Upper(Bat(b.label));
         float lt = Math.Clamp(cell.Height * 0.08f, 4, 8), iw = cell.Width - 2 * ip;
         float th = ts * 1.3f, gap = MathF.Max(4, ts * 0.2f), y = cell.Y + (cell.Height - th - gap - lt) / 2;
         var tr = new RectangleF(cell.X + ip, y, iw, th);
@@ -1898,13 +1930,13 @@ public sealed partial class WristPanel
         var (n, f, names) = RoomCount(d);
         if (w.W >= 2)
         {
-            _ui.Text95(Fit(n < 0 ? "Not in a world" : n == 1 ? "1 person" : $"{n} people", c.Width - 8, Ui.F95, true),
+            _ui.Text95(Fit(n < 0 ? "Not in a world" : n == 1 ? "1 person" : Lang.F("{0} people", n), c.Width - 8, Ui.F95, true),
                 new RectangleF(c.X + 4, c.Y + c.Height / 2 - 14, c.Width - 8, 13), Blk95, true);
-            _ui.Text95(Fit(f > 0 ? (f == 1 ? "1 friend" : $"{f} friends") + ": " + names : n < 0 ? "" : d.Room.World, c.Width - 8),
+            _ui.Text95(Fit(f > 0 ? (f == 1 ? Lang.T("1 friend") : Lang.F("{0} friends", f)) + ": " + names : n < 0 ? "" : d.Room.World, c.Width - 8),
                 new RectangleF(c.X + 4, c.Y + c.Height / 2 + 1, c.Width - 8, 13), f > 0 ? 0xFF008000 : Gry95);
             return;
         }
-        Value95(c, n < 0 ? "--" : n.ToString(), f > 0 ? $"{f} friend{(f == 1 ? "" : "s")}" : "in room", Blk95);
+        Value95(c, n < 0 ? "--" : n.ToString(), f > 0 ? (f == 1 ? "1 friend" : Lang.F("{0} friends", f)) : "in room", Blk95);
     }
 
     static bool DockShows(PanelData d) =>
@@ -2263,7 +2295,7 @@ public sealed partial class WristPanel
                     if (w.W >= 2 && (k.Id is "cpu" or "ram" or "vram") && frac >= 0)
                     {
                         // a System Monitor bar
-                        _ui.Text95(Fit($"{cap95}: {value}{(unit == "GB" ? " GB" : "")}", c.Width - 8), new RectangleF(c.X + 4, c.Y + 4, c.Width - 8, 13), color);
+                        _ui.Text95(Fit($"{Lang.T(cap95)}: {value}{(unit == "GB" ? " GB" : "")}", c.Width - 8), new RectangleF(c.X + 4, c.Y + 4, c.Width - 8, 13), color);
                         _ui.Progress95(new RectangleF(c.X + 4, c.Y + 22, c.Width - 8, 14), frac, Navy95c);
                     }
                     else Value95(c, value, cap95, color);
@@ -2441,7 +2473,7 @@ public sealed partial class WristPanel
             var low = bats[0];
             foreach (var b in bats) if (b.pct < low.pct) low = b;
             float y = MathF.Floor(c.Y + (c.Height - 28) / 2);
-            _ui.Text95(low.label, new RectangleF(c.X, y, c.Width, 13), Blk95, false, TextAlignment.Center);
+            _ui.Text95(Bat(low.label), new RectangleF(c.X, y, c.Width, 13), Blk95, false, TextAlignment.Center);
             _ui.Text95($"{low.pct * 100:0}%", new RectangleF(c.X, y + 14, c.Width, 15), low.pct > 0.2f ? Blk95 : 0xFF800000, true,
                 TextAlignment.Center, size: 13);
             return;
@@ -2452,7 +2484,7 @@ public sealed partial class WristPanel
         {
             var b = bats[pick[i]];
             float y = y0 + i * 13;
-            _ui.Text95(b.label, new RectangleF(c.X + 2, y, 34, 12));
+            _ui.Text95(Bat(b.label), new RectangleF(c.X + 2, y, 34, 12));
             var bar = new RectangleF(c.X + 36, y + 1, c.Width - 36 - 32, 10);
             bool low = b.pct <= 0.2f && !b.charging;
             if (bar.Width >= 12) _ui.Progress95(bar, b.pct, low ? 0xFF800000 : Theme.W95Navy);
@@ -2482,7 +2514,7 @@ public sealed partial class WristPanel
             var g = DockGrid(new RectangleF(c.X + 3, c.Y + 3, gw, gh), d, 2, 0, true);
             float tx = g.Right + 5, tw = c.Right - 3 - tx;
             _ui.Text95(Fit(DockWhere(s), tw), new RectangleF(tx, c.Y + c.Height / 2 - 14, tw, 13));
-            _ui.Text95(Fit(s.Ambient ? "Idle" : s.InFolder ? "Folder" : $"{s.Page + 1} of {s.Pages}", tw), new RectangleF(tx, c.Y + c.Height / 2 + 1, tw, 13), Gry95);
+            _ui.Text95(Fit(s.Ambient ? "Idle" : s.InFolder ? "Folder" : Lang.F("{0} of {1}", s.Page + 1, s.Pages), tw), new RectangleF(tx, c.Y + c.Height / 2 + 1, tw, 13), Gry95);
             return;
         }
         DockGrid(RectangleF.Inflate(c, -3, -3), d, 2, 0, true);

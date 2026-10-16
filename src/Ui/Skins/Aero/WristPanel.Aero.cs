@@ -158,7 +158,7 @@ public sealed partial class WristPanel
         {
             if (shown >= max) break;
             float y = y0 + shown * pitch;
-            _p.Text(b.label, new RectangleF(r.X, y - 2, 32, pitch + 4), ink, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+            _p.Text(Bat(b.label), new RectangleF(r.X, y - 2, 32, pitch + 4), ink, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
             var bar = new RectangleF(r.X + 32, y + MathF.Floor((pitch - 9) / 2), r.Width - 32 - 32, 9);
             uint[] col = b.charging ? AeroSkin.BarBlue : b.pct <= 0.2f ? AeroSkin.BarRed : b.pct <= 0.35f ? AeroSkin.BarYellow : AeroSkin.BarGreen;
             if (bar.Width >= 10) AeroSkin.Bar7(_p, bar, b.pct, col);
@@ -178,7 +178,7 @@ public sealed partial class WristPanel
     {
         "L" => new[] { "Left controller", "Left", "L" },
         "R" => new[] { "Right controller", "Right", "R" },
-        _ when label.StartsWith("Trk×", StringComparison.Ordinal) => new[] { $"{label[4..]} trackers (lowest)", $"{label[4..]} trackers", label },
+        _ when label.StartsWith("Trk×", StringComparison.Ordinal) => new[] { Lang.F("{0} trackers (lowest)", label[4..]), Lang.F("{0} trackers", label[4..]), label },
         _ => new[] { label },
     };
 
@@ -193,7 +193,7 @@ public sealed partial class WristPanel
             uint pc = b.charging ? 0xFFBFE2FF : b.pct <= 0.2f ? 0xFFFFA48F : 0xFFFFFFFF;
             float pw = WAero(pct, 11) + 2, bw = b.charging ? 7 : 0;
             float nw = r.Width - pw - bw - 6;
-            string name = Array.Find(BatteryNamesAero(b.label), x => WAero(x, 11) <= nw) ?? Fit(b.label, nw);
+            string name = Array.Find(BatteryNamesAero(b.label), x => WAero(x, 11) <= nw) ?? Fit(Bat(b.label), nw);
             _p.Text(name, new RectangleF(r.X, y - 2, nw + 2, 16), 0xFFE8F1FC, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
             if (b.charging) _p.Pixels(BoltAero, MathF.Round(r.X + WAero(name, 11) + 4), y + 2, 0xFFFFD866);
             _p.Text(pct, new RectangleF(r.Right - pw - 2, y - 2, pw + 2, 16), pc, 11, FontWeight.Normal, TextAlignment.Trailing, ParagraphAlignment.Center, Ae.Font);
@@ -290,7 +290,7 @@ public sealed partial class WristPanel
         {
             (v.AppFps < 0 ? "-- fps" : $"{v.AppFps:0}/{v.DisplayHz:0} fps", v.AppFps < 0 ? "--" : $"{v.AppFps:0} fps",
                 v.AppFps >= 0 && v.AppFps < v.DisplayHz * 0.85f ? warn : ok),
-            (v.ReprojPct < 0 ? "-- reprojection" : $"{v.ReprojPct:0}% reprojection", v.ReprojPct < 0 ? "--" : $"{v.ReprojPct:0}% reproj.",
+            (v.ReprojPct < 0 ? Lang.T("-- reprojection") : Lang.F("{0:0}% reprojection", v.ReprojPct), v.ReprojPct < 0 ? "--" : $"{v.ReprojPct:0}% reproj.",
                 v.ReprojPct > 25 ? bad : v.ReprojPct > 8 ? warn : ok),
             (v.GpuMs < 0 ? "-- ms GPU" : $"{v.GpuMs:0.0} ms GPU", v.GpuMs < 0 ? "--" : $"{v.GpuMs:0.0} ms",
                 v.GpuMs > budget ? bad : v.GpuMs > budget * 0.85f ? warn : ok),
@@ -399,14 +399,14 @@ public sealed partial class WristPanel
                     if (value == "–") value = "--";
                     string cap = k.Id switch
                     {
-                        "fps" => d.Vr.AppFps >= 0 ? $"fps / {d.Vr.DisplayHz:0}" : "fps", "reproj" => "reprojection", "gpu" => "ms GPU",
+                        "fps" => d.Vr.AppFps >= 0 ? $"fps / {d.Vr.DisplayHz:0}" : "fps", "reproj" => Lang.T("reprojection"), "gpu" => "ms GPU",
                         "vram" => "GB VRAM", "cpu" => "CPU", _ => "RAM",
                     };
                     if (WAero(cap, 11) > c.Width - 2)
                         cap = k.Id switch { "fps" => "fps", "reproj" => "reproj.", "gpu" => "GPU ms", "vram" => "VRAM", _ => cap };
                     if (w.W >= 2 && (k.Id is "cpu" or "ram" or "vram") && frac >= 0)
                     {
-                        _p.Text(Fit($"{cap}: {value}{(unit == "GB" && k.Id != "vram" ? " GB" : "")}", c.Width - 8), new RectangleF(c.X + 4, c.Y + 2, c.Width - 8, 18),
+                        _p.Text(Fit($"{Lang.T(cap)}: {value}{(unit == "GB" && k.Id != "vram" ? " GB" : "")}", c.Width - 8), new RectangleF(c.X + 4, c.Y + 2, c.Width - 8, 18),
                             color, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, sk.Font);
                         AeroSkin.Bar7(_p, new RectangleF(c.X + 4, c.Y + 22, c.Width - 8, 12), frac,
                             tint == Theme.Bad ? AeroSkin.BarRed : tint == Theme.Warn ? AeroSkin.BarYellow : AeroSkin.BarGreen);

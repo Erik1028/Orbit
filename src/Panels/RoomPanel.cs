@@ -186,10 +186,30 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
     internal static string Ago(DateTime t, DateTime now)
     {
         var d = now - t;
-        if (d.TotalMinutes < 1) return "just now";
-        if (d.TotalHours < 1) return $"{(int)d.TotalMinutes} min";
-        return $"{(int)d.TotalHours} h {d.Minutes:00} min";
+        if (d.TotalMinutes < 1) return Lang.T("just now");
+        if (d.TotalHours < 1) return Lang.F("{0} min", (int)d.TotalMinutes);
+        return Lang.F("{0} h {1:00} min", (int)d.TotalHours, d.Minutes);
     }
+
+    // "5 min ago", "1 h 05 min ago", "just now"
+    internal static string AgoText(DateTime t, DateTime now)
+    {
+        var d = now - t;
+        if (d.TotalMinutes < 1) return Lang.T("just now");
+        if (d.TotalHours < 1) return Lang.F("{0} min ago", (int)d.TotalMinutes);
+        return Lang.F("{0} h {1:00} min ago", (int)d.TotalHours, d.Minutes);
+    }
+
+    // someone who left: "left 5 min" (a list's last column, form 0), "left 5 min ago" (1; 2: "left just now" in the first minute) -
+    // English as each place always wrote it; another language its own way
+    internal static string LeftText(DateTime t, DateTime now, int form)
+    {
+        if (Lang.English) return form == 2 ? "left " + AgoText(t, now) : "left " + Ago(t, now) + (form == 1 ? " ago" : "");
+        return now - t < TimeSpan.FromMinutes(1) ? Lang.T("left just now") : Lang.F("left {0}", AgoText(t, now));
+    }
+
+    internal static string PeopleText(int n) => n == 1 ? Lang.T("1 person") : Lang.F("{0} people", n);
+    internal static string FriendsText(int f) => f == 1 ? Lang.T("1 friend") : Lang.F("{0} friends", f);
 
     string Empty() => EmptyText(_s);
 
@@ -225,8 +245,8 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         int friends = _s.Here.FindAll(p => p.Friend).Count;
         if (_s.InRoom)
         {
-            string count = _s.Here.Count == 1 ? "1 person" : $"{_s.Here.Count} people";
-            if (friends > 0) count += friends == 1 ? " · 1 friend" : $" · {friends} friends";
+            string count = PeopleText(_s.Here.Count);
+            if (friends > 0) count += " · " + FriendsText(friends);
             float cw = _p.MeasureWidth(count, 15, FontWeight.SemiBold) + 26;
             _p.Fill(new RectangleF(hx, 19, cw, 30), Theme.WithAlpha(Theme.Accent, 0.18f), 15);
             _p.Text(count, new RectangleF(hx + 13, 19, cw - 22, 30), Theme.Accent, 15, FontWeight.SemiBold);
@@ -291,7 +311,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         if (_ui.Clickable(Ui.Id("rm.s", index), sr, out bool hover, out _)) ToggleStar(p);
         _p.Text(star ? "★" : "☆", sr, star ? Theme.Warn : hover ? Theme.Text : sub, 22, FontWeight.Normal, TextAlignment.Center);
         float x = sr.Right + 4;
-        string when = gone ? "left " + Ago(p.Left, now) + " ago" : Ago(p.Joined, now);
+        string when = gone ? LeftText(p.Left, now, 1) : Ago(p.Joined, now);
         float ww = _p.MeasureWidth(when, 14) + 16;
         float nw = r.Right - x - ww - (p.Friend ? 76 : 8);
         _p.Text(Ellipsize(p.Name, nw, 18, FontWeight.SemiBold), new RectangleF(x, r.Y, nw, r.Height), gone ? sub : Theme.Text, 18, FontWeight.SemiBold);
@@ -307,6 +327,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
 
     string Ellipsize(string s, float maxW, float size, FontWeight wt = FontWeight.Normal)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, wt) <= maxW) return s;
         int n = s.Length;
         while (n > 1 && _p.MeasureWidth(s[..n] + "…", size, wt) > maxW) n--;
@@ -336,7 +357,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         var win = new RectangleF(0, 0, W95, H95);
         _p.Fill(win, Theme.W95Face);
         _p.Bevel(win, Painter.Edge.Window);
-        _ui.Caption95(new RectangleF(3, 3, W95 - 6, 18), _s.InRoom && _s.World.Length > 0 ? Fit95("Room - " + _s.World, W95 - 40) : "Room");
+        _ui.Caption95(new RectangleF(3, 3, W95 - 6, 18), _s.InRoom && _s.World.Length > 0 ? Fit95(Lang.F("Room - {0}", _s.World), W95 - 40) : "Room");
         if (_ui.CaptionClose95("rm95.x", W95 - 5 - 16, 5, true, 6)) Toggle();
 
         var people = Ordered();
@@ -353,7 +374,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         {
             _p.Fill(box, 0xFFFFFFFF);
             _p.Bevel(box, Painter.Edge.Sunken);
-            _ui.Text95(Empty() + ".", new RectangleF(box.X + 8, box.Y + 6, box.Width - 16, 16));
+            _ui.Text95(Lang.T(Empty()) + ".", new RectangleF(box.X + 8, box.Y + 6, box.Width - 16, 16));
         }
         else
         {
@@ -362,9 +383,9 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
                 var (p, gone) = lines[i];
                 uint fg = on ? 0xFFFFFFFF : gone ? Gry95 : Blk95;
                 _ui.Text95(Starred(p) ? "★" : "☆", new RectangleF(r.X + 2, r.Y, 16, r.Height), on ? fg : Starred(p) ? 0xFF808000 : Gry95);
-                string name = p.Name + (p.Friend ? "  (friend)" : "");
+                string name = p.Name + (p.Friend ? Lang.T("  (friend)") : "");
                 _ui.Text95(Fit95(name, r.Width - 20 - 104), new RectangleF(r.X + 20, r.Y, r.Width - 124, r.Height), fg, p.Friend && !gone);
-                string when = gone ? "left " + Ago(p.Left, now) : Ago(p.Joined, now);
+                string when = gone ? LeftText(p.Left, now, 0) : Ago(p.Joined, now);
                 _ui.Text95(Fit95(when, 98), new RectangleF(r.Right - 100, r.Y, 98, r.Height), fg);
             });
             if (hit >= 0)
@@ -374,9 +395,9 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
             }
         }
         int friends = _s.Here.FindAll(p => p.Friend).Count;
-        _ui.Pane95(new RectangleF(4, 214, 120, 20), _s.InRoom ? (people.Count == 1 ? "1 person" : $"{people.Count} people") : "Not in a world");
-        _ui.Pane95(new RectangleF(126, 214, 110, 20), friends == 1 ? "1 friend" : $"{friends} friends");
-        _ui.Pane95(new RectangleF(238, 214, W95 - 242, 20), Fit95(_s.VrcxFound ? $"VRCX: {_s.Friends} friends" : "VRCX not found", W95 - 256),
+        _ui.Pane95(new RectangleF(4, 214, 120, 20), _s.InRoom ? PeopleText(people.Count) : "Not in a world");
+        _ui.Pane95(new RectangleF(126, 214, 110, 20), FriendsText(friends));
+        _ui.Pane95(new RectangleF(238, 214, W95 - 242, 20), Fit95(_s.VrcxFound ? Lang.F("VRCX: {0} friends", _s.Friends) : "VRCX not found", W95 - 256),
             _s.VrcxFound ? 0xFF008000 : 0);
         _p.End();
         _p.Begin(Surf.Bitmap, 0x00000000);
@@ -394,6 +415,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
 
     string Fit95(string s, float w)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || _ui.Width95(s) <= w) return s;
         int n = s.Length;
         while (n > 1 && _ui.Width95(s[..n] + "...") > w) n--;

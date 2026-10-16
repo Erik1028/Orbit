@@ -43,7 +43,10 @@ public sealed partial class WristPanel
     // s cut to w with an ellipsis (one cell)
     static string TFit(string s, float w, int n = 1, bool bold = false)
     {
+        string sh = Lang.Short(s);
+        s = Lang.T(s);                  // cut in the language picked (its short form first, where it has one)
         if (string.IsNullOrEmpty(s) || T.W(s, n, bold) <= w) return s;
+        if (sh != null && T.W(s = sh, n, bold) <= w) return s;
         int k = s.Length;
         while (k > 1 && T.W(s[..k] + "\u2026", n, bold) > w) k--;
         if (k > 1 && char.IsHighSurrogate(s[k - 1])) k--;
@@ -207,7 +210,7 @@ public sealed partial class WristPanel
         }
         var pick = PickBatteries(all, Math.Min(max, (int)((r.Height + 4) / 11)));
         float lw = 0;
-        foreach (int i in pick) lw = MathF.Max(lw, T.W(T.Up(all[i].label)));
+        foreach (int i in pick) lw = MathF.Max(lw, T.W(T.Up(Bat(all[i].label))));
         lw = MathF.Min(lw, 30);
         int cells = (int)((r.Width - lw - 6 - 30) / 6) - 2;
         for (int k = 0; k < pick.Count; k++)
@@ -215,7 +218,7 @@ public sealed partial class WristPanel
             var b = all[pick[k]];
             float top = r.Y + 2 + k * 11;
             bool low = b.pct <= 0.2f && !b.charging;
-            TCaps(TFit(T.Up(b.label), lw), r.X, top, T.MID);
+            TCaps(TFit(T.Up(Bat(b.label)), lw), r.X, top, T.MID);
             float bx = r.X + lw + 6;
             bx += TBar(bx, top, cells, b.pct, low);
             TCapsR($"{b.pct * 100:0}%", r.Right - 6, top, low ? T.HOT : T.INK);
@@ -401,7 +404,8 @@ public sealed partial class WristPanel
         if (k.Button)
         {
             var (key, word, wide) = TButtonWords(k.Id);
-            if (word == null) word = wide = T.Up(d.LayoutName ?? "LAYOUT");
+            (word, wide) = (Lang.T(word), Lang.T(wide));        // in the language picked (TKey measures what it draws)
+            if (word == null) word = wide = T.Up(Lang.T(d.LayoutName ?? "LAYOUT"));
             bool click = w.W >= 2
                 ? TKey(Ui.Id("wcb", id), r, $"[{key}] {wide}", IsOn(k.Id, d))
                 : TKey(Ui.Id("wcb", id), r, $"[{key}]", IsOn(k.Id, d), true, word);
@@ -443,7 +447,7 @@ public sealed partial class WristPanel
             case "dock" when !DockShows(d) && d.Dock?.State == HexpadLink.LinkState.Connecting:
                 // Hexpad being looked for: a spinner turns after the word
                 if (_ui.Clickable(Ui.Id("wdk", id), r, out _, out _)) OpenDetail(w);
-                string cw = w.W >= 2 ? "CONNECTING " : "CONN ";
+                string cw = Lang.T(w.W >= 2 ? "CONNECTING " : "CONN ");
                 TCapsC(cw + T.Spinner(), c, MathF.Floor(c.Y + (c.Height - 7) / 2), T.INK);
                 break;
             case "dock": Dock95Widget(r, c, d, w, id); break;
@@ -458,8 +462,10 @@ public sealed partial class WristPanel
                 else TPerfTwo(d, c);
                 break;
             case "session":
-                string sv = SessionText(d);
-                TValue(c, sv == "\u2013" ? "--" : sv.Replace(" min", ""), sv.EndsWith(" min") ? "MIN" : w.W >= 2 ? "H:MM IN VR" : "H:MM", T.INK);
+                // the first hour in minutes ("42" MIN), then hours and minutes (whatever language SessionText writes them in)
+                bool firstHour = d.VrSince is { } vs0 && (DateTime.Now - vs0).TotalHours < 1;
+                string sv = d.VrSince is { } vs1 ? (firstHour ? Math.Max(0, (int)(DateTime.Now - vs1).TotalMinutes).ToString(CultureInfo.InvariantCulture) : SessionText(d)) : "\u2013";
+                TValue(c, sv == "\u2013" ? "--" : sv, firstHour ? "MIN" : w.W >= 2 ? "H:MM IN VR" : "H:MM", T.INK);
                 break;
             default:
                 var (frac, value, unit, _, tint) = StatInfo(k.Id, d);
@@ -559,7 +565,7 @@ public sealed partial class WristPanel
             return;
         }
         string iso = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        string sub = $"{T.Up(now.ToString(w.W >= 3 ? "dddd" : "ddd", culture))} \u00B7 WEEK {ISOWeek.GetWeekOfYear(now)}";
+        string sub = Lang.F("{0} \u00B7 WEEK {1}", T.Up(now.ToString(w.W >= 3 ? "dddd" : "ddd", culture)), ISOWeek.GetWeekOfYear(now));
         int n = TScale(iso, c.Width - 6, c.Height - 13, 3);
         float vh = 7 * n, top = MathF.Floor(c.Y + (c.Height - vh - 12) / 2);
         TCapsC(iso, c, top, T.INK, n);
@@ -628,7 +634,7 @@ public sealed partial class WristPanel
         {
             var low = bats[0];
             foreach (var b in bats) if (b.pct < low.pct) low = b;
-            TValue(c, $"{low.pct * 100:0}%", T.Up(low.label), low.pct > 0.2f || low.charging ? T.INK : T.HOT);
+            TValue(c, $"{low.pct * 100:0}%", T.Up(Bat(low.label)), low.pct > 0.2f || low.charging ? T.INK : T.HOT);
             return;
         }
         int two = (int)((c.Height + 3) / 24);
@@ -643,7 +649,7 @@ public sealed partial class WristPanel
                 var b = bats[pick[i]];
                 bool low = b.pct <= 0.2f && !b.charging;
                 float y = top + i * 24;
-                string head = $"{TFit(T.Up(b.label), c.Width - 50)} {b.pct * 100:0}%";
+                string head = $"{TFit(T.Up(Bat(b.label)), c.Width - 50)} {b.pct * 100:0}%";
                 TCaps(head, c.X + 3, y, low ? T.HOT : T.INK);
                 if (b.charging) TCaps("+", c.X + 3 + T.W(head) + 6, y, T.HOT);
                 TBar(c.X + 3, y + 10, cells, b.pct, low);
@@ -749,12 +755,12 @@ public sealed partial class WristPanel
         if (w.W >= 2)
         {
             float top = MathF.Floor(c.Y + (c.Height - 18) / 2);
-            TCaps(TFit(n < 0 ? "NOT IN A WORLD" : n == 1 ? "1 PERSON" : $"{n} PEOPLE", c.Width - 6), c.X + 3, top, n < 0 ? T.DIM : T.INK);
-            string sub = f > 0 ? (f == 1 ? "1 FRIEND" : $"{f} FRIENDS") + ": " + names : n < 0 ? "" : T.Up(d.Room.World);
+            TCaps(TFit(n < 0 ? "NOT IN A WORLD" : Lang.Upper(RoomPanel.PeopleText(n)), c.Width - 6), c.X + 3, top, n < 0 ? T.DIM : T.INK);
+            string sub = f > 0 ? Lang.Upper(RoomPanel.FriendsText(f)) + ": " + names : n < 0 ? "" : T.Up(d.Room.World);
             if (!string.IsNullOrEmpty(sub)) TCaps(TFit(sub, c.Width - 6), c.X + 3, top + 11, f > 0 ? T.HOT : T.MID);
             return;
         }
-        TValue(c, n < 0 ? "--" : n.ToString(CultureInfo.InvariantCulture), f > 0 ? $"{f} FRIEND{(f == 1 ? "" : "S")}" : "IN ROOM", T.INK);
+        TValue(c, n < 0 ? "--" : n.ToString(CultureInfo.InvariantCulture), f > 0 ? Lang.Upper(RoomPanel.FriendsText(f)) : "IN ROOM", T.INK);
     }
 
     // the microphone: a tap mutes it; wide, [X] MUTE and the level as a bar
@@ -807,7 +813,8 @@ public sealed partial class WristPanel
         {
             string kid = _groupIds[j];
             var (key, word, wide) = TButtonWords(kid);
-            if (word == null) word = wide = T.Up(d.LayoutName ?? "LAYOUT");
+            (word, wide) = (Lang.T(word), Lang.T(wide));
+            if (word == null) word = wide = T.Up(Lang.T(d.LayoutName ?? "LAYOUT"));
             var b = new RectangleF(a.X + j % cols * (bw + 2), y0 + j / cols * (bh + 2), bw, bh);
             float fit = bw - 4;
             string shrt = kid switch
@@ -815,6 +822,7 @@ public sealed partial class WristPanel
                 "keyboard" => "KBD", "desktops" => "MON", "recenter" => "CTR", "night" => "NGT", "settings" => "SET", "status" => "STS",
                 "theater" => "CIN", _ => word.Length > 3 ? word[..3] : word,
             };
+            shrt = Lang.T(shrt);
             string label = T.W($"[{key}] {wide}") <= fit ? $"[{key}] {wide}" : T.W(wide) <= fit ? wide : T.W(word) <= fit ? word
                 : T.W(shrt) <= fit ? shrt : key;
             if (TKey(Ui.Id("wgb", id * 8 + j), b, label, IsOn(kid, d))) OnAction?.Invoke(kid);
@@ -834,7 +842,7 @@ public sealed partial class WristPanel
         for (int i = 0; i < count; i++)
         {
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
-            string name = T.Up(WatchPages.Name(C, i));
+            string name = T.Up(WatchPages.Name(C, i));          // (already in the language picked)
             string label = T.W($"F{i + 1} {name}") <= bw - 6 ? $"F{i + 1} {name}" : TFit($"{i + 1}:{name}", bw - 6);
             if (TKey(Ui.Id("wtb", i), b, label, i == cur)) GoToPage(i);
         }
@@ -1061,6 +1069,6 @@ public sealed partial class WristPanel
         };
         _ui.Text95(msg, new RectangleF(x0, ty, w, 60), T.INK, false, TextAlignment.Leading, true, true);
         int best = MinesBestOf(0);
-        TCaps(best > 0 ? $"BEST {best} S" : "BEST --", x0, sw.Bottom - 16, T.DIM);
+        TCaps(best > 0 ? Lang.F("BEST {0} S", best) : "BEST --", x0, sw.Bottom - 16, T.DIM);
     }
 }

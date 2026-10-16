@@ -467,7 +467,8 @@ public static class WatchPages
     public static string Name(WristConfig c, int i)
     {
         string n = i <= 0 ? c.Name : c.Pages[i - 1].Name;
-        return string.IsNullOrWhiteSpace(n) ? $"Page {i + 1}" : n;
+        // in the language picked: the built-in pages' names ("Performance") and "Page 2" (a name of your own stays as it is)
+        return string.IsNullOrWhiteSpace(n) ? Lang.F("Page {0}", i + 1) : Lang.T(n);
     }
 
     // a page's list (null: page 1 never set up)

@@ -24,6 +24,7 @@ public sealed class Updater
     readonly object _lock = new();
     State _state;
     string _message = "";
+    object[] _args;           // the message's parts: it is then a pattern of the language table, filled in (Snapshot) in the language picked
     float _progress;
     Version _latest;
     string _latestName, _assetUrl, _sha256, _pageUrl;
@@ -33,18 +34,18 @@ public sealed class Updater
 
     public (State state, string message, float progress, string latest) Snapshot()
     {
-        lock (_lock) return (_state, _message, _progress, _latest?.ToString(3));
+        lock (_lock) return (_state, _args == null ? _message : Lang.F(_message, _args), _progress, _latest?.ToString(3));
     }
 
-    void Set(State s, string msg, float progress = 0)
+    void Set(State s, string msg, float progress = 0, params object[] args)
     {
-        lock (_lock) { _state = s; _message = msg; _progress = progress; }
+        lock (_lock) { _state = s; _message = msg; _progress = progress; _args = args is { Length: > 0 } ? args : null; }
     }
 
     public bool Busy { get { lock (_lock) return _state is State.Checking or State.Downloading or State.Starting; } }
 
     // first start after an update: the Version row says so
-    public void NoteUpdated(string from) => Set(State.UpToDate, $"updated from {from}");
+    public void NoteUpdated(string from) => Set(State.UpToDate, "updated from {0}", 0, from);
 
     static HttpClient Client()
     {
@@ -69,7 +70,7 @@ public sealed class Updater
                 using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 var root = doc.RootElement;
                 string tag = root.GetProperty("tag_name").GetString() ?? "";
-                if (!Version.TryParse(tag.TrimStart('v', 'V'), out var v)) { Set(State.Failed, $"unexpected release tag '{tag}'"); return; }
+                if (!Version.TryParse(tag.TrimStart('v', 'V'), out var v)) { Set(State.Failed, "unexpected release tag '{0}'", 0, tag); return; }
                 v = new Version(v.Major, v.Minor, Math.Max(0, v.Build));
                 string name = root.TryGetProperty("name", out var n) ? n.GetString() : tag;
                 string page = root.TryGetProperty("html_url", out var h) ? h.GetString() : $"https://github.com/{Repo}/releases/latest";
@@ -88,8 +89,8 @@ public sealed class Updater
                         sha = d[7..].ToLowerInvariant();
                 }
                 lock (_lock) { _latest = v; _latestName = name; _assetUrl = url; _sha256 = sha; _assetSize = size; _pageUrl = page; }
-                if (v > Current) Set(State.Available, $"{name} is out");
-                else Set(State.UpToDate, $"up to date ({Current.ToString(3)} is the latest)");
+                if (v > Current) Set(State.Available, "{0} is out", 0, name);
+                else Set(State.UpToDate, "up to date ({0} is the latest)", 0, Current.ToString(3));
                 Log.Info($"update check: latest {tag}, running {Current.ToString(3)}, asset {(url != null ? "found" : "missing")}, digest {(sha != null ? "yes" : "no")}");
             }
             catch (Exception e)
@@ -134,7 +135,7 @@ public sealed class Updater
             catch (Exception e)
             {
                 Log.Warn("update: " + e.Message);
-                Set(State.Failed, "update failed: " + e.Message);
+                Set(State.Failed, "update failed: {0}", 0, e.Message);
             }
         });
     }
@@ -164,7 +165,7 @@ public sealed class Updater
                 {
                     await dst.WriteAsync(buf.AsMemory(0, read));
                     done += read;
-                    if (total > 0) Set(State.Downloading, $"downloading... {done * 100 / total}%", done / (float)total);
+                    if (total > 0) Set(State.Downloading, "downloading... {0}%", done / (float)total, done * 100 / total);
                 }
             }
             // the file must be exactly what GitHub lists for this release

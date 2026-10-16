@@ -120,7 +120,10 @@ public sealed partial class WristPanel
 
     string Fit(string s, float w, float size = Ui.F95, bool bold = false)
     {
+        string sh = Lang.Short(s);
+        s = Lang.T(s);                     // cut in the language picked (its short form first, where it has one)
         if (string.IsNullOrEmpty(s) || _ui.Width95(s, bold, size) <= w) return s;
+        if (sh != null && _ui.Width95(s = sh, bold, size) <= w) return s;
         int n = s.Length;
         while (n > 1 && _ui.Width95(s[..n] + "...", bold, size) > w) n--;
         if (n > 1 && char.IsHighSurrogate(s[n - 1])) n--;
@@ -222,7 +225,7 @@ public sealed partial class WristPanel
         {
             if (shown >= 4) break;
             float y = r.Y + shown * 12;
-            _ui.Text95(b.label, new RectangleF(r.X, y, 34, 12));
+            _ui.Text95(Bat(b.label), new RectangleF(r.X, y, 34, 12));
             var bar = new RectangleF(r.X + 36, y + 1, r.Width - 36 - 32, 10);
             _ui.Progress95(bar, b.pct, b.pct > 0.2f ? Theme.W95Navy : 0xFF800000);
             if (b.charging) _p.Pixels(BoltGlyph, bar.Right + 3, y + 3, Blk95);
@@ -263,7 +266,7 @@ public sealed partial class WristPanel
         (string, uint)[] panes =
         {
             (v.AppFps < 0 ? "-- fps" : $"{v.AppFps:0}/{v.DisplayHz:0} fps", v.AppFps >= 0 && v.AppFps < v.DisplayHz * 0.85f ? 0xFF806000 : Blk95),
-            (v.ReprojPct < 0 ? "-- reproj." : $"{v.ReprojPct:0}% reproj.", v.ReprojPct > 25 ? 0xFF800000 : v.ReprojPct > 8 ? 0xFF806000 : Blk95),
+            (v.ReprojPct < 0 ? Lang.T("-- reproj.") : Lang.F("{0:0}% reproj.", v.ReprojPct), v.ReprojPct > 25 ? 0xFF800000 : v.ReprojPct > 8 ? 0xFF806000 : Blk95),
             (v.GpuMs < 0 ? "-- ms GPU" : $"{v.GpuMs:0.0} ms GPU", v.GpuMs > budget ? 0xFF800000 : v.GpuMs > budget * 0.85f ? 0xFF806000 : Blk95),
             (vram < 0 ? "-- GB" : d.VramTotalGB > 0 ? $"{vram:0.0}/{d.VramTotalGB:0} GB" : $"{vram:0.0} GB",
                 vram > 0 && d.VramTotalGB > 0 && vram > d.VramTotalGB * 0.92f ? 0xFF806000 : Blk95),
@@ -308,7 +311,7 @@ public sealed partial class WristPanel
         }
         float by = MathF.Round(inner.Bottom - inner.Height * (budget / top));
         _p.Fill(new RectangleF(inner.X, by, inner.Width, 1), Wht95);
-        string label = v.AppFps < 0 ? "waiting for frames" : $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms GPU  {Math.Max(0, v.ReprojPct):0}% reproj.";
+        string label = v.AppFps < 0 ? "waiting for frames" : Lang.F("{0:0} fps  {1:0.0} ms GPU  {2:0}% reproj.", v.AppFps, v.GpuMs, Math.Max(0, v.ReprojPct));
         if (v.AppFps >= 0 && _ui.Width95(label) > inner.Width - 12)
             label = $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms  {Math.Max(0, v.ReprojPct):0}%";
         label = Fit(label, inner.Width - 12);                  // a narrow graph widget

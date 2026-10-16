@@ -101,7 +101,7 @@ public sealed partial class WristPanel
     {
         float tx = MathF.Abs(x - (r.X + PadX(r))) < 0.5f ? r.X + CyTagX : x;
         float room = maxW + (x - tx);
-        foreach (var f in forms)
+        foreach (var f in ShortForms(forms))
         {
             if (string.IsNullOrEmpty(f)) continue;
             string s = Upper(f);
@@ -116,7 +116,7 @@ public sealed partial class WristPanel
 
     float CyberCaptionWidth(string[] forms, float maxW)
     {
-        foreach (var f in forms)
+        foreach (var f in ShortForms(forms))
         {
             if (string.IsNullOrEmpty(f)) continue;
             float w = CyberHud.TagWidth(_p, Upper(f));
@@ -332,7 +332,7 @@ public sealed partial class WristPanel
             var zone = CyMonoFit(UtcForms(now), right - (x + tw + 12), CyNote, FontWeight.Bold);
             if (zone != null) CyMono(zone, right, r.Y + CyBase, CyMonoW(zone, CyNote, FontWeight.Bold) + 2, CyInk, CyNote, FontWeight.Bold, TextAlignment.Trailing);
             float bs = r.Height >= 300 ? 18 : 16;
-            string secText = "SEC " + sec;
+            string secText = Lang.T("SEC ") + sec;
             float sw = CyMonoW(secText, bs, FontWeight.Bold);
             CyMono(secText, x, floor, sw + 2, CyInk, bs, FontWeight.Bold);
             string date = CyMonoFit(CyDateForms(now), iw - sw - 16, bs, FontWeight.Bold);
@@ -552,7 +552,7 @@ public sealed partial class WristPanel
         float wdw = CyMonoW(wd, CyNote, FontWeight.Bold);
         CyMono(wd, mx, bottom, wdw + 2, CyC, CyNote, FontWeight.Bold);
         if (s1) return;
-        string[] rest = { $" · W{ISOWeek.GetWeekOfYear(now)} · {now.Year}", $" · W{ISOWeek.GetWeekOfYear(now)}" };
+        string[] rest = { Lang.F(" · W{0} · {1}", ISOWeek.GetWeekOfYear(now), now.Year), Lang.F(" · W{0}", ISOWeek.GetWeekOfYear(now)) };
         string more = CyMonoFit(rest, mw - wdw);
         if (more != null) CyMono(more, mx + wdw, bottom, mw - wdw + 2, CyG);
     }
@@ -601,11 +601,11 @@ public sealed partial class WristPanel
     // name, the percentage, a short line. Cyan above half, yellow below, red when low (Orbit's battery rule).
     uint CyBattery(float pct, StatLevel lv) => lv != StatLevel.Ok ? CyWarn() : pct >= 0.5f ? CyC : CyY;
 
-    int _cyDevN = -1;
+    int _cyDevN = -1, _cyDevLang = -1;
     string _cyDev;
     string DevNote(int n)
     {
-        if (n != _cyDevN) { _cyDevN = n; _cyDev = n <= 0 ? null : n.ToString(CultureInfo.InvariantCulture) + " DEV"; }
+        if (n != _cyDevN || _cyDevLang != Lang.Version) { _cyDevN = n; _cyDevLang = Lang.Version; _cyDev = n <= 0 ? null : Lang.F("{0} DEV", n); }
         return _cyDev;
     }
 
@@ -628,7 +628,7 @@ public sealed partial class WristPanel
             var b = bats[Emptiest(bats)];
             int shown = ShownPct(b.pct);
             var lv = BatteryLevel(shown);
-            string pct = Pct(shown), name = Upper(b.label);
+            string pct = Pct(shown), name = Upper(Bat(b.label));
             float nw = CyMonoW(name) + (b.charging ? 14 : 0);
             float vs = CyFit(pct, iw - nw - 4, MathF.Min((by0 - r.Y - 33) / CyCap, _big ? 58 : 40));
             if (vs < 24) { nw = 0; vs = CyFit(pct, iw, MathF.Min((by0 - r.Y - 33) / CyCap, 40)); }
@@ -677,10 +677,10 @@ public sealed partial class WristPanel
                 float cx = x + j * (cw + gapX);
                 int shown = ShownPct(b.pct);
                 var lv = BatteryLevel(shown);
-                string name = Upper(b.label);
+                string name = Upper(Bat(b.label));
                 float nx = cx;
                 if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, nb - 13, 14, 15), CyC, 12); nx += 12; }
-                if (CyMonoW(name) > cx + cw - nx) name = Upper(b.label.Split('×')[0]);
+                if (CyMonoW(name) > cx + cw - nx) name = Upper(Bat(b.label).Split('×')[0]);
                 if (CyMonoW(name) <= cx + cw - nx) CyMono(name, nx, nb, cx + cw - nx + 2, CyG);
                 string pct = Pct(shown);
                 float vs = CyFit(pct, cw, _big ? 34 : MathF.Min(26, (vb - nb - 6) / CyCap));
@@ -705,7 +705,7 @@ public sealed partial class WristPanel
         float nx = c.X, ns = MathF.Max(17, ts - 4);
         if (b.charging) { float bs = MathF.Min(14, ns - 4); _p.Icon(Bolt, new RectangleF(nx - 2, by - bs - 1, bs + 4, bs + 2), CyC, bs); nx += bs + 4; }
         float room = c.Right - pw - 10 - nx;
-        TextAt(Ellipsize(Upper(b.label), room, ns, FontWeight.SemiBold, Theme.Display), nx, by, room + 2, CyW, ns, FontWeight.SemiBold,
+        TextAt(Ellipsize(Upper(Bat(b.label)), room, ns, FontWeight.SemiBold, Theme.Display), nx, by, room + 2, CyW, ns, FontWeight.SemiBold,
             TextAlignment.Leading, Theme.Display);
         CyberMeter(new RectangleF(c.X, barY, c.Width, barH), b.pct, CyBattery(b.pct, lv), key, Math.Max(5, Math.Min(12, (int)(c.Width / 17))));
     }
@@ -936,11 +936,13 @@ public sealed partial class WristPanel
     // friends first, cyan), "3 FRIENDS"
     RoomWatcher.Snapshot _cyRoomSeen;
     bool _cyRoomKnown;
+    int _cyRoomLang = -1;
     string _cyRoomNames, _cyRoomFriends;
     void CyRoomNow(PanelData d)
     {
-        if (_cyRoomKnown && ReferenceEquals(d.Room, _cyRoomSeen)) return;
+        if (_cyRoomKnown && ReferenceEquals(d.Room, _cyRoomSeen) && _cyRoomLang == Lang.Version) return;
         _cyRoomKnown = true;
+        _cyRoomLang = Lang.Version;
         _cyRoomSeen = d.Room;
         _cyRoomNames = _cyRoomFriends = null;
         var s = d.Room;
@@ -949,17 +951,17 @@ public sealed partial class WristPanel
         int f = 0;
         foreach (var p in s.Here) { if (!p.Friend) continue; f++; if (names.Count < 3) names.Add(p.Name); }
         if (f > 0) _cyRoomNames = string.Join(" · ", names) + (f > names.Count ? $" +{f - names.Count}" : "");
-        _cyRoomFriends = f == 1 ? "1 FRIEND" : $"{f} FRIENDS";
+        _cyRoomFriends = Lang.Upper(RoomPanel.FriendsText(f));
     }
 
     string RoomNote(PanelData d, DateTime now)
     {
         var s = d.Room;
         if (s == null || !s.InRoom) return null;
-        string world = string.IsNullOrEmpty(s.World) ? "A world" : s.World;
+        string world = string.IsNullOrEmpty(s.World) ? Lang.T("A world") : s.World;
         if (s.Since == default) return world;
         var t = now - s.Since;
-        string stay = t.TotalHours >= 1 ? $"{(int)t.TotalHours}H {t.Minutes:00}M" : $"{Math.Max(0, (int)t.TotalMinutes)}M";
+        string stay = t.TotalHours >= 1 ? Lang.F("{0}H {1:00}M", (int)t.TotalHours, t.Minutes) : Lang.F("{0}M", Math.Max(0, (int)t.TotalMinutes));
         return world + " · " + stay;
     }
 
@@ -999,7 +1001,7 @@ public sealed partial class WristPanel
         if (fw > 0) CyMono(fr, right, bottom, fw, CyG, CyNote, FontWeight.SemiBold, TextAlignment.Trailing);
         // the friends' names over it (or how many are here)
         float ns = _big ? 22 : 18, nby = segY - 9;
-        string line = _cyRoomNames ?? (n == 1 ? "1 here" : $"{n} here");
+        string line = _cyRoomNames ?? (n == 1 ? Lang.T("1 here") : Lang.F("{0} here", n));
         TextAt(Ellipsize(line, cwid, ns, FontWeight.SemiBold, Theme.Display), cx, nby, cwid + 2, _cyRoomNames != null ? CyC : CyG, ns, FontWeight.SemiBold,
             TextAlignment.Leading, Theme.Display);
     }
@@ -1059,7 +1061,7 @@ public sealed partial class WristPanel
             _cyNotes.Add((chip, text, it.At));
         }
         int n = d.Notes.Items.Count;
-        if (n > 0) _cyNew = $"{n} NEW";
+        if (n > 0) _cyNew = Lang.F("{0} NEW", n);
         if (n > 0) CyInboxSeen(d.Notes.Items[0].At, _cyNotesFirst);
         _cyNotesFirst = false;
     }

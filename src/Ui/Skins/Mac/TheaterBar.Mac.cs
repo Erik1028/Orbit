@@ -60,13 +60,13 @@ public sealed partial class TheaterBar
         Divider(x + 2);
         x += 8;
         bool changed = false;
-        _ui.Label95("Dim:", new RectangleF(x, 10, 26, 15));
-        x += 26;
+        _ui.Label95("Dim:", new RectangleF(x, 10, DimW95, 15));
+        x += DimW95;
         float dim = C.Dim;
         if (_ui.Track95("thb95.dim", new RectangleF(x, 4, Track95W, 28), ref dim, 0, 0.9f, true, 10)) { C.Dim = dim; changed = true; }
         x += Track95W + 8;
-        _ui.Label95("Size:", new RectangleF(x, 10, 30, 15));
-        x += 30;
+        _ui.Label95("Size:", new RectangleF(x, 10, SizeW95, 15));
+        x += SizeW95;
         float size = SizeNow;
         if (_ui.Track95("thb95.size", new RectangleF(x, 4, Track95W, 28), ref size, Theater.MinWidth, Theater.MaxWidth, true, 10)) { C.Width = size; changed = true; }
         x += Track95W + 8;

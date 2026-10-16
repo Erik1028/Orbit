@@ -86,7 +86,7 @@ static partial class Tools
         var wcfg = cfg.Data.Wrist;
         var app0 = cfg.Data.Appearance;
         var culture0 = CultureInfo.CurrentCulture;
-        CultureInfo.CurrentCulture = new CultureInfo("en-US");
+        CultureInfo.CurrentCulture = Tools.SnapCulture;
         var keep = (wcfg.Face, wcfg.Widgets, wcfg.Grid, wcfg.Name, wcfg.Pages, wcfg.Page, wcfg.Background);
         var media0 = (data.FakeMedia, data.FakeTimeline, data.FakeArt, data.Room, data.Notes, data.NightMode, data.DesktopsVisible);
         var vr0 = data.Vr;

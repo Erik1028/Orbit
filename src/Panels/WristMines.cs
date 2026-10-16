@@ -351,13 +351,13 @@ public sealed partial class WristPanel
         float tx = fr.Right + 14, tw = x + w - tx;
         string st = g.State switch
         {
-            MinesGame.Phase.Ready => "Ready", MinesGame.Phase.Playing => "Playing", MinesGame.Phase.Won => "Cleared!", _ => "Boom!",
+            MinesGame.Phase.Ready => "Ready", MinesGame.Phase.Playing => Lang.C("mines", "Playing"), MinesGame.Phase.Won => "Cleared!", _ => "Boom!",
         };
         uint sc = g.State == MinesGame.Phase.Won ? Bento.Ok : g.State == MinesGame.Phase.Lost ? Bento.BadInk : Bento.Text;
         TextAt(Ellipsize(st, tw, 20, FontWeight.SemiBold), tx, fr.Y + 26, tw, sc, 20, FontWeight.SemiBold);
         int best = MinesBestOf(_mLevel);
         bool record = g.State == MinesGame.Phase.Won && best > 0 && best == Math.Max(1, (int)g.Seconds(now));
-        string bt = record ? "New best!" : best > 0 ? "Best " + MinesTime(best) : "No best yet";
+        string bt = record ? "New best!" : best > 0 ? Lang.F("Best {0}", MinesTime(best)) : "No best yet";
         TextAt(Ellipsize(bt, tw, SmallText, FontWeight.Normal), tx, fr.Y + 50, tw, Sub, SmallText, FontWeight.Normal);
         // flag mode: a tap flags (a held square flags in either mode)
         var fb = new RectangleF(x, E.Y + 230, w, 52);
@@ -579,7 +579,7 @@ public sealed partial class WristPanel
                 break;
         }
         int best = MinesBestOf(0);
-        _ui.Text95(best > 0 ? $"Best time: {best} s" : "Best time: none", new RectangleF(x0, sw.Bottom - 8 - 15, w, 15));
+        _ui.Text95(best > 0 ? Lang.F("Best time: {0} s", best) : "Best time: none", new RectangleF(x0, sw.Bottom - 8 - 15, w, 15));
     }
 
     // ---- --snapshot's hooks ----

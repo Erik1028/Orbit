@@ -78,7 +78,7 @@ static partial class Tools
 
     // onlyStyle (--only-style 95 | xp | aero | mac | term, or ORBIT_SNAP_STYLE): that retro style's screens alone, in seconds - the
     // modern pictures, the other styles, the fonts and the pages left out (for working on a style; its layout check runs too)
-    public static int Snapshot(string dir, string onlyStyle = null)
+    static int SnapshotRun(string dir, string onlyStyle = null)
     {
         dir = Path.GetFullPath(dir);
         Directory.CreateDirectory(dir);
@@ -193,7 +193,7 @@ static partial class Tools
         void WhatsNewShots(string st, bool modern = false)
         {
             host.WhatsNewList = WhatsNew.Since("1.8.2");
-            host.WhatsNewSub = $"Updated to {Updater.Current.ToString(3)} from 1.8.2";
+            host.WhatsNewSub = Lang.F("Updated to {0} from {1}", Updater.Current.ToString(3), "1.8.2");
             Log.Info($"what's new since 1.8.2: {host.WhatsNewList.Count} versions, {WhatsNew.All.Count} in the file");
             int keep = view.Tab;
             view.Tab = SettingsView.TabGeneral;
@@ -515,7 +515,7 @@ static partial class Tools
         }
         wcfg.Face = "custom";
         var culture0 = System.Globalization.CultureInfo.CurrentCulture;
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");   // docs pictures in English
+        System.Globalization.CultureInfo.CurrentCulture = SnapCulture;   // docs pictures in English
         wrist.Stats.Sample(Clock.Now);                 // a CPU reading needs two samples
         System.Threading.Thread.Sleep(400);
         wrist.Stats.Sample(Clock.Now + 2);
@@ -618,7 +618,7 @@ static partial class Tools
         }
         SaveOpened("");
         LayoutCheck("modern");
-        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Globalization.CultureInfo.CurrentCulture = SnapCulture;
         StylesRun(wrist, data, painter, cfg, gpu, dir);
         System.Globalization.CultureInfo.CurrentCulture = culture0;
         TapFamily("");
@@ -777,7 +777,7 @@ static partial class Tools
             cfg.Data.Appearance = new AppearanceConfig { Style = sk.Id, Clock24h = true };
             Theme.Apply(cfg.Data.Appearance);
             var culture = System.Globalization.CultureInfo.CurrentCulture;
-            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+            System.Globalization.CultureInfo.CurrentCulture = SnapCulture;
             for (int t = 0; t < SettingsView.TabCount; t++)
             {
                 view.Tab = t;
@@ -934,7 +934,7 @@ static partial class Tools
             cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true };
             Theme.Apply(cfg.Data.Appearance);
             var culture = System.Globalization.CultureInfo.CurrentCulture;
-            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+            System.Globalization.CultureInfo.CurrentCulture = SnapCulture;
             void FrameC() { ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End(); }
             for (int t = 0; t < SettingsView.TabCount; t++)
             {
@@ -1119,7 +1119,7 @@ static partial class Tools
         string face0 = wcfg.Face;
         var keep = cfg.Data.Appearance;
         var culture0 = CultureInfo.CurrentCulture;
-        var en = new CultureInfo("en-US");
+        var en = SnapCulture;
         void Look(string font)
         {
             cfg.Data.Appearance = new AppearanceConfig { Clock24h = false, Font = font };
@@ -1208,7 +1208,7 @@ static partial class Tools
                 surf.SavePng(gpu, Path.Combine(fdir, $"settings{t}.png"));
             }
             host.WhatsNewList = WhatsNew.Since("1.8.2");
-            host.WhatsNewSub = $"Updated to {Updater.Current.ToString(3)} from 1.8.2";
+            host.WhatsNewSub = Lang.F("Updated to {0} from {1}", Updater.Current.ToString(3), "1.8.2");
             view.Tab = SettingsView.TabGeneral;
             ui.ResetAnimations();
             Spy("settings_whatsnew", Frame);
@@ -1301,7 +1301,7 @@ static partial class Tools
                      $"{problems} problem(s)");
             notes.Add($"{name} {problems}");
         }
-        Log.Info($"layout fonts: {total} problem(s) in {fonts.Count - 1} fonts ({string.Join(", ", notes)})");
+        Log.Info($"layout fonts{LangTag}: {total} problem(s) in {fonts.Count - 1} fonts ({string.Join(", ", notes)})");
         cfg.Data.Appearance = keep;
         Theme.Apply(keep);
         CultureInfo.CurrentCulture = culture0;
@@ -1359,7 +1359,7 @@ static partial class Tools
         using var wrist = new WristPanel(gpu, painter, cfg);
         VariantWants();
         var culture0 = CultureInfo.CurrentCulture;
-        CultureInfo.CurrentCulture = new CultureInfo("en-US");
+        CultureInfo.CurrentCulture = SnapCulture;
         cfg.Data.Wrist.Face = "custom";
         LayoutCheckRun(wrist, data, cfg, painter, gpu, dir, "modern", true);
         StylesRun(wrist, data, painter, cfg, gpu, dir, variantsOnly: true);
@@ -1616,7 +1616,7 @@ static partial class Tools
         {
             problems += VariantChecks();
             wcfg.Background = "panel";
-            Log.Info($"layout variants: {problems} problem(s)");
+            Log.Info($"layout variants{LangTag}: {problems} problem(s)");
             return problems;
         }
         // every size the style offers; in 95 then the modern-only ones too (a face made in the modern style, drawn with the
@@ -1887,7 +1887,7 @@ static partial class Tools
             return bad;
         }
         wcfg.Background = "panel";
-        Log.Info($"layout {style}: {problems} problem(s)");
+        Log.Info($"layout {style}{LangTag}: {problems} problem(s)");
         return problems;
     }
 
@@ -2199,7 +2199,7 @@ static partial class Tools
             data.FakeVram = vram0;
             data.Vr.GpuMs = gpu0;
             foreach (var look in lowest.Keys) Log.Info($"styles {look}: lowest text contrast {lowest[look].cr:0.0}:1 ({lowest[look].what})");
-            Log.Info($"layout styles (variants): {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
+            Log.Info($"layout styles (variants){LangTag}: {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
             return problems;
         }
         foreach (var look in looks)
@@ -2343,7 +2343,7 @@ static partial class Tools
         data.FakeVram = vram0;
         data.Vr.GpuMs = gpu0;
         foreach (var look in lowest.Keys) Log.Info($"styles{tag} {look}: lowest text contrast {lowest[look].cr:0.0}:1 ({lowest[look].what})");
-        Log.Info($"layout styles{tag}: {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
+        Log.Info($"layout styles{tag}{LangTag}: {problems} problem(s) in {faces} faces, {checkedTexts} texts checked");
         return problems;
     }
 

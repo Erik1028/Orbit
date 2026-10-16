@@ -145,6 +145,7 @@ public sealed partial class AeroSkin : Win95Skin
 
     public List<string> WrapLines(Painter p, string s, float width, bool bold, float size)
     {
+        s = Lang.T(s);                     // cut in the language picked
         var lines = new List<string>();
         foreach (var para in s.Split('\n'))
         {

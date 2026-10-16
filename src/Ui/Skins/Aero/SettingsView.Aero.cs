@@ -140,10 +140,12 @@ public sealed partial class SettingsView
         // the buttons along the bottom, under a separator (the same as the 95 sheet's)
         p.Fill(new RectangleF(16, 440, W95W - 32, 1), AeroSkin.GroupLine);
         const float by = 448;
-        if (ui.Button95("p95.rc", new RectangleF(9, by, 75, 23), "Re&center", _h.VrConnected)) _h.Recenter();
-        if (ui.Button95("p95.kb", new RectangleF(90, by, 95, 23), C.Keyboard.Visible ? "Hide &keyboard" : "Show &keyboard"))
+        string kbL = C.Keyboard.Visible ? "Hide &keyboard" : "Show &keyboard", dkL = C.General.DesktopsVisible ? "Hide &desktops" : "Show &desktops";
+        float w1 = Btn95(ui, "Re&center", 75), w2 = Btn95(ui, kbL, 95), w3 = Btn95(ui, dkL, 95);
+        if (ui.Button95("p95.rc", new RectangleF(9, by, w1, 23), "Re&center", _h.VrConnected)) _h.Recenter();
+        if (ui.Button95("p95.kb", new RectangleF(15 + w1, by, w2, 23), kbL))
             _h.ToggleKeyboard();
-        if (ui.Button95("p95.desk", new RectangleF(191, by, 95, 23), C.General.DesktopsVisible ? "Hide &desktops" : "Show &desktops"))
+        if (ui.Button95("p95.desk", new RectangleF(21 + w1 + w2, by, w3, 23), dkL))
             _h.ToggleDesktops();
         float x = W95W - 9 - 75;
         if (ui.Button95("p95.apply", new RectangleF(x, by, 75, 23), "&Apply", _h.Cfg.Dirty)) _h.Cfg.SaveIfDue(force: true);
@@ -185,7 +187,7 @@ public sealed partial class SettingsView
 
         // the styles: a little window of each, the chosen one selected the way Explorer selects
         int n = StyleMenu.Ids.Length;
-        ui.Group95(new RectangleF(24, 102, 702, 100), $"Styles ({n})");
+        ui.Group95(new RectangleF(24, 102, 702, 100), Lang.F("Styles ({0})", n));
         int cur = StyleMenu.IndexOf(a.Style);
         const float gap = 8;
         float cw = MathF.Min(106, MathF.Floor((702 - 16 - (n - 1) * gap) / n));      // seven fit since Cyber came

@@ -20,7 +20,10 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
 {
     // modern: pills on a rounded bar; 95: push buttons, trackbars and a check box on a strip, half-size canvas drawn 2x
     const int H = 84, Pad = 10, ChipW = 230, Gap = 8, GoW = 196, SliderW = 210, CurveW = 168;
-    const int H95 = 34, Btn95W = 150, Exit95W = 46, Go95W = 86, Track95W = 84, Kb95W = 86;
+    const int H95 = 34, Btn95W = 150, Go95W = 86, Track95W = 84;
+    // the keyboard and exit buttons: as wide as their words in another language (the 1995 sizes in English)
+    float Exit95W => Lang.English ? 46 : MathF.Max(46, MathF.Ceiling(_ui.LabelWidth95("Exit")) + 16);
+    float Kb95W => Lang.English ? 86 : MathF.Max(86, MathF.Ceiling(_ui.LabelWidth95("&Keyboard")) + 40);
 
     readonly Gpu _g;
     readonly Painter _p;
@@ -131,7 +134,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
             _current = theater.Screen;
             _dirty = true;
         }
-        int key = (th ? 1000 + _choices.Count * 8 : 0) + (int)Theme.Retro;      // another style: another width
+        int key = (th ? 1000 + _choices.Count * 8 : 0) + (int)Theme.Retro + 100000 * Lang.Version;      // another style or language: another width
         if (key != _layoutKey && !held) Relayout(key);
         // changed elsewhere (grabbing the big screen, the settings window): the sliders follow
         if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved || KbOn != _drawnKb) _dirty = true;
@@ -181,7 +184,11 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
     }
 
     // the width of everything right of the screen buttons / the Theater button
-    float SettingsWidth95() => 8 + 26 + Track95W + 8 + 30 + Track95W + 8 + 19 + _ui.LabelWidth95("Curved") + 10;
+    float SettingsWidth95() => 8 + DimW95 + Track95W + 8 + SizeW95 + Track95W + 8 + 19 + _ui.LabelWidth95("Curved") + 10;
+
+    // the trackbars' labels: as wide as their words (the 1995 sizes at least - the English bar keeps its places)
+    float DimW95 => Lang.English ? 26 : MathF.Max(26, MathF.Ceiling(_ui.LabelWidth95("&Dim:")) + 4);
+    float SizeW95 => Lang.English ? 30 : MathF.Max(30, MathF.Ceiling(_ui.LabelWidth95("&Size:")) + 4);
 
     void Relayout(int key)
     {
@@ -345,13 +352,13 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
         _p.Fill(new RectangleF(x + 3, 4, 1, H95 - 8), 0xFFFFFFFF);
         x += 8;
         bool changed = false;
-        _ui.Label95("&Dim:", new RectangleF(x, 10, 26, 15));
-        x += 26;
+        _ui.Label95("&Dim:", new RectangleF(x, 10, DimW95, 15));
+        x += DimW95;
         float dim = C.Dim;
         if (_ui.Track95("thb95.dim", new RectangleF(x, 4, Track95W, 28), ref dim, 0, 0.9f, true, 10)) { C.Dim = dim; changed = true; }
         x += Track95W + 8;
-        _ui.Label95("&Size:", new RectangleF(x, 10, 30, 15));
-        x += 30;
+        _ui.Label95("&Size:", new RectangleF(x, 10, SizeW95, 15));
+        x += SizeW95;
         float size = SizeNow;
         if (_ui.Track95("thb95.size", new RectangleF(x, 4, Track95W, 28), ref size, Theater.MinWidth, Theater.MaxWidth, true, 10)) { C.Width = size; changed = true; }
         x += Track95W + 8;
@@ -385,6 +392,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
 
     string Ellipsize(string s, float maxW, float size, FontWeight wt)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, wt) <= maxW) return s;
         int n = s.Length;
         while (n > 1 && _p.MeasureWidth(s[..n] + "…", size, wt) > maxW) n--;
@@ -394,6 +402,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
 
     string Fit95(string s, float w)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || _ui.Width95(s) <= w) return s;
         int n = s.Length;
         while (n > 1 && _ui.Width95(s[..n] + "...") > w) n--;

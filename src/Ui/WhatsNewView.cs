@@ -84,7 +84,7 @@ public static partial class WhatsNewView
         var lines = new List<(string text, bool bold, float indent)>();
         foreach (var e in list)
         {
-            foreach (var l in Wrap95(ui, $"Version {e.Version.ToString(3)} - {e.Title}", textW + 10, true)) lines.Add((l, true, 2));
+            foreach (var l in Wrap95(ui, Lang.F("Version {0} - {1}", e.Version.ToString(3), e.Title), textW + 10, true)) lines.Add((l, true, 2));
             foreach (var pt in e.Points)
             {
                 bool first = true;

@@ -88,10 +88,12 @@ public sealed partial class SettingsView
         // (like a 95 sheet after PSM_CANCELTOCLOSE, so "Close", not a Cancel that could not undo);
         // Apply lights up until the change is saved to disk.
         const float by = 448;
-        if (ui.Button95("p95.rc", new RectangleF(9, by, 75, 23), "Re&center", _h.VrConnected)) _h.Recenter();
-        if (ui.Button95("p95.kb", new RectangleF(90, by, 95, 23), C.Keyboard.Visible ? "Hide &keyboard" : "Show &keyboard"))
+        string kbL = C.Keyboard.Visible ? "Hide &keyboard" : "Show &keyboard", dkL = C.General.DesktopsVisible ? "Hide &desktops" : "Show &desktops";
+        float w1 = Btn95(ui, "Re&center", 75), w2 = Btn95(ui, kbL, 95), w3 = Btn95(ui, dkL, 95);
+        if (ui.Button95("p95.rc", new RectangleF(9, by, w1, 23), "Re&center", _h.VrConnected)) _h.Recenter();
+        if (ui.Button95("p95.kb", new RectangleF(15 + w1, by, w2, 23), kbL))
             _h.ToggleKeyboard();
-        if (ui.Button95("p95.desk", new RectangleF(191, by, 95, 23), C.General.DesktopsVisible ? "Hide &desktops" : "Show &desktops"))
+        if (ui.Button95("p95.desk", new RectangleF(21 + w1 + w2, by, w3, 23), dkL))
             _h.ToggleDesktops();
         float x = W95W - 9 - 75;
         if (ui.Button95("p95.apply", new RectangleF(x, by, 75, 23), "&Apply", _h.Cfg.Dirty)) _h.Cfg.SaveIfDue(force: true);
@@ -110,6 +112,10 @@ public sealed partial class SettingsView
         }
         if (ui.Changed) _h.Cfg.MarkDirty();
     }
+
+    // a bottom-row button as wide as its words need, never narrower than its 1995 size (the English ones keep their places)
+    static float Btn95(Ui ui, string label, float min, float icon = 0) =>
+        Lang.English ? min : MathF.Max(min, MathF.Ceiling(ui.LabelWidth95(label)) + 16 + icon);
 
     // ---- rows ----
 
@@ -138,6 +144,7 @@ public sealed partial class SettingsView
 
     string Fit95(Ui ui, string s, float w)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || ui.Width95(s) <= w) return s;
         int lo = 0, hi = s.Length - 1;
         while (lo < hi)
@@ -149,7 +156,7 @@ public sealed partial class SettingsView
         return s[..lo].TrimEnd() + "...";
     }
 
-    static string Radius(float width, float curve) => curve < 0.005f ? "flat" : $"radius {width / (2 * MathF.PI * curve):0.00} m";
+    static string Radius(float width, float curve) => curve < 0.005f ? "flat" : Lang.F("radius {0:0.00} m", width / (2 * MathF.PI * curve));
 
     // ---------------- Desktops (Display Properties' Settings tab) ----------------
 
@@ -186,7 +193,7 @@ public sealed partial class SettingsView
             ui.Text95((i + 1).ToString(), screen, W95, true, TextAlignment.Center, size: 16);
             if (on) p.Stroke(new RectangleF(r.X - 1.5f, r.Y - 1.5f, r.Width + 3, r.Height + 3), K95, 1);
             if (ui.Hover(r) && ui.Pressed) _selected = m.Id;
-            names[i] = $"{i + 1}. {m.Name} ({m.W} x {m.H}){(m.Primary ? ", primary" : "")}";
+            names[i] = $"{i + 1}. {m.Name} ({m.W} x {m.H}){(m.Primary ? Lang.T(", primary") : "")}";
         }
         bool changedBefore = ui.Changed;
         if (ComboRow(ui, "d95.disp", 16, 164, 70, 664, "&Display:", names, ref sel))
@@ -199,7 +206,7 @@ public sealed partial class SettingsView
         if (cfg == null) return;
 
         int gs = _h.GroupSize(cfg);
-        ui.Group95(new RectangleF(16, 192, 350, 238), gs > 1 ? $"This monitor (in a row of {gs})" : "This monitor");
+        ui.Group95(new RectangleF(16, 192, 350, 238), gs > 1 ? Lang.F("This monitor (in a row of {0})", gs) : "This monitor");
         bool en2 = cfg.Enabled;
         if (ui.Check95("d95.en", 28, 212, "&Show in VR", ref en2)) _h.SetDesktopEnabled(cfg, en2);
         int ai = Math.Max(0, Array.IndexOf(AttachIds, cfg.Place.Attach ?? "world")), a2 = ai;
@@ -207,7 +214,7 @@ public sealed partial class SettingsView
         bool mouse = cfg.Mouse;
         if (ui.Check95("d95.m", 28, 264, "&Mouse control (the laser moves the cursor)", ref mouse, cfg.Enabled)) cfg.Mouse = mouse;
         float v = cfg.Width;
-        if (TrackRow(ui, "d95.w", 28, 286, 108, 150, 90, "Si&ze:", ref v, 0.3f, 3f, $"{cfg.Width:0.00} m wide", cfg.Enabled))
+        if (TrackRow(ui, "d95.w", 28, 286, 108, 150, 90, "Si&ze:", ref v, 0.3f, 3f, Lang.F("{0:0.00} m wide", cfg.Width), cfg.Enabled))
         { cfg.Width = v; _h.DesktopEdited(cfg); }
         v = cfg.Opacity;
         if (TrackRow(ui, "d95.o", 28, 318, 108, 150, 90, "&Opacity:", ref v, 0.2f, 1f, $"{cfg.Opacity * 100:0}%", cfg.Enabled)) cfg.Opacity = v;
@@ -272,7 +279,7 @@ public sealed partial class SettingsView
         ui.Group95(new RectangleF(376, 56, 358, 374), "This window");
         W95Icons.Draw(p, W95Icons.Id.Window, 388, 76);
         ui.Text95(Fit95(ui, string.IsNullOrEmpty(cur.Title) ? cur.Process : cur.Title, 310), new RectangleF(410, 76, 312, 16), K95, true);
-        ui.Text95(Fit95(ui, $"{cur.Process} - {_h.WindowStatus(cur)}", 310), new RectangleF(410, 92, 312, 13), Grey95);
+        ui.Text95(Fit95(ui, $"{cur.Process} - {WinStatus(_h.WindowStatus(cur))}", 310), new RectangleF(410, 92, 312, 13), Grey95);
         bool en = cur.Enabled;
         if (ui.Check95("wn95.en", 388, 118, "&Show in VR", ref en)) _h.SetWindowEnabled(cur, en);
         int ai = Math.Max(0, Array.IndexOf(AttachIds, cur.Place.Attach ?? "world")), a2 = ai;
@@ -280,7 +287,7 @@ public sealed partial class SettingsView
         bool mouse = cur.Mouse;
         if (ui.Check95("wn95.m", 388, 170, "&Mouse control (the laser moves the cursor)", ref mouse, cur.Enabled)) cur.Mouse = mouse;
         float v = cur.Width;
-        if (TrackRow(ui, "wn95.w", 388, 192, 468, 150, 90, "Si&ze:", ref v, 0.15f, 3f, $"{cur.Width:0.00} m wide", cur.Enabled)) cur.Width = v;
+        if (TrackRow(ui, "wn95.w", 388, 192, 468, 150, 90, "Si&ze:", ref v, 0.15f, 3f, Lang.F("{0:0.00} m wide", cur.Width), cur.Enabled)) cur.Width = v;
         v = cur.Opacity;
         if (TrackRow(ui, "wn95.o", 388, 224, 468, 150, 90, "&Opacity:", ref v, 0.2f, 1f, $"{cur.Opacity * 100:0}%", cur.Enabled)) cur.Opacity = v;
         v = cur.Curvature;
@@ -336,7 +343,7 @@ public sealed partial class SettingsView
         {
             var l = list[i];
             W95Icons.Draw(ui.P, W95Icons.Id.Layouts, r.X + 1, r.Y + 1);
-            ui.Text95(l.Name + (l.Name == C.ActiveLayout ? "  (in use)" : ""), new RectangleF(r.X + 20, r.Y, r.Width - 22, r.Height), on ? W95 : K95);
+            ui.Text95(l.Name == C.ActiveLayout ? Lang.F("{0}  (in use)", Lang.T(l.Name)) : l.Name, new RectangleF(r.X + 20, r.Y, r.Width - 22, r.Height), on ? W95 : K95);
         }, 18);
         if (hit >= 0) _selLayout = list[hit].Name;
         var s = list.First(l => l.Name == _selLayout);
@@ -347,8 +354,8 @@ public sealed partial class SettingsView
         bool active = s.Name == C.ActiveLayout;
         ui.Group95(new RectangleF(376, 56, 358, 236), Ui.Esc95(s.Name));
         W95Icons.Draw(ui.P, W95Icons.Id.Layouts, 388, 76);
-        ui.Text95(active ? "In use now." : s.Saved is { } t ? $"Last used {t:MMM d, HH:mm}." : "Not used yet.", new RectangleF(410, 77, 312, 15));
-        if (ui.Button95("l95.use", new RectangleF(388, 102, 150, 23), active ? "In use" : "&Switch to " + Ui.Esc95(s.Name), !active, isDefault: !active))
+        ui.Text95(active ? "In use now." : s.Saved is { } t ? Lang.F("Last used {0:MMM d, HH:mm}.", t) : "Not used yet.", new RectangleF(410, 77, 312, 15));
+        if (ui.Button95("l95.use", new RectangleF(388, 102, 150, 23), active ? "In use" : Lang.F("&Switch to {0}", Ui.Esc95(Lang.T(s.Name))), !active, isDefault: !active))
             _h.SwitchLayout(s.Name);
         bool onWrist = s.OnWrist;
         if (ui.Check95("l95.wrist", 388, 138, "On the &watch (its button cycles through these)", ref onWrist)) s.OnWrist = onWrist;
@@ -456,7 +463,7 @@ public sealed partial class SettingsView
         k.AutoShow = b;
         Hint(ui, 47, 115, 300, "when a click in VR lands in one; hides again after");
         float v = k.Width;
-        TrackRow(ui, "k95.size", 28, 136, 108, 150, 90, "Si&ze:", ref v, 0.3f, 1.2f, $"{k.Width * 100:0} cm wide");
+        TrackRow(ui, "k95.size", 28, 136, 108, 150, 90, "Si&ze:", ref v, 0.3f, 1.2f, Lang.F("{0:0} cm wide", k.Width * 100));
         k.Width = v;
         int ai = Math.Max(0, Array.IndexOf(AttachIds, k.Place.Attach ?? "world"));
         if (ai == 3) ai = 0;
@@ -469,7 +476,7 @@ public sealed partial class SettingsView
         ui.Check95("k95.snd", 388, 76, "&Key sounds", ref b);
         k.Sounds = b;
         int si = k.SoundStyle == "muted" ? 1 : 0;
-        if (ComboRow(ui, "k95.style", 388, 98, 468, 100, "S&ound:", new[] { "Click", "Muted" }, ref si, k.Sounds))
+        if (ComboRow(ui, "k95.style", 388, 98, 468, 100, "S&ound:", new[] { "Click", Lang.C("keyboard", "Muted") }, ref si, k.Sounds))
         {
             k.SoundStyle = si == 1 ? "muted" : "click";
             _h.Keyboard.PlayClick(false);
@@ -505,8 +512,8 @@ public sealed partial class SettingsView
             changed = true;
         }
         string era = Theme.Retro == RetroStyle.Win95 ? "their real 1995 pixel size" : "the real pixel size of its day";
-        Hint(ui, 28, 108, 326, $"{Theme.RetroSkin.Name} draws these settings, the watch, the keyboard and the notifications at {era}, " +
-                               "enlarged without smoothing.", 60);
+        Hint(ui, 28, 108, 326, Lang.F("{0} draws these settings, the watch, the keyboard and the notifications at {1}, enlarged without smoothing.",
+                               Lang.T(Theme.RetroSkin.Name), Lang.T(era)), 60);
 
         ui.Group95(new RectangleF(16, 214, 350, 106), "Modern colours");
         Hint(ui, 28, 234, 326, "The accent colour, the panel colour, the themes and the opacity belong to the Modern style; switch to it " +
@@ -654,22 +661,23 @@ public sealed partial class SettingsView
         g.PauseWhenOff = b;
         b = g.Osc;
         ui.Check95("g95.osc", 28, 304, "VRChat avatar parameters (OS&C)", ref b);
-        Hint(ui, 47, 321, 300, $"XSOverlay-style, for DXOverlay - 127.0.0.1:{g.OscPort}");
+        Hint(ui, 47, 321, 300, Lang.F("XSOverlay-style, for DXOverlay - 127.0.0.1:{0}", g.OscPort));
         g.Osc = b;
         float bx = 28;
         if (g.RunAsAdmin && !_h.IsElevated)
         {
-            if (ui.Button95("g95.elevate", new RectangleF(bx, 346, 110, 23), "R&estart as admin")) _h.RestartElevated();
-            bx += 116;
+            float ew = Btn95(ui, "R&estart as admin", 110);
+            if (ui.Button95("g95.elevate", new RectangleF(bx, 346, ew, 23), "R&estart as admin")) _h.RestartElevated();
+            bx += ew + 6;
         }
-        if (ui.Button95("g95.folder", new RectangleF(bx, 346, 130, 23), "Open con&fig folder", true, false, false, W95Icons.Id.Folder))
+        if (ui.Button95("g95.folder", new RectangleF(bx, 346, Btn95(ui, "Open con&fig folder", 130, 22), 23), "Open con&fig folder", true, false, false, W95Icons.Id.Folder))
             _h.OpenConfigFolder();
 
         // System Properties' General tab: the logo, the name, the version, the machine
         ui.Group95(new RectangleF(376, 56, 358, 178), "About OrbitOverlay");
         W95Icons.Draw(ui.P, W95Icons.Id.Orbit, 388, 74, 2);
         ui.Text95("OrbitOverlay", new RectangleF(430, 74, 200, 15), K95, true);
-        ui.Text95($"Version {Updater.Current.ToString(3)}", new RectangleF(430, 90, 200, 15));
+        ui.Text95(Lang.F("Version {0}", Updater.Current.ToString(3)), new RectangleF(430, 90, 200, 15));
         float ry = 116;
         void Row(string key, string val)
         {
@@ -686,9 +694,9 @@ public sealed partial class SettingsView
         string ulabel = us switch
         {
             Updater.State.Checking => "Checking...",
-            Updater.State.Downloading => $"Downloading {uprog * 100:0}%",
+            Updater.State.Downloading => Lang.F("Downloading {0:0}%", uprog * 100),
             Updater.State.Starting => "Installing...",
-            Updater.State.Available => $"&Update to {ulatest}",
+            Updater.State.Available => Lang.F("&Update to {0}", ulatest),
             _ => "Check for &updates",
         };
         // checking / downloading / installing: busy - the hourglass on the button (the desktop window's cursor turns into it too)
@@ -704,7 +712,7 @@ public sealed partial class SettingsView
             ui.Text95(Fit95(ui, umsg, 196), new RectangleF(524, 191, 200, 13), us == Updater.State.Failed ? 0xFF800000 : Grey95);
         if (ui.Button95("g95.whatsnew", new RectangleF(388, 212, 130, 23), "&What's New...")) { _whatsNewManual = true; }
 
-        ui.Group95(new RectangleF(376, 242, 358, 188), "Notifications");
+        ui.Group95(new RectangleF(376, 242, 358, 128), "Notifications");
         b = g.Notifications;
         ui.Check95("g95.notif", 388, 262, "Show &notifications", ref b);
         Hint(ui, 407, 279, 315, Fit95(ui, g.Notifications ? _h.NotificationStatus : "XSOverlay format (VRCX, Discord plugins...)", 315));
@@ -714,7 +722,12 @@ public sealed partial class SettingsView
         g.NotificationSound = b;
         if (ui.Button95("g95.ntest", new RectangleF(647, 298, 75, 23), "&Test", g.Notifications && _h.VrConnected)) _h.TestNotification();
         float na = g.NotificationAngle;
-        TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, $"{Math.Round(na):0}° below eyes", g.Notifications);
+        TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, Lang.F("{0:0}° below eyes", Math.Round(na)), g.Notifications);
         g.NotificationAngle = MathF.Round(na);
+
+        // the language of every screen, each choice in its own words (Regional Settings' box): it applies at once
+        ui.Group95(new RectangleF(376, 378, 358, 52), "Language");
+        int lg = Lang.Index(Lang.Code);
+        if (ComboRow(ui, "g95.lang", 388, 398, 468, 150, "&Language:", LanguageNames, ref lg)) SetLanguage(ui, lg);
     }
 }

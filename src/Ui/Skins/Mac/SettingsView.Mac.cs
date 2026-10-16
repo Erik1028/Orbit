@@ -55,10 +55,12 @@ public sealed partial class SettingsView
 
         // the quick actions on the left; Apply, Close and the default OK on the right (everything applies at once: Close, not Cancel)
         const float by = 448;
-        if (ui.Button95("p95.rc", new RectangleF(9, by, 75, 23), "Recenter", _h.VrConnected)) _h.Recenter();
-        if (ui.Button95("p95.kb", new RectangleF(90, by, 95, 23), C.Keyboard.Visible ? "Hide keyboard" : "Show keyboard"))
+        string kbL = C.Keyboard.Visible ? "Hide keyboard" : "Show keyboard", dkL = C.General.DesktopsVisible ? "Hide desktops" : "Show desktops";
+        float w1 = Btn95(ui, "Recenter", 75), w2 = Btn95(ui, kbL, 95), w3 = Btn95(ui, dkL, 95);
+        if (ui.Button95("p95.rc", new RectangleF(9, by, w1, 23), "Recenter", _h.VrConnected)) _h.Recenter();
+        if (ui.Button95("p95.kb", new RectangleF(15 + w1, by, w2, 23), kbL))
             _h.ToggleKeyboard();
-        if (ui.Button95("p95.desk", new RectangleF(191, by, 95, 23), C.General.DesktopsVisible ? "Hide desktops" : "Show desktops"))
+        if (ui.Button95("p95.desk", new RectangleF(21 + w1 + w2, by, w3, 23), dkL))
             _h.ToggleDesktops();
         float x = W95W - 9 - 75;
         if (ui.Button95("p95.ok", new RectangleF(x, by - 2, 75, 27), "OK", true, isDefault: true))
@@ -125,8 +127,8 @@ public sealed partial class SettingsView
             a.Motion = Motion.Id((MotionLevel)mi);
             changed = true;
         }
-        Hint(ui, X, 94, 480, $"{Theme.RetroSkin.Name} draws these settings, the watch, the keyboard and the notifications at the real " +
-                             "pixel size of its day, enlarged without smoothing.", 30);
+        Hint(ui, X, 94, 480, Lang.F("{0} draws these settings, the watch, the keyboard and the notifications at the real pixel size of its day, enlarged without smoothing.",
+                             Lang.T(Theme.RetroSkin.Name)), 30);
         MacLabel(ui, L, 132, "Colours:");
         Hint(ui, X, 135, 480, "The accent colour, the panel colour, the themes and the opacity belong to the Modern style; switch to it " +
                               "to change them.", 30);
@@ -196,7 +198,7 @@ public static partial class WhatsNewView
         var lines = new List<(string text, bool bold, float indent)>();
         foreach (var e in list)
         {
-            foreach (var l in Wrap95(ui, $"Version {e.Version.ToString(3)} - {e.Title}", textW + 10, true)) lines.Add((l, true, 2));
+            foreach (var l in Wrap95(ui, Lang.F("Version {0} - {1}", e.Version.ToString(3), e.Title), textW + 10, true)) lines.Add((l, true, 2));
             foreach (var pt in e.Points)
             {
                 bool first = true;

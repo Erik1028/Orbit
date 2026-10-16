@@ -393,6 +393,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
     // what does not fit even at the smallest size it may have ends in "…"
     string Ellipsize(string s, float w, float size)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, FontWeight.SemiBold) <= w) return s;
         int n = s.Length;
         while (n > 1 && _p.MeasureWidth(s[..n].TrimEnd() + "…", size, FontWeight.SemiBold) > w) n--;
@@ -511,8 +512,8 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         var card = new RectangleF(TW / 2 - 230, TH / 2 - 100, 460, 200);
         _p.Fill(card, Theme.Panel, 22);
         _p.Stroke(RectangleF.Inflate(card, -0.6f, -0.6f), Theme.Border, 1.2f, 22);
-        _p.Text($"Run “{label}”?", new RectangleF(card.X + 24, card.Y + 20, card.Width - 48, 40), Theme.Text,
-            FitSize($"Run “{label}”?", card.Width - 48, 22), FontWeight.SemiBold);
+        _p.Text(Lang.F("Run “{0}”?", label), new RectangleF(card.X + 24, card.Y + 20, card.Width - 48, 40), Theme.Text,
+            FitSize(Lang.F("Run “{0}”?", label), card.Width - 48, 22), FontWeight.SemiBold);
         _p.Text("It could end your VR session, so it asks first.", new RectangleF(card.X + 24, card.Y + 62, card.Width - 48, 26), sub, 15);
         if (_ui.Button("dk.no", new RectangleF(card.X + 24, card.Bottom - 68, 196, 46), "Cancel")) _in.ConfirmNo();
         if (_ui.Button("dk.yes", new RectangleF(card.Right - 220, card.Bottom - 68, 196, 46), "Do it", null, true)) _in.ConfirmYes();
@@ -545,7 +546,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
             _p.Fill(msg, Wht95);
             _p.Bevel(msg, Painter.Edge.Sunken);
             W95Icons.Draw(_p, W95Icons.Id.Info32, msg.X + 14, msg.Y + 16);
-            _ui.Text95(StateLine() + ".", new RectangleF(msg.X + 54, msg.Y + 18, msg.Width - 64, msg.Height - 30), Blk95, false,
+            _ui.Text95(Lang.T(StateLine()) + ".", new RectangleF(msg.X + 54, msg.Y + 18, msg.Width - 64, msg.Height - 30), Blk95, false,
                 TextAlignment.Leading, true, true);
         }
         // the six keys: 68 x 68 picture boxes, the dock's own pixels
@@ -576,8 +577,8 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         for (int k = 0; k < Knobs.Length; k++)
             SliderGroup95(Knobs[k], new RectangleF(243, 23 + k * 63, 152, 61), show, now);
         // status bar
-        string pages = _s.InFolder ? (_s.FolderPages > 1 ? $"Folder {_s.FolderPage + 1} of {_s.FolderPages}" : "Folder")
-            : $"Page {_s.Page + 1} of {_s.Pages}";
+        string pages = _s.InFolder ? (_s.FolderPages > 1 ? Lang.F("Folder {0} of {1}", _s.FolderPage + 1, _s.FolderPages) : "Folder")
+            : Lang.F("Page {0} of {1}", _s.Page + 1, _s.Pages);
         string name = _s.InFolder ? _s.FolderName : _s.PageName;
         string state = Live ? (_s.Ambient ? "Idle" : "Connected") : StateLine();
         if (show)
@@ -599,6 +600,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
 
     string Fit95(string s, float w)
     {
+        s = Lang.T(s);                     // cut in the language picked
         if (string.IsNullOrEmpty(s) || _ui.Width95(s) <= w) return s;
         int n = s.Length;
         while (n > 1 && _ui.Width95(s[..n] + "...") > w) n--;
@@ -670,7 +672,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         _p.Bevel(box, Painter.Edge.Window);
         _ui.Caption95(new RectangleF(box.X + 3, box.Y + 3, box.Width - 6, 18), "Hexpad");
         W95Icons.Draw(_p, W95Icons.Id.Info32, box.X + 12, box.Y + 32);
-        _ui.Text95(Fit95($"Run \"{label}\"?", box.Width - 64), new RectangleF(box.X + 52, box.Y + 30, box.Width - 60, 16), Blk95, true);
+        _ui.Text95(Fit95(Lang.F("Run \"{0}\"?", label), box.Width - 64), new RectangleF(box.X + 52, box.Y + 30, box.Width - 60, 16), Blk95, true);
         _ui.Text95("It could end your VR session.", new RectangleF(box.X + 52, box.Y + 48, box.Width - 60, 16));
         if (_ui.Button95("dk95.yes", new RectangleF(box.X + box.Width / 2 - 80, box.Bottom - 32, 75, 23), "&Yes", true, true))
             _in.ConfirmYes();

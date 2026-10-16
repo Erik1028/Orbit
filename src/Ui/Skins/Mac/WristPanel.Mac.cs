@@ -150,14 +150,14 @@ public sealed partial class WristPanel
         float pitch = MathF.Min(15, MathF.Floor(r.Height / pick.Count));
         float y0 = MathF.Floor(r.Y + (r.Height - pick.Count * pitch) / 2);
         float lw = 20;
-        foreach (int i in pick) lw = MathF.Max(lw, _ui.Width95(bats[i].label, true) + 2);
+        foreach (int i in pick) lw = MathF.Max(lw, _ui.Width95(Bat(bats[i].label), true) + 2);
         lw = MathF.Min(lw, MathF.Floor(r.Width * 0.4f));
         for (int i = 0; i < pick.Count; i++)
         {
             var b = bats[pick[i]];
             float yy = y0 + i * pitch + MathF.Floor((pitch - 13) / 2);
             bool low = b.pct <= 0.2f && !b.charging;
-            _ui.Text95(Fit(b.label, lw - 1, Ui.F95, true), new RectangleF(r.X, yy, lw, 13), MacBlack, true);
+            _ui.Text95(Fit(Bat(b.label), lw - 1, Ui.F95, true), new RectangleF(r.X, yy, lw, 13), MacBlack, true);
             var bar = new RectangleF(r.X + lw + 1, yy + 2, r.Width - lw - 1 - 30, 10);
             if (bar.Width >= 12) _ui.Progress95(bar, b.pct, low ? 0xFF800000 : Theme.W95Navy);
             if (b.charging) _p.Pixels(BoltGlyph, bar.Right + 2, yy + 4, MacBlack);
@@ -582,7 +582,7 @@ public sealed partial class WristPanel
         _p.Fill(new RectangleF(gi.X, gi.Y, lw + 8, 14), MacWhite);
         _ui.Text95(cpuLabel, new RectangleF(gi.X + 3, gi.Y + 1, lw + 4, 13), MacBlack, true);
         float frac = Stats.RamTotalGB > 0 ? Stats.RamUsedGB / Stats.RamTotalGB : 0;
-        _ui.Text95(Stats.RamTotalGB > 0 ? $"Memory: {Stats.RamUsedGB:0.0} of {Stats.RamTotalGB:0} GB" : "Memory: --", new RectangleF(c.X, c.Bottom - 38, c.Width, 15));
+        _ui.Text95(Stats.RamTotalGB > 0 ? Lang.F("Memory: {0:0.0} of {1:0} GB", Stats.RamUsedGB, Stats.RamTotalGB) : "Memory: --", new RectangleF(c.X, c.Bottom - 38, c.Width, 15));
         _ui.Progress95(new RectangleF(c.X, c.Bottom - 20, c.Width, 14), frac, Theme.W95Navy);
     }
 }
