@@ -68,7 +68,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         if (want && (!ReferenceEquals(list, _list) || sub != _sub)) { _list = list; _sub = sub; _scroll = 0; _dirty = true; }
         if (_look != Theme.Version) { _look = Theme.Version; _dirty = true; }      // a new look (colours, font): drawn again
         if (want && !_placed) BringHere();
-        _vis = Math.Clamp(_vis + Math.Sign((want ? 1 : 0) - _vis) * dt / 0.22f, 0, 1);
+        _vis = Motion.Step(_vis, want, dt, 0.22f);                       // Look > Motion off: at once
         if (_vis <= 0 || !_placed)
         {
             if (_vis <= 0) { _ptr.Leave(); if (!want) _placed = false; }      // next time: in front of you again

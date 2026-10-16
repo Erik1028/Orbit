@@ -8,7 +8,7 @@ namespace Orbit;
 // whole-pixel sizes, never smoothed.
 public static class W95Icons
 {
-    public enum Id { Orbit, Clock, Moon, Gear, Center, Info32, Computer, ComputerOff, Folder, Note, RadioOff, RadioOn, Window, Layouts, Keyboard, Palette, Delete, Download, Dock, People, Chat, Theater, Mine, Flag }
+    public enum Id { Orbit, Clock, Moon, Gear, Center, Info32, Computer, ComputerOff, Folder, Note, RadioOff, RadioOn, Window, Layouts, Keyboard, Palette, Delete, Download, Dock, People, Chat, Theater, Mine, Flag, Hourglass }
 
     // k black  w white  s silver  g grey  n navy  b blue  t teal  c cyan  r red  m maroon
     // y yellow o olive  e green   l lime  p purple f fuchsia   . transparent
@@ -447,6 +447,25 @@ public static class W95Icons
             ".kwwwwwwwwwwwgk.",
             ".kkkkkkkkkkkkkk.",
             "................",
+        },
+        Id.Hourglass => new[]               // busy: the 1995 wait cursor's hourglass (still - 95's did not turn)
+        {
+            "..kkkkkkkkkkkk..",
+            "..kwwwwwwwwwwk..",
+            "..kkkkkkkkkkkk..",
+            "...kwwwwwwwwk...",
+            "...kwkkkkkkwk...",
+            "....kwkkkkwk....",
+            ".....kwkkwk.....",
+            "......kwwk......",
+            "......kwwk......",
+            ".....kwwkwk.....",
+            "....kwwwkwwk....",
+            "...kwwkkkkwwk...",
+            "...kwkkkkkkwk...",
+            "..kkkkkkkkkkkk..",
+            "..kwwwwwwwwwwk..",
+            "..kkkkkkkkkkkk..",
         },
         Id.Mine => MineArt.Mine16,          // Minesweeper's own pictures (Mines.cs)
         Id.Flag => MineArt.Flag16,

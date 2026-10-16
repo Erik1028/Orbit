@@ -154,7 +154,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
     {
         if (Ov == null) return;
         float target = Shown ? 1 : 0;
-        _vis = Math.Clamp(_vis + Math.Sign(target - _vis) * dt / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, Shown, dt, 0.18f);                      // Look > Motion off: at once
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
             if (_vis <= 0) { _in.ReleasePress(); _ptr.Leave(); _in.Hover = null; }

@@ -75,7 +75,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
     public void Update(VrSession vr, double now, float dt, RoomWatcher.Snapshot s)
     {
         if (Ov == null) return;
-        _vis = Math.Clamp(_vis + Math.Sign((Shown ? 1 : 0) - _vis) * dt / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, Shown, dt, 0.18f);                      // Look > Motion off: at once
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
             if (_vis <= 0) _ptr.Leave();

@@ -416,6 +416,43 @@ static partial class Tools
             ptr.Leave();
             ui.ResetAnimations();
         }
+        // Look > Motion (Gfx/Motion.cs), its segments in the Look tab: a pick applies at once and is written only when not Full; Off
+        // puts a spring at its target in one frame (an eased value too); Reduced skips the watch's cascade, Full plays it
+        {
+            void FrameL() { ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End(); }
+            void ClickL(float x, float y) { ptr.Move(x * 1.5f, y * 1.5f); FrameL(); ptr.Press(); FrameL(); ptr.Release(); FrameL(); }
+            static float Seg(int i) => 612 + 356 / 3f * (i + 0.5f);
+            static bool Written(AppearanceConfig x) => System.Text.Json.JsonSerializer.Serialize(x).Contains("\"Motion\"");
+            var am = cfg.Data.Appearance;
+            view.Tab = SettingsView.TabLook;
+            ui.ResetAnimations();
+            ClickL(Seg(1), 607);
+            bool reduced = am.Motion == "reduced" && Motion.Level == MotionLevel.Reduced && Written(am);
+            wrist.Settle();
+            wrist.Intro();
+            bool cascadeReduced = wrist.IntroRunning;
+            ClickL(Seg(2), 607);
+            bool off = am.Motion == "off" && Motion.Level == MotionLevel.Off && Written(am);
+            var mu = new Ui(painter);
+            mu.Spring("s", 0); mu.Anim("a", 0);
+            bool snapS = mu.Spring("s", 100) == 100, snapA = mu.Anim("a", 1) == 1;
+            ClickL(Seg(0), 607);
+            bool full = am.Motion == null && Motion.Full && !Written(am);
+            var fu = new Ui(painter);
+            fu.Spring("s", 0);
+            bool moves = fu.Spring("s", 100) < 100;
+            wrist.Settle();
+            wrist.Intro();
+            bool cascadeFull = wrist.IntroRunning;
+            wrist.Settle();
+            ptr.Leave();
+            ui.ResetAnimations();
+            Log.Info($"motion: Reduced picked in the Look tab applies at once and is written {reduced} (want True), Off {off} (want True), " +
+                     $"Full again writes nothing {full} (want True)");
+            Log.Info($"motion: Off - a spring is at its target in one frame {snapS} (want True), an eased value too {snapA} (want True); " +
+                     $"Full - it moves there {moves} (want True)");
+            Log.Info($"motion: Reduced skips the watch's cascade {!cascadeReduced} (want True), Full plays it {cascadeFull} (want True)");
+        }
         KeySounds.Export(dir);
         using (var np = new NotificationPanel(gpu, painter, cfg))
         {
@@ -777,6 +814,18 @@ static partial class Tools
             Log.Info($"{sk.Tag} drop-down: outside click kept haptics {hap0}->{hap1} (want same), next click {cfg.Data.General.Haptics} (want {!hap0})");
             cfg.Data.General.LaserSmoothing = smooth0;
             cfg.Data.General.Haptics = hap0;
+            if (sk.Tag == "95")
+            {
+                // Look > Motion as the sheet's option buttons: Off applies at once and is written, Full again writes nothing
+                view.Tab = SettingsView.TabLook;
+                ui.ResetAnimations();
+                Click95(34, 348 + 2 * 20 + 5);
+                bool off = cfg.Data.Appearance.Motion == "off" && Motion.Level == MotionLevel.Off;
+                Click95(34, 348 + 5);
+                bool full = cfg.Data.Appearance.Motion == null && Motion.Full;
+                Log.Info($"95 motion: Off picked from the option buttons applies at once {off} (want True), Full again writes nothing {full} (want True)");
+                view.Tab = SettingsView.TabGeneral;
+            }
             ptr.Leave();
             ui.ResetAnimations();
             panelView.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, 0x00000000);

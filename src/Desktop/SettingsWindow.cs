@@ -256,6 +256,9 @@ public sealed class SettingsWindow : Form
         }
         _swap.Present(0, PresentFlags.None);
         if (_ui.Interacting || _ui.Changed || _ui.Animating || _ui.Pressed || _ui.Released) Dirty = true;
+        // 95: busy in the background (the updater) - the cursor is the arrow with the hourglass, as 1995's was
+        var cur = _classic && View.Busy95 ? Cursors.AppStarting : Cursors.Default;
+        if (Cursor != cur) Cursor = cur;
     }
 
     protected override void Dispose(bool disposing)

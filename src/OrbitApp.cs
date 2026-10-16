@@ -515,7 +515,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             AutoKeyboard(now);
             // night mode fades in / out over a moment
             float dimWant = C.Appearance.NightMode ? Math.Clamp(C.Appearance.NightBrightness, 0.1f, 1f) : 1f;
-            _dimNow += (dimWant - _dimNow) * Math.Min(1f, dt * 8);
+            _dimNow = Motion.Any ? _dimNow + (dimWant - _dimNow) * Math.Min(1f, dt * 8) : dimWant;      // Motion off: at once
             if (MathF.Abs(dimWant - _dimNow) < 0.004f) _dimNow = dimWant;
             VrOverlay.SetDim(_dimNow);
             if (C.General.Osc && now >= _nextOsc)       // 10 Hz is plenty for avatar parameters
