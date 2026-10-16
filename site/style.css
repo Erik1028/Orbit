@@ -259,3 +259,108 @@ footer p{max-width:40em}
 .wd-dot::after{content:"";width:9px;height:9px;border-radius:50%;background:#414862;transition:background .2s,width .2s}
 .wd-dot[aria-current="true"]::after{background:var(--accent);width:22px;border-radius:5px}
 @media (prefers-reduced-motion:reduce){.wd-track,.wd-line>i{transition:none}.wd-w.wd-flash,.wd-detail.wd-in{animation:none}}
+
+/* ---------- Windows 95 style (win95.js): the page as a 1995 desktop ----------
+   Bevels are the classic four-line box-shadows: white / light grey on the lit edges, dark grey / black on the others. */
+.w95-taskbar,.w95-menu{display:none}
+.w95-toggle{background:none;font:inherit;font-family:var(--mono);font-size:13px;cursor:pointer}
+html[data-style="95"]{
+  --bg:#008080; --text:#000; --dim:#303030; --line:#808080; --panel:#fff; --accent:#000080;
+  --sans:"Microsoft Sans Serif","MS Sans Serif",Tahoma,Arial,sans-serif; --display:var(--sans);
+  --raised:inset -1px -1px #0a0a0a,inset 1px 1px #fff,inset -2px -2px #808080,inset 2px 2px #dfdfdf;
+  --sunken:inset -1px -1px #fff,inset 1px 1px #808080,inset -2px -2px #dfdfdf,inset 2px 2px #0a0a0a;
+  color-scheme:light;
+}
+html[data-style="95"] body{font-size:15px;line-height:1.5;-webkit-font-smoothing:auto;padding-bottom:calc(52px + env(safe-area-inset-bottom,0px))}
+html[data-style="95"] .top{display:none}
+html[data-style="95"] a{color:#0000ee;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+html[data-style="95"] a:hover{color:#0000ee}
+html[data-style="95"] :focus-visible{outline:1px dotted #000;outline-offset:-4px;border-radius:0}
+html[data-style="95"] .w95-ht{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+html[data-style="95"] main{display:flex;flex-direction:column;gap:28px;padding-block:28px 0}
+
+/* windows */
+html[data-style="95"] main > section,html[data-style="95"] main > .page-head{background:#c0c0c0;box-shadow:var(--raised);padding:3px 16px 18px;margin:0;max-width:none;color:#000}
+html[data-style="95"] main > section::before,html[data-style="95"] main > .page-head::before{
+  content:attr(data-w95-title);grid-column:1/-1;display:block;margin:0 -13px 14px;height:24px;line-height:24px;padding:0 64px 0 8px;
+  background:#000080 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='54' height='16'%3E%3Cg fill='%23c0c0c0'%3E%3Crect width='16' height='14' y='1'/%3E%3Crect x='16' width='16' height='14' y='1'/%3E%3Crect x='36' width='16' height='14' y='1'/%3E%3C/g%3E%3Cg fill='none' stroke-width='1'%3E%3Cpath d='M.5 14.5v-13h15M16.5 14.5v-13h15M36.5 14.5v-13h15' stroke='%23fff'/%3E%3Cpath d='M.5 14.5h15v-13M16.5 14.5h15v-13M36.5 14.5h15v-13' stroke='%23000'/%3E%3C/g%3E%3Cpath d='M4 11h6v2H4z' fill='%23000'/%3E%3Cpath d='M20.5 4.5h8v7h-8z M20.5 5.5h8' fill='none' stroke='%23000'/%3E%3Cpath d='M40 4l8 8M48 4l-8 8' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 3px center;
+  color:#fff;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html[data-style="95"] .part,html[data-style="95"] .install,html[data-style="95"] .intro,html[data-style="95"] .try{row-gap:16px}
+html[data-style="95"] .intro{align-items:end}
+html[data-style="95"] .intro h1{font-family:Arial,"Helvetica Neue",sans-serif;font-weight:700;letter-spacing:0;font-size:clamp(36px,5.6vw,60px)}
+html[data-style="95"] .intro p,html[data-style="95"] .part .txt>p,html[data-style="95"] .facts dd,html[data-style="95"] .ver ul,html[data-style="95"] .install .aside,html[data-style="95"] .try aside,html[data-style="95"] .fix div,html[data-style="95"] .page-head p{color:#000}
+html[data-style="95"] .part ul.plain,html[data-style="95"] .ctl td:last-child,html[data-style="95"] .wtable td:nth-child(2),html[data-style="95"] .wtable td.sz,html[data-style="95"] .wtable th{color:#000}
+html[data-style="95"] .try aside .note,html[data-style="95"] .install .aside,html[data-style="95"] .ver,html[data-style="95"] .fix,html[data-style="95"] .wtable td{border-color:#808080}
+html[data-style="95"] .try aside b,html[data-style="95"] .install .aside b{color:#000}
+html[data-style="95"] .get .mono{color:#000}
+html[data-style="95"] .mono,html[data-style="95"] kbd,html[data-style="95"] code,html[data-style="95"] .ver .v{font-family:"Courier New",Courier,monospace}
+html[data-style="95"] .ver .v{color:#000080;font-weight:700}
+html[data-style="95"] .install ol li::marker{color:#000;font-family:inherit}
+
+/* buttons, keys, frames */
+html[data-style="95"] .btn,html[data-style="95"] .more,html[data-style="95"] .wd-back{background:#c0c0c0;color:#000;border:0;border-radius:0;box-shadow:var(--raised);font-weight:700;text-decoration:none}
+html[data-style="95"] .btn{padding:12px 20px}
+html[data-style="95"] .btn:hover,html[data-style="95"] .more:hover{background:#c0c0c0;color:#000}
+html[data-style="95"] .btn:active,html[data-style="95"] .more:active,html[data-style="95"] .wd-back:active{box-shadow:var(--sunken)}
+html[data-style="95"] kbd{background:#c0c0c0;border:0;border-radius:0;box-shadow:inset -1px -1px #0a0a0a,inset 1px 1px #fff;padding:1px 7px;color:#000}
+html[data-style="95"] code{background:#fff;border:0;border-radius:0;box-shadow:inset 1px 1px #808080,inset -1px -1px #dfdfdf;color:#000}
+html[data-style="95"] .shot{border:0;border-radius:0;background:#c0c0c0;box-shadow:var(--sunken);padding:2px}
+html[data-style="95"] .ctl tr:first-child td,html[data-style="95"] .ctl td{border-color:#808080}
+html[data-style="95"] .live{border-radius:0;background:#008000}
+html[data-style="95"] .toc a{color:#0000ee}
+
+/* footer on the desktop */
+html[data-style="95"] footer{border-top:0;margin-top:28px}
+html[data-style="95"] footer .wrap{color:#fff}
+html[data-style="95"] footer a{color:#fff}
+
+/* taskbar */
+html[data-style="95"] .w95-taskbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:50;align-items:center;gap:4px;
+  padding:4px max(4px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(4px,env(safe-area-inset-left,0px));
+  background:#c0c0c0;box-shadow:inset 0 1px #dfdfdf,inset 0 2px #fff;font-family:var(--sans);font-size:14px;color:#000}
+.w95-start,.w95-task{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;background:#c0c0c0;border:0;box-shadow:var(--raised);font:inherit;color:#000;cursor:pointer;text-decoration:none}
+.w95-start b{font-size:15px}
+.w95-start[aria-expanded="true"]{box-shadow:var(--sunken);padding:1px 9px 0 11px}
+html[data-style="95"] .w95-task{flex:0 1 220px;min-width:0;box-shadow:var(--sunken);background:#dcdcdc;color:#000;text-decoration:none;font-weight:700;overflow:hidden;white-space:nowrap}
+.w95-tray{margin-left:auto;height:34px;display:flex;align-items:center;padding:0 12px;box-shadow:inset -1px -1px #fff,inset 1px 1px #808080;font-variant-numeric:tabular-nums;white-space:nowrap}
+html[data-style="95"] .w95-menu:not([hidden]){display:flex;position:fixed;z-index:51;left:max(4px,env(safe-area-inset-left,0px));bottom:calc(44px + env(safe-area-inset-bottom,0px));
+  background:#c0c0c0;box-shadow:var(--raised);padding:3px;font-family:var(--sans);font-size:15px;max-width:calc(100vw - 8px)}
+.w95-banner{writing-mode:vertical-rl;transform:rotate(180deg);background:linear-gradient(#000080,#808080);color:#c0c0c0;font-family:Arial,sans-serif;font-size:22px;font-weight:700;padding:10px 4px;letter-spacing:.5px}
+.w95-banner b{color:#fff}
+.w95-banner i{font-style:normal;color:#fff;font-weight:400}
+.w95-menu [role="menu"]{display:flex;flex-direction:column;min-width:230px;padding:2px 0}
+.w95-menu a,.w95-menu button{display:block;text-align:left;padding:8px 18px 8px 14px;color:#000;text-decoration:none;background:none;border:0;font:inherit;cursor:pointer}
+html[data-style="95"] .w95-menu a{color:#000;text-decoration:none}
+html[data-style="95"] .w95-menu a:hover,html[data-style="95"] .w95-menu a:focus,.w95-menu a:hover,.w95-menu a:focus,.w95-menu button:hover,.w95-menu button:focus{background:#000080;color:#fff;outline:0}
+.w95-menu hr{border:0;border-top:1px solid #808080;border-bottom:1px solid #fff;margin:3px 2px;width:auto}
+
+/* the watch in the app's Windows 95 style: little 95 windows on a teal desktop */
+html[data-style="95"] .watch{--wd-acc:#000080;--wd-bar:#00c000;--wd-over:#ffff00;--wd-grid:rgba(0,255,0,.55)}
+html[data-style="95"] .wd-frame{background:#008080;border:0;border-radius:0;box-shadow:var(--sunken)}
+html[data-style="95"] .wd-w{background:#c0c0c0;border:0;border-radius:0;box-shadow:var(--raised);color:#000;font-family:var(--sans);padding:calc(max(11px,2.5cqw) + 1.4cqw) 1.4cqw 1.2cqw}
+html[data-style="95"] .wd-w::before{content:attr(data-n95);position:absolute;top:2px;left:2px;right:2px;height:max(11px,2.5cqw);line-height:max(11px,2.5cqw);padding:0 .7cqw;
+  background:#000080;color:#fff;font-weight:700;font-size:max(8px,1.55cqw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html[data-style="95"] .wd-w:hover{border:0}
+html[data-style="95"] .wd-btn{color:#000}
+html[data-style="95"] .wd-w.wd-on{box-shadow:var(--sunken);background:#dcdcdc}
+html[data-style="95"] .wd-w small,html[data-style="95"] .wd-player small,html[data-style="95"] .wd-player span,html[data-style="95"] .wd-row3 small,html[data-style="95"] .wd-big-clock small{color:#000}
+html[data-style="95"] .wd-graph small,html[data-style="95"] .wd-graph-big>.wd-row2 small,html[data-style="95"] .wd-big-clock small b{color:#000}
+html[data-style="95"] .wd-w b,html[data-style="95"] .wd-time span{font-weight:700}
+html[data-style="95"] .wd-line{background:#fff!important;border-radius:0;box-shadow:inset 1px 1px #808080;height:max(5px,.9cqw)}
+html[data-style="95"] .wd-line>i{background:#000080!important;border-radius:0}
+html[data-style="95"] .wd-round,html[data-style="95"] .wd-pink,html[data-style="95"] .wd-purple,html[data-style="95"] .wd-group span{border-radius:0;background:#c0c0c0;color:#000;box-shadow:var(--raised)}
+html[data-style="95"] .wd-round:active,html[data-style="95"] .wd-group span:active{box-shadow:var(--sunken)}
+html[data-style="95"] .wd-cover{border-radius:0;background:#fff;color:#000080;box-shadow:var(--sunken)}
+html[data-style="95"] .wd-dial circle{fill:#000}
+html[data-style="95"] .wd-dial circle[fill="none"]{fill:#fff;stroke:#808080;stroke-width:1.6}
+html[data-style="95"] .wd-dial line{stroke:#000}
+html[data-style="95"] .wd-dial line[data-h$="s"]{stroke:#c00000}
+html[data-style="95"] .wd-graph canvas,html[data-style="95"] .wd-graph-big canvas{background:#000;box-shadow:var(--sunken)}
+html[data-style="95"] .wd-today{border-radius:0;border-color:#000080;color:#fff;background:#000080}
+html[data-style="95"] .wd-detail{background:#008080}
+html[data-style="95"] .wd-dbody{background:#c0c0c0;border:0;border-radius:0;box-shadow:var(--raised);color:#000}
+html[data-style="95"] .wd-big-clock span{color:#000080}
+html[data-style="95"] .wd-toast{background:#ffffe1;border:1px solid #000;border-radius:0;color:#000;font-family:var(--sans)}
+html[data-style="95"] .wd-vol input{accent-color:#000080}
+html[data-style="95"] .wd-dot::after{border-radius:0;background:#c0c0c0;box-shadow:inset -1px -1px #0a0a0a,inset 1px 1px #fff;width:12px;height:12px}
+html[data-style="95"] .wd-dot[aria-current="true"]::after{background:#000080;width:24px;border-radius:0}

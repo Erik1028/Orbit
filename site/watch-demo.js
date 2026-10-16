@@ -64,12 +64,18 @@
      ['cpu', 0, 3, 2, 1], ['ram', 2, 3, 1, 1], ['day', 3, 3, 1, 1], ['theater', 4, 3, 1, 1], ['settings', 5, 3, 1, 1]]
   ];
 
+  // the Windows 95 style's window title of each widget (the app's own names, WatchWidgets.Kinds)
+  var N95 = { analog: 'Clock', time: 'Clock', date: 'Date', calendar: 'Calendar', timer: 'Timer', stopwatch: 'Stopwatch',
+    session: 'Session', battery: 'Power Meter', media: 'CD Player', volume: 'Volume Control', graph: 'Frame Graph',
+    fps: 'Frame Rate', reproj: 'Reprojection', gpu: 'GPU Time', vram: 'Video Memory', cpu: 'CPU Usage', ram: 'Memory',
+    night: 'Night', layout: 'Layout', group: 'Buttons', theater: 'Theater', settings: 'Settings', day: 'Date' };
+
   // ---------- markup ----------
   root.innerHTML =
     '<div class="wd-frame"><div class="wd-track">' +
     PAGES.map(function (p, pi) {
       return '<div class="wd-face" data-page="' + pi + '"' + (pi ? ' aria-hidden="true"' : '') + '>' + p.map(function (w) {
-        return '<div class="wd-w wd-' + w[0] + '" data-t="' + w[0] + '" style="grid-area:' + (w[2] + 1) + '/' + (w[1] + 1) + '/span ' + w[4] + '/span ' + w[3] + '"' +
+        return '<div class="wd-w wd-' + w[0] + '" data-t="' + w[0] + '" data-n95="' + (N95[w[0]] || '') + '" style="grid-area:' + (w[2] + 1) + '/' + (w[1] + 1) + '/span ' + w[4] + '/span ' + w[3] + '"' +
           ' role="button" tabindex="0">' + tile(w[0], w[3], w[4]) + '</div>';
       }).join('') + '</div>';
     }).join('') +
@@ -155,12 +161,13 @@
     var dpr = window.devicePixelRatio || 1, W = Math.round(r.width * dpr), H = Math.round(r.height * dpr);
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     var c = cv.getContext('2d'), n = S.frames.length, bw = W / n, max = 20;
+    var cs = getComputedStyle(cv), bar = cs.getPropertyValue('--wd-bar').trim() || '#ff5d93', overC = cs.getPropertyValue('--wd-over').trim() || '#f5b82e';
     c.clearRect(0, 0, W, H);
     var budget = 1000 / S.fps, by = H - (budget / max) * H;
-    c.fillStyle = 'rgba(232,235,242,0.35)'; c.fillRect(0, Math.round(by), W, Math.max(1, dpr));
+    c.fillStyle = cs.getPropertyValue('--wd-grid').trim() || 'rgba(232,235,242,0.35)'; c.fillRect(0, Math.round(by), W, Math.max(1, dpr));
     for (var i = 0; i < n; i++) {
       var v = S.frames[i], hh = Math.min(1, v / max) * H;
-      c.fillStyle = v > budget ? '#f5b82e' : 'rgba(255,93,147,' + (big ? 0.95 : 0.85) + ')';
+      c.fillStyle = v > budget ? overC : bar;
       c.fillRect(i * bw, H - hh, Math.max(1, bw - (big ? dpr : 0)), hh);
     }
   }
@@ -317,4 +324,5 @@
   tick(true);
   setInterval(loop, reduce ? 1000 : 100);
   window.addEventListener('resize', function () { tick(true); });
+  document.addEventListener('orbit-style', function () { tick(true); });
 })();
