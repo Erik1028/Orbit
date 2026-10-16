@@ -184,11 +184,13 @@ public sealed partial class SettingsView
             0xFF333333);
 
         // the styles: a little window of each, the chosen one selected the way Explorer selects
-        ui.Group95(new RectangleF(24, 102, 702, 100), $"Styles ({Skins.StyleIds.Length})");
-        int cur = Skins.IndexOf(a.Style);
-        const float cw = 106, gap = 8;
-        float x0 = 24 + MathF.Floor((702 - (Skins.StyleIds.Length * cw + (Skins.StyleIds.Length - 1) * gap)) / 2);
-        for (int i = 0; i < Skins.StyleIds.Length; i++)
+        int n = StyleMenu.Ids.Length;
+        ui.Group95(new RectangleF(24, 102, 702, 100), $"Styles ({n})");
+        int cur = StyleMenu.IndexOf(a.Style);
+        const float gap = 8;
+        float cw = MathF.Min(106, MathF.Floor((702 - 16 - (n - 1) * gap) / n));      // seven fit since Cyber came
+        float x0 = 24 + MathF.Floor((702 - (n * cw + (n - 1) * gap)) / 2);
+        for (int i = 0; i < n; i++)
         {
             var cell = new RectangleF(x0 + i * (cw + gap), 120, cw, 80);
             bool click = ui.Clickable(Ui.Id("lk7.s", i), cell, out bool hv, out bool hd);
@@ -203,9 +205,9 @@ public sealed partial class SettingsView
                 if (ch < 1) p.PopFade();
             }
             var pic = new RectangleF(cell.X + 7, cell.Y + 6, cell.Width - 14, 50);
-            StyleChip7(p, pic, Skins.StyleIds[i]);
-            ui.Text95(Skins.StyleNames[i], new RectangleF(cell.X, cell.Y + 59, cell.Width, 16), 0xFF000000, false, TextAlignment.Center);
-            if (click && !on) { a.Style = Skins.StyleIds[i]; changed = true; }
+            StyleChip7(p, pic, StyleMenu.Ids[i]);
+            ui.Text95(StyleMenu.Names[i], new RectangleF(cell.X, cell.Y + 59, cell.Width, 16), 0xFF000000, false, TextAlignment.Center);
+            if (click && !on) { a.Style = StyleMenu.Ids[i]; changed = true; }
         }
 
         // the laser's colour: "as the style", then the presets - 7's glossy swatches
@@ -338,6 +340,9 @@ public sealed partial class SettingsView
                 for (int i = 0; i < 4; i++) p.Fill(new RectangleF(wm.X + 2, wm.Y + 2 + i * 2, wm.Width - 4, 1), 0xFF8A8A8A);
                 p.Fill(new RectangleF(wm.X + 4, wm.Y + 2, 7, 7), 0xFFDDDDDD);
                 p.Fill(new RectangleF(wm.X + 1, wm.Y + 10, wm.Width - 2, 1), 0xFF000000);
+                break;
+            case CyberHud.Id:
+                CyberHud.Chip(p, r);
                 break;
             case "terminal":
                 p.Fill(r, 0xFF050805);

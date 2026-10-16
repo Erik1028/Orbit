@@ -16,7 +16,7 @@ public sealed partial class SettingsView
 {
     int _tRow;          // the Look list's current item (the one pointed at last): its help is shown
 
-    static readonly string[] TStyleNames = Skins.StyleNames.Select(s => s.ToUpperInvariant()).ToArray();
+    static readonly string[] TStyleNames = StyleMenu.Names.Select(s => s.ToUpperInvariant()).ToArray();
     // the laser colour wells of the 95 page, by name: the style's own, then the presets (the last, white, is not offered)
     static readonly string[] TLaserNames = { "PHOSPHOR", "SKY BLUE", "BLUE", "VIOLET", "PINK", "RED", "ORANGE", "AMBER", "GREEN", "TEAL" };
     static readonly string[] TMotionNames = { "FULL", "REDUCED", "OFF" };       // Look > Motion (MotionLevel's order)
@@ -150,8 +150,8 @@ public sealed partial class SettingsView
 
         // Style
         float yy = top;
-        int si = Skins.IndexOf(a.Style);
-        if (ui.Combo95("lkT.style", new RectangleF(vx, yy, 172, 21), TStyleNames, ref si)) { a.Style = Skins.StyleIds[si]; changed = true; }
+        int si = StyleMenu.IndexOf(a.Style);
+        if (ui.Combo95("lkT.style", new RectangleF(vx, yy, 172, 21), TStyleNames, ref si)) { a.Style = StyleMenu.Ids[si]; changed = true; }
         // Laser colour
         yy += pitch;
         var wells = new List<uint> { 0 };

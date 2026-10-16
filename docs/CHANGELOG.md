@@ -3,6 +3,10 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.13.1 | Cyber in every style list
+- The Style list in the Windows 7, Classic Mac and Terminal settings now offers Cyber too (it had six styles
+  there).
+
 ## 1.13.0 | Seven styles, all of them moving
 - Settings > Look > Style has five new styles besides Modern and Windows 95: Windows XP, Windows 7, Classic Mac, a
   green Terminal and Cyber. Each one draws the watch, the settings, the keyboard, notifications, the screen bar and

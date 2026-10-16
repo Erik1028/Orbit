@@ -196,6 +196,11 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.13.1 – Cyber minden stíluslistában (2026-10-16)
+
+A Windows 7 / Mac / terminál beállítás a `Skins.StyleIds`-t használta (6 elem); most a `StyleMenu`-t (7, Cyberrel), a
+Windows 7 csempéi a 7-hez szűkülnek, a Cyber csempét a `CyberHud.Chip` rajzolja.
+
 ## 1.13.0 – öt új stílus, animációk, Mozgás (2026-10-16)
 
 Erik: „egy nagy munka: több windows stílus” (retró koncepció) + a Cyber HUD koncepció (cyber_1/2), majd „minden

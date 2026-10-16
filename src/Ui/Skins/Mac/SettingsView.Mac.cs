@@ -110,11 +110,11 @@ public sealed partial class SettingsView
         bool changed = false;
         const float L = 214, X = 224;          // the labels' right edge, the controls' left
 
-        int si = Skins.IndexOf(a.Style);
+        int si = StyleMenu.IndexOf(a.Style);
         MacLabel(ui, L, 66, "Style:");
-        if (ui.Combo95("lk95.style", new RectangleF(X, 66, 190, RowH), Skins.StyleNames, ref si))
+        if (ui.Combo95("lk95.style", new RectangleF(X, 66, 190, RowH), StyleMenu.Names, ref si))
         {
-            a.Style = Skins.StyleIds[si];
+            a.Style = StyleMenu.Ids[si];
             changed = true;
         }
         // how much moves (Gfx/Motion.cs): a pop-up menu beside the style - written only when not Full, it applies at once
