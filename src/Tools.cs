@@ -10,8 +10,9 @@ using Valve.VR;
 
 namespace Orbit;
 
-// Developer tools: --snapshot renders every panel to PNG without VR (every retro style too: *_95, *_xp, *_aero, *_mac, *_term;
-// --snapshot <dir> --only-style xp - or ORBIT_SNAP_STYLE=xp - renders one style's screens alone in seconds); --selftest checks the
+// Developer tools: --snapshot renders every panel to PNG without VR (every retro style too: *_95, *_xp, *_aero, *_mac, *_term; and
+// Cyber, *_cyber; --snapshot <dir> --only-style xp - or ORBIT_SNAP_STYLE=xp / cyber - renders one style's screens alone in seconds);
+// --selftest checks the
 // SteamVR side.
 static partial class Tools
 {
@@ -83,12 +84,13 @@ static partial class Tools
         Directory.CreateDirectory(dir);
         onlyStyle ??= Environment.GetEnvironmentVariable("ORBIT_SNAP_STYLE");
         RetroSkin only = null;
-        if (!string.IsNullOrEmpty(onlyStyle))
+        bool onlyCyber = onlyStyle == CyberHud.Id;          // Cyber: a modern style, its own run (CyberShots)
+        if (!string.IsNullOrEmpty(onlyStyle) && !onlyCyber)
         {
             only = Array.Find(Skins.All, k => k.Tag == onlyStyle || k.Id == onlyStyle);
-            if (only == null) { Log.Error($"snapshot: no style '{onlyStyle}' (95, xp, aero, mac, term)"); return 1; }
+            if (only == null) { Log.Error($"snapshot: no style '{onlyStyle}' (95, xp, aero, mac, term, cyber)"); return 1; }
         }
-        bool everything = only == null;
+        bool everything = only == null && !onlyCyber;
         // separate config: a snapshot never touches the real one
         var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
         using var gpu = new Gpu(-1);
@@ -188,7 +190,7 @@ static partial class Tools
         using var surf = new Surface(gpu, 1500, 960);
         var ptr = new PointerState();
         // "What's new" after an update from 1.8.2: over the settings (General tab) and as the VR panel
-        void WhatsNewShots(string st)
+        void WhatsNewShots(string st, bool modern = false)
         {
             host.WhatsNewList = WhatsNew.Since("1.8.2");
             host.WhatsNewSub = $"Updated to {Updater.Current.ToString(3)} from 1.8.2";
@@ -196,7 +198,7 @@ static partial class Tools
             int keep = view.Tab;
             view.Tab = SettingsView.TabGeneral;
             ui.ResetAnimations();
-            if (st == "")
+            if (st == "" || modern)
             {
                 ui.Begin(ptr, 1.5f);
                 painter.Begin(surf.Bitmap, Theme.Bg, 1.5f);
@@ -271,6 +273,12 @@ static partial class Tools
         {
             RetroShots(only);
             Log.Info($"snapshot ({only.Name} only) written to " + dir);
+            return 0;
+        }
+        if (onlyCyber)
+        {
+            CyberShots();
+            Log.Info($"snapshot ({CyberHud.Name} only) written to " + dir);
             return 0;
         }
         for (int t = 0; t < SettingsView.TabCount; t++)
@@ -393,11 +401,12 @@ static partial class Tools
             void FrameS() => view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal);
             void ClickS(float x, float y) { ptr.Move(x * 2, y * 2); FrameS(); ptr.Press(); FrameS(); ptr.Release(); FrameS(); FrameS(); }
             ui.ResetAnimations();
+            float listTop = 512 - 6 - StyleMenu.Ids.Length * 40 - 12;     // the list over the Style field (SettingsView.StyleList)
             ClickL(410, 531);                                     // the Style field
-            ptr.Move(410 * 1.5f, (254 + 6 + 2 * 40 + 20) * 1.5f);  // over Windows XP in the list
+            ptr.Move(410 * 1.5f, (listTop + 6 + 2 * 40 + 20) * 1.5f);  // over Windows XP in the list
             FrameL(); FrameL();
             surf.SavePng(gpu, Path.Combine(dir, "settings_look_styles.png"));
-            ClickL(410, 254 + 6 + 2 * 40 + 20);
+            ClickL(410, listTop + 6 + 2 * 40 + 20);
             bool xp = cfg.Data.Appearance.Style == "xp" && Theme.Retro == RetroStyle.XP && Theme.Classic;
             ptr.Leave();
             ClickS(180, 86);                                      // the XP sheet's Style box: its list opens
@@ -714,8 +723,9 @@ static partial class Tools
         wcfg.Widgets = null;
         view.Tab = 0;
 
-        // the retro styles: every screen once more in each, Windows 95 first (its pictures keep their *_95 names)
+        // the retro styles: every screen once more in each, Windows 95 first (its pictures keep their *_95 names); then Cyber
         foreach (var sk in Skins.All) RetroShots(sk);
+        CyberShots();
         FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
         PagesRun(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
         Log.Info("snapshot written to " + dir);
@@ -832,6 +842,103 @@ static partial class Tools
             wcfg.Face = face0;
             wcfg.Widgets = null;
             System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+
+        // Cyber (a modern style with its own token layer and watch designs): every modern screen once more, its pictures named
+        // *_cyber; the modern layout checks on its faces ('layout cyber'), the styles checks too ('layout styles cyber' - the widgets'
+        // own looks do not apply in Cyber, so one pass of them)
+        void CyberShots()
+        {
+            const string tag = "_cyber";
+            cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true };
+            Theme.Apply(cfg.Data.Appearance);
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+            void FrameC() { ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End(); }
+            for (int t = 0; t < SettingsView.TabCount; t++)
+            {
+                view.Tab = t;
+                ui.ResetAnimations();
+                if (view.ShowsWristPreview) wrist.Draw(data);
+                if (view.ShowsKeyboardPreview) kb.Draw();
+                FrameC();
+                surf.SavePng(gpu, Path.Combine(dir, $"settings{t}{tag}.png"));
+            }
+            WhatsNewShots(tag, true);
+            ui.ResetAnimations();
+            for (int frame = 0; frame < 2; frame++)
+            {
+                ui.Begin(ptr, 1.5f);
+                painter.Begin(surf.Bitmap, 0x00000000, 1.5f);
+                var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
+                painter.PushRoundedClip(all, 22);
+                panelView.Draw(ui);
+                painter.PopRoundedClip();
+                painter.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), CyberHud.Frame, 2, 21);
+                painter.End();
+                ui.End();
+            }
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_panel{tag}.png"));
+            foreach (var face in new[] { "full", "analog", "minimal", "time" })
+            {
+                cfg.Data.Wrist.Face = face;
+                cfg.Data.Wrist.PerfGraph = face == "analog";
+                wrist.Draw(data);
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}{tag}.png"));
+            }
+            cfg.Data.Wrist.Face = "full";
+            cfg.Data.Wrist.PerfGraph = false;
+            kb.Draw();
+            kb.Surf.SavePng(gpu, Path.Combine(dir, $"keyboard{tag}.png"));
+            kb.PreviewChat("Szia! Mindjárt jövök, csak befejezem ezt :)");
+            kb.Draw();
+            kb.Surf.SavePng(gpu, Path.Combine(dir, $"keyboard_chat{tag}.png"));
+            kb.PreviewChat("");
+            typeof(KeyboardPanel).GetField("_chat", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(kb, false);
+            using (var np = new NotificationPanel(gpu, painter, cfg))
+            {
+                np.AddForPreview(new Notification { Source = "VRCX", Title = "Friend online", Content = "Sam has joined The Black Cat (Friends+)" });
+                np.AddForPreview(new Notification { Source = "Discord", Title = "New message", Content = "Alex: are you in VR? The new watch looks great." });
+                np.Draw();
+                np.Surface.SavePng(gpu, Path.Combine(dir, $"notifications{tag}.png"));
+            }
+            wcfg.Face = "custom";
+            wrist.Stats.Sample(Clock.Now);
+            SaveCustom(tag);
+            SaveOpened(tag);
+            if (Environment.GetEnvironmentVariable("ORBIT_SNAP_CHECKS") != "0")
+            {
+                LayoutCheck("cyber");
+                StylesRun(wrist, data, painter, cfg, gpu, dir, " cyber", defaultOnly: true);
+            }
+            TapFamily(tag);
+            // the Wrist tab and its editor with the custom face
+            wcfg.Face = "custom";
+            wcfg.Widgets = Gallery(0);
+            view.Tab = SettingsView.TabWrist;
+            ui.ResetAnimations();
+            wrist.Settle();
+            wrist.Draw(data);
+            FrameC();
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_wrist_custom{tag}.png"));
+            view.EditingWatch = true;
+            wrist.Draw(data);
+            FrameC();
+            ui.ResetAnimations();
+            wrist.Draw(data);
+            FrameC();
+            surf.SavePng(gpu, Path.Combine(dir, $"settings_wrist_editor{tag}.png"));
+            view.EditingWatch = false;
+            view.Tab = 0;
+            TheaterShots(tag);
+            PanelShots(tag);
+            MinesTools.Run(wrist, data, cfg, gpu, dir, tag);
+            PageShots(tag);
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+            cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
+            Theme.Apply(cfg.Data.Appearance);
         }
 
         // the custom face with three pages (the last on the 4 x 3 grid): the taskbar along the bottom, each page once
@@ -1169,7 +1276,8 @@ static partial class Tools
     // --faceshot DIR: your own watch face, without VR - from a COPY of the config (the real one is only read), drawn in the
     // modern style with your look, then once more with the Bento theme's colours (accent #FF5D93, panel #0A0B10): before /
     // after pictures of a redesign. The numbers are the snapshot's made-up ones (plus a made-up room and Hexpad), the clock,
-    // CPU, RAM and the system volume are live, dates in this PC's language.
+    // CPU, RAM and the system volume are live, dates in this PC's language. The pages are drawn in Windows 95 and Cyber too
+    // (face_page*_95, face_page*_cyber).
     public static int FaceShot(string dir)
     {
         dir = Path.GetFullPath(dir);
@@ -1295,17 +1403,20 @@ static partial class Tools
             PagesData(data);
             a.Accent = accent0;
             a.PanelColor = panel0;
-            // in Modern and in every retro style: face_page<n>.png, then face_page<n>_95 / _xp / _aero / _mac / _term.png
-            foreach (var skin in new RetroSkin[] { null }.Concat(Skins.All))
+            // in Modern, every retro style and Cyber: face_page<n>.png, then face_page<n>_95 / _xp / _aero / _mac / _term / _cyber.png
+            var looks = new List<(string style, string suffix)> { ("modern", "") };
+            foreach (var skin in Skins.All) looks.Add((skin.Id, "_" + skin.Tag));
+            looks.Add((CyberHud.Id, "_cyber"));
+            foreach (var (style, suffix) in looks)
             {
-                a.Style = skin?.Id ?? "modern";
+                a.Style = style;
                 Theme.Apply(a);
                 for (int i = 0; i < WatchPages.Count(wc); i++)
                 {
                     wc.Page = i;
                     wrist.Settle();
                     for (int f = 0; f < 8; f++) { wrist.Draw(data); Thread.Sleep(50); }      // a new cover fades in
-                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{(skin == null ? "" : "_" + skin.Tag)}.png"));
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{suffix}.png"));
                 }
             }
             a.Style = "modern";
@@ -1537,7 +1648,7 @@ static partial class Tools
                 painter.TextSpy = (s, _, _, size, _, _) => texts.Add((s, size));
                 wrist.Draw(data);
                 painter.TextSpy = null;
-                string file = Path.Combine(dir, "qa", $"modern_{fc.Kind}_{fc.W}x{fc.H}_{fc.Tag}.png");
+                string file = Path.Combine(dir, "qa", $"{(classic ? "modern" : style)}_{fc.Kind}_{fc.W}x{fc.H}_{fc.Tag}.png");
                 wrist.Surf.SavePng(gpu, file);
                 if (fc.Tag is "en_12h" or "hu_24h" || (fc.Kind != "time" && fc.Tag is "en" or "hu" or "en_on_12h" or "hu_on_24h"))
                     sheet.Add(($"{fc.Kind} {fc.W}x{fc.H} {fc.Tag}", file, fc.W, fc.H));
@@ -1562,7 +1673,7 @@ static partial class Tools
                 }
             }
             FamilySet(wrist, data, cfg, null);
-            FamilySheet(Path.Combine(dir, "qa", "family_time.png"), sheet);
+            FamilySheet(Path.Combine(dir, "qa", $"family_time{Suffix(style)}.png"), sheet);
             problems += VariantChecks();
         }
 
@@ -1574,7 +1685,7 @@ static partial class Tools
         {
             int bad = 0;
             var texts = new List<(string s, float size)>();
-            string vq = Path.Combine(dir, "qa", "variants");
+            string vq = Path.Combine(dir, "qa", "variants" + Suffix(style));
             Directory.CreateDirectory(vq);
             var sheets = new Dictionary<string, List<(string label, string file, int w, int h)>> { ["time"] = new(), ["analog"] = new() };
             void One(string kind, string variant, int w, int h, Family fc, string look, uint? colour, bool sheet)
@@ -1648,7 +1759,7 @@ static partial class Tools
             bool folds = wrist.Animating;
             Thread.Sleep(110);
             wrist.Draw(data);
-            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", "variants_flip_fold.png"));
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"variants_flip_fold{Suffix(style)}.png"));
             Thread.Sleep(320);
             wrist.Draw(data);
             bool done = !wrist.Animating;
@@ -1657,7 +1768,7 @@ static partial class Tools
             FamilySet(wrist, data, cfg, null);
             int Order(string kind, string label) => Array.FindIndex(WatchWidgets.VariantsOf(kind), v => label.StartsWith(v.Id + " "));
             foreach (var (kind, items) in sheets)
-                FamilySheet(Path.Combine(dir, "qa", $"variants_{kind}.png"),
+                FamilySheet(Path.Combine(dir, "qa", $"variants_{kind}{Suffix(style)}.png"),
                     items.OrderBy(x => Order(kind, x.label)).ThenBy(x => x.label.Split(' ')[^1]).ToList());
             return bad;
         }
@@ -1702,6 +1813,9 @@ static partial class Tools
                     }
         }
     }
+
+    // a style's pictures beside the modern ones: "" for the modern style (and the 95 ones), "_cyber" for Cyber
+    static string Suffix(string style) => style == "cyber" ? "_cyber" : "";
 
     // a family case's moment, language, clock and SteamVR start on the watch (null: back to the clock, en-US, as it was)
     static CultureInfo _familyCulture;
@@ -1768,10 +1882,11 @@ static partial class Tools
     // text's contrast against what is really under it (a render without text; with no page, over a dark room and a white wall):
     // 4.5:1, 3:1 for big, bold or icon text; "nothing there" (Faint) is left out. styles_buttons_*: the tiles in every look.
     static int StylesRun(WristPanel wrist, PanelData data, Painter painter, ConfigStore cfg, Gpu gpu, string dir, string tag = "",
-        bool variantsOnly = false)
+        bool variantsOnly = false, bool defaultOnly = false)
     {
         var wcfg = cfg.Data.Wrist;
         string qa = Path.Combine(dir, "qa");
+        string pre = tag.Trim().Length > 0 ? tag.Trim() + "_" : "";       // another style's run: qa/<style>_styles_*.png
         Directory.CreateDirectory(qa);
         int TW = WristPanel.TW, TH = WristPanel.TH, problems = 0, faces = 0, checkedTexts = 0;
         var texts = new List<(string s, System.Drawing.RectangleF r, uint c, float size, Vortice.DirectWrite.FontWeight w, string fam, bool faint)>();
@@ -1893,7 +2008,7 @@ static partial class Tools
             if (save != null)
             {
                 wrist.Draw(data);
-                wrist.Surf.SavePng(gpu, Path.Combine(qa, save));
+                wrist.Surf.SavePng(gpu, Path.Combine(qa, pre + save));
             }
             problems += n;
             return n;
@@ -1936,7 +2051,7 @@ static partial class Tools
         data.KeyboardVisible = false;
         wcfg.Face = "custom";
         wcfg.Background = "panel";
-        string[] looks = { "default", "tint", "solid", "twotone", "header", "outline", "glass" };
+        string[] looks = defaultOnly ? new[] { "default" } : new[] { "default", "tint", "solid", "twotone", "header", "outline", "glass" };
         // the clocks' designs in every look, each at every size it takes (a size's default is checked with the kinds below), with no
         // page; the colours taking turns (none every eighth), the time in English at 12 h and in Hungarian at 24 h by turns
         void VariantStyles()
@@ -1978,6 +2093,18 @@ static partial class Tools
             string style = look == "default" ? null : look;
             wcfg.Widgets = Face(style, navy, teal, amber);
             Check(look, look, $"styles_{look}.png");
+            if (defaultOnly)
+            {
+                // the faces of the pages too (VRChat, Performance; Everyday on the 4 x 3 grid)
+                foreach (var (preset, grid) in new[] { ("vrchat", "6x4"), ("performance", "6x4"), ("everyday", "4x3") })
+                {
+                    wcfg.Grid = grid == "4x3" ? grid : null;
+                    wcfg.Widgets = WatchWidgets.PagePreset(preset, GridSpec.Of(grid));
+                    Check(look, $"{look} page {preset}", $"styles_page_{preset}.png");
+                }
+                wcfg.Grid = null;
+                continue;
+            }
             foreach (var (cn, c) in new[] { ("navy", navy), ("pink", Col("Pink")), ("teal", teal), ("amber", amber), ("white", Col("White")) })
             {
                 wcfg.Widgets = Face(style, c, c, c);
@@ -1990,6 +2117,8 @@ static partial class Tools
                 Check(look, $"{look} auto", $"styles_{look}_auto.png");
             }
         }
+        if (!defaultOnly)
+        {
         // two-tone with a picked second colour
         wcfg.Widgets = Face("twotone", navy, teal, amber);
         foreach (var w in wcfg.Widgets) w.Color2 = w.Color == navy ? Col("Purple") : w.Color == teal ? Col("Blue") : Col("Red");
@@ -2000,7 +2129,7 @@ static partial class Tools
         {
             wcfg.Widgets = Face(look, navy, teal, amber);
             Check(look, look + " night", $"styles_{look}_night.png");
-            Dim(Path.Combine(qa, $"styles_{look}_night.png"), 0.45f);
+            Dim(Path.Combine(qa, pre + $"styles_{look}_night.png"), 0.45f);
         }
         data.NightMode = false;
         // every look at once, and glass with no page behind
@@ -2035,7 +2164,7 @@ static partial class Tools
             if (!wrist.OpenForTest(type)) continue;
             wrist.Draw(data);
             wrist.Draw(data);
-            wrist.Surf.SavePng(gpu, Path.Combine(qa, $"styles_open_{type}.png"));
+            wrist.Surf.SavePng(gpu, Path.Combine(qa, pre + $"styles_open_{type}.png"));
             wrist.CloseForTest();
         }
         wcfg.Background = "cards";
@@ -2043,6 +2172,18 @@ static partial class Tools
         Check("glass", "glass cards", "styles_glass_cards.png");
         wcfg.Widgets = Face("solid", navy, teal, amber);
         Check("solid", "solid cards", "styles_solid_cards.png");
+        }
+        else
+        {
+            // no page behind the cards (Erik's own face has none): the default face and the night tile
+            wcfg.Background = "cards";
+            wcfg.Widgets = Face(null, null, null, null);
+            Check("default", "default cards", "styles_default_cards.png");
+            data.NightMode = true;
+            Check("default", "default cards night", "styles_default_cards_night.png");
+            data.NightMode = false;
+            wcfg.Background = "panel";
+        }
         // every kind at every size alone, in each look (no page: whatever sticks out shows), the colours taking turns
         uint[] turns = { navy, teal, amber, Col("Pink"), Col("White"), Col("Purple") };
         int turn = 0;
@@ -2074,7 +2215,7 @@ static partial class Tools
                 }
         wcfg.Grid = null;
         // the time family's cases (both languages and clocks, SteamVR on and off) in four looks
-        foreach (var look in new[] { "default", "solid", "header", "glass" })
+        foreach (var look in defaultOnly ? looks : new[] { "default", "solid", "header", "glass" })
             foreach (var fc in FamilyCases())
             {
                 FamilySet(wrist, data, cfg, fc);

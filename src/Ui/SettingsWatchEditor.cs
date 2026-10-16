@@ -504,13 +504,13 @@ public sealed partial class SettingsView
                 var look = Bento.Make(i, c, i == 3 ? sel.Color2 ?? 0 : 0, sel.Color.HasValue, false, false);
                 Bento.Sample(p, RectangleF.Inflate(r, -5, -7), look, 4);
             }
-            ui.Section(new RectangleF(x, y, w, 22), "Style");
+            ui.Section(new RectangleF(x, y, w, 22), Theme.Cyber ? "Style (Modern)" : "Style");
             p.Text(title ?? Bento.StyleNames[style], new RectangleF(x, y, w, 22), Theme.Text, 12, FontWeight.SemiBold, TextAlignment.Trailing);
             y += 22 + 40 + 8;
         }
         else
         {
-            ui.Section(new RectangleF(x, y, w, 22), "Style");
+            ui.Section(new RectangleF(x, y, w, 22), Theme.Cyber ? "Style (Modern)" : "Style");     // Cyber draws every widget its own way
             y += 24;
             const float cw = 59.5f, ch = 46, gap = 7;
             for (int i = 0; i < Bento.Styles.Length; i++)
@@ -529,7 +529,7 @@ public sealed partial class SettingsView
             }
             y += 2 * ch + 6 + 10;
         }
-        ui.Section(new RectangleF(x, y, w, 22), "Colour");
+        ui.Section(new RectangleF(x, y, w, 22), Theme.Cyber ? "Colour (Modern)" : "Colour");
         y += 24;
         if (Swatches(ui, "wcol", x, y, sel.Color, auto, out var picked)) { sel.Color = picked; c = picked ?? auto; }
         y += 80;

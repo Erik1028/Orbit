@@ -118,7 +118,7 @@ public sealed partial class WristPanel
         _halo = Bento.Card;                    // the opened card is flat
         _haloCard = RectangleF.Empty;
         // a widget with a colour of its own keeps it as the accent of its opened view (the card stays the default one)
-        bool own = _open.Color.HasValue;
+        bool own = _open.Color.HasValue && !Theme.Cyber;
         if (own) Bento.Use(LookOf(0, _open.Color.Value | 0xFF000000, 0, true, false, false));
         if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
@@ -132,7 +132,9 @@ public sealed partial class WristPanel
         }
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
-        if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
+        if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
+            CyberHud.Tag(_p, E.X + 24, E.Y + 23, Upper(k.Name), size: 18, h: 26);           // Cyber: a yellow tag
+        else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
         if (Press("wclose", new RectangleF(E.Right - 22 - 46, E.Y + 14, 46, 46), "\uE711", null, false, !_closing, 18, true))

@@ -165,11 +165,15 @@ public sealed partial class WristPanel
     {
         const float pitch = 18, rad = 3.5f, cy = TH - 5;
         float span = (count - 1) * pitch, x0 = TW / 2f - span / 2;
-        if (cards) _p.Fill(new RectangleF(x0 - 13, TH - 10, span + 26, 10), 0xA6000000, 5);     // no page under them: a dark pill
-        uint dim = Theme.WithAlpha(Bento.Grey, 0.75f);
-        for (int i = 0; i < count; i++) _p.Circle(x0 + i * pitch, cy, rad, dim);
-        float ax = x0 + Math.Clamp(pos, 0, count - 1) * pitch;
-        _p.Fill(new RectangleF(ax - 9, cy - rad, 18, 2 * rad), Bento.Default.Accent, rad);
+        if (Theme.Cyber) CyberDots(count, pos, cards, x0, pitch, cy);          // short bars (WristCyber.cs)
+        else
+        {
+            if (cards) _p.Fill(new RectangleF(x0 - 13, TH - 10, span + 26, 10), 0xA6000000, 5);     // no page under them: a dark pill
+            uint dim = Theme.WithAlpha(Bento.Grey, 0.75f);
+            for (int i = 0; i < count; i++) _p.Circle(x0 + i * pitch, cy, rad, dim);
+            float ax = x0 + Math.Clamp(pos, 0, count - 1) * pitch;
+            _p.Fill(new RectangleF(ax - 9, cy - rad, 18, 2 * rad), Bento.Default.Accent, rad);
+        }
         var hit = new RectangleF(x0 - 30, TH - 16, span + 60, 16);
         if (!_ui.Clickable("wdots", hit, out _, out _)) return;
         float mx = _ui.Mouse.X;
@@ -329,7 +333,7 @@ public sealed partial class WristPanel
     int _palTheme = -1;
 
     // now playing in its cover's colours: on either grid, unless it has a look of its own
-    bool CoverCard(WatchWidgets.Kind k, WatchWidget w, bool styled) => k.Id == "media" && !styled;
+    bool CoverCard(WatchWidgets.Kind k, WatchWidget w, bool styled) => k.Id == "media" && !styled && !Theme.Cyber;
 
     // the card: three colours of the cover, corner to corner, darker toward the bottom (white text on it reads)
     void CoverBack(RectangleF r, PanelData d)

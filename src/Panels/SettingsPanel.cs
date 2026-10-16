@@ -122,7 +122,7 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
         _p.PushRoundedClip(all, 22);
         _view.Draw(_ui);
         _p.PopRoundedClip();
-        _p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), 0x40FFFFFF, 2, 21);
+        _p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), Theme.PanelLine, 2, 21);
         _p.End();
         _ui.End();
     }
