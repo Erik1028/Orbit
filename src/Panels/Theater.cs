@@ -76,19 +76,41 @@ public sealed partial class Theater : IDisposable
 
     public Theater(Gpu g, Painter p) { _g = g; _p = p; }
 
-    // The world dims behind it: a wide black wall just behind the screen, bent around you (half a circle). It is
-    // under the screen both by sort order and by distance, so it can't end up in front of it whichever one SteamVR
-    // goes by (1.8.0 used a sheet on the headset, 0.5 m away: in front of everything by distance).
+    // The world dims behind it: a black wall just behind the screen, bent all the way round you (a closed cylinder), dark up to
+    // 55° above and below the middle and fading out by 80° - no edge to see when you look up or turn round (Erik 10-16: half a
+    // circle with a hard top edge "showed very clearly"). It is under the screen both by sort order and by distance, so it can't
+    // end up in front of it whichever one SteamVR goes by (1.8.0 used a sheet on the headset, 0.5 m away: in front of everything).
+    public const float WallAspect = 2;     // its height for its width (2πr round): the top and bottom 81° from you
+    const int WallW = 4, WallH = 256;
+
+    // 0 = the middle row .. 1 = the top / bottom edge: how dark (the angle up from you does not depend on the radius)
+    public static float WallAlpha(float f)
+    {
+        float deg = MathF.Atan(f * WallAspect * MathF.PI) * 180 / MathF.PI;
+        float t = Math.Clamp((80 - deg) / (80 - 55), 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
     public void CreateOverlay()
     {
-        _black ??= new Surface(_g, 8, 8);
-        _p.Begin(_black.Bitmap, 0xFF000000);
-        _p.End();
+        if (_black == null)
+        {
+            // straight into the texture (no painter: a retro style's colour mapping must not touch it), premultiplied black
+            _black = new Surface(_g, WallW, WallH);
+            var px = new uint[WallW * WallH];
+            for (int y = 0; y < WallH; y++)
+            {
+                uint a = (uint)MathF.Round(255 * WallAlpha(MathF.Abs(y + 0.5f - WallH / 2f) / (WallH / 2f)));
+                for (int x = 0; x < WallW; x++) px[y * WallW + x] = a << 24;
+            }
+            _g.Ctx.UpdateSubresource(px, _black.Tex, 0, WallW * 4, 0, null);
+        }
         _dim = new VrOverlay("erik.orbit.theater.dim", "OrbitOverlay theater dim");
         _dim.SetSortOrder(1);
+        _dim.SetFlag(Valve.VR.VROverlayFlags.IsPremultiplied, true);
         _dim.SetTexture(_black.Tex);
         _gridOn = false;                    // (Cyber: its grid, TheaterCyber.cs)
-        _dim.SetCurvature(0.5f);
+        _dim.SetCurvature(1f);
     }
 
     public void DestroyOverlay()
@@ -266,7 +288,7 @@ public sealed partial class Theater : IDisposable
                 const float Behind = 0.6f;
                 float r = Vector3.Distance(_view.World.Translation, _view.Head) + Behind;
                 _dim.SetAbsolute(Matrix4x4.CreateTranslation(0, 0, -Behind) * _view.World);
-                _dim.SetWidth(MathF.PI * r);        // half a circle around you at that radius (curvature 0.5)
+                _dim.SetWidth(2 * MathF.PI * r);    // all the way round you at that radius (curvature 1)
                 _dim.SetAlpha(a);
                 CyberWall();                // Cyber: a faint HUD grid (TheaterCyber.cs)
                 _dim.Show();
