@@ -6,14 +6,14 @@ namespace Orbit;
 // A Cyber panel coming into view and going (the VR settings panel, the keyboard, the Room and Hexpad panels, What's new): drawn
 // over what the panel draws, in its own texture, while SteamVR fades the overlay as before.
 //  - opening (Full): four yellow corner brackets snap out from the centre to the panel's corners (0.13 s), then a cyan scan line
-//    sweeps down and reveals the panel behind it, a faint grid flashing on the rows it has just passed (0.08-0.34 s); the
+//    sweeps down and reveals the panel behind it, a faint grid flashing on the rows it has just passed (0.05-0.3 s); the
 //    brackets fade once it is in. Reduced: only the brackets (the panel is there at once). Off: nothing.
 //  - closing (Full, while the overlay fades out): the picture folds into a cyan line across the middle, which then shrinks to a
 //    point. Reduced / Off: the fade alone.
 // While it runs it asks for the next frame (AnimWake); at rest it is not there - no frame, no cost.
 static class CyberReveal
 {
-    public const double OpenTime = 0.34;
+    public const double OpenTime = 0.3;
 
     public struct State
     {
@@ -48,7 +48,7 @@ static class CyberReveal
         AnimWake.At(now);
         if (CyberFx.Full)
         {
-            float scan = CyberFx.EaseInOut(CyberFx.Ramp(t, 0.08, OpenTime - 0.08));
+            float scan = CyberFx.EaseInOut(CyberFx.Ramp(t, 0.05, OpenTime - 0.05));
             if (scan < 1)
             {
                 p.PushClip(new RectangleF(all.X, all.Y, all.Width, all.Height * scan));
@@ -60,7 +60,7 @@ static class CyberReveal
 
     // where the opening's scan line is (texture px; it has not started: the top)
     public static float ScanY(in State st) =>
-        st.All.Y + st.All.Height * CyberFx.EaseInOut(CyberFx.Ramp(st.T, 0.08, OpenTime - 0.08));
+        st.All.Y + st.All.Height * CyberFx.EaseInOut(CyberFx.Ramp(st.T, 0.05, OpenTime - 0.05));
 
     public static void End(Painter p, in State st)
     {
@@ -97,7 +97,7 @@ static class CyberReveal
             CyberFx.Corners(p, new RectangleF(cx - w / 2, cy - h / 2, w, h), Theme.WithAlpha(CyberHud.Yellow, fade), arm, 3);
         }
         if (!CyberFx.Full) return;
-        float scan = CyberFx.EaseInOut(CyberFx.Ramp(t, 0.08, OpenTime - 0.08));
+        float scan = CyberFx.EaseInOut(CyberFx.Ramp(t, 0.05, OpenTime - 0.05));
         if (scan <= 0 || scan >= 1) return;
         float y = a.Y + a.Height * scan;
         // a faint grid on the rows just revealed, the line itself with a red / cyan split

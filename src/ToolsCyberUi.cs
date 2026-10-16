@@ -118,6 +118,7 @@ static partial class Tools
             }
             var c42 = CellM(4, 2);
             ClickW(c42.X, c42.Y);
+            ptr.Leave(); wrist.Settle(); FrameW(); ui.ResetAnimations(); FrameW();      // the watch and the page at rest for the picture
             surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_editor_sel_cyber.png"));
             ClickW(724 + 2 * (244 / 3f + 8) + 40, 138 + 17);
             var gpuW = wcfg.Widgets.FirstOrDefault(w => w.Type == "gpu");
@@ -141,6 +142,30 @@ static partial class Tools
             view.EditingWatch = false;
             wcfg.Face = face0;
             wcfg.Widgets = null;
+            // ---- 1.14's pages in Cyber: Layouts > Per game, the editor's Share - a click opens each ----
+            view.Tab = SettingsView.TabLayouts;
+            ui.ResetAnimations();
+            Frame();
+            Click(612 + 180, 394 + 19);
+            bool rules = OpenFor(view);
+            ptr.Leave(); ui.ResetAnimations(); Frame();
+            surf.SavePng(gpu, Path.Combine(dir, "settings_layouts_rules_cyber.png"));
+            SetOpen(view, "_rulesOpen", false);
+            view.Tab = SettingsView.TabWrist;
+            wcfg.Face = "custom";
+            wcfg.Widgets = null;
+            view.EditingWatch = true;
+            ui.ResetAnimations();
+            FrameW();
+            ClickW(222 + 486 - 118 - 6 - 40 + 20, 76 + 16);
+            bool share = ShareOpen(view);
+            ptr.Leave(); wrist.Settle(); FrameW(); ui.ResetAnimations(); FrameW();
+            surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_share_cyber.png"));
+            SetOpen(view, "_wshare", false);
+            view.EditingWatch = false;
+            wcfg.Face = face0;
+            wcfg.Widgets = null;
+            Log.Info($"cyber ui: Per game opens from its button {rules} (want True), the editor's Share from its button {share} (want True)");
             // ---- the keyboard's Cyber rows ----
             kb.Draw();
             int n = 0, under = 0, outside = 0, overlap = 0;
@@ -170,7 +195,24 @@ static partial class Tools
             sw.Restart();
             for (int i = 0; i < 20; i++) kb.Draw();
             gpu.Ctx.Flush();
-            Log.Info($"cyber ui: a settings frame (General) {sms:0.00} ms, a keyboard frame {sw.Elapsed.TotalMilliseconds / 20:0.00} ms");
+            double kms = sw.Elapsed.TotalMilliseconds / 20;
+            // the same in Modern, for comparison (the machine's load varies from run to run)
+            var look = cfg.Data.Appearance;
+            look.Style = null;
+            Theme.Apply(look);
+            Frame(); kb.Draw();
+            sw.Restart();
+            for (int i = 0; i < 20; i++) Frame();
+            gpu.Ctx.Flush();
+            double smm = sw.Elapsed.TotalMilliseconds / 20;
+            sw.Restart();
+            for (int i = 0; i < 20; i++) kb.Draw();
+            gpu.Ctx.Flush();
+            double kmm = sw.Elapsed.TotalMilliseconds / 20;
+            look.Style = CyberHud.Id;
+            Theme.Apply(look);
+            kb.Draw();
+            Log.Info($"cyber ui: a settings frame (General) {sms:0.00} ms (Modern {smm:0.00}), a keyboard frame {kms:0.00} ms (Modern {kmm:0.00})");
             // ---- every text inside its box ----
             CyberFit(view, ui, surf, ptr, painter, gpu, cfg, host, wrist, data, kb, qa, Frame);
         }
@@ -181,6 +223,25 @@ static partial class Tools
         wcfg.Widgets = null;
         ptr.Leave();
         ui.ResetAnimations();
+    }
+
+    // ORBIT_SNAP_ONLY=cyberui --snapshot <dir>: only the Cyber UI's motion frames (qa/cyberui_*.png), in seconds
+    static int CyberUiOnly(SettingsView view, SettingsView panelView, Ui ui, Surface surf, PointerState ptr, Painter painter, Gpu gpu, ConfigStore cfg,
+        WristPanel wrist, PanelData data, KeyboardPanel kb, string dir)
+    {
+        cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true, Motion = Environment.GetEnvironmentVariable("ORBIT_ANIM_MOTION") };
+        Theme.Apply(cfg.Data.Appearance);
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        string qa = Path.Combine(dir, "qa");
+        Directory.CreateDirectory(qa);
+        void Frame()
+        {
+            if (view.ShowsWristPreview) wrist.Draw(data);
+            if (view.ShowsKeyboardPreview) kb.Draw();
+            ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End();
+        }
+        CyberMotion(view, panelView, ui, surf, ptr, painter, gpu, cfg, wrist, data, kb, qa, Frame);
+        return 0;
     }
 
     // 'layout cyber ui': the ink of every text of the Cyber settings, What's new, the keyboard and the panels inside its box

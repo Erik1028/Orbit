@@ -302,18 +302,6 @@ public sealed partial class KeyboardPanel
         main();
     }
 
-    // the modern keyboard's Cyber marks (no longer drawn: Cyber has its own keyboard above; kept for the modern draw's call)
-    void CyberKey(RectangleF kr, bool hover, bool down, float glow)
-    {
-        if (hover && !down)
-        {
-            _p.Stroke(RectangleF.Inflate(kr, -0.6f, -0.6f), CyberHud.Cyan, 1.5f, 11.4f);
-            CyberHud.Brackets(_p, kr, CyberHud.Cyan, 9, 6, 2);
-        }
-        if (glow > 0.01f && !down && Motion.Any)
-            CyberFx.Corners(_p, kr, Theme.WithAlpha(CyberHud.Cyan, glow), 10, 2, 1 + 7 * (1 - glow));
-    }
-
     // --animshot: key i let go just now (its glow)
     public void CyberFlashForTest(int i)
     {
