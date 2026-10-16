@@ -46,7 +46,9 @@
 <tr><td><kbd>Stick</kbd> up / down</td><td>Scroll</td></tr>
 <tr><td><kbd>Grip</kbd> on a panel</td><td>Grab and move it. Stick changes the distance, the other hand's grip resizes.</td></tr>
 <tr><td>Both <kbd>Grip</kbd>s, twice quickly</td><td>Hide or show all screens and the keyboard</td></tr>
-<tr><td>Look at your wrist</td><td>The watch appears</td></tr>
+<tr><td>Look at your wrist</td><td>The watch appears. Tap a widget to open it; tap beside it or its <kbd>×</kbd> to close.</td></tr>
+<tr><td><kbd>Trigger</kbd> held, swipe sideways on the watch</td><td>The next or previous watch page. Tapping the dots at the bottom does the same.</td></tr>
+<tr><td>Point at the lower part of the middle monitor</td><td>A bar appears under it: Theater mode, Dim, Size, Curved and a keyboard button.</td></tr>
 </tbody>
 </table>
 </div>
@@ -54,7 +56,7 @@
 
 <section class="log" id="widgets">
 <h2>Watch widgets</h2>
-<p style="color:var(--dim);margin-top:12px;max-width:44em">The custom face is a grid of 6 × 4 cells. Sizes are width × height in cells. Add and arrange widgets in Settings › Wrist › Edit layout: drag to move, drag the corner to resize. Tap a widget on your wrist to open it big.</p>
+<p style="color:var(--dim);margin-top:12px;max-width:44em">The custom face is a grid of 6 × 4 cells, and it can have several pages: a new install starts with a VRChat page and a Performance page, and an update from before 1.12 keeps your own face as page 1 with those two after it. A page can also use a 4 × 3 grid with bigger cards. Sizes below are width × height on the 6 × 4 grid. Add and arrange widgets in Settings › Wrist › Edit layout: drag to move, drag the corner to resize, add or remove pages over the watch. Select a widget to give it its own style (Tint, Solid, Two-tone, Header, Outline or Glass) and colour, or a clock its design. Tap a widget on your wrist to open it big.</p>
 <div class="wtable-wrap">
 <table class="wtable">
 <thead><tr><th scope="col">Widget</th><th scope="col">Shows</th><th scope="col">Sizes</th></tr></thead>
@@ -63,28 +65,28 @@
 <tr><td>Time</td><td>The time in six designs: standard, flip, outline, stacked, segment, and a word clock from 2 × 2.</td><td class="sz">1×1 2×1 3×1 4×1 2×2 3×2 4×2 6×2 6×3 6×4</td></tr>
 <tr><td>Analog clock</td><td>Squircle, classic, minimal, roman or Swiss station dial. 1 × 1 is the squircle clock.</td><td class="sz">1×1 2×2 3×3 4×4</td></tr>
 <tr><td>Date</td><td>Weekday and date.</td><td class="sz">1×1 2×1 3×1 4×1 6×1</td></tr>
-<tr><td>Calendar</td><td>The month with today marked. Opens the full month.</td><td class="sz">1×1 2×1 2×2</td></tr>
+<tr><td>Calendar</td><td>The day (1 × 1), this week as a strip (2 × 1) or the month (2 × 2), today marked. Opens the full month.</td><td class="sz">1×1 2×1 2×2</td></tr>
 <tr><td>Timer</td><td>Countdown with − / + and presets when opened.</td><td class="sz">1×1 2×1 2×2</td></tr>
 <tr><td>Stopwatch</td><td>Start, stop and laps.</td><td class="sz">1×1 2×1</td></tr>
 <tr><td>Time in VR</td><td>How long this SteamVR session has been running.</td><td class="sz">1×1 2×1</td></tr>
 <tr class="group"><td colspan="3">Status</td></tr>
 <tr><td>Batteries</td><td>Headset, both controllers and trackers. Opens every battery.</td><td class="sz">1×1 2×1 2×2 3×2</td></tr>
-<tr><td>Now playing</td><td>Song from Spotify, a browser or any Windows media player, with controls. Opens the cover and volume.</td><td class="sz">2×1 3×1 4×1 6×1 4×2 6×2</td></tr>
-<tr><td>Volume</td><td>Windows volume slider.</td><td class="sz">1×1 2×1 3×1</td></tr>
-<tr><td>Microphone</td><td>Mute and unmute your microphone.</td><td class="sz">1×1 2×1</td></tr>
+<tr><td>Now playing</td><td>Song from Spotify, a browser or any Windows media player, with play / pause (previous / next on the bigger sizes). Unless you give it a look of its own, the card takes the album art's colours and shows how far the song is. Opens the cover and volume.</td><td class="sz">2×1 3×1 4×1 6×1 4×2 6×2</td></tr>
+<tr><td>Volume</td><td>The volume of the device you hear, with − / + (and mute on 3 × 1). Opens a slider. With Virtual Desktop it sets every app playing there, since that device ignores the Windows volume.</td><td class="sz">1×1 2×1 3×1</td></tr>
+<tr><td>Microphone</td><td>Your microphone, live or muted, and its level. Tap to mute or unmute.</td><td class="sz">1×1 2×1</td></tr>
 <tr><td>Notifications</td><td>The latest notifications, for example from VRCX.</td><td class="sz">2×1 3×1 2×2</td></tr>
 <tr class="group"><td colspan="3">Performance</td></tr>
 <tr><td>Performance</td><td>Frame rate, reprojection, GPU time and VRAM in one row.</td><td class="sz">4×1 6×1</td></tr>
-<tr><td>Frame graph</td><td>Live frame times. Opens the graph with averages.</td><td class="sz">3×1 4×1 6×1 4×2 6×2</td></tr>
+<tr><td>Frame graph</td><td>The last 30 seconds of frame times as a line, the frame budget dashed. Two rows tall: frame rate, 1% low and reprojection under it.</td><td class="sz">3×1 4×1 6×1 4×2 6×2</td></tr>
 <tr><td>Frame rate, Reprojection, GPU time, VRAM</td><td>One number each.</td><td class="sz">1×1 2×1</td></tr>
 <tr><td>CPU, Memory</td><td>Total CPU load and used RAM. CPU opens its history.</td><td class="sz">1×1 2×1</td></tr>
 <tr class="group"><td colspan="3">Buttons</td></tr>
 <tr><td>Single buttons</td><td>Keyboard, Monitors, Recenter, Layout, Night mode, Settings, Status line, Theater.</td><td class="sz">1×1 2×1</td></tr>
-<tr><td>Button group</td><td>Two to six of those buttons in one widget.</td><td class="sz">2×1 3×1 2×2 6×1</td></tr>
+<tr><td>Button group</td><td>Up to six of those buttons in one card. Pick them in the editor.</td><td class="sz">2×1 3×1 2×2 6×1</td></tr>
 <tr class="group"><td colspan="3">VRChat and extras</td></tr>
-<tr><td>Room</td><td>How many people are in your VRChat instance. Opens who is there.</td><td class="sz">1×1 2×1 3×1</td></tr>
-<tr><td>Hexpad</td><td>The keys of your Ajazz AKP03 stream dock, live. Only shows up when Hexpad runs.</td><td class="sz">1×1 2×1 2×2</td></tr>
-<tr><td>Minesweeper</td><td>A game of Minesweeper on your wrist.</td><td class="sz">1×1 2×2 3×2</td></tr>
+<tr><td>Room</td><td>How many people are in your VRChat instance and your friends among them; 3 × 1 shows the world and their initials. Tap it and it grows into the list of who is there.</td><td class="sz">1×1 2×1 3×1</td></tr>
+<tr><td>Hexpad</td><td>The keys of your Ajazz AKP03 stream dock, live. Tap it and the whole dock opens on the watch: press keys, drag the knobs. Offered only while Hexpad runs.</td><td class="sz">1×1 2×1 2×2</td></tr>
+<tr><td>Minesweeper</td><td>Mines left, the time and a picture of the board. Tap it and it grows into the game, 9 × 9 or 16 × 16: tap to open a square, hold it to flag. In the Windows 95 style it is the real 1995 Minesweeper.</td><td class="sz">1×1 2×2 3×2</td></tr>
 </tbody>
 </table>
 </div>
@@ -113,8 +115,11 @@
 <div class="fix"><h3>The chatbox or status line does nothing</h3><div>
 <p>Both talk to VRChat over OSC. In VRChat, open the Action Menu › Options › OSC and enable it.</p></div></div>
 
-<div class="fix"><h3>Friends are missing from the Room panel</h3><div>
-<p>Your friends list comes from VRCX. Without VRCX, the panel still lists everyone in the instance, and people you star come first.</p></div></div>
+<div class="fix"><h3>Friends are missing from the Room widget</h3><div>
+<p>Your friends list comes from VRCX. Without VRCX, the room still lists everyone in the instance, and people you star in the Room panel come first.</p></div></div>
+
+<div class="fix"><h3>The volume widget does nothing with Virtual Desktop</h3><div>
+<p>Update to 1.12.1 or newer. Virtual Desktop's speakers ignore the Windows volume, so the watch now sets the volume of every app playing there instead.</p></div></div>
 
 <div class="fix"><h3>No notifications from VRCX</h3><div>
 <p>OrbitOverlay listens for XSOverlay notifications on <code>127.0.0.1:42069</code>. Turn on XSOverlay notifications in VRCX.</p></div></div>
@@ -134,8 +139,8 @@
 <section class="facts two" id="faq">
 <h2>Questions</h2>
 <dl>
-<div><dt>Does it work with Quest, Pico or Virtual Desktop?</dt><dd>Yes, as long as the game runs through SteamVR. In Virtual Desktop, pick SteamVR instead of VDXR / OpenXR.</dd></div>
-<div><dt>How do I update?</dt><dd>Settings › General › Check for updates. The app updates itself and shows what changed.</dd></div>
+<div><dt>Does it work with Quest, Pico or Virtual Desktop?</dt><dd>Yes, as long as the game runs through SteamVR. In Virtual Desktop, pick SteamVR instead of VDXR / OpenXR. The volume and microphone widgets work with Virtual Desktop's audio.</dd></div>
+<div><dt>How do I update?</dt><dd>Settings › General › Check for updates. The app updates itself and shows what changed in a "What's new" window. The installer is about 49 MB.</dd></div>
 <div><dt>Does it work with my XSOverlay add-ons?</dt><dd>Notifications use XSOverlay's format, and the VRChat avatar parameters work with DXOverlay and similar add-ons.</dd></div>
 <div><dt>Why does it ask for administrator rights?</dt><dd>Only so the laser can click into admin windows. You can say no; everything else works.</dd></div>
 <div><dt>Does it collect data?</dt><dd>No account, no telemetry. The only internet request is the update check, when you press it.</dd></div>
