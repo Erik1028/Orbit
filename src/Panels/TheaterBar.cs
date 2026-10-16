@@ -231,6 +231,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
     void Draw()
     {
         if (Theme.Classic) Draw95();
+        else if (Theme.Cyber) DrawCyber();          // a HUD strip (TheaterBarCyber.cs)
         else DrawModern();
     }
 
@@ -475,6 +476,9 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
     public void GrabTwoHandScale(float ratio) { }
     public bool GrabSnapPreview => false;
     public void GrabEnd() { }
+
+    // --snapshot (Cyber's motion frames): how far it has faded in
+    public float VisForTest { set => _vis = value; }
 
     // used by --theatertest: the bar without VR - theater mode (switcher) when current != null, else a screen's bar
     public Surface DrawFor(List<ITheaterScreen> choices, ITheaterScreen current, TheaterView view = null)

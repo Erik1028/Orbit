@@ -224,6 +224,7 @@ public sealed partial class Ui
 
     public bool Button(string id, RectangleF r, string label, string icon = null, bool accent = false, bool enabled = true, float fontSize = 15)
     {
+        if (CyberHud_) return HudButton(id, r, label, icon, accent, enabled, fontSize);     // Cyber: the HUD's plate (UiHud.cs)
         bool click = Behave(id, r, out bool hover, out bool held) && enabled;
         if (Theme.Classic)
         {
@@ -264,6 +265,7 @@ public sealed partial class Ui
 
     public bool Toggle(string id, RectangleF r, string label, ref bool value, string hint = null, bool enabled = true)
     {
+        if (CyberHud_) return HudToggle(id, r, label, ref value, hint, enabled);          // Cyber: an ON / OFF switch (UiHud.cs)
         bool click = Behave(id, r, out bool hover, out _) && enabled;
         if (click) { value = !value; Changed = true; }
         if (Theme.Classic)
@@ -331,6 +333,7 @@ public sealed partial class Ui
             changed = true;
         }
         if (changed) Changed = true;
+        if (CyberHud_) { HudSlider(id, r, label, value, min, max, fmt, enabled, hover, held); return changed; }     // Cyber: segments (UiHud.cs)
         if (Theme.Classic)
         {
             // a trackbar: label and value above, a sunken groove, a raised thumb
@@ -370,6 +373,7 @@ public sealed partial class Ui
 
     public bool Segmented(string id, RectangleF r, string[] options, ref int index, bool enabled = true)
     {
+        if (CyberHud_) return HudSegmented(id, r, options, ref index, enabled);            // Cyber: a tab strip (UiHud.cs)
         bool changed = false;
         if (Theme.Classic)
         {
@@ -420,6 +424,7 @@ public sealed partial class Ui
     public bool Card(string id, RectangleF r, bool selected, out bool hover)
     {
         bool click = Behave(id, r, out hover, out _);
+        if (CyberHud_) { HudCard(id, r, selected, hover); return click; }                 // Cyber: an edged plate (UiHud.cs)
         if (Theme.Classic)
         {
             P.Fill(r, selected ? Theme.W95Light : Theme.W95Face);
@@ -438,6 +443,12 @@ public sealed partial class Ui
     {
         var box = new RectangleF(cx - r - 3, cy - r - 3, 2 * r + 6, 2 * r + 6);
         bool click = Behave(id, box, out bool hover, out _);
+        if (CyberHud_)
+        {
+            HudSwatch(box, cx, cy, r, color, selected, hover, inner, id);                 // Cyber: a cut square (UiHud.cs)
+            if (click) Changed = true;
+            return click;
+        }
         if (Theme.Classic)
         {
             // a colour well: a sunken square; the chosen one gets a black frame
@@ -461,8 +472,11 @@ public sealed partial class Ui
         return click;
     }
 
-    public void Label(RectangleF r, string text, uint color = Theme.Dim, float size = 13, FontWeight w = FontWeight.Normal, bool wrap = false) =>
+    public void Label(RectangleF r, string text, uint color = Theme.Dim, float size = 13, FontWeight w = FontWeight.Normal, bool wrap = false)
+    {
+        if (CyberHud_) { HudLabel(r, text, color, size, w, wrap); return; }              // Cyber: monospace captions (UiHud.cs)
         P.Text(text, r, color, size, w, TextAlignment.Leading, wrap ? ParagraphAlignment.Near : ParagraphAlignment.Center, null, wrap);
+    }
 
     public void Section(RectangleF r, string title)
     {

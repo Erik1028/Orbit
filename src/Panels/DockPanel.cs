@@ -295,7 +295,8 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         var all = new RectangleF(0, 0, TW, TH);
-        if (Theme.Cyber) CyberHud.PanelFrame(_p, all, Theme.OverlayBg);
+        var cyRev = CyberReveal.Begin(_p, all, Ov != null ? Ov.ShownAt : -10, Ov != null ? _vis : 1, !Shown);     // Cyber: its reveal
+        if (Theme.Cyber) CyberHud.ConsoleFrame(_p, all, Theme.OverlayBg);
         else
         {
             _p.Fill(all, Theme.OverlayBg, 30);
@@ -304,6 +305,9 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         uint sub = Theme.Mix(Theme.Text, Theme.OverlayBg, 0.42f);
 
         // header: name, where on the dock, the idle chip; bring here / close on the right
+        if (Theme.Cyber) CyberHeader();            // a HEXPAD tag, where and the idle state as readouts (DockCyber.cs)
+        else
+        {
         _p.Text("Hexpad", new RectangleF(Pad + 4, 14, 140, 38), Theme.Text, 22, FontWeight.SemiBold);
         float hx = Pad + 4 + _p.MeasureWidth("Hexpad", 22, FontWeight.SemiBold) + 14;
         if (Live || _s.State == HexpadLink.LinkState.ScreenOff)
@@ -321,6 +325,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
                 _p.Text(idle, new RectangleF(hx + 12, 19, iw - 18, 30), Theme.Accent, 14);
             }
         }
+        }
         if (HeaderButton("dk.x", new RectangleF(TW - Pad - 40, 14, 40, 40), "")) { Toggle(); }
         if (HeaderButton("dk.here", new RectangleF(TW - Pad - 90, 14, 40, 40), Theme.IcoRecenter)) BringHere();
 
@@ -334,6 +339,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
                 _ => "",
             };
             _p.Text(hint, new RectangleF(0, 206, TW, 30), sub, 16, FontWeight.Normal, TextAlignment.Center);
+            if (cyRev.Kind != 0) CyberReveal.End(_p, cyRev);
             _p.End();
             _ui.End();
             return;
@@ -357,6 +363,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
             }
             if (Ctl(id) is { Danger: true }) _p.Circle(rr.Right - 14, rr.Y + 14, 5, Theme.Bad);
             if (hov || flash) _p.Stroke(RectangleF.Inflate(rr, 3, 3), flash ? Theme.Accent : Theme.WithAlpha(Theme.Accent, 0.85f), 3, 21);
+            if (Theme.Cyber) CyberKeyMarks(rr, hov, flash, i);       // brackets, its number (DockCyber.cs)
         }
 
         // a round button under each column
@@ -367,8 +374,12 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
             var r = new RectangleF(cx - 24, cy - 24, 48, 48);
             _hit[id] = RectangleF.Inflate(r, 10, 6);
             bool down = _pressed == id, hov = _hover == id, flash = Flash(id, now);
-            _p.Circle(cx, cy, down ? 21 : 24, down || flash ? Theme.Accent : Theme.Panel3);
-            if (hov) _p.Stroke(RectangleF.Inflate(r, 3, 3), Theme.Accent, 2.5f, 27);
+            if (Theme.Cyber) CyberRoundButton(r, down, hov, flash);       // a cut plate (DockCyber.cs)
+            else
+            {
+                _p.Circle(cx, cy, down ? 21 : 24, down || flash ? Theme.Accent : Theme.Panel3);
+                if (hov) _p.Stroke(RectangleF.Inflate(r, 3, 3), Theme.Accent, 2.5f, 27);
+            }
             string label = Ctl(id)?.Label ?? "";
             _p.Text(label, new RectangleF(cx - Tile / 2, cy + 28, Tile, 22), sub,
                 FitSize(label, Tile - 4, 14), FontWeight.SemiBold, TextAlignment.Center);
@@ -379,6 +390,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
             SliderRow(Knobs[k], new RectangleF(ColX, KeysY + k * (RowH + RowGap), TW - Pad - ColX, RowH), now, sub);
 
         if (_confirm != null) ConfirmModern(sub);
+        if (cyRev.Kind != 0) CyberReveal.End(_p, cyRev);
         _p.End();
         _ui.End();
     }
@@ -402,6 +414,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
 
     bool HeaderButton(string id, RectangleF r, string icon)
     {
+        if (Theme.Cyber) return _ui.HudButton(id, r, null, icon, false, true, 13);        // a HUD plate
         bool click = _ui.Clickable(id, r, out bool hover, out bool held);
         _p.Fill(r, held ? Theme.Accent : hover ? Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f) : Theme.Panel3, r.Height / 2);
         _p.Icon(icon, r, held ? Theme.OnAccent : Theme.Text, 16);
@@ -417,7 +430,8 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         bool dragging = _drag == id, flash = Flash(id, now);
         bool hovS = on && (dragging || _hover == S(id)), hovP = _hover == id;
         _cards[id] = card;
-        _p.Fill(card, Theme.Panel2, 18);
+        if (Theme.Cyber) CyberHud.CardShape(_p, card, CyberHud.Card, CyberHud.Edge);
+        else _p.Fill(card, Theme.Panel2, 18);
         if (flash) _p.Stroke(RectangleF.Inflate(card, -1, -1), Theme.Accent, 2, 17);
 
         // the push: a pill at the right of the name
@@ -464,9 +478,11 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         float hl = _ui.Anim(Ui.Id("dkh", id), hovS ? 1 : 0, 18);
         if (!on)
         {
-            _p.Fill(tr, Theme.WithAlpha(Theme.Panel3, 0.55f), 7);
+            if (Theme.Cyber) CyberHud.Segments(_p, new RectangleF(tr.X, tr.Y + 2, tr.Width, 10), 0, 0, Theme.WithAlpha(CyberHud.Track, 0.55f), 0, 4);
+            else _p.Fill(tr, Theme.WithAlpha(Theme.Panel3, 0.55f), 7);
             return;
         }
+        if (Theme.Cyber && t == Slide.Abs) { CyberAbsTrack(id, tr, cy, hl, dragging, now); return; }       // segments and a notch (DockCyber.cs)
         _p.Fill(tr, Theme.Panel3, 7);
         if (t == Slide.Abs)
         {
@@ -501,6 +517,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
 
     void Thumb(float x, float y, float hl, bool held)
     {
+        if (Theme.Cyber) { CyberThumb(x, y, hl, held); return; }
         if (hl > 0.01f) _p.Circle(x, y, 14 + 9 * hl, Theme.WithAlpha(Theme.Accent, 0.22f * hl));
         _p.Circle(x, y, held ? 15 : 14, Theme.Text);
     }
@@ -510,8 +527,12 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
         string label = ConfirmLabel();
         _p.Fill(new RectangleF(0, 0, TW, TH), Theme.WithAlpha(0xFF000000, 0.55f), 30);
         var card = new RectangleF(TW / 2 - 230, TH / 2 - 100, 460, 200);
-        _p.Fill(card, Theme.Panel, 22);
-        _p.Stroke(RectangleF.Inflate(card, -0.6f, -0.6f), Theme.Border, 1.2f, 22);
+        if (Theme.Cyber) CyberConfirmCard(card);           // a HUD warning card (DockCyber.cs)
+        else
+        {
+            _p.Fill(card, Theme.Panel, 22);
+            _p.Stroke(RectangleF.Inflate(card, -0.6f, -0.6f), Theme.Border, 1.2f, 22);
+        }
         _p.Text(Lang.F("Run “{0}”?", label), new RectangleF(card.X + 24, card.Y + 20, card.Width - 48, 40), Theme.Text,
             FitSize(Lang.F("Run “{0}”?", label), card.Width - 48, 22), FontWeight.SemiBold);
         _p.Text("It could end your VR session, so it asks first.", new RectangleF(card.X + 24, card.Y + 62, card.Width - 48, 26), sub, 15);

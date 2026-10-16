@@ -191,9 +191,12 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
 
     void BuildLayout()
     {
+        // Cyber: a header strip over the top bar, the rows a little lower (KeyboardCyber.cs); every other style as it was
+        _builtCyber = Theme.Cyber;
+        float top = Pad + (_builtCyber ? CyHead : 0), barH = _builtCyber ? CyBar : Bar, uv = _builtCyber ? CyU : U;
         // top bar
-        float bh = Bar - Gap * 2;
-        RectangleF Cell(float x, float w) => new(x + Gap / 2, Pad + Gap / 2, w - Gap, bh);
+        float bh = barH - Gap * 2;
+        RectangleF Cell(float x, float w) => new(x + Gap / 2, top + Gap / 2, w - Gap, bh);
         Key ActionKey(string id, string label, string icon, float x, float w) =>
             new Key { Kind = Kind.Action, Action = id, Fixed = label, Icon = icon, R = Cell(x, w) };
         var chatKey = ActionKey("chat", "Chatbox", "\uE8BD", Pad, 220);
@@ -210,7 +213,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         _barChat.Add(ActionKey("send", "Send", "\uE724", TW - Pad - 200, 200));
         _chatField = Cell(Pad + 220, TW - 2 * Pad - 220 - 200);
 
-        float y = Pad + Bar;
+        float y = top + barH;
         void Row(float h, params (float w, Action<Key> init)[] keys)
         {
             float x = Pad;
@@ -233,29 +236,29 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         ushort[] fsc = { 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x57, 0x58 };
         for (int i = 0; i < 12; i++) f.Add(Fx("F" + (i + 1), fsc[i], 1));
         f.Add(Fx("Del", 0x53, 1.75f, true));
-        Row(U * 0.75f, f.ToArray());
+        Row(uv * 0.75f, f.ToArray());
 
         var r1 = new List<(float, Action<Key>)> { Sc(0x29) };
         for (ushort s = 0x02; s <= 0x0D; s++) r1.Add(Sc(s));
         r1.Add(Fx(null, 0x0E, 2, false, Theme.IcoBack));
-        Row(U, r1.ToArray());
+        Row(uv, r1.ToArray());
 
         var r2 = new List<(float, Action<Key>)> { Fx("Tab", 0x0F, 1.5f) };
         for (ushort s = 0x10; s <= 0x1B; s++) r2.Add(Sc(s));
         r2.Add(Sc(0x2B, 1.5f));
-        Row(U, r2.ToArray());
+        Row(uv, r2.ToArray());
 
         var r3 = new List<(float, Action<Key>)> { (1.75f, k => { k.Scan = 0x3A; k.Fixed = "Caps"; k.Kind = Kind.Caps; }) };
         for (ushort s = 0x1E; s <= 0x28; s++) r3.Add(Sc(s));
         r3.Add(Fx(null, 0x1C, 2.25f, false, Theme.IcoEnter));
-        Row(U, r3.ToArray());
+        Row(uv, r3.ToArray());
 
         var r4 = new List<(float, Action<Key>)> { Md("Shift", "shift", 0x2A, 1.25f), Sc(0x56) };
         for (ushort s = 0x2C; s <= 0x35; s++) r4.Add(Sc(s));
         r4.Add(Md("Shift", "shift", 0x36, 2.75f));
-        Row(U, r4.ToArray());
+        Row(uv, r4.ToArray());
 
-        Row(U,
+        Row(uv,
             Md("Ctrl", "ctrl", 0x1D, 1.25f), Md("Win", "win", 0x5B, 1.25f, true), Md("Alt", "alt", 0x38, 1.25f),
             (3.75f, k => { k.Scan = 0x39; k.Fixed = " "; }),
             (1f, k => { k.Kind = Kind.Action; k.Action = "lang"; k.Icon = "\uE774"; k.Fixed = "HU"; }),
@@ -334,6 +337,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
             }
         }
         if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
+        if (_builtCyber != Theme.Cyber) RebuildLayout();          // Cyber has its own rows (KeyboardCyber.cs)
         if (_chat)
         {
             int b = (int)(now * 2) % 2;
@@ -371,17 +375,18 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
 
     public void Draw()
     {
+        if (_builtCyber != Theme.Cyber) RebuildLayout();          // Cyber has its own rows (KeyboardCyber.cs)
         if (_hkl == IntPtr.Zero)
         {
             if (BuiltIn) { _hkl = (IntPtr)(-1); ApplyBuiltInLabels(); }
             else RefreshLabels(Native.ForegroundLayout());
         }
         if (Theme.Classic) { Draw95(); return; }
+        if (Theme.Cyber) { DrawCyber(); return; }        // the HUD keyboard (KeyboardCyber.cs)
         _p.Begin(Surf.Bitmap, 0x00000000);
-        if (Theme.Cyber) CyberHud.PanelFrame(_p, new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 22);    // the olive frame
-        else _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 26);
+        _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 26);
         if (Theme.Classic) _p.Bevel(new RectangleF(0, 0, TW, TH), Painter.Edge.Window);
-        else if (!Theme.Cyber) _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
+        else _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
         bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
         // press glow fades out after the key is let go
         foreach (var key in new System.Collections.Generic.List<Key>(_flash.Keys))
@@ -451,10 +456,6 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
                 if (!down && glow > 0) bg = Theme.Mix(bg, Theme.Accent, glow);
                 kr = down ? RectangleF.Inflate(k.R, -3, -3) : k.R;     // pressed keys sink a little
                 _p.Fill(kr, bg, 12);
-                // Cyber: a hairline round every key (the actions' cyan, like the watch's buttons)
-                if (Theme.Cyber && !down && modState != 2)
-                    _p.Stroke(RectangleF.Inflate(kr, -0.6f, -0.6f), k.Kind == Kind.Action ? CyberHud.CyanDim : CyberHud.Line, 1.25f, 11.4f);
-                if (Theme.Cyber) CyberKey(kr, hover, down, glow);       // hover marks, a let-go key's brackets (KeyboardCyber.cs)
                 if (modState == 1) _p.Stroke(kr, Theme.Accent, 3, 12);
                 fg = down || modState == 2 ? Theme.OnAccent : Theme.Text;
             }
@@ -463,7 +464,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
                 // icon + label, centred
                 float tw = _p.MeasureWidth(k.Fixed, 22, FontWeight.SemiBold);
                 float x0 = k.R.X + (k.R.Width - (28 + 10 + tw)) / 2;
-                _p.Icon(k.Icon, new RectangleF(x0, k.R.Y, 28, k.R.Height), Theme.Cyber && fg == Theme.Text ? CyberHud.Cyan : fg, 24);
+                _p.Icon(k.Icon, new RectangleF(x0, k.R.Y, 28, k.R.Height), fg, 24);
                 _p.Text(k.Fixed, new RectangleF(x0 + 38, k.R.Y, tw + 6, k.R.Height), fg, 22, FontWeight.SemiBold);
             }
             else if (k.Icon != null)

@@ -14,6 +14,7 @@ public static partial class WhatsNewView
     // Returns true when OK (or the close box) is pressed. scroll: pixels, kept by the caller.
     public static bool DrawModern(Ui ui, RectangleF r, IReadOnlyList<WhatsNew.Entry> list, string sub, ref float scroll, uint bg)
     {
+        if (Theme.Cyber && ui.Hud) return DrawCyber(ui, r, list, sub, ref scroll, bg);     // a PATCH NOTES console (WhatsNewCyber.cs)
         var p = ui.P;
         p.Fill(r, bg, 28);
         p.Stroke(RectangleF.Inflate(r, -1, -1), 0x40FFFFFF, 2, 27);

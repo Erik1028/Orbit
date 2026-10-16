@@ -124,10 +124,14 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
         _ui.Begin(ptr, Scale);
         _p.Begin(Surf.Bitmap, 0x00000000, Scale);
         var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
-        _p.PushRoundedClip(all, 22);
-        _view.Draw(_ui);
-        _p.PopRoundedClip();
-        _p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), Theme.PanelLine, 2, 21);
+        if (Theme.Cyber) _view.Draw(_ui);          // Cyber: the view draws its own cut frame (SettingsCyber.cs)
+        else
+        {
+            _p.PushRoundedClip(all, 22);
+            _view.Draw(_ui);
+            _p.PopRoundedClip();
+            _p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), Theme.PanelLine, 2, 21);
+        }
         _p.End();
         _ui.End();
     }
