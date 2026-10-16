@@ -158,6 +158,18 @@ html[data-style="95"] .wd95{animation:none}
 .wtable td:nth-child(2){color:var(--dim)}
 .wtable td.sz{font-family:var(--mono);font-size:13.5px;color:var(--dim);white-space:nowrap}
 .wtable tr.group td{border-top:0;padding-top:28px;font-family:var(--display);font-size:20px;font-weight:700;color:var(--text)}
+/* phones: each widget becomes a small block (name, what it shows, its sizes) instead of a 600 px table that scrolls sideways */
+@media (max-width:640px){
+  .wtable{min-width:0}
+  .wtable,.wtable tbody,.wtable tr,.wtable td{display:block}
+  .wtable thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .wtable tr:not(.group){border-top:1px solid var(--line);padding:12px 0}
+  .wtable td{border-top:0;padding:0}
+  .wtable td:first-child{white-space:normal}
+  .wtable td:nth-child(2){margin-top:4px}
+  .wtable td.sz{white-space:normal;margin-top:6px;word-spacing:4px}
+  .wtable tr.group td{padding:28px 0 10px}
+}
 .fix{padding-block:22px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:8px 40px}
 .fix h3{font-size:18px}
 .fix div{color:var(--dim);font-size:16px;display:flex;flex-direction:column;gap:8px}

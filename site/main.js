@@ -33,9 +33,10 @@
       .catch(function () {});
   }
 
-  // A clip from the headset: shown only once docs/img/demo.mp4 exists (the workflow copies docs/img next to the page).
+  // A clip from the headset: only once the figure names one in data-src (docs/img/demo.mp4, which the workflow copies
+  // next to the page). Without data-src nothing is requested, so there is no 404 in the console.
   var clip = document.getElementById('clip');
-  if (clip) {
+  if (clip && clip.getAttribute('data-src')) {
     var src = clip.getAttribute('data-src');
     fetch(src, { method: 'HEAD' }).then(function (r) {
       if (!r.ok) return;

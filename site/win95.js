@@ -117,24 +117,21 @@
       .catch(function () {});
   }
 
-  // screenshots: in this mode show the app's own Windows 95 look. img/NAME-95.png is used when it exists
-  // (docs/make-95-shots.ps1 makes them from the app); a modern-only picture is hidden meanwhile.
+  // screenshots: in this mode show the app's own Windows 95 look. A picture with a data-95="img/NAME-95.png" attribute
+  // swaps to it; one without (no 95 version yet, e.g. the keyboard) is hidden meanwhile. Nothing is probed, so a
+  // missing file never shows up as a 404.
   var shots = Array.prototype.slice.call(document.querySelectorAll('main .shot img')).filter(function (img) {
     return !/windows95\.png$/.test(img.getAttribute('src'));
   });
-  var has95 = {};
   function swapShots(on) {
     shots.forEach(function (img) {
       var modern = img.getAttribute('data-modern') || img.getAttribute('src');
       img.setAttribute('data-modern', modern);
       var box = img.closest('.shot');
+      var alt95 = img.getAttribute('data-95');
       if (!on) { if (img.getAttribute('src') !== modern) img.setAttribute('src', modern); box.classList.remove('r90-nopic'); return; }
-      var alt95 = modern.replace(/\.png$/, '-95.png');
-      var apply = function (ok) { if (ok) img.setAttribute('src', alt95); else box.classList.add('r90-nopic'); };
-      if (alt95 in has95) { apply(has95[alt95]); return; }
-      box.classList.add('r90-nopic');
-      fetch(alt95, { method: 'HEAD' }).then(function (r) { has95[alt95] = r.ok; }, function () { has95[alt95] = false; })
-        .then(function () { if (isOn()) { box.classList.remove('r90-nopic'); apply(has95[alt95]); } });
+      if (alt95) { img.setAttribute('src', alt95); box.classList.remove('r90-nopic'); }
+      else box.classList.add('r90-nopic');
     });
   }
 

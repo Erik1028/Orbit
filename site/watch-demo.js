@@ -1654,7 +1654,7 @@
   var ctx95 = canvas95.getContext('2d'), img95 = ctx95.createImageData(P95W, P95H), buf = new Uint32Array(img95.data.buffer);
   var tcv = document.createElement('canvas');
   tcv.width = P95W; tcv.height = 64;
-  var tctx = tcv.getContext('2d');
+  var tctx = tcv.getContext("2d", { willReadFrequently: true });   // read back for every 95 text: keep it on the CPU
   var FACE = 0xFFC0C0C0, LT = 0xFFDFDFDF, HI = 0xFFFFFFFF, SH = 0xFF808080, BK = 0xFF000000, NAVY = 0xFF000080, TEAL = 0xFF008080;
   var PAL = { k: 0xFF000000, w: 0xFFFFFFFF, s: 0xFFC0C0C0, g: 0xFF808080, n: 0xFF000080, b: 0xFF0000FF, t: 0xFF008080, c: 0xFF00FFFF, r: 0xFFFF0000,
     m: 0xFF800000, y: 0xFFFFFF00, o: 0xFF808000, e: 0xFF008000, l: 0xFF00FF00, p: 0xFF800080, f: 0xFFFF00FF };
