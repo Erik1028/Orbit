@@ -335,6 +335,7 @@ public sealed partial class SettingsView
 
     void Layouts95(Ui ui)
     {
+        bool inert95 = Dialog95Begin(ui, _rulesOpen);      // the Per game dialog over the page (SettingsView95.Extras.cs)
         var list = C.Layouts;
         if (_selLayout == null || !list.Any(l => l.Name == _selLayout)) _selLayout = C.ActiveLayout;
         ui.Group95(new RectangleF(16, 56, 350, 236), "Layout profiles");
@@ -367,6 +368,7 @@ public sealed partial class SettingsView
                 ? "The first time you switch to it, everything comes to where you are looking - lying in bed, that is above you."
                 : "Switching puts every panel back where it was in this profile. Recenter still brings everything in front of you.", 60);
         Theater95(ui);
+        PerGame95(ui, inert95);
     }
 
     // theater mode: the same settings as on the bar under a screen in VR, and the bar itself on / off
@@ -524,6 +526,7 @@ public sealed partial class SettingsView
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
                 NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
+                LookVersion = 1,     // the reset IS the Bento look: never the 1.10 migration again (1.13.2 put pink over a green accent)
             };
             changed = true;
         }
@@ -627,6 +630,7 @@ public sealed partial class SettingsView
         rm.NotifyEveryone = b;
         if (ui.Button95("vc95.open", new RectangleF(388, 186, 140, 23), rm.Visible ? "Hide Room &panel" : "Show Room &panel", _h.VrConnected && rm.Enabled))
             _h.ToggleRoom();
+        Gesture95(ui);                // B / Y twice (SettingsView95.Extras.cs)
     }
 
     void General95(Ui ui)
@@ -646,7 +650,7 @@ public sealed partial class SettingsView
         ui.Check95("g95.quick", 28, 154, "Double-tap both &grips: hide / show the panels", ref b);
         g.QuickToggle = b;
 
-        ui.Group95(new RectangleF(16, 186, 350, 244), "Startup and system");
+        ui.Group95(new RectangleF(16, 186, 350, 190), "Startup and system");
         b = g.AutoStart;
         ui.Check95("g95.auto", 28, 206, "Start with Steam&VR", ref b);
         Hint(ui, 47, 223, 300, Fit95(ui, b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start OrbitOverlay yourself", 300));
@@ -712,7 +716,7 @@ public sealed partial class SettingsView
             ui.Text95(Fit95(ui, umsg, 196), new RectangleF(524, 191, 200, 13), us == Updater.State.Failed ? 0xFF800000 : Grey95);
         if (ui.Button95("g95.whatsnew", new RectangleF(388, 212, 130, 23), "&What's New...")) { _whatsNewManual = true; }
 
-        ui.Group95(new RectangleF(376, 242, 358, 128), "Notifications");
+        ui.Group95(new RectangleF(376, 242, 358, 188), "Notifications");
         b = g.Notifications;
         ui.Check95("g95.notif", 388, 262, "Show &notifications", ref b);
         Hint(ui, 407, 279, 315, Fit95(ui, g.Notifications ? _h.NotificationStatus : "XSOverlay format (VRCX, Discord plugins...)", 315));
@@ -724,10 +728,11 @@ public sealed partial class SettingsView
         float na = g.NotificationAngle;
         TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, Lang.F("{0:0}° below eyes", Math.Round(na)), g.Notifications);
         g.NotificationAngle = MathF.Round(na);
+        Alerts95(ui);                 // low battery / frame rate (SettingsView95.Extras.cs)
 
         // the language of every screen, each choice in its own words (Regional Settings' box): it applies at once
-        ui.Group95(new RectangleF(376, 378, 358, 52), "Language");
+        ui.Group95(new RectangleF(16, 382, 350, 48), "Language");
         int lg = Lang.Index(Lang.Code);
-        if (ComboRow(ui, "g95.lang", 388, 398, 468, 150, "&Language:", LanguageNames, ref lg)) SetLanguage(ui, lg);
+        if (ComboRow(ui, "g95.lang", 28, 401, 108, 150, "&Language:", LanguageNames, ref lg)) SetLanguage(ui, lg);
     }
 }

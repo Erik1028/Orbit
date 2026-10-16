@@ -34,6 +34,7 @@ public sealed partial class WristPanel
         "minesweeper" => "mines",
         "room" => "room",
         "dock" => "dock",
+        "mixer" => "mixer",
         _ => null,
     };
 
@@ -158,6 +159,7 @@ public sealed partial class WristPanel
             case "perf": PerfDetail(c, d); break;
             case "system": SystemDetail(c, d); break;
             case "volume": VolumeDetail(c); break;
+            case "mixer": MixerDetail(c); break;
             case "mines": MinesDetail(E); break;
             case "room": RoomDetail(E, d); break;
             case "dock": DockDetail(E, d); break;
@@ -580,6 +582,7 @@ public sealed partial class WristPanel
                 break;
             case "system": System95Detail(c); break;
             case "volume": Volume95Detail(c); break;
+            case "mixer": Mixer95Detail(c); break;
         }
     }
 

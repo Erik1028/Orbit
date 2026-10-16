@@ -188,6 +188,69 @@ static class CyberAnimShot
         return 0;
     }
 
+    // --animstrip <dir> --only-style cyber: the preset faces in Cyber (WristCyberFaces.cs) - each booting as the watch comes into view,
+    // and the minute's glitch - drawn in real time, the frames at the listed times in a sheet four across at half size:
+    // <dir>/cyberface_<face>_boot.png, cyberface_<face>_glitch.png (frame times in <dir>/cyberface_index.txt)
+    public static int Faces(string dir)
+    {
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(dir);
+        var cfg = new ConfigStore(Path.Combine(dir, "config.json"));
+        cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true };
+        Theme.Apply(cfg.Data.Appearance);
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        using var gpu = new Gpu(-1);
+        using var painter = new Painter(gpu);
+        var data = new PanelData { VrConnected = true, VramTotalGB = 16, FakeGpuLoad = 63, FakeVram = 9.4f, VrSince = DateTime.Now.AddMinutes(-83) };
+        data.Vr.AppFps = 86; data.Vr.ReprojPct = 4; data.Vr.GpuMs = 9.3f; data.Vr.DisplayHz = 90;
+        data.Vr.Batteries.Add(("HMD", 0.71f, false));
+        data.Vr.Batteries.Add(("L", 0.82f, false));
+        data.Vr.Batteries.Add(("R", 0.18f, true));
+        data.Vr.Batteries.Add(("Trk×6", 0.44f, false));
+        data.FakeMedia = (true, "Midnight City", "M83", true);
+        using var wrist = new WristPanel(gpu, painter, cfg);
+        wrist.Mic.Fake = true;
+        CyberFx.Live = true;
+        wrist.CyberLive = true;
+        var index = new StringBuilder();
+        double[] boot = { 0.03, 0.1, 0.17, 0.24, 0.32, 0.42, 0.55, 0.7, 0.85, 1.0, 1.15, 1.4 }, glitch = { 0.0, 0.04, 0.08, 0.12, 0.17, 0.3 };
+        void Sheet(string name, string what, List<(double t, uint[] px)> frames)
+        {
+            const int cols = 4, gap = 6, fw = WristPanel.TW / 2, fh = WristPanel.TH / 2;
+            int rows = (frames.Count + cols - 1) / cols;
+            using var sheet = new Bitmap(cols * fw + (cols - 1) * gap, rows * fh + (rows - 1) * gap, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(sheet))
+            {
+                g.Clear(Color.FromArgb(255, 70, 70, 70));
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                for (int i = 0; i < frames.Count; i++)
+                {
+                    string tmp = Path.Combine(dir, "_frame.png");
+                    Write(tmp, frames[i].px, WristPanel.TW, WristPanel.TH, new RectangleF(0, 0, WristPanel.TW, WristPanel.TH));
+                    using (var f = new Bitmap(tmp)) g.DrawImage(f, i % cols * (fw + gap), i / cols * (fh + gap), fw, fh);
+                    File.Delete(tmp);
+                }
+            }
+            sheet.Save(Path.Combine(dir, $"cyberface_{name}.png"), ImageFormat.Png);
+            var ms = new List<string>();
+            foreach (var (t, _) in frames) ms.Add($"{t * 1000:0}");
+            index.AppendLine($"{name}|{what}|{string.Join(",", ms)} ms");
+        }
+        foreach (var face in new[] { "full", "analog", "minimal", "time" })
+        {
+            cfg.Data.Wrist.Face = face;
+            wrist.Settle(); wrist.Draw(data); wrist.Draw(data);
+            Sheet($"{face}_boot", $"the {face} face boots (the watch comes into view)", Capture(() => wrist.Draw(data), () => wrist.Surf.ReadPixels(gpu), gpu, boot, wrist.Intro));
+            wrist.Settle(); wrist.Draw(data); wrist.Draw(data);
+            Sheet($"{face}_glitch", $"the {face} face's minute glitch", Capture(() => wrist.Draw(data), () => wrist.Surf.ReadPixels(gpu), gpu, glitch, () => wrist.CyberTest("glitch")));
+        }
+        File.WriteAllText(Path.Combine(dir, "cyberface_index.txt"), index.ToString());
+        CyberFx.Live = false;
+        wrist.CyberLive = false;
+        Log.Info("animstrip: the Cyber preset faces written to " + dir);
+        return 0;
+    }
+
     static List<WatchWidget> Concept()
     {
         var l = new List<WatchWidget>();

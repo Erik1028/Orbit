@@ -12,7 +12,7 @@ using Windows.Graphics.DirectX.Direct3D11;
 
 namespace Orbit;
 
-public sealed class OrbitApp : IOrbitHost, IDisposable
+public sealed partial class OrbitApp : IOrbitHost, IDisposable
 {
     public const string AppKey = "erik.orbit";
     public const string ExitEventName = @"Local\OrbitOverlayExit", ShowEventName = @"Local\OrbitOverlayShow";
@@ -28,6 +28,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly PanelData _data = new();
     readonly GpuStats _gpuStats = new();
     readonly MediaInfo _media = new();
+    readonly AudioMixer _mixer = new();              // the output device's apps; the Windows volume in VR (Sys/AudioMixer.cs)
     readonly NotificationHistory _notes = new();     // the watch's notifications widget
     readonly HexpadLink _hexpad = new();
     readonly RoomWatcher _room = new();
@@ -111,6 +112,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _data.VramTotalGB = _gpu.DedicatedVram / (1024f * 1024 * 1024);
 
         _wrist = new WristPanel(_gpu, _painter, _cfg) { OnAction = WristAction };
+        _wrist.UseRealAudio(_mixer);                         // the watch's volume and mixer on the real output device (the tools' are made up)
         _kb = new KeyboardPanel(_gpu, _painter, _cfg);
         _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
         _dockFaces = new HexpadFaces();
@@ -482,6 +484,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _awake = awake;
             _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
             _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
+            UpdateExtras(now, awake, dash);     // B / Y twice (before the block moves on), alerts, per-game rules (OrbitApp.Extras.cs)
             BlockGameInput(awake && !dash, now);
             foreach (var la in _lasers) if (la.Hovered is ITheaterScreen sc) _lastScreen = sc;
             Perf(1, ref t);
@@ -550,6 +553,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _data.NightMode = C.Appearance.NightMode;
         _data.LayoutName = C.ActiveLayout;
         _data.KeyboardVisible = C.Keyboard.Visible;
+        // the output device's apps follow the Windows volume while SteamVR runs (a device that ignores its own); the mixer's list
+        AudioMixer.Mode = C.General.VolumeToApps is "on" or "off" ? C.General.VolumeToApps : "auto";
+        _mixer.Tick(now, _vr.Connected);
         _win.Tick(now);
         _cfg.SaveIfDue();
     }
@@ -672,9 +678,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             {
                 _thumbSurf = new Surface(_gpu, 256, 256, rgba: true);
                 _painter.Begin(_thumbSurf.Bitmap, 0x00000000);
-                _painter.Fill(new System.Drawing.RectangleF(8, 8, 240, 240), Theme.Panel2, 56);
-                _painter.Ring(128, 128, 64, Theme.Accent, 16);
-                _painter.Circle(176, 80, 22, Theme.Accent2);
+                _painter.Logo(new System.Drawing.RectangleF(8, 8, 240, 240));
                 _painter.End();
             }
             _dashThumb.SetFlag(VROverlayFlags.IsPremultiplied, true);
@@ -758,6 +762,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockPanel.DestroyOverlay();
         _roomPanel.DestroyOverlay();
         _whatsNewPanel.DestroyOverlay();
+        ExtrasReset();
         if (_theater.On) StopTheater(glide: false);
         _theater.DestroyOverlay();
         _theaterBar.DestroyOverlay();
@@ -1830,6 +1835,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _focus?.Dispose();
         _notifyPanel?.Dispose();
         _media.Dispose();
+        _mixer.Dispose();
         _sysCursor?.Dispose();
         _osc.Dispose();
         _win?.Dispose();

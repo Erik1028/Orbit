@@ -196,6 +196,50 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## Következő – hangerőkeverő widget, a Windows hangerő VR-ben (2026-10-16, `mixer` ág, nincs kiadva)
+
+- **A Windows hangerő VR-ben** (`Sys/AudioMixer.cs`): a Virtual Desktop hangszórója hardveres hangerőt jelez és nem
+  alkalmazza (1.12.1), ezért a Windows csúszka, a hangerőgombok és a Hexpad gombja (mind a végponti hangerőt állítja)
+  VR-ben semmit nem csináltak. Most, amíg a SteamVR fut, az app fő ciklusa (`OrbitApp.Tick` → `AudioMixer.Tick`) figyeli
+  a végponti hangerőt és némítást (`RegisterControlChangeNotify` callback + 4 Hz-es nézés biztonsági hálónak), és ha más
+  állítja, az eszköz minden appja követi – mindegyik a saját arányával: egy app, amit külön lehalkítottál (Windows
+  keverő vagy az óra keverője), annyival halkabb marad, a többi pontosan a szintet kapja (mint egy rendes eszközön).
+  Később induló app a szintet kapja; egy appot, amit valaki külön állított, nem állít vissza. Az Orbit saját változtatása
+  (az óra hangereje, a keverő felső sora) a végpontra is megy (a Windows csúszka az igazat mutatja) és rögtön az appokra,
+  és nem hat kétszer (saját event-context GUID; a callback kiszűri). Induláskor a master a leghangosabb app szintjét
+  veszi át (amit hallasz) – semmi nem lesz hangosabb/halkabb magától. A `SystemVolume` app-módja ezért az `AudioMixer`-en át
+  megy (a saját munkamenet-kódja megszűnt); az órák (`WristPanel.Volume`) alapból kitaláltak, az app adja át a valódit
+  (`UseRealAudio`).
+- **Melyik eszköz**: `General.VolumeToApps` (csak a configban, nincs kapcsoló a beállításokban): null/"auto" = a
+  Virtual Desktop eszköze név szerint, ha hardveres hangerőt jelez; "on" = minden eszköz, ami hardveres hangerőt jelez
+  (csak az hagyhatja figyelmen kívül – a többin a Windows maga alkalmazza, ott a követés duplán halkítana); "off" = egyik
+  sem. Kapcsoló a General fülön minden stílusban: később (a nyelvválasztó munka közben nem nyúltam a beállításlapokhoz).
+- **Hangerőkeverő widget** (`mixer`, „Volume mixer”, `Panels/WristMixer.cs`): az alapértelmezett kimeneti eszköz appjai
+  (munkamenetek exe szerint csoportosítva, a SteamVR / Steam folyamatai egy sorban), saját hangerő (`ISimpleAudioVolume`),
+  név (a munkamenet neve, az exe FileDescription-je vagy neve) és az exe ikonja (`SHDefExtractIcon`, háttérszálon). Csúszka
+  appokként (lézerrel húzható, a stick 2 %/notch), az ikonra bökés némít; elöl a szóló és leghangosabb appok (2 s-onként
+  rendez, csak ha egy másik jól hangosabb; amíg a lézer a widgeten van, a sorrend áll). Az Orbit saját munkamenete (a
+  billentyűhang) nincs a listában (a hangereje a Keyboard fülön van), a követés viszont azt is viszi. Méretek: 2×1 (a két első egymás
+  mellett), 2×2, 3×2 (lista), 4×3-on M és L; kinyitva a kimeneti eszköz hangereje + minden app (4 felett két oszlop, a
+  stick görget). Modern Bento (widget-kinézettel), Cyber (tag, szegmensek, cián jel), a retro stílusok a 95-ös úton: sorok
+  95-ös trackbarokkal; kinyitva a Windows 95 Volume Control (sndvol32) – oszloponként app, álló trackbar (a skin saját
+  trackbarja transzponálva: a fény bal-fent marad, a hegye jobbra mutat), Mute, vízszintes görgetősáv (a skin
+  görgetősávja transzponálva) – minden skin a saját vezérlőivel. Terminálban nincsenek ikonok (zöld szöveg).
+- **Eszközök**: `--snapshot` (kitalált appokkal): `mixer<tag>` sorok (sorrend, húzás, némítás, stick, kinyitás, a kinyitott
+  nézet húzása / némítása / görgetése) minden stílusban, `mixer sync` sorok (kitalált eszközön: kívülről jövő változás
+  egyszer az appokra, a saját nem visszhangzik, új app, külön állított app, némítás, melyik eszköz), képek
+  `wrist_mixer_<eset><tag>.png`. `ORBIT_SNAP_ONLY=mixer`: csak a keverő minden stílusban (pár másodperc).
+  `--mixertest`: a valódi eszköz, ahogy az app olvassa – CSAK OLVAS (nem ír semmit, a szinkron nem fut).
+- **Nincs VR-ben kipróbálva**: a követés a valódi VD eszközön (a kód útja kitalált eszközön tesztelve, a valódi
+  eszközön csak olvasva).
+
+## 1.13.2 – az új logó mindenhol (2026-10-16)
+
+Erik: „a logó amit mondtam még nem változott meg”. 1.13.0-ban csak az exe ikonja (`assets\orbit.ico`) és a
+`Tray.MakeIcon` lett új; a SteamVR dashboard gombja (`OrbitApp` `_thumbSurf`), a beállítások fejléce, a telepítő még a
+régi gyűrű + pötty volt, a 95-ös `W95Icons.Id.Orbit` (95 About, Windows 7 címsor) a régi bolygó. Most mind
+`Painter.Logo(r)` (az SVG 64-es rácsán, mindig simítva), a 95-ös ikon kézzel rajzolt 16 x 16-os változat.
+
 ## 1.13.1 – Cyber minden stíluslistában (2026-10-16)
 
 A Windows 7 / Mac / terminál beállítás a `Skins.StyleIds`-t használta (6 elem); most a `StyleMenu`-t (7, Cyberrel), a
@@ -759,6 +803,7 @@ a Regional Settings Properties lapot és egy Date/Time órát küldte.
 - `--leaktest <gpu|media|idle> [mp]` – egy háttér-összetevő privát memóriája egyedül futtatva, a végén GC-vel.
 - `--wintest <mappa>` – az asztali beállításablak mindkét stílusban (saját config a mappában): kép, méret,
   és mit felel a 95-ös címsor a WM_NCHITTEST-re.
+- `--mixertest` – a kimeneti eszköz appjai, ahogy a keverő olvassa (csak olvas, nem állít semmit).
 - `--focustest` – a szövegmező-felismerés egy képernyőn kívüli tesztablakon (szövegmező, csak olvasható mező,
   gomb, RichEdit), közvetlenül és a fókusz-hookon át.
 

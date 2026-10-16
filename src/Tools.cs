@@ -74,6 +74,10 @@ static partial class Tools
         public void SwitchLayout(string name) => Cfg.Data.ActiveLayout = name;
         public Updater Updates { get; } = new();
         public void ForgetLayout(string name) { }
+        // 1.14 (ToolsExtras.cs): a made-up running app; the cards asked for
+        public (string key, string name) RunningApp { get; set; }
+        public readonly List<(string title, string text)> Notes = new();
+        public void Notify(string title, string text) => Notes.Add((title, text));
     }
 
     // onlyStyle (--only-style 95 | xp | aero | mac | term, or ORBIT_SNAP_STYLE): that retro style's screens alone, in seconds - the
@@ -116,6 +120,7 @@ static partial class Tools
         wrist.Mic.Fake = true;                          // never the real microphone: a tap flips a made-up one
         wrist.Mic.Present = true;
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "pages") return PagesRun(wrist, data, cfg, painter, gpu, dir, null, null, null);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "mixer") return MixerOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -270,6 +275,7 @@ static partial class Tools
         string face0 = wcfg.Face;
         var panelView = new SettingsView(host) { OnClose = () => { }, Tab = SettingsView.TabGeneral };
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "anim_cyber") return CyberAnimShot.Run(wrist, data, cfg, gpu, dir, kb, view, ui, surf, ptr, painter);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "extras") return ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);
         if (only != null)
         {
             RetroShots(only);
@@ -570,6 +576,8 @@ static partial class Tools
             }
             RoomViewTools.Run(wrist, data, cfg, gpu, dir, tag);      // the room opened: its cases, a tap opens it (not the Room panel)
             DockViewTools.Run(wrist, data, cfg, painter, gpu, dir, tag);      // the dock opened, on made-up data (not the Hexpad panel)
+            if (tag == "") MixerViewTools.MasterChecks();                     // the Windows volume in VR, on a made-up device
+            MixerViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the volume mixer, on made-up apps
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -764,6 +772,7 @@ static partial class Tools
         // the retro styles: every screen once more in each, Windows 95 first (its pictures keep their *_95 names); then Cyber
         foreach (var sk in Skins.All) RetroShots(sk);
         CyberShots();
+        ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
         PagesRun(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
         Log.Info("snapshot written to " + dir);
@@ -1000,6 +1009,7 @@ static partial class Tools
                 wrist.Draw(data);
                 wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}{tag}.png"));
             }
+            CyberPresets(tag);
             cfg.Data.Wrist.Face = "full";
             cfg.Data.Wrist.PerfGraph = false;
             kb.Draw();
@@ -1053,6 +1063,108 @@ static partial class Tools
             System.Globalization.CultureInfo.CurrentCulture = culture;
             cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
             Theme.Apply(cfg.Data.Appearance);
+        }
+
+        // The presets' own Cyber designs (WristCyberFaces.cs) in their other forms: the numbers / the graph, without batteries, media or
+        // readings, SteamVR off with nothing playing (wrist_<face>_<form>_cyber.png). Then the old faces' buttons - a click in the middle
+        // of each of the six does what it did - and the motion: a preset boots with Motion on Full, not on Off; at rest it asks for no
+        // frame but its next second.
+        void CyberPresets(string tag)
+        {
+            var w = cfg.Data.Wrist;
+            var odd = new List<string>();               // a text cut short or under 14 px (not a value's smaller "%", nor an icon)
+            int shots = 0;
+            void Shot(string face, string name)
+            {
+                w.Face = face;
+                wrist.Settle();
+                wrist.Draw(data);
+                painter.TextSpy = (s, _, _, size, _, _) => { if (s.Contains('…') || (size < 14 && s != "%" && !(s.Length == 1 && char.GetUnicodeCategory(s[0]) == UnicodeCategory.PrivateUse))) odd.Add($"{name}: '{s}' {size:0.#} px"); };
+                wrist.Draw(data);
+                painter.TextSpy = null;
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{name}{tag}.png"));
+                shots++;
+            }
+            w.PerfGraph = true; Shot("full", "full_graph");
+            w.PerfGraph = false; Shot("analog", "analog_numbers");
+            w.ShowBatteries = false; Shot("full", "full_nobat"); Shot("analog", "analog_nobat");
+            w.ShowMedia = false; Shot("full", "full_perfonly");
+            w.ShowBatteries = true; w.ShowPerformance = false; Shot("full", "full_batonly");
+            w.ShowBatteries = false; Shot("analog", "analog_bare");
+            w.ShowMedia = true; Shot("full", "full_mediaonly");
+            w.ShowPerformance = w.ShowBatteries = true;
+            w.PerfGraph = true; w.ShowBatteries = w.ShowMedia = false; Shot("full", "full_graphonly");
+            w.PerfGraph = false; w.ShowBatteries = w.ShowMedia = true;
+            // a 12-hour clock (AM / PM), Hungarian dates
+            cfg.Data.Appearance.Clock24h = false;
+            Shot("full", "full_12h"); Shot("analog", "analog_12h"); Shot("time", "time_12h");
+            cfg.Data.Appearance.Clock24h = true;
+            var cul0 = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = new CultureInfo("hu-HU");
+            Shot("analog", "analog_hu"); Shot("minimal", "minimal_hu");
+            CultureInfo.CurrentCulture = cul0;
+            var vr0 = (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia);
+            var bats0 = new List<(string, float, bool)>(data.Vr.Batteries);
+            (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia) = (-1, -1, -1, false, (false, null, null, false));
+            data.Vr.Batteries.Clear();
+            Shot("full", "full_off"); Shot("analog", "analog_off"); Shot("minimal", "minimal_off");
+            (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia) = vr0;
+            data.Vr.Batteries.AddRange(bats0);
+            Log.Info($"cyber presets: {shots} pictures, texts cut short or under 14 px: {(odd.Count == 0 ? "none" : string.Join(", ", odd))} (want none)");
+            // the buttons: the middle of each old one (Buttons: 6 across from x 28, 89 wide and 10 apart, y 354-416)
+            var hits = new List<string>();
+            var act0 = wrist.OnAction;
+            wrist.OnAction = id => hits.Add(id);
+            var got = new List<string>();
+            foreach (var face in new[] { "full", "analog", "minimal" })
+            {
+                w.Face = face;
+                wrist.Settle();
+                wrist.Draw(data);
+                hits.Clear();
+                for (int i = 0; i < 6; i++)
+                {
+                    var at = new Vector2(28 + i * 99 + 44.5f, 385);
+                    wrist.PointerMove(Hand.Left, at); wrist.Draw(data);
+                    wrist.PointerButton(Hand.Left, PtrButton.Primary, true, at); wrist.Draw(data);
+                    wrist.PointerButton(Hand.Left, PtrButton.Primary, false, at); wrist.Draw(data);
+                }
+                wrist.PointerLeave(Hand.Left);
+                got.Add($"{face}: {string.Join(" ", hits)}");
+            }
+            wrist.OnAction = act0;
+            Log.Info($"cyber presets: a click in the middle of each old button - {string.Join("; ", got)} (want keyboard desktops recenter layout night settings each)");
+            // the motion; at rest as in the headset (its effects live, no warning on the face: a warning pulses for 8 s)
+            var level0 = Motion.Level;
+            CyberFx.Live = true;
+            var boots = new List<string>();
+            bool rest = true;
+            data.Vr.Batteries.Clear();
+            foreach (var face in new[] { "full", "analog", "minimal", "time" })
+            {
+                w.Face = face;
+                Motion.Level = MotionLevel.Off;
+                wrist.Settle(); wrist.Intro(); wrist.Draw(data);
+                bool off = wrist.CyberMoving;
+                Motion.Level = MotionLevel.Full;
+                wrist.Settle(); wrist.Intro(); wrist.Draw(data);
+                bool full = wrist.CyberMoving;
+                wrist.Settle();
+                wrist.CyberLive = true;
+                AnimWake.Take();
+                for (int i = 0; i < 3; i++) wrist.Draw(data);
+                double ask = AnimWake.Take() - Clock.Now, own = wrist.CyberNextFrame - Clock.Now;
+                rest &= !wrist.Animating && ask > 0 && ask < 1.05 && own > 5;
+                wrist.CyberLive = false;
+                boots.Add($"{face} {full}/{off}");
+            }
+            data.Vr.Batteries.AddRange(bats0);
+            Motion.Level = level0;
+            CyberFx.Live = false;
+            wrist.Settle();
+            Log.Info($"cyber presets: boot on Full / on Off - {string.Join(", ", boots)} (want True/False each); at rest only the next second asked, " +
+                     $"Cyber's own next frame 5 s off or more {rest} (want True)");
+            w.Face = "full";
         }
 
         // the custom face with three pages (the last on the 4 x 3 grid): the taskbar along the bottom, each page once
@@ -1391,7 +1503,7 @@ static partial class Tools
     // modern style with your look, then once more with the Bento theme's colours (accent #FF5D93, panel #0A0B10): before /
     // after pictures of a redesign. The numbers are the snapshot's made-up ones (plus a made-up room and Hexpad), the clock,
     // CPU, RAM and the system volume are live, dates in this PC's language. The pages are drawn in Windows 95 and Cyber too
-    // (face_page*_95, face_page*_cyber).
+    // (face_page*_95, face_page*_cyber), and the preset faces in Cyber (face_<face>_cyber, face_<face>_cyber_off).
     public static int FaceShot(string dir)
     {
         dir = Path.GetFullPath(dir);
@@ -1537,6 +1649,32 @@ static partial class Tools
             Theme.Apply(a);
             wc.Page = 0;
         }
+        // the preset faces in Cyber (WristCyberFaces.cs) with your options and clock: face_<face>_cyber.png; then SteamVR off, nothing
+        // playing: face_<face>_cyber_off.png
+        {
+            string face0 = wc.Face;
+            a.Style = CyberHud.Id;
+            Theme.Apply(a);
+            foreach (bool off in new[] { false, true })
+            {
+                if (off)
+                {
+                    (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia) = (-1, -1, -1, false, (false, null, null, false));
+                    data.Vr.Batteries.Clear();
+                }
+                foreach (var face in new[] { "full", "analog", "minimal", "time" })
+                {
+                    wc.Face = face;
+                    wrist.Settle();
+                    wrist.Draw(data);
+                    wrist.Draw(data);
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_{face}_cyber{(off ? "_off" : "")}.png"));
+                }
+            }
+            wc.Face = face0;
+            a.Style = "modern";
+            Theme.Apply(a);
+        }
         Log.Info("faceshot written to " + dir);
         return 0;
     }
@@ -1544,7 +1682,8 @@ static partial class Tools
     // Every widget kind at every size, alone on a watch with no background ("cards"), and every opened view
     // without its clip: anything drawn outside the card sticks out (a non-transparent pixel there), and in the
     // modern style anything within a few pixels of the card's edge is too close to it. Logged, one line each.
-    static int LayoutCheckRun(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir, string style, bool variantsOnly = false)
+    static int LayoutCheckRun(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir, string style, bool variantsOnly = false,
+        string onlyKind = null)
     {
         var wcfg = cfg.Data.Wrist;
         bool classic = Theme.Classic;
@@ -1625,6 +1764,7 @@ static partial class Tools
         if (classic) sized.AddRange(WatchWidgets.Kinds.Where(kd => kd.Extra != null).SelectMany(kd => kd.Extra.Select(s => (kd, s.W, s.H))));
         foreach (var (kind, w, h) in sized)
         {
+            if (onlyKind != null && kind.Id != onlyKind) continue;
             wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
             wrist.Settle();
             wrist.Draw(data);
@@ -1654,6 +1794,7 @@ static partial class Tools
         foreach (var kind in WatchWidgets.Kinds)
             foreach (var (w, h) in WatchWidgets.Sizes43(kind))
             {
+                if (onlyKind != null && kind.Id != onlyKind) continue;
                 wcfg.Grid = "4x3";
                 wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
                 wcfg.Pages = classic ? new List<WatchPage> { new() { Grid = "4x3" } } : null;
@@ -1690,7 +1831,7 @@ static partial class Tools
         wrist.LayoutTest = true;
         foreach (var kind in WatchWidgets.Kinds)
         {
-            if (kind.Button) continue;
+            if (kind.Button || (onlyKind != null && kind.Id != onlyKind)) continue;
             var (w, h) = kind.Sizes[kind.Default];
             wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
             wrist.Settle();
@@ -1713,6 +1854,12 @@ static partial class Tools
             wrist.CloseForTest();
         }
         wrist.LayoutTest = false;
+        if (onlyKind != null)
+        {
+            wcfg.Background = "panel";
+            Log.Info($"layout {style} ({onlyKind} only): {problems} problem(s)");
+            return problems;
+        }
         var bats0 = new List<(string, float, bool)>(data.Vr.Batteries);
         var fake0 = data.FakeMedia;
         void Shot(string type, int w, int h, string name, bool open)

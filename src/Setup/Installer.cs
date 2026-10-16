@@ -497,8 +497,7 @@ sealed class InstallerWindow : Form
         var p = _p;
         p.Fill(new RectangleF(0, 0, LW, 104), Theme.Panel);
         p.Line(0, 104, LW, 104, Theme.Border, 1);
-        p.Ring(56, 52, 20, Theme.Accent, 5);
-        p.Circle(73, 36, 6.5f, Theme.Accent2);
+        p.Logo(new RectangleF(30, 26, 52, 52));
         p.Text("OrbitOverlay", new RectangleF(96, 22, 400, 40), Theme.Text, 30, FontWeight.SemiBold);
         p.Text("v" + Installer.Version, new RectangleF(200, 30, 120, 30), Theme.Dim, 14);
         p.Text("Wrist watch, desktop mirrors and a VR keyboard for SteamVR", new RectangleF(98, 60, 480, 26), Theme.Dim, 14);

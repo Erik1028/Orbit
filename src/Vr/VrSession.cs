@@ -282,6 +282,13 @@ public sealed class VrStats
     public float AppFps = -1, ReprojPct = -1, DroppedPerSec = -1, GpuMs = -1, DisplayHz = 90;
     public readonly List<(string label, float pct, bool charging)> Batteries = new();
     public int TrackerCount;
+    // 1.14, the alerts (Sys/Alerts.cs): every controller / tracker with a battery on its own (Batteries sums the trackers up);
+    // AppFps's second: the game loading or not answering (the compositor's loading / timed-out frames), the scene app's process
+    public readonly List<BatteryDevice> Devices = new();
+    public bool AppStalled;
+    public uint ScenePid;
+    public double FpsAt = -1;                     // when AppFps was last measured
+    public double ReadAt = -1;                    // when all of this was read (once a second)
 
     // per-frame history for the wrist graph (~5 s at 90 Hz)
     public const int FrameHistory = 450;
@@ -367,6 +374,7 @@ public sealed class VrStats
     {
         if (!vr.Connected || now < _next) return;
         _next = now + 1.0;
+        ReadAt = now;
         DisplayHz = vr.DisplayHz;
 
         var s = new Compositor_CumulativeStats();
@@ -382,8 +390,12 @@ public sealed class VrStats
                 ReprojPct = 100f * reproj / presents;
                 AppFps = (float)((presents - reproj - dropped) / dt);
                 DroppedPerSec = (float)(dropped / dt);
+                FpsAt = now;
             }
+            AppStalled = s.m_nNumFramePresentsLoading != _prev.m_nNumFramePresentsLoading || s.m_nNumFramePresentsTimedOut != _prev.m_nNumFramePresentsTimedOut;
         }
+        else AppStalled = true;          // another game (or none): no rate of its own yet
+        ScenePid = s.m_nPid;
         _prev = s; _prevT = now;
 
         _timings[0].m_nSize = (uint)Marshal.SizeOf<Compositor_FrameTiming>();
@@ -396,6 +408,7 @@ public sealed class VrStats
         }
 
         Batteries.Clear();
+        Devices.Clear();
         TrackerCount = 0;
         LeftBattery = RightBattery = TrackerAverage = -1;
         float trackerMin = 2, trackerSum = 0;
@@ -411,6 +424,7 @@ public sealed class VrStats
             bool chg = vr.BoolProp(i, ETrackedDeviceProperty.Prop_DeviceIsCharging_Bool);
             if (cls == ETrackedDeviceClass.GenericTracker)
             {
+                Devices.Add(new BatteryDevice(i, BatteryDevice.Tracker, pct, chg));
                 TrackerCount++;
                 trackerSum += pct;
                 if (pct < trackerMin) { trackerMin = pct; trackerCharging = chg; }
@@ -424,6 +438,8 @@ public sealed class VrStats
                     _ => "C",
                 };
             Batteries.Add((label, pct, chg));
+            if (cls == ETrackedDeviceClass.Controller)
+                Devices.Add(new BatteryDevice(i, label == "L" ? BatteryDevice.Left : label == "R" ? BatteryDevice.Right : BatteryDevice.Other, pct, chg));
             if (label == "L") LeftBattery = pct;
             if (label == "R") RightBattery = pct;
         }
@@ -433,4 +449,10 @@ public sealed class VrStats
     }
 
     static int Order(string l) => l switch { "HMD" => 0, "L" => 1, "R" => 2, _ => 3 };
+}
+
+// a controller or tracker with a battery (VrStats.Devices): its device index, which one, the charge (0..1)
+public readonly record struct BatteryDevice(uint Index, byte Kind, float Pct, bool Charging)
+{
+    public const byte Left = 1, Right = 2, Other = 3, Tracker = 4;
 }

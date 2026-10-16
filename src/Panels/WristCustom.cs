@@ -16,7 +16,7 @@ public sealed partial class WristPanel
 {
     bool _layoutChecked, _layoutSeen;
     public readonly SystemStats Stats = new();
-    public readonly SystemVolume Volume = new();
+    public readonly SystemVolume Volume = new() { Fake = true };     // made-up until the app hands it the real device (UseRealAudio)
 
     // the page in view (pages: WristPages.cs)
     List<WatchWidget> Layout => PageList(CurPage);
@@ -135,6 +135,7 @@ public sealed partial class WristPanel
         if (HasWidget("cpu") || HasWidget("ram")) Stats.Sample(now);
         if (HasWidget("volume")) Volume.Sample(now);
         if (HasWidget("mic")) Mic.Sample(now);
+        if (MixerOn) MixerFrame(now);
     }
 
     // ---- timer and stopwatch: one of each, shared by their widgets; they keep running while the watch is hidden ----
@@ -452,7 +453,8 @@ public sealed partial class WristPanel
     // over a card without a caption (the dial, the dock's keys) or whose caption row holds more (the cover, round buttons
     // from 31 px down: a band would run into them)
     bool StripBand(WatchWidgets.Kind k, WatchWidget w) =>
-        k.Id is "analog" or "media" or "buttons" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" or "minesweeper" && w.W >= 2);
+        k.Id is "analog" or "media" or "buttons" || (k.Id == "dock" && _dockKeys) || (k.Id is "volume" or "stopwatch" or "minesweeper" && w.W >= 2) ||
+        (k.Id == "mixer" && w.H == 1 && !_big);
 
     float BandHeight(WatchWidgets.Kind k, WatchWidget w, RectangleF r)
     {
@@ -641,6 +643,7 @@ public sealed partial class WristPanel
             case "mic": MicOrbit(r, w, id); break;
             case "notifications": NotesOrbit(r, w, d, id); break;
             case "buttons": GroupOrbit(r, w, d, id); break;
+            case "mixer": MixerOrbit(r, w, id); break;
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2282,6 +2285,7 @@ public sealed partial class WristPanel
                 case "mic": Mic95(r, c, w, id); break;
                 case "notifications": Notes95(c, d); break;
                 case "buttons": Group95(c, w, d, id); break;
+                case "mixer": Mixer95(r, c, w, id); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);

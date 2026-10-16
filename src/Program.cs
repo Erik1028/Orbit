@@ -26,6 +26,7 @@ static class Program
     //   --leaktest <gpu|media|idle> [seconds]   dev: private memory of one background component
     //   --raytest         dev: LocalRaycast vs SteamVR's ComputeOverlayIntersection on a hidden overlay
     //   --updatetest      dev: GitHub release check + download + verify (does not install)
+    //   --mixertest       dev: the default output device's apps as the mixer reads them (read only: nothing is set)
     //   --setup [--install-dir <dir>] [--no-config] [--quiet]   installer (also when the exe name contains "setup")
     //   (setup) --update --install-dir <dir>   started by "Check for updates": silent install over that copy, restart
     //   --uninstall [--quiet]   remove the installed copy (used by Settings > Apps)
@@ -38,7 +39,7 @@ static class Program
         int uf = Array.IndexOf(args, "--updated-from");
         if (uf >= 0 && uf + 1 < args.Length) UpdatedFrom = args[uf + 1];
         bool has(string a) => args.Contains(a);
-        bool tool = has("--snapshot") || has("--animstrip") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest") || has("--voltest");
+        bool tool = has("--snapshot") || has("--animstrip") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest") || has("--voltest") || has("--mixertest");
         if (tool) return RunTool(args);
 
         // install / uninstall (the same exe: named "OrbitSetup.exe" it is the installer)
@@ -117,10 +118,13 @@ static class Program
         }
     }
 
-    // dev: the watch's volume control on this PC's default speakers (per-app on Virtual Desktop's); "dip": 5 % down for 2 s, then back
+    // dev: the watch's volume control on this PC's default speakers (per-app on Virtual Desktop's, through the mixer as in VR); "dip":
+    // 5 % down for 2 s, then back
     static int VolTest(bool dip)
     {
-        var v = new SystemVolume();
+        using var mx = new AudioMixer();
+        mx.Tick(0, true);
+        var v = new SystemVolume { Engine = mx };
         v.Sample(0);
         Log.Info($"voltest: '{v.DeviceName}' level {v.Level:0.00} muted {v.Muted} per-app {v.PerApp}");
         if (v.Level < 0) return 1;
@@ -179,6 +183,8 @@ static class Program
             }
             if (args.Contains("--voltest"))
                 return VolTest(args.Contains("dip"));
+            if (args.Contains("--mixertest"))
+                return MixerViewTools.Probe();
             if (args.Contains("--capturetest"))
                 return CaptureTest.Run();
             if (args.Contains("--pacertest"))
