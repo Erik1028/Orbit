@@ -37,7 +37,7 @@ public sealed partial class WristPanel
     // what lines up with it
     (float top, float span, float mid, float h) Ink()
     {
-        if (Theme.UserFont == null) return (DigitTop, DigitSpan, DigitH / 2, DigitH);
+        if (!Theme.OwnFont) return (DigitTop, DigitSpan, DigitH / 2, DigitH);
         var (a, b) = _p.DigitInk(FontWeight.Bold, Theme.Display);
         return (a, a + b, (a - b) / 2, a);
     }
@@ -46,7 +46,7 @@ public sealed partial class WristPanel
     // chosen font made the date (the default font's layout already is: it stays exactly as it was)
     static readonly WatchWidgets.Kind TimeKind = WatchWidgets.Find("time");
     float BelowBand(RectangleF r, WatchWidget w, float y, float more = 0) =>
-        Theme.UserFont == null ? y : MathF.Max(y, r.Y + BandHeight(TimeKind, w, r) + 4 + more);
+        !Theme.OwnFont ? y : MathF.Max(y, r.Y + BandHeight(TimeKind, w, r) + 4 + more);
 
     // the clock's header on a card wider than a 1x1 (TimeOrbit's): the date, the time in VR at its right; returns where the space
     // under it starts (10 px under the date's descenders)
@@ -90,7 +90,7 @@ public sealed partial class WristPanel
         float k = _p.MeasureWidth("00", 100, FontWeight.Bold, Theme.Display) / 100;
         float fill0 = tall ? 0.6f : 0.68f;             // how much of a card's height its digits may take
         var ink = Ink();
-        float dh = Theme.UserFont == null ? DigitH : ink.span;      // the digits' height, in em
+        float dh = !Theme.OwnFont ? DigitH : ink.span;      // the digits' height, in em
         float size = MathF.Min(area.Height * fill0 / dh, (area.Width - sw) / (2 * k + 0.9f));
         size = MathF.Max(14, MathF.Floor(size * 2) / 2);
         float cw = (k + 0.4f) * size, gap = MathF.Max(4, size * 0.1f);

@@ -1212,7 +1212,7 @@ public sealed partial class WristPanel
     void Note(float x, float by, float iw, string[] forms)
     {
         string s = forms[0];
-        float size = FitSize(s, iw, 15, FontWeight.SemiBold, null), least = Theme.UserFont != null ? 15 : 14;
+        float size = FitSize(s, iw, 15, FontWeight.SemiBold, null), least = Theme.OwnFont ? 15 : 14;
         for (int i = 1; i < forms.Length && size < least; i++) { s = forms[i]; size = FitSize(s, iw, 15, FontWeight.SemiBold, null); }
         size = MathF.Max(14, size);
         TextAt(Ellipsize(s, iw, size, FontWeight.SemiBold), x, by, iw + 2, size < 15 ? Theme.Mix(Sub, Bento.Text, 0.3f) : Sub, size, FontWeight.SemiBold);

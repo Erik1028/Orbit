@@ -490,10 +490,10 @@ public sealed partial class SettingsView
         var a = C.Appearance;
         bool changed = false;
         ui.Group95(new RectangleF(16, 56, 350, 150), "Style");
-        int si = Skins.IndexOf(a.Style);
-        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", Skins.StyleNames, ref si))
+        int si = StyleMenu.IndexOf(a.Style);
+        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", StyleMenu.Names, ref si))
         {
-            a.Style = Skins.StyleIds[si];
+            a.Style = StyleMenu.Ids[si];
             changed = true;
         }
         string era = Theme.Retro == RetroStyle.Win95 ? "their real 1995 pixel size" : "the real pixel size of its day";

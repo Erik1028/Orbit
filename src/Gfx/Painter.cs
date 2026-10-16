@@ -50,11 +50,15 @@ static class Theme
     public static uint W95Window => RetroSkin.Window;
     public static string RetroFont => RetroSkin.Font;    // the typeface of every retro text
 
+    // Look > Style "cyber" (CyberHud, src/Gfx/Cyber.cs): a modern style (Classic false - the modern layouts and code paths) with
+    // its own token layer, type and cut corners; the watch's widgets have their Cyber designs (WristCyber.cs)
+    public static bool Cyber { get; private set; }
+
     // the modern text colours are constants (used as default arguments); under the skin they are drawn as
     // the 1995 ones - RGB swapped, alpha kept; then the style's own colour map (Win95: none)
     public static uint Skin(uint c)
     {
-        if (!Classic) return c;
+        if (!Classic) return Cyber ? CyberHud.MapColor(c) : c;
         uint rgb = c & 0xFFFFFF, a = c & 0xFF000000;
         var sk = RetroSkin;
         return sk.MapColor(rgb switch
@@ -76,8 +80,16 @@ static class Theme
     {
         Retro = Skins.Parse(a.Style);
         Classic = Retro != RetroStyle.None;
+        Cyber = !Classic && a.Style == CyberHud.Id;
         RetroSkin = Skins.For(Retro);
         UserFont = a.Font != null && Array.IndexOf(FontsInstalled, a.Font) >= 0 ? a.Font : null;   // not on this PC: the default
+        if (Cyber)
+        {
+            // its own palette and type: the accent, panel colour and Look > Font are Modern's (the opacity and laser apply)
+            CyberHud.Apply(a);
+            Version++;
+            return;
+        }
         if (Classic)
         {
             // one grey window face for every piece of chrome, white wells, black text, navy selection (in the style's palette)
@@ -171,6 +183,7 @@ static class Theme
             if (!has(IconFont)) IconFont = "Segoe MDL2 Assets";
             if (!has(ClassicFont)) ClassicFont = "Tahoma";
             FontsInstalled = Array.FindAll(FontChoices, has);
+            CyberHud.ResolveFonts(has);
         }
         catch { }
     }
@@ -183,9 +196,12 @@ static class Theme
     public static string UserFont { get; private set; }                             // the chosen one (Apply), null = default
     public static string DefaultFontName => UiFont.Replace(" Text", "");
 
-    // the typeface for UI text and big numbers in the current skin
-    public static string Font => Classic ? RetroFont : UserFont ?? UiFont;
-    public static string Display => Classic ? RetroFont : UserFont ?? DisplayFont;
+    // the typeface for UI text and big numbers in the current skin (Cyber: Bahnschrift's condensed widths - Look > Font is Modern's)
+    public static string Font => Classic ? RetroFont : Cyber ? CyberHud.Text : UserFont ?? UiFont;
+    public static string Display => Classic ? RetroFont : Cyber ? CyberHud.Display : UserFont ?? DisplayFont;
+
+    // the watch draws in a typeface other than Segoe UI Variable (Look > Font, or Cyber's): its digits' ink is measured, not assumed
+    public static bool OwnFont => UserFont != null || Cyber;
 
     // Segoe Fluent Icons code points
     public const string IcoKeyboard = "\uE765";
@@ -377,7 +393,8 @@ public sealed class Painter : IDisposable
                 foreach (var old in _formats.Values) old.Dispose();
                 _formats.Clear();
             }
-            f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, size * FontScale(family), "en-us");
+            CyberHud.Resolve(family, out var real, out var stretch);         // Cyber's Bahnschrift widths; any other family as it is
+            f = _g.DWrite.CreateTextFormat(real, null, w, Vortice.DirectWrite.FontStyle.Normal, stretch, size * FontScale(family), "en-us");
             f.TextAlignment = h;
             f.ParagraphAlignment = v;
             f.WordWrapping = wrap ? WordWrapping.Wrap : WordWrapping.NoWrap;
@@ -391,6 +408,13 @@ public sealed class Painter : IDisposable
     public void Fill(RectangleF r, uint c, float radius = 0)
     {
         if (Theme.Classic) radius = 0;        // square corners in the 95 skin
+        else if (Theme.Cyber && radius > 0)
+        {
+            // Cyber: the corners cut, not rounded
+            var (tl, br) = CyberHud.Cuts(r, radius);
+            if (br > 0) { FillCut(r, c, tl, 0, br, 0); return; }
+            radius = 0;
+        }
         if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c));
         else Dc.FillRectangle(Raw(r), Brush(c));
     }
@@ -398,8 +422,90 @@ public sealed class Painter : IDisposable
     public void Stroke(RectangleF r, uint c, float width = 1, float radius = 0)
     {
         if (Theme.Classic) radius = 0;
+        else if (Theme.Cyber && radius > 0)
+        {
+            var (tl, br) = CyberHud.Cuts(r, radius);
+            if (br > 0) { StrokeCut(r, c, width, tl, 0, br, 0); return; }
+            radius = 0;
+        }
         if (radius > 0) Dc.DrawRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c), width);
         else Dc.DrawRectangle(Raw(r), Brush(c), width);
+    }
+
+    // ---- Cyber: rectangles with cut corners (top-left, top-right, bottom-right, bottom-left; 0 = square) ----
+    // Each outline is made once per size and cuts, at (0, 0), and drawn moved into place; past 256 they start over (a card
+    // springing to a new size makes one a frame).
+    readonly Dictionary<(float, float, float, float, float, float), ID2D1PathGeometry> _cuts = new();
+
+    ID2D1PathGeometry CutGeo(float w, float h, float tl, float tr, float br, float bl)
+    {
+        var key = (w, h, tl, tr, br, bl);
+        if (_cuts.TryGetValue(key, out var geo)) return geo;
+        if (_cuts.Count >= 256) DropCuts();
+        geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            float m = MathF.Min(w, h) / 2;
+            tl = MathF.Min(tl, m); tr = MathF.Min(tr, m); br = MathF.Min(br, m); bl = MathF.Min(bl, m);
+            sink.BeginFigure(new Vector2(tl, 0), FigureBegin.Filled);
+            sink.AddLine(new Vector2(w - tr, 0));
+            if (tr > 0) sink.AddLine(new Vector2(w, tr));
+            sink.AddLine(new Vector2(w, h - br));
+            if (br > 0) sink.AddLine(new Vector2(w - br, h));
+            sink.AddLine(new Vector2(bl, h));
+            if (bl > 0) sink.AddLine(new Vector2(0, h - bl));
+            sink.AddLine(new Vector2(0, tl));
+            sink.EndFigure(FigureEnd.Closed);
+            sink.Close();
+        }
+        _cuts[key] = geo;
+        return geo;
+    }
+
+    void DropCuts()
+    {
+        foreach (var g in _cuts.Values) g.Dispose();
+        _cuts.Clear();
+    }
+
+    public void FillCut(RectangleF r, uint c, float tl, float tr, float br, float bl)
+    {
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var geo = CutGeo(r.Width, r.Height, tl, tr, br, bl);
+        var old = Dc.Transform;
+        Dc.Transform = Matrix3x2.CreateTranslation(r.X, r.Y) * old;
+        Dc.FillGeometry(geo, Brush(c));
+        Dc.Transform = old;
+    }
+
+    public void StrokeCut(RectangleF r, uint c, float width, float tl, float tr, float br, float bl)
+    {
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var geo = CutGeo(r.Width, r.Height, tl, tr, br, bl);
+        var old = Dc.Transform;
+        Dc.Transform = Matrix3x2.CreateTranslation(r.X, r.Y) * old;
+        Dc.DrawGeometry(geo, Brush(c), width);
+        Dc.Transform = old;
+    }
+
+    // 'count' four-point figures (4 * count points) filled as one shape (Cyber's bar segments, hazard stripes)
+    public void Quads(Vector2[] pts, int count, uint c)
+    {
+        if (count <= 0) return;
+        using var geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            for (int q = 0; q < count; q++)
+            {
+                sink.BeginFigure(pts[4 * q], FigureBegin.Filled);
+                sink.AddLine(pts[4 * q + 1]);
+                sink.AddLine(pts[4 * q + 2]);
+                sink.AddLine(pts[4 * q + 3]);
+                sink.EndFigure(FigureEnd.Closed);
+            }
+            sink.Close();
+        }
+        Dc.FillGeometry(geo, Brush(c));
     }
 
     // ---- linear gradients (the modern watch's cards: the top light, two-tone fills, a glass sheen) ----
@@ -426,6 +532,21 @@ public sealed class Painter : IDisposable
     {
         if (Theme.Classic || PixelMode) { Fill(r, a); return; }
         if (a == b && (n == 2 || b == c)) { Fill(r, a, radius); return; }       // flat: the solid brush
+        if (Theme.Cyber && radius > 0)
+        {
+            var (tl, br) = CyberHud.Cuts(r, radius);
+            if (br > 0)
+            {
+                // the cut shape at (0, 0), its gradient laid over it there
+                var geo = CutGeo(r.Width, r.Height, tl, 0, br, 0);
+                var old = Dc.Transform;
+                Dc.Transform = Matrix3x2.CreateTranslation(r.X, r.Y) * old;
+                Dc.FillGeometry(geo, Place(GradBrush(a, b, c, n), new RectangleF(0, 0, r.Width, r.Height), angleDeg, span));
+                Dc.Transform = old;
+                return;
+            }
+            radius = 0;
+        }
         var brush = Place(GradBrush(a, b, c, n), r, angleDeg, span);
         if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
         else Dc.FillRectangle(Raw(r), brush);
@@ -1060,7 +1181,26 @@ public sealed class Painter : IDisposable
     // clips everything drawn until PopRoundedClip to a rounded rectangle (antialiased edges)
     public void PushRoundedClip(RectangleF r, float radius)
     {
-        var geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
+        ID2D1Geometry geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
+        if (Theme.Cyber && CyberHud.Cuts(r, radius) is { br: > 0 } cut)
+        {
+            // Cyber: the cut shape (its own geometry, placed: the clip layer keeps it until PopRoundedClip)
+            geo.Dispose();
+            var pg = _g.D2DFactory.CreatePathGeometry();
+            using (var sink = pg.Open())
+            {
+                float tl = MathF.Min(cut.tl, MathF.Min(r.Width, r.Height) / 2), br = MathF.Min(cut.br, MathF.Min(r.Width, r.Height) / 2);
+                sink.BeginFigure(new Vector2(r.X + tl, r.Y), FigureBegin.Filled);
+                sink.AddLine(new Vector2(r.Right, r.Y));
+                sink.AddLine(new Vector2(r.Right, r.Bottom - br));
+                sink.AddLine(new Vector2(r.Right - br, r.Bottom));
+                sink.AddLine(new Vector2(r.X, r.Bottom));
+                sink.AddLine(new Vector2(r.X, r.Y + tl));
+                sink.EndFigure(FigureEnd.Closed);
+                sink.Close();
+            }
+            geo = pg;
+        }
         Dc.PushLayer(new LayerParameters1
         {
             ContentBounds = new Vortice.RawRectF(-100000, -100000, 100000, 100000),
@@ -1100,6 +1240,7 @@ public sealed class Painter : IDisposable
         _dashes.Clear();
         DropGradients();
         DropSquircles();
+        DropCuts();
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();
