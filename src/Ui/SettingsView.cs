@@ -197,9 +197,7 @@ public sealed partial class SettingsView
         if (Theme.Classic) { DrawHeaderClassic(ui); return; }
         p.Fill(new RectangleF(0, 0, W, 64), Theme.Panel);
         p.Line(0, 64, W, 64, Theme.Border, 1);
-        // logo: ring + moon
-        p.Ring(40, 32, 13, Theme.Accent, 3.5f);
-        p.Circle(51, 21, 4.5f, Theme.Accent2);
+        p.Logo(new RectangleF(22, 15, 34, 34));
         p.Text("OrbitOverlay", new RectangleF(64, 0, 180, 64), Theme.Text, 22, FontWeight.SemiBold);
         bool on = _h.VrConnected;
         float px = 64 + p.MeasureWidth("OrbitOverlay", 22, FontWeight.SemiBold) + 16;       // the pill right after the name

@@ -671,9 +671,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             {
                 _thumbSurf = new Surface(_gpu, 256, 256, rgba: true);
                 _painter.Begin(_thumbSurf.Bitmap, 0x00000000);
-                _painter.Fill(new System.Drawing.RectangleF(8, 8, 240, 240), Theme.Panel2, 56);
-                _painter.Ring(128, 128, 64, Theme.Accent, 16);
-                _painter.Circle(176, 80, 22, Theme.Accent2);
+                _painter.Logo(new System.Drawing.RectangleF(8, 8, 240, 240));
                 _painter.End();
             }
             _dashThumb.SetFlag(VROverlayFlags.IsPremultiplied, true);

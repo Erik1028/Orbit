@@ -873,6 +873,21 @@ public sealed class Painter : IDisposable
     public void Ring(float cx, float cy, float r, uint c, float width) =>
         Dc.DrawEllipse(new Ellipse(new Vector2(cx, cy), r, r), Brush(c), width);
 
+    // Erik's logo (assets\orbitoverlay.svg, 64 x 64 units, the exe's icon) filling the square r: the dark rounded square,
+    // the cyan ring and the purple moon whose dark rim cuts the ring. The same in every style, always smoothed.
+    public const uint LogoBg = 0xFF171A24, LogoRing = 0xFF3CC3FF, LogoMoon = 0xFF8B5CF6;
+    public void Logo(RectangleF r)
+    {
+        var aa = Dc.AntialiasMode;
+        Dc.AntialiasMode = AntialiasMode.PerPrimitive;
+        float u = r.Width / 64f;
+        FillRound(r, LogoBg, 16 * u);
+        Ring(r.X + 31 * u, r.Y + 34 * u, 17 * u, LogoRing, 6 * u);
+        Circle(r.X + 46 * u, r.Y + 19 * u, 8 * u, LogoBg);
+        Circle(r.X + 46 * u, r.Y + 19 * u, 5 * u, LogoMoon);
+        Dc.AntialiasMode = aa;
+    }
+
     // --snapshot's contrast check: every text drawn (and where, in what colour); NoText leaves all text out (what it sits on)
     public Action<string, RectangleF, uint, float, FontWeight, string> TextSpy;
     public bool NoText;
