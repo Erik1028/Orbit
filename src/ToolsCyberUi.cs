@@ -14,9 +14,11 @@ namespace Orbit;
 //    Default look (what Cyber's Look sets, Modern's colours kept), the watch editor's select / remove / move / resize / add;
 //  - the keyboard's Cyber rows: inside the texture, under the header strip, none over another;
 //  - 'layout cyber ui': every text of those screens inside its box (its ink, as the fonts check measures it); qa/cyberui_misfits.txt;
-//  - its motion as frames (qa/cyberui_<effect>_<ms>.png, CyberFx live only here): a tab picked, the VR panel opening and closing,
-//    the keyboard opening, a key pressed and let go, a modifier latching, a notification scanning in, the screen bar opening, a
-//    monitor's unfold frame, the theater wall's grid. ORBIT_SNAP_CHECKS=0 leaves the checks out (the pictures stay).
+//  - its motion as frames (qa/cyberui_<effect>_<ms>.png, CyberFx live only here): a tab picked, a button hovered / held / let go, a
+//    switch flipped, a choice picked, the VR panel opening and closing, the keyboard opening, a key pressed and let go, a modifier
+//    latching, a notification scanning in, the screen bar opening, a monitor's unfold frame and the theater lock-on, the theater
+//    wall's grid. ORBIT_SNAP_CHECKS=0 leaves the checks out (the pictures stay);
+//  - what a settings and a keyboard frame cost against Modern (FrameCost; ORBIT_SNAP_ONLY=cyberperf: that alone, more cases).
 static partial class Tools
 {
     static void CyberUiRun(SettingsView view, SettingsView panelView, Ui ui, Surface surf, PointerState ptr, Painter painter, Gpu gpu,
@@ -186,29 +188,14 @@ static partial class Tools
             view.Tab = SettingsView.TabGeneral;
             ptr.Leave();
             ui.ResetAnimations();
-            Frame();
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            for (int i = 0; i < 20; i++) Frame();
-            gpu.Ctx.Flush();
-            double sms = sw.Elapsed.TotalMilliseconds / 20;
-            kb.Draw();
-            sw.Restart();
-            for (int i = 0; i < 20; i++) kb.Draw();
-            gpu.Ctx.Flush();
-            double kms = sw.Elapsed.TotalMilliseconds / 20;
+            var (sms, _) = FrameCost(gpu, Frame);
+            var (kms, _) = FrameCost(gpu, kb.Draw);
             // the same in Modern, for comparison (the machine's load varies from run to run)
             var look = cfg.Data.Appearance;
             look.Style = null;
             Theme.Apply(look);
-            Frame(); kb.Draw();
-            sw.Restart();
-            for (int i = 0; i < 20; i++) Frame();
-            gpu.Ctx.Flush();
-            double smm = sw.Elapsed.TotalMilliseconds / 20;
-            sw.Restart();
-            for (int i = 0; i < 20; i++) kb.Draw();
-            gpu.Ctx.Flush();
-            double kmm = sw.Elapsed.TotalMilliseconds / 20;
+            var (smm, _) = FrameCost(gpu, Frame);
+            var (kmm, _) = FrameCost(gpu, kb.Draw);
             look.Style = CyberHud.Id;
             Theme.Apply(look);
             kb.Draw();
@@ -241,6 +228,96 @@ static partial class Tools
             ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End();
         }
         CyberMotion(view, panelView, ui, surf, ptr, painter, gpu, cfg, wrist, data, kb, qa, Frame);
+        return 0;
+    }
+
+    // What a frame costs on the CPU (drawing + hand-over, the GPU idle before each one): the best of 3 rounds of n frames - the PC's
+    // load swings from run to run - and what a frame allocates
+    static (double ms, long bytes) FrameCost(Gpu gpu, Action draw, int n = 60)
+    {
+        using var query = gpu.Device.CreateQuery(new Vortice.Direct3D11.QueryDescription(Vortice.Direct3D11.QueryType.Event));
+        void Idle()
+        {
+            gpu.Ctx.End(query);
+            gpu.Ctx.Flush();
+            while (gpu.Ctx.GetData(query, IntPtr.Zero, 0, Vortice.Direct3D11.AsyncGetDataFlags.None).Code != 0) Thread.SpinWait(50);
+        }
+        draw(); draw();
+        double best = double.MaxValue;
+        long bytes = long.MaxValue;
+        for (int round = 0; round < 3; round++)
+        {
+            double sum = 0;
+            long alloc = 0;
+            for (int i = 0; i < n; i++)
+            {
+                Idle();
+                long m0 = GC.GetAllocatedBytesForCurrentThread();
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                draw();
+                gpu.Ctx.Flush();
+                sum += System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+                alloc += GC.GetAllocatedBytesForCurrentThread() - m0;
+            }
+            best = Math.Min(best, sum / n);
+            bytes = Math.Min(bytes, alloc / n);
+        }
+        return (best, bytes);
+    }
+
+    // ORBIT_SNAP_ONLY=cyberperf --snapshot <dir>: what the Cyber settings and keyboard cost a frame against Modern's, at rest and moving
+    // (a button under the pointer, a key let go, a tab picked), each the best of 3 rounds - in seconds
+    static int CyberPerfOnly(SettingsView view, Ui ui, Surface surf, PointerState ptr, Painter painter, Gpu gpu, ConfigStore cfg, KeyboardPanel kb)
+    {
+        void Frame()
+        {
+            ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, Theme.Bg, 1.5f); view.Draw(ui); painter.End(); ui.End();
+        }
+        System.Globalization.CultureInfo.CurrentCulture = SnapCulture;
+        var look = cfg.Data.Appearance;
+        var lines = new List<string>();
+        foreach (string style in new[] { CyberHud.Id, null })
+        {
+            look.Style = style;
+            look.Motion = Environment.GetEnvironmentVariable("ORBIT_BENCH_MOTION");
+            Theme.Apply(look);
+            CyberFx.Live = true;
+            string name = style == null ? "Modern" : CyberHud.Name;
+            view.Tab = SettingsView.TabGeneral;
+            ptr.Leave();
+            ui.ResetAnimations();
+            var rest = FrameCost(gpu, Frame);
+            ptr.Move((222 + 200) * 1.5f, (196 + 22) * 1.5f);         // over the Haptic ticks switch
+            var hover = FrameCost(gpu, Frame);
+            ptr.Leave();
+            // a tab picked: the frames of its transition (each round from the click)
+            double tab = double.MaxValue;
+            for (int r = 0; r < 3; r++)
+            {
+                view.Tab = SettingsView.TabDesktops;
+                ui.ResetAnimations();
+                Frame();
+                ptr.Move(106 * 1.5f, (84 + SettingsView.TabGeneral * 50 + 21) * 1.5f);
+                Frame(); ptr.Press(); Frame(); ptr.Release();
+                tab = Math.Min(tab, FrameCost(gpu, Frame, 12).ms);
+                ptr.Leave();
+            }
+            var krest = FrameCost(gpu, kb.Draw);
+            double kpress = double.MaxValue;
+            for (int r = 0; r < 3; r++)
+            {
+                kb.HoldForTest(30, true); kb.Draw();
+                kb.HoldForTest(30, false);
+                kpress = Math.Min(kpress, FrameCost(gpu, () => { kb.CyberFlashForTest(-1); kb.Draw(); }, 12).ms);
+            }
+            CyberFx.Live = false;
+            lines.Add($"cyber perf: {name,-6} settings (General) at rest {rest.ms:0.000} ms ({rest.bytes} B), a switch under the pointer {hover.ms:0.000} ms " +
+                      $"({hover.bytes} B), a tab picked {tab:0.000} ms; keyboard at rest {krest.ms:0.000} ms ({krest.bytes} B), a key let go {kpress:0.000} ms");
+        }
+        look.Style = CyberHud.Id;
+        look.Motion = null;
+        Theme.Apply(look);
+        foreach (var l in lines) Log.Info(l);
         return 0;
     }
 
@@ -374,6 +451,29 @@ static partial class Tools
                     ptr.Press(); frame(); ptr.Release();
                 }, frame, () => surf, whole);
             ptr.Leave();
+            // the HUD controls (General): a button the pointer comes onto, holds and lets go; a switch flipped on; a choice picked
+            var g0 = cfg.Data.General;
+            view.Tab = SettingsView.TabGeneral;
+            ui.ResetAnimations();
+            frame(); frame();
+            Shoot("button", "a button: the pointer comes onto it (a light crosses the plate), held (its label splits red / cyan), let go (its corners kick out)",
+                new[] { 0.0, 0.04, 0.08, 0.12, 0.16, 0.2, 0.28, 0.32, 0.36, 0.42, 0.52 }, () => ptr.Move((572 + 66) * 1.5f, (14 + 18) * 1.5f), frame, () => surf,
+                new RectangleF(540 * 1.5f, 0, 300 * 1.5f, 66 * 1.5f), t => { if (t >= 0.26 && t < 0.3 && !ptr.Down) ptr.Press(); else if (t >= 0.3 && ptr.Down) ptr.Release(); });
+            ptr.Leave();
+            bool hap0 = g0.Haptics;
+            g0.Haptics = false;
+            ui.ResetAnimations();
+            frame(); frame();
+            Shoot("switch", "a switch flipped on: the fill wipes over with a bright front, the housing's corners kick out, the word glitches",
+                new[] { 0.0, 0.03, 0.06, 0.1, 0.14, 0.2, 0.3 }, () => { ptr.Move(422 * 1.5f, 218 * 1.5f); frame(); ptr.Press(); frame(); ptr.Release(); }, frame,
+                () => surf, new RectangleF(470 * 1.5f, 186 * 1.5f, 150 * 1.5f, 60 * 1.5f));
+            g0.Haptics = hap0;
+            string hand0 = g0.LaserHand;
+            Shoot("choice", "a choice picked: the underline stretches over and settles, the new pick's name glitches",
+                new[] { 0.0, 0.03, 0.06, 0.1, 0.14, 0.2, 0.3 }, () => { ptr.Move(410 * 1.5f, 127 * 1.5f); frame(); ptr.Press(); frame(); ptr.Release(); }, frame,
+                () => surf, new RectangleF(225 * 1.5f, 100 * 1.5f, 370 * 1.5f, 52 * 1.5f));
+            g0.LaserHand = hand0;
+            ptr.Leave();
             // the VR panel: opening, then closing
             void FrameP() { ui.Begin(ptr, 1.5f); painter.Begin(surf.Bitmap, 0x00000000, 1.5f); panelView.Draw(ui); painter.End(); ui.End(); }
             panelView.Tab = SettingsView.TabLook;
@@ -437,7 +537,8 @@ static partial class Tools
                     ("u000", 0.02f, false, 0.0, -1, -1), ("u050", 0.3f, false, 0.05, -1, -1), ("u100", 0.62f, false, 0.1, -1, -1),
                     ("u160", 1, false, 0.16, -1, -1), ("u260", 1, false, 0.26, -1, -1),
                     ("h050", 0.5f, true, -1, -1, -1), ("h120", 0.08f, true, -1, -1, -1),
-                    ("t000", 1, false, -1, 0.0, -1), ("t100", 1, false, -1, 0.1, -1), ("t250", 1, false, -1, 0.25, -1), ("t450", 1, false, -1, 0.45, -1),
+                    ("t000", 1, false, -1, 0.0, -1), ("t100", 1, false, -1, 0.1, -1), ("t180", 1, false, -1, 0.18, -1), ("t250", 1, false, -1, 0.25, -1),
+                    ("t320", 1, false, -1, 0.32, -1), ("t450", 1, false, -1, 0.45, -1),
                     ("r100", 1, false, -1, -1, 0.1),
                 };
                 var files = new List<string>();
