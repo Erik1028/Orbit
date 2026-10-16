@@ -19,6 +19,9 @@ public sealed partial class SettingsView
     static readonly string[] TStyleNames = Skins.StyleNames.Select(s => s.ToUpperInvariant()).ToArray();
     // the laser colour wells of the 95 page, by name: the style's own, then the presets (the last, white, is not offered)
     static readonly string[] TLaserNames = { "PHOSPHOR", "SKY BLUE", "BLUE", "VIOLET", "PINK", "RED", "ORANGE", "AMBER", "GREEN", "TEAL" };
+    static readonly string[] TMotionNames = { "FULL", "REDUCED", "OFF" };       // Look > Motion (MotionLevel's order)
+    // the Motion item's [VALUE] (the snapshot's check clicks it): the Look list's 8th line
+    public static readonly RectangleF MotionTerm = new(262, 64 + 7 * 34, 92, 21);
 
     partial void SettingsTerm(Ui ui, ref bool done)
     {
@@ -129,7 +132,8 @@ public sealed partial class SettingsView
         bool changed = false;
         const float lx = 22, vx = 262, top = 64, pitch = 34, divX = 528;
 
-        string[] names = { "Style", "Laser colour", "Laser thickness", "Always show the beam", "Night mode", "Night brightness", "Modern colours" };
+        string[] names = { "Style", "Laser colour", "Laser thickness", "Always show the beam", "Night mode", "Night brightness", "Modern colours",
+            "Motion" };
         int rows = names.Length;
         for (int i = 0; i < rows; i++)
             if (ui.Hover(new RectangleF(8, top + i * pitch - 6, divX - 10, pitch))) _tRow = i;
@@ -184,10 +188,14 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
             };
             changed = ui.Changed = true;
         }
+        // Motion: FULL -> REDUCED -> OFF -> FULL at each click (Gfx/Motion.cs; written only when not FULL, it applies at once)
+        int mi = MotionIndex(a.Motion);
+        if (TValueBox(ui, "lkT.motion", MotionTerm, TMotionNames[mi]))           // (top + 7 pitches: under Modern colours)
+        { a.Motion = Motion.Id((MotionLevel)((mi + 1) % TMotionNames.Length)); changed = ui.Changed = true; }
 
         // the help column
         p.Fill(new RectangleF(divX, 47, 1, 392), T.FRAME);
@@ -205,6 +213,8 @@ public sealed partial class SettingsView
             3 => "ENABLED: the beam always shows.\n\nDISABLED: only while it points at a panel.",
             4 => "Dims every panel in VR.\n\nThe watch has a key for it too (NIGHT).",
             5 => "How bright the panels stay in night mode.",
+            7 => "How much moves.\n\nFULL: every animation of the style - the tube switching on and off, the cursor blinking, the band.\n\n" +
+                 "REDUCED: short movements only, no loops.\n\nOFF: nothing moves, everything changes at once.",
             _ => "The accent colour, the panel colour, the themes and the opacity belong to the Modern style: switch to it to change them.\n\n" +
                  "RESET puts them back.",
         };

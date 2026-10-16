@@ -99,6 +99,9 @@ public sealed partial class SettingsView
         return ch;
     }
 
+    // Look > Motion's pop-up menu (the snapshot's check clicks it here)
+    public static readonly RectangleF MotionMac = new(578, 66, 142, RowH);
+
     void LookMac(Ui ui)
     {
         var p = ui.P;
@@ -114,6 +117,14 @@ public sealed partial class SettingsView
             a.Style = Skins.StyleIds[si];
             changed = true;
         }
+        // how much moves (Gfx/Motion.cs): a pop-up menu beside the style - written only when not Full, it applies at once
+        int mi = MotionIndex(a.Motion);
+        MacLabel(ui, MotionMac.X - 8, 66, "Motion:");
+        if (ui.Combo95("lkM.motion", MotionMac, MotionNames, ref mi))
+        {
+            a.Motion = Motion.Id((MotionLevel)mi);
+            changed = true;
+        }
         Hint(ui, X, 94, 480, $"{Theme.RetroSkin.Name} draws these settings, the watch, the keyboard and the notifications at the real " +
                              "pixel size of its day, enlarged without smoothing.", 30);
         MacLabel(ui, L, 132, "Colours:");
@@ -124,7 +135,7 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
             };
             changed = true;
         }

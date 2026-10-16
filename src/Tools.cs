@@ -815,16 +815,47 @@ static partial class Tools
             Log.Info($"{sk.Tag} drop-down: outside click kept haptics {hap0}->{hap1} (want same), next click {cfg.Data.General.Haptics} (want {!hap0})");
             cfg.Data.General.LaserSmoothing = smooth0;
             cfg.Data.General.Haptics = hap0;
-            if (sk.Tag == "95")
             {
-                // Look > Motion as the sheet's option buttons: Off applies at once and is written, Full again writes nothing
+                // Look > Motion on each style's own Look page: Off applies at once and is written, Full again writes nothing.
+                // 95 / XP: the sheet's option buttons; 7: a drop-down; the Mac: a pop-up menu; the Terminal: its [VALUE] clicked round
                 view.Tab = SettingsView.TabLook;
                 ui.ResetAnimations();
-                Click95(34, 348 + 2 * 20 + 5);
-                bool off = cfg.Data.Appearance.Motion == "off" && Motion.Level == MotionLevel.Off;
-                Click95(34, 348 + 5);
-                bool full = cfg.Data.Appearance.Motion == null && Motion.Full;
-                Log.Info($"95 motion: Off picked from the option buttons applies at once {off} (want True), Full again writes nothing {full} (want True)");
+                bool IsOff() => cfg.Data.Appearance.Motion == "off" && Motion.Level == MotionLevel.Off;
+                bool IsFull() => cfg.Data.Appearance.Motion == null && Motion.Full;
+                bool off, full;
+                string how;
+                if (sk.Tag is "aero" or "mac")
+                {
+                    var f = sk.Tag == "mac" ? SettingsView.MotionMac : SettingsView.MotionAero;
+                    float lh = 3 * rowH + 2, ly = f.Bottom + lh <= SettingsView.W95H ? f.Bottom : f.Y - lh;    // where Combo95 opens it
+                    void Pick(int i) { Click95(f.X + f.Width / 2, f.Y + f.Height / 2); Click95(f.X + f.Width / 2, ly + 1 + i * rowH + rowH / 2); }
+                    Pick(2);
+                    off = IsOff();
+                    Pick(0);
+                    full = IsFull();
+                    how = sk.Tag == "mac" ? "the pop-up menu" : "the drop-down";
+                }
+                else if (sk.Tag == "term")
+                {
+                    var v = SettingsView.MotionTerm;
+                    Click95(v.X + v.Width / 2, v.Y + v.Height / 2);
+                    bool reduced = cfg.Data.Appearance.Motion == "reduced" && Motion.Level == MotionLevel.Reduced;
+                    Click95(v.X + v.Width / 2, v.Y + v.Height / 2);
+                    off = reduced && IsOff();
+                    Click95(v.X + v.Width / 2, v.Y + v.Height / 2);
+                    full = IsFull();
+                    how = "the [VALUE] (FULL, REDUCED, OFF)";
+                }
+                else
+                {
+                    Click95(34, 348 + 2 * 20 + 5);
+                    off = IsOff();
+                    Click95(34, 348 + 5);
+                    full = IsFull();
+                    how = "the option buttons";
+                }
+                Log.Info($"{sk.Tag} motion: Off picked from {how} applies at once {off} (want True), Full again writes nothing {full} (want True)");
+                if (cfg.Data.Appearance.Motion != null) { cfg.Data.Appearance.Motion = null; Theme.Apply(cfg.Data.Appearance); }   // (a failed pick)
                 view.Tab = SettingsView.TabGeneral;
             }
             ptr.Leave();
@@ -913,6 +944,39 @@ static partial class Tools
                 if (view.ShowsKeyboardPreview) kb.Draw();
                 FrameC();
                 surf.SavePng(gpu, Path.Combine(dir, $"settings{t}{tag}.png"));
+            }
+            {
+                // Look > Motion in Cyber (the Look tab's segments): Off - the shared springs and eased values are at their targets in
+                // one frame and the HUD does not boot; Full again - a spring moves, the HUD boots (its effects live for this check)
+                view.Tab = SettingsView.TabLook;
+                ui.ResetAnimations();
+                void ClickC(float x, float y) { ptr.Move(x * 1.5f, y * 1.5f); FrameC(); ptr.Press(); FrameC(); ptr.Release(); FrameC(); }
+                static float SegC(int i) => 612 + 356 / 3f * (i + 0.5f);
+                string faceC = wcfg.Face;
+                ClickC(SegC(2), 607);
+                bool off = cfg.Data.Appearance.Motion == "off" && Motion.Level == MotionLevel.Off;
+                var mu = new Ui(painter);
+                mu.Spring("s", 0); mu.Anim("a", 0);
+                bool snap = mu.Spring("s", 100) == 100 && mu.Anim("a", 1) == 1;
+                CyberFx.Live = true;
+                wcfg.Face = "custom";
+                wrist.Settle(); wrist.Intro(); wrist.Draw(data);
+                bool bootOff = wrist.CyberMoving;
+                ClickC(SegC(0), 607);
+                bool full = cfg.Data.Appearance.Motion == null && Motion.Full;
+                var fu = new Ui(painter);
+                fu.Spring("s", 0);
+                bool moves = fu.Spring("s", 100) < 100;
+                wrist.Settle(); wrist.Intro(); wrist.Draw(data);
+                bool bootFull = wrist.CyberMoving;
+                wrist.Settle();
+                CyberFx.Live = false;
+                wcfg.Face = faceC;
+                ptr.Leave();
+                ui.ResetAnimations();
+                Log.Info($"cyber motion: Off picked in the Look tab {off} (want True) - the shared springs and eased values at their targets in one frame " +
+                         $"{snap} (want True), the HUD does not boot {!bootOff} (want True)");
+                Log.Info($"cyber motion: Full again {full} (want True) - a spring moves {moves} (want True), the HUD boots {bootFull} (want True)");
             }
             WhatsNewShots(tag, true);
             ui.ResetAnimations();

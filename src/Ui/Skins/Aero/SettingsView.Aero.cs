@@ -252,11 +252,23 @@ public sealed partial class SettingsView
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
                 NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, LaserColor = a.LaserColor,
+                Motion = a.Motion,
             };
+            changed = true;
+        }
+        // how much moves (Gfx/Motion.cs): a drop-down on the link's line, right - written only when not Full, it applies at once
+        int mi = MotionIndex(a.Motion);
+        Lbl(ui, MotionAero.X - 52, MotionAero.Y, "Moti&on:");
+        if (ui.Combo95("lk7.motion", MotionAero, MotionNames, ref mi))
+        {
+            a.Motion = Motion.Id((MotionLevel)mi);
             changed = true;
         }
         if (changed) { ui.Changed = true; _h.AppearanceChanged(); }
     }
+
+    // Look > Motion's drop-down (the snapshot's check clicks it here)
+    public static readonly RectangleF MotionAero = new(566, 410, 160, RowH);
 
     // 7's colour swatch: rounded, glossy, the chosen one ringed in the selection blue
     static void Swatch7(Painter p, RectangleF r, uint c, bool on, bool hover)
