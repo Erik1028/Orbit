@@ -24,6 +24,21 @@ public sealed partial class WristPanel
     void TCapsR(string s, float right, float capTop, uint c, int n = 1, bool bold = false) =>
         TCaps(s, right - T.W(s, n, bold), capTop, c, n, bold);
 
+    // big letters on the tube: a faint halo around them first (the phosphor's glow, it also softens the scanlines), then the ink
+    void TBig(string s, float x, float capTop, int n, uint c = 0)
+    {
+        if (c == 0) c = T.INK;
+        if (n >= 3)
+        {
+            uint halo = T.Ph(0.17f);
+            TCaps(s, x - 1, capTop, halo, n);
+            TCaps(s, x + 1, capTop, halo, n);
+            TCaps(s, x, capTop - 1, halo, n);
+            TCaps(s, x, capTop + 1, halo, n);
+        }
+        TCaps(s, x, capTop, c, n);
+    }
+
     // s cut to w with an ellipsis (one cell)
     static string TFit(string s, float w, int n = 1, bool bold = false)
     {
@@ -102,7 +117,7 @@ public sealed partial class WristPanel
         bool rich = face is "full" or "analog";
         bool media = rich && C.ShowMedia, bats = rich && C.ShowBatteries, perf = rich && C.ShowPerformance;
         bool tools = face != "time", big = face is "minimal" or "time";
-        float hClock = big ? 64 : 48, hMedia = media ? 38 : 0, hTools = tools ? 32 : 0, hPerf = perf ? (C.PerfGraph ? 34 : 18) : 0;
+        float hClock = big ? 64 : 52, hMedia = media ? 38 : 0, hTools = tools ? 32 : 0, hPerf = perf ? (C.PerfGraph ? 34 : 18) : 0;
         float h = 3 + 30 + hClock + hMedia + hTools + hPerf + 6 + 3;
         float wy = MathF.Floor((TH95 - h) / 2);
         var win = new RectangleF(0, wy, TW95, h);
@@ -129,7 +144,7 @@ public sealed partial class WristPanel
         {
             int n = TScale(time, x1 - x0 - aw, 48, 6);
             float tw = T.W(time, n) + aw, tx = MathF.Floor((TW95 - tw) / 2), top = y + 2;
-            TCaps(time, tx, top, T.INK, n);
+            TBig(time, tx, top, n);
             if (ampm != null) TCaps(ampm, tx + T.W(time, n) + 4, top + 7 * n - 7, T.MID);
             string longDate = T.Up(now.ToString(culture.DateTimeFormat.LongDatePattern, culture));
             string ds = T.W(longDate) <= x1 - x0 ? longDate : date;
@@ -150,7 +165,7 @@ public sealed partial class WristPanel
             else
             {
                 int n = TScale(time, x1 - bw - x0 - aw - 6, 28, 4);
-                TCaps(time, x0, y + 2, T.INK, n);
+                TBig(time, x0, y + 2, n);
                 if (ampm != null) TCaps(ampm, x0 + T.W(time, n) + 4, y + 2 + 7 * n - 7, T.MID);
                 TCaps(date, x0, y + 2 + 7 * n + 8, T.MID);
             }
@@ -174,6 +189,7 @@ public sealed partial class WristPanel
             if (C.PerfGraph) TGraph(d.Vr, new RectangleF(x0, y, x1 - x0, 28), true);
             else TStatus(d, x0, y + 3, x1 - x0, true);
         }
+        T.Scanlines(_p, RectangleF.Inflate(win, -3, -3));
     }
 
     // the batteries, one a row: HMD [#####---] 71%
@@ -397,7 +413,7 @@ public sealed partial class WristPanel
                 TDial(now, MathF.Floor(c.X + c.Width / 2), MathF.Floor(c.Y + c.Height / 2), MathF.Floor(MathF.Min(c.Width, c.Height) / 2) - 3);
                 break;
             case "timer":
-                if (w.H >= 2) Timer95(c, w, id);
+                if (w.H >= 2) TTimer(c, w, id);
                 else
                 {
                     double left = TimerLeft(Clock.Now);
@@ -406,7 +422,7 @@ public sealed partial class WristPanel
                 }
                 break;
             case "stopwatch":
-                if (w.W >= 2) Stopwatch95(c, w, id);
+                if (w.W >= 2) TStopwatch(c, w, id);
                 else TValue(c, StopwatchText(StopwatchTime(Clock.Now), false), _swRunning ? "RUN" : "STOP", T.INK);
                 break;
             case "battery": TBatteries(c, d, w); break;
@@ -420,12 +436,12 @@ public sealed partial class WristPanel
                 else Volume95(c, w, id);
                 break;
             case "dock": Dock95Widget(r, c, d, w, id); break;
-            case "room": Room95Widget(r, c, d, w, id); break;
+            case "room": TRoomWidget(r, c, d, w, id); break;
             case "graph": TGraph(d.Vr, RectangleF.Inflate(c, -1, -1), w.H >= 2 || c.Width >= 140); break;
             case "minesweeper": TMinesWidget(c, w); break;
-            case "mic": Mic95(r, c, w, id); break;
-            case "notifications": Notes95(c, d); break;
-            case "buttons": Group95(c, w, d, id); break;
+            case "mic": TMic(r, c, w, id); break;
+            case "notifications": TNotes(c, d); break;
+            case "buttons": TGroup(c, w, d, id); break;
             case "perf":
                 if (c.Width >= 280) TStatus(d, c.X + 3, MathF.Floor(c.Y + (c.Height - 7) / 2), c.Width - 6, false);
                 else TPerfTwo(d, c);
@@ -471,7 +487,9 @@ public sealed partial class WristPanel
         int n = TScale(value, c.Width - 2, caption != null ? c.Height - 13 : c.Height - 2, 3);
         float vh = 7 * n, total = vh + (caption != null ? 5 + 7 : 0);
         float top = MathF.Floor(c.Y + (c.Height - total) / 2);
-        TCapsC(TFit(value, c.Width - 2, n), c, top, color, n, n == 1);
+        string v = TFit(value, c.Width - 2, n);
+        if (n >= 3) TBig(v, c.X + MathF.Floor((c.Width - T.W(v, n)) / 2), top, n, color);
+        else TCapsC(v, c, top, color, n, n == 1);
         if (caption != null) TCapsC(TFit(caption, c.Width - 2), c, top + vh + 5, T.DIM);
     }
 
@@ -502,7 +520,7 @@ public sealed partial class WristPanel
         float vh = 7 * n, total = vh + (withDate ? 9 + 7 : 0);
         float top = MathF.Floor(c.Y + (c.Height - total) / 2);
         float tw = T.W(time, n) + aw, x = c.X + MathF.Floor((c.Width - tw) / 2);
-        TCaps(time, x, top, T.INK, n);
+        TBig(time, x, top, n);
         if (ampm != null) TCaps(ampm, x + T.W(time, n) + 4, top + vh - 7, T.MID);
         if (!withDate) return;
         TCapsC(TFit(TLongDate(now, c.Width - 6), c.Width - 4), c, top + vh + 9, T.MID);
@@ -575,8 +593,15 @@ public sealed partial class WristPanel
             bool today = month.Year == now.Year && month.Month == now.Month && dd == now.Day;
             float capTop = cr.Y + MathF.Floor((rh - 7) / 2);
             if (today) T.Lit(_p, new RectangleF(cr.X + 1, capTop - 2, cw - 1, 11));
-            // every other column a little dimmer: the numbers stay apart where the columns are narrow
-            TCapsR(dd.ToString(CultureInfo.InvariantCulture), cr.Right - MathF.Floor((cw - 11) / 2), capTop, today ? T.BG : cell % 7 % 2 == 0 ? T.INK : T.MID);
+            string ds = dd.ToString(CultureInfo.InvariantCulture);
+            if (cw >= 16) TCapsR(ds, cr.Right - MathF.Floor((cw - 11) / 2), capTop, today ? T.BG : T.INK);
+            else
+            {
+                // narrow columns: the condensed digits (a 132-column line's), so the numbers stay apart
+                float dw = T.Narrow.Measure(ds, false), rx = cr.Right - MathF.Floor((cw - 7) / 2);
+                T.Narrow.Draw(_p, ds, new RectangleF(rx - dw, capTop - 2, dw + 1, T.CellH), today ? T.BG : T.INK, false, TextAlignment.Leading,
+                    ParagraphAlignment.Near, false);
+            }
         }
     }
 
@@ -669,6 +694,119 @@ public sealed partial class WristPanel
             int cells = (int)(((time ? rest - T.W(tt) - 6 : rest) + 1) / 6) - 2;
             TTrack(bx + 4, top + 20, cells, (float)(pos / dur));
             if (time) TCapsR(tt, c.Right - 3, top + 20, T.DIM);
+        }
+    }
+
+    // the timer, two cells high: the time as big as fits, the play key beside it, the time left as a bar, -1 / RESET / +1
+    void TTimer(RectangleF c, WatchWidget w, int id)
+    {
+        double left = TimerLeft(Clock.Now);
+        bool idle = _timer == TimerState.Idle, over = _timer == TimerState.Done;
+        string txt = over ? "DONE" : Clock2(left);
+        if (TGlyphKey(Ui.Id("wtp", id), new RectangleF(c.Right - 30, c.Y + 3, 26, 18), _timer == TimerState.Running ? PauseGlyph : PlayGlyph, true))
+            TimerTap();
+        float by = c.Bottom - 23;
+        int n = TScale(txt, c.Width - 40, MathF.Min(28, by - c.Y - 24), 4);
+        TBig(txt, c.X + 4, c.Y + 4 + MathF.Max(0, MathF.Floor((18 - 7 * n) / 2)), n, over ? T.HOT : T.INK);
+        float top = c.Y + 4 + MathF.Max(18, 7 * n);
+        float frac = idle ? 1 : (float)(left / Math.Max(1, Math.Max(_timerTotal, left)));
+        TBar(c.X + 3, MathF.Floor(top + (by - top - 7) / 2), (int)((c.Width - 6) / 6) - 2, frac, over);
+        float rw = T.W("RESET") + 10, sw = MathF.Floor((c.Width - 8 - rw - 6) / 2);
+        if (TKey(Ui.Id("wtm", id), new RectangleF(c.X + 4, by, sw, 20), "-1")) TimerAdjust(-1);
+        if (TKey(Ui.Id("wtr", id), new RectangleF(c.X + 7 + sw, by, c.Width - 14 - 2 * sw, 20), "RESET", false, !idle)) TimerReset();
+        if (TKey(Ui.Id("wtq", id), new RectangleF(c.Right - 4 - sw, by, sw, 20), "+1")) TimerAdjust(1);
+    }
+
+    // the stopwatch, two cells wide: the time, START / STOP and RESET under it
+    void TStopwatch(RectangleF c, WatchWidget w, int id)
+    {
+        double t = StopwatchTime(Clock.Now);
+        string txt = StopwatchText(t, true);
+        float by = c.Bottom - 21;
+        int n = TScale(txt, c.Width - 8, by - c.Y - 6, 3);
+        TBig(txt, c.X + MathF.Floor((c.Width - T.W(txt, n)) / 2), c.Y + MathF.Floor((by - c.Y - 7 * n) / 2), n);
+        float bw = MathF.Floor((c.Width - 10) / 2);
+        if (TKey(Ui.Id("wsp", id), new RectangleF(c.X + 2, by, bw, 19), _swRunning ? "STOP" : "START", _swRunning)) StopwatchTap();
+        if (TKey(Ui.Id("wsr", id), new RectangleF(c.X + 6 + bw, by, bw, 19), "RESET", false, t > 0 && !_swRunning)) StopwatchReset();
+    }
+
+    // who is in the room: how many, the friends among them (a tap opens the list)
+    void TRoomWidget(RectangleF r, RectangleF c, PanelData d, WatchWidget w, int id)
+    {
+        if (_ui.Clickable(Ui.Id("wrm", id), r, out _, out _)) OpenDetail(w);
+        var (n, f, names) = RoomCount(d);
+        if (w.W >= 2)
+        {
+            float top = MathF.Floor(c.Y + (c.Height - 18) / 2);
+            TCaps(TFit(n < 0 ? "NOT IN A WORLD" : n == 1 ? "1 PERSON" : $"{n} PEOPLE", c.Width - 6), c.X + 3, top, n < 0 ? T.DIM : T.INK);
+            string sub = f > 0 ? (f == 1 ? "1 FRIEND" : $"{f} FRIENDS") + ": " + names : n < 0 ? "" : T.Up(d.Room.World);
+            if (!string.IsNullOrEmpty(sub)) TCaps(TFit(sub, c.Width - 6), c.X + 3, top + 11, f > 0 ? T.HOT : T.MID);
+            return;
+        }
+        TValue(c, n < 0 ? "--" : n.ToString(CultureInfo.InvariantCulture), f > 0 ? $"{f} FRIEND{(f == 1 ? "" : "S")}" : "IN ROOM", T.INK);
+    }
+
+    // the microphone: a tap mutes it; wide, [X] MUTE and the level as a bar
+    void TMic(RectangleF r, RectangleF c, WatchWidget w, int id)
+    {
+        if (_ui.Clickable(Ui.Id("wmic", id), r, out _, out _)) { Mic.ToggleMute(); _dirty = true; }
+        bool has = Mic.Present, muted = has && Mic.Muted;
+        if (w.W >= 2 && c.Height >= 34)
+        {
+            bool m = muted;
+            if (_ui.Check95(Ui.Id("wmk", id), c.X + 6, c.Y + 4, "Mute", ref m, has)) { Mic.ToggleMute(); _dirty = true; }
+            TBar(c.X + 3, c.Bottom - 11, (int)((c.Width - 6) / 6) - 2, has && !muted ? MathF.Sqrt(MathF.Max(0, Mic.Peak)) : 0, false);
+            return;
+        }
+        TValue(c, !has ? "--" : muted ? "MUTED" : "LIVE", "MIC", muted ? T.HOT : T.INK);
+    }
+
+    // the last notifications, newest first: what, and how long ago
+    void TNotes(RectangleF c, PanelData d)
+    {
+        NotesNow(d);
+        if (_noteRows.Count == 0)
+        {
+            TCapsC(TFit("NO MESSAGES", c.Width - 4), c, MathF.Floor(c.Y + (c.Height - 7) / 2), T.DIM);
+            return;
+        }
+        int rows = Math.Max(1, (int)((c.Height - 2) / 11));
+        float top = c.Y + MathF.Floor((c.Height - (Math.Min(rows, _noteRows.Count) * 11 - 4)) / 2);
+        var now = DateTime.Now;
+        for (int i = 0; i < Math.Min(rows, _noteRows.Count); i++)
+        {
+            var (text, _, at) = _noteRows[i];
+            string age = T.Up(Age(at, now));
+            float y = top + i * 11, aw = T.W(age);
+            TCaps(TFit(text, c.Width - aw - 12), c.X + 3, y, i == 0 ? T.INK : T.MID);
+            TCapsR(age, c.Right - 3, y, T.DIM);
+        }
+    }
+
+    // a group of buttons: F-key boxes in a row (two columns when tall), the ones that are on lit
+    void TGroup(RectangleF c, WatchWidget w, PanelData d, int id)
+    {
+        GroupIdsOf(w);
+        int n = _groupIds.Count;
+        int cols = w.H >= 2 ? Math.Min(2, n) : n, rows = (n + cols - 1) / cols;
+        var a = RectangleF.Inflate(c, -2, -2);
+        float bw = MathF.Floor((a.Width - (cols - 1) * 2) / cols), bh = MathF.Floor(MathF.Min(26, (a.Height - (rows - 1) * 2) / rows));
+        float y0 = MathF.Floor(a.Y + (a.Height - rows * bh - (rows - 1) * 2) / 2);
+        for (int j = 0; j < n; j++)
+        {
+            string kid = _groupIds[j];
+            var (key, word, wide) = TButtonWords(kid);
+            if (word == null) word = wide = T.Up(d.LayoutName ?? "LAYOUT");
+            var b = new RectangleF(a.X + j % cols * (bw + 2), y0 + j / cols * (bh + 2), bw, bh);
+            float fit = bw - 4;
+            string shrt = kid switch
+            {
+                "keyboard" => "KBD", "desktops" => "MON", "recenter" => "CTR", "night" => "NGT", "settings" => "SET", "status" => "STS",
+                "theater" => "CIN", _ => word.Length > 3 ? word[..3] : word,
+            };
+            string label = T.W($"[{key}] {wide}") <= fit ? $"[{key}] {wide}" : T.W(wide) <= fit ? wide : T.W(word) <= fit ? word
+                : T.W(shrt) <= fit ? shrt : key;
+            if (TKey(Ui.Id("wgb", id * 8 + j), b, label, IsOn(kid, d))) OnAction?.Invoke(kid);
         }
     }
 

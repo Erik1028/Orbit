@@ -118,8 +118,8 @@ public sealed partial class TerminalSkin : Win95Skin
     public override PixelFont PixelFont(string family, float size, FontWeight weight) =>
         family == Theme.IconFont || _plain > 0 ? null : FontAt(ScaleOf(size));
 
-    // the font's size for a pixel size: 1x up to 22 px (one size, like the terminal), then whole multiples
-    public static int ScaleOf(float size) => Math.Clamp((int)(size * 0.09f), 1, 8);
+    // the font's size for a pixel size: 1x up to 19 px (one size, like the terminal), then whole multiples (22 px: 2x)
+    public static int ScaleOf(float size) => Math.Clamp((int)(size * 0.09f + 0.2f), 1, 8);
     static float SizeOf(int n) => n == 1 ? Ui.F95 : (n + 0.5f) / 0.09f;
 
     public static bool Covers(string s, int n = 1)
@@ -232,6 +232,7 @@ public sealed partial class TerminalSkin : Win95Skin
         ParagraphAlignment v = ParagraphAlignment.Center, bool wrap = false)
     {
         if (string.IsNullOrEmpty(s)) return;
+        s = Tty(s);
         if (Covers(s, n)) { FontAt(n).Draw(p, s, r, c, bold, h, v, wrap); return; }
         _plain++;
         try { p.Text(s, r, c, SizeOf(n), bold ? FontWeight.Bold : FontWeight.Normal, h, v, "Consolas", wrap); }
@@ -282,6 +283,13 @@ public sealed partial class TerminalSkin : Win95Skin
         for (float x = x1; x + 5 <= x2; x += 6) p.Fill(new RectangleF(x, y, 5, 1), c);
     }
 
+    // the tube's scanlines: every other pixel row a little darker (over a whole screen, once it is drawn)
+    public static readonly uint ScanDark = Sign(0x2A000000);
+    public static void Scanlines(Painter p, RectangleF r)
+    {
+        for (float y = r.Y + 1; y < r.Bottom; y += 2) p.Fill(new RectangleF(r.X, y, r.Width, 1), ScanDark);
+    }
+
     // the monitor around the tube: 3 px of its case and the glass's rounded corners
     public static void Crt(Painter p, RectangleF r)
     {
@@ -306,9 +314,14 @@ public sealed partial class TerminalSkin : Win95Skin
 
     // ---- text ----
 
+    // the emoji a text may carry (the chatbox line's note) as the font's own signs
+    public static string Tty(string s) =>
+        s == null || s.IndexOf((char)0xD83C) < 0 ? s : s.Replace("\U0001F3B5", "\u266A").Replace("\U0001F3B6", "\u266B");
+
     public override void Text(Painter p, string s, RectangleF r, uint c, bool bold, TextAlignment al, bool enabled, bool wrap, float size)
     {
         if (string.IsNullOrEmpty(s)) return;
+        s = Tty(s);
         bool plain = !Covers(s, ScaleOf(size));
         if (plain) _plain++;
         try { base.Text(p, s, r, c, bold, al, enabled, wrap, size); }
@@ -318,6 +331,7 @@ public sealed partial class TerminalSkin : Win95Skin
     public override float TextWidth(Painter p, string s, bool bold, float size)
     {
         if (string.IsNullOrEmpty(s)) return 0;
+        s = Tty(s);
         bool plain = !Covers(s, ScaleOf(size));
         if (plain) _plain++;
         try { return base.TextWidth(p, s, bold, size); }
@@ -653,5 +667,47 @@ public sealed partial class TerminalSkin : Win95Skin
         string t = Up(text);
         Text(p, t, new RectangleF(x, y, TextWidth(p, t, false, Ui.F95) + 2, 15), INK, false, TextAlignment.Leading, true, false, Ui.F95);
         Text(p, t[..1], new RectangleF(x, y, 8, 15), HOT, false, TextAlignment.Leading, true, false, Ui.F95);
+    }
+
+    // ---- icons: the 95 pictures as a monochrome graphics terminal shows them ----
+    // Each 95 pixel glows by how dark it was (the black outlines brightest, the white fills the black glass), quantised to three
+    // levels of the phosphor; the light pixels are left out so the screen shows through. Minesweeper's own pictures stay as they are.
+
+    static readonly Dictionary<(Painter, W95Icons.Id), Vortice.Direct2D1.ID2D1Bitmap> _icons = new();
+    static System.Reflection.MethodInfo _iconMap, _iconPal;
+
+    public override bool Icon(Painter p, W95Icons.Id id, float x, float y, int scale)
+    {
+        if (id is W95Icons.Id.Mine or W95Icons.Id.Flag) return false;
+        if (!_icons.TryGetValue((p, id), out var bmp))
+        {
+            bmp = null;
+            try
+            {
+                const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+                _iconMap ??= typeof(W95Icons).GetMethod("Map", F);
+                _iconPal ??= typeof(W95Icons).GetMethod("Pal", F);
+                if (_iconMap?.Invoke(null, new object[] { id }) is string[] map && map.Length > 1 && _iconPal != null)
+                {
+                    int h = map.Length, w = map[0].Length;
+                    var px = new uint[w * h];
+                    for (int yy = 0; yy < h; yy++)
+                        for (int xx = 0; xx < w && xx < map[yy].Length; xx++)
+                        {
+                            uint c = (uint)_iconPal.Invoke(null, new object[] { map[yy][xx] });
+                            if ((c >> 24) == 0) continue;
+                            float g = Glow(c);
+                            px[yy * w + xx] = g < 0.2f ? 0 : g > 1.05f ? HOT : g >= 0.75f ? INK : g >= 0.45f ? MID : DIM;
+                        }
+                    bmp = p.CreateBitmap(px, w, h);
+                }
+            }
+            catch (Exception) { bmp = null; }
+            _icons[(p, id)] = bmp;
+        }
+        if (bmp == null) return false;
+        int n = W95Icons.Size(id) * scale;
+        p.ImageNearest(bmp, new RectangleF(x, y, n, n));
+        return true;
     }
 }

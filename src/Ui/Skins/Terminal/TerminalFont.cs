@@ -163,9 +163,33 @@ U+25C4 ...#. ..##. .###. ####. .###. ..##. ...#.
 U+2605 ..#.. .###. ##### .###. .#.#. #...# .....
 U+2606 ..#.. .#.#. ##.## #...# .#.#. #.#.# .....
 U+266A ..#.. ..##. ..#.# ..#.. ###.. ###.. .....
+U+266B .#### .#..# .#..# .#..# ##.## ##.## .....
 U+26A1 ..##. .##.. ##### ..##. .##.. .#... .....
 U+2713 ..... ....# ...#. #.#.. .#... ..... .....
 ";
+
+    // the condensed digits (a 132-column line's narrower cell): 3 x 7, for numbers packed close - a month's days in a small box
+    static PixelFont _narrow;
+    public static PixelFont Narrow => _narrow ??= MakeNarrow();
+
+    static PixelFont MakeNarrow()
+    {
+        string[] d =
+        {
+            ".#. #.# #.# #.# #.# #.# .#.", ".#. ##. .#. .#. .#. .#. ###", ".#. #.# ..# .#. #.. #.. ###", "##. ..# ..# .#. ..# ..# ##.",
+            "#.# #.# #.# ### ..# ..# ..#", "### #.. #.. ##. ..# ..# ##.", ".#. #.. #.. ##. #.# #.# .#.", "### ..# ..# .#. .#. .#. .#.",
+            ".#. #.# #.# .#. #.# #.# .#.", ".#. #.# #.# .## ..# ..# .#.",
+        };
+        var g = new Dictionary<char, string[]>();
+        for (int i = 0; i < 10; i++)
+        {
+            var rows = new List<string> { "...", "..." };
+            rows.AddRange(d[i].Split(' '));
+            rows.Add("..."); rows.Add("...");
+            g[(char)('0' + i)] = rows.ToArray();
+        }
+        return new PixelFont(CellH, CellAscent, g) { Spacing = 1, SpaceWidth = 4, Smear = true, Fallback = '0' };
+    }
 
     // the marks of the accented letters: (rows above a capital, rows above a lowercase letter, rows under the letter)
     static readonly Dictionary<char, string[]> Marks = new()

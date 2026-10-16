@@ -96,6 +96,7 @@ public sealed partial class KeyboardPanel
             if (!altgr && k.AltGr != null)
                 sk.Put(_p, k.AltGr, face.Right - 3 - T.W(k.AltGr), face.Bottom - 10, lit ? T.BG : T.FRAME);
         }
+        T.Scanlines(_p, RectangleF.Inflate(all, -3, -3));
         _p.End();
         _p.Begin(Surf.Bitmap, 0x00000000);
         _p.ImageNearest(_canvas95.Bitmap, new RectangleF(0, 0, TW, TH));
