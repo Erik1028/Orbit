@@ -53,10 +53,11 @@ public sealed partial class WristPanel
 
     void CloseDetail()
     {
-        // Minesweeper and the room shrink back into their tiles in both styles (95: the zoom outline the other way round)
+        // modern: it shrinks back into its card; 95: every window zooms back into its widget - the 1995 zoom outline the other way
+        // round, as it opened (Motion off: gone at once)
         DockLetGo();
-        if (Theme.Classic && (DetailIs("mines") || DetailIs("room") || DetailIs("dock"))) { _closing = true; _openStart = Clock.Now; }
-        else if (Theme.Classic) _open = null;      // a 95 dialog just goes away
+        if (Theme.Classic && Motion.Any) { _closing = true; _openStart = Clock.Now; }
+        else if (Theme.Classic) _open = null;
         else _closing = true;
         _dirty = true;
     }
@@ -122,6 +123,9 @@ public sealed partial class WristPanel
         if (own) Bento.Use(LookOf(0, _open.Color.Value | 0xFF000000, 0, true, false, false));
         if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
+        // the content of a view that does not grow with its card fades in after the card and rises the last few px into place
+        bool rise = !grow && ca < 0.999f;
+        if (rise) _p.PushOffset(0, 14 * (1 - ca) * (1 - ca));
         float gs = grow ? MathF.Min(r.Width / target.Width, r.Height / target.Height) : 1;
         bool zoom = MathF.Abs(gs - 1) > 0.002f, inert = _ui.Inert;
         if (zoom)
@@ -158,6 +162,7 @@ public sealed partial class WristPanel
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
+        if (rise) _p.PopScale();
         if (ca < 0.999f) _p.PopFade();
         if (!LayoutTest) _p.PopClip();
         if (own) Bento.Reset();
@@ -523,10 +528,10 @@ public sealed partial class WristPanel
         string kind = k == null ? null : DetailOf(k.Id);
         if (kind == null) { _open = null; return; }
         var win = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, true);
-        double t = (Clock.Now - _openStart) / 0.22;
+        double t = Motion.Any ? (Clock.Now - _openStart) / 0.22 : 1;        // Motion off: no zoom outline, the window at once
         if (_closing)
         {
-            // (Minesweeper, the room) the zoom outline back into its tile, then it is gone
+            // the zoom outline back into its widget, then it is gone
             if (t >= 1) { _open = null; _closing = false; return; }
             var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
             _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);

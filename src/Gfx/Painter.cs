@@ -764,6 +764,13 @@ public sealed class Painter : IDisposable
         if (_transforms.Count > 0) Dc.Transform = _transforms.Pop();
     }
 
+    // draw moved by (dx, dy) until PopScale (something sliding or rising into place)
+    public void PushOffset(float dx, float dy)
+    {
+        _transforms.Push(Dc.Transform);
+        Dc.Transform = Matrix3x2.CreateTranslation(dx, dy) * Dc.Transform;
+    }
+
     int _fades;
 
     // everything until PopFade at this opacity (a layer: only while something animates)

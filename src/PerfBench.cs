@@ -58,10 +58,13 @@ static class PerfBench
             var cpu = new List<double>();
             var gpuMs = new List<double>();
             double period = 1 / 90.0, t0 = Clock.Now, next = t0;
+            long alloc = 0;
             while (Clock.Now - t0 < seconds)
             {
                 double a = Clock.Now;
+                long m0 = GC.GetAllocatedBytesForCurrentThread();
                 wrist.Draw(data);
+                alloc += GC.GetAllocatedBytesForCurrentThread() - m0;
                 gpu.Ctx.End(query);
                 gpu.Ctx.Flush();
                 double b = Clock.Now;
@@ -79,7 +82,8 @@ static class PerfBench
                 var s = l.OrderBy(x => x).ToList();
                 return $"avg {l.Average():0.00} p95 {s[(int)(s.Count * 0.95)]:0.00} max {s[^1]:0.00}";
             }
-            Log.Info($"perfbench: {name,-24} {cpu.Count,3} frames | cpu {S(cpu)} | done on gpu {S(gpuMs)} | over 5 ms: {cpu.Count(x => x > 5)}");
+            Log.Info($"perfbench: {name,-24} {cpu.Count,3} frames | cpu {S(cpu)} | done on gpu {S(gpuMs)} | over 5 ms: {cpu.Count(x => x > 5)}" +
+                     $" | allocated {alloc / Math.Max(1, cpu.Count)} B a frame");
         }
 
         Phase("first look (cold)", 1.4, () => wrist.Intro());

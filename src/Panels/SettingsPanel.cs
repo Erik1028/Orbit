@@ -82,7 +82,7 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
     {
         if (Ov == null) return;
         float target = _open ? 1 : 0;
-        _vis = Math.Clamp(_vis + Math.Sign(target - _vis) * dt / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, _open, dt, 0.18f);                      // Look > Motion off: at once
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
             if (_vis <= 0) _ptr.Leave();

@@ -127,10 +127,11 @@ public sealed partial class Ui
                 if (_hot[i].Contains(Mouse.X, Mouse.Y)) { _lastHot = i; break; }
     }
 
-    // Eases a value towards 'target' (exponential, ~1/speed seconds). The first call snaps.
+    // Eases a value towards 'target' (exponential, ~1/speed seconds). The first call snaps; so does every one in the 95 styles and
+    // with Look > Motion off.
     public float Anim(string id, float target, float speed = 16f)
     {
-        if (Theme.Classic) { _anim[id] = target; return target; }
+        if (Theme.Classic || !Motion.Any) { _anim[id] = target; return target; }
         if (!_anim.TryGetValue(id, out float v)) v = target;
         v += (target - v) * (1 - MathF.Exp(-speed * _dt));
         if (MathF.Abs(v - target) < 0.003f) v = target;
@@ -147,7 +148,7 @@ public sealed partial class Ui
     // (and redraws) for values that jitter a little, like a frame rate
     public float Spring(string id, float target, float stiffness = 170, float damping = 20, float snap = 0)
     {
-        if (Theme.Classic || !_springs.TryGetValue(id, out var s)) { _springs[id] = (target, 0); return target; }
+        if (Theme.Classic || !Motion.Any || !_springs.TryGetValue(id, out var s)) { _springs[id] = (target, 0); return target; }
         if (snap > 0 && MathF.Abs(target - s.x) < snap && MathF.Abs(s.v) < 0.05f) { _springs[id] = (target, 0); return target; }
         float t = _dt;
         while (t > 0)
@@ -165,6 +166,16 @@ public sealed partial class Ui
 
     // start a spring from a value (e.g. a widget popping in from 0)
     public void SpringFrom(string id, float from) => _springs[id] = (from, 0);
+
+    // start an eased value from 'from' (a page fading in from 0 after a tab switch)
+    public void AnimFrom(string id, float from) => _anim[id] = from;
+
+    // before a widget's own call this frame: is it held (pressed and not let go), is the pointer over r - so what is drawn under it
+    // (a card's scale, its highlight) can follow the press; no hot area is added
+    public bool HeldNow(string id) => _active == id && (Down || Pressed);
+
+    public bool OverNow(RectangleF r) => !Inert && Inside && r.Contains(Mouse.X, Mouse.Y) &&
+                                         (_drop == null || !_dropList.Contains(Mouse.X, Mouse.Y));
 
     public bool HasSpring(string id) => _springs.ContainsKey(id);
 
@@ -415,8 +426,9 @@ public sealed partial class Ui
             return click;
         }
         float h = Anim(K(id, "#h"), hover ? 1 : 0, 18);
-        P.Fill(r, selected ? Theme.Panel3 : Theme.Mix(Theme.Panel2, 0xFFFFFFFF, 0.05f * h), 12);
-        P.Stroke(r, selected ? Theme.Accent : Theme.Border, selected ? 2 : 1, 12);
+        float s = Anim(K(id, "#s"), selected ? 1 : 0, 16);          // the selection eases in / out (the fill, the outline)
+        P.Fill(r, Theme.Mix(Theme.Mix(Theme.Panel2, 0xFFFFFFFF, 0.05f * h), Theme.Panel3, s), 12);
+        P.Stroke(r, Theme.Mix(Theme.Border, Theme.Accent, s), 1 + s, 12);
         return click;
     }
 

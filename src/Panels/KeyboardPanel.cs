@@ -343,7 +343,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         float dt = (float)Math.Clamp(now - _lastNow, 0, 0.1);
         _lastNow = now;
         _lastDt = Math.Max(dt, 0.001f);
-        _vis = Math.Clamp(_vis + (want ? dt : -dt) / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, want, dt, 0.18f);                       // Look > Motion off: at once
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
             if (Ov.Visible) ReleaseAll();
@@ -384,7 +384,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         foreach (var key in new System.Collections.Generic.List<Key>(_flash.Keys))
         {
             if (Array.IndexOf(_down, key) >= 0) continue;
-            float f = _flash[key] - _lastDt / 0.25f;
+            float f = Motion.Any ? _flash[key] - _lastDt / 0.25f : 0;       // Look > Motion off: gone at once
             if (f <= 0) _flash.Remove(key); else _flash[key] = f;
         }
         if (_chat)

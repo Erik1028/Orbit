@@ -122,6 +122,7 @@ public sealed class Theater : IDisposable
     // its own place is about where the big screen goes (seen from your head): it can grow out of it
     bool GrowsFromHome(ITheaterScreen s)
     {
+        if (!Motion.Full) return false;        // Look > Motion reduced: it fades in where it plays (a screen flying across is a lot)
         if (!s.Home(out var home, out _, out _, out _)) return false;
         var a = home.Translation - _view.Head;
         var b = _view.Place.Translation - _view.Head;
@@ -248,7 +249,7 @@ public sealed class Theater : IDisposable
         // the way out, so the screen does not pass through them
         bool aside = On || (_screen != null && _t > 0.3f);
         foreach (var s in live) s.TheaterHidden = aside && s != _screen && s != _leaving;
-        _t = Math.Clamp(_t + (On ? dt : -dt) / (_glide ? Glide : Appear), 0, 1);
+        _t = Motion.Step(_t, On, dt, _glide ? Glide : Appear);       // Motion off: there (and gone) at once
         if (_screen != null)
         {
             if (vr.HmdValid) _view.Head = vr.Hmd.Translation;
@@ -302,8 +303,8 @@ public sealed class Theater : IDisposable
         }
         else
         {
-            // fades in where it plays, settling from slightly smaller (the bend scales with it: same radius)
-            float s = 0.9f + 0.1f * (1 - MathF.Pow(1 - _t, 3));
+            // fades in where it plays, settling from slightly smaller (the bend scales with it: same radius); Motion reduced: only fades
+            float s = Motion.Full ? 0.9f + 0.1f * (1 - MathF.Pow(1 - _t, 3)) : 1;
             v.World = v.Place;
             v.Width = v.Size * s;
             v.Curvature = DesktopLayout.Flat(v.Bend * s);

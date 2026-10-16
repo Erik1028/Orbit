@@ -113,7 +113,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
             show = C.Bar && _target != null && now < _showUntil && _target.Overlay is { Visible: true } && _target.Playable;
         }
         _wasOn = th;
-        _vis = Math.Clamp(_vis + (show ? dt : -dt) / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, show, dt, 0.18f);                       // Look > Motion off: at once
         if (_vis <= 0 || _target == null)
         {
             Cancel();

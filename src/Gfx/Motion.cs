@@ -12,10 +12,16 @@ public static class Motion
     public static MotionLevel Level = MotionLevel.Full;
 
     public static bool Full => Level == MotionLevel.Full;          // decorative, looping or flashing effects
+    public static bool Still;                                      // --snapshot: loops held at rest, no hover lift under a pointer
+                                                                   // a test left there (the same picture every run)
     public static bool Any => Level != MotionLevel.Off;            // short transitions (opening, sliding, fading)
 
     public static void Apply(AppearanceConfig a) =>
         Level = a.Motion switch { "reduced" => MotionLevel.Reduced, "off" => MotionLevel.Off, _ => MotionLevel.Full };
 
     public static string Id(MotionLevel l) => l switch { MotionLevel.Reduced => "reduced", MotionLevel.Off => "off", _ => null };
+
+    // a 0..1 visibility (a panel fading in / out) stepped toward 'show' over 'seconds'; Off: there at once
+    public static float Step(float v, bool show, float dt, float seconds) =>
+        !Any ? (show ? 1 : 0) : System.Math.Clamp(v + (show ? dt : -dt) / seconds, 0, 1);
 }

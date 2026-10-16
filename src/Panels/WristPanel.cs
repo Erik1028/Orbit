@@ -113,7 +113,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             if (now >= _dismissUntil || (!C.AlwaysVisible && target < 0.05f)) _dismissed = false;
             else target = 0;
         }
-        Alpha += (target - Alpha) * Math.Min(1, dt * 10);
+        Alpha = Motion.Any ? Alpha + (target - Alpha) * Math.Min(1, dt * 10) : target;      // Motion off: there at once
         if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); SwipeCancel(); DockLetGo(); _open = null; return; }      // looking away closes an opened widget
         Ov.SetAlpha(Math.Min(1, Alpha));
         if (!Ov.Visible)
@@ -148,6 +148,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             // the time in VR (its card, the clock's header) moves on a whole minute after SteamVR came on: just after that too
             if (!Theme.Classic && C.Face == "custom" && d.VrSince is { } since && (HasWidget("session") || HasWidget("time")))
                 _nextDraw = Math.Min(_nextDraw, now + 60.02 - (DateTime.Now - since).TotalSeconds % 60);
+            if (_pulsing) _nextDraw = Math.Min(_nextDraw, now + 1 / 30.0);      // a charging bolt breathes: 30 frames a second is smooth
         }
     }
 
@@ -155,7 +156,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     // buttons), "time" (only the time on a small card, nothing to press).
     public void Draw(PanelData d)
     {
-        _rolling = false;
+        _rolling = _pulsing = false;
         if (Theme.Classic) { Draw95(d); return; }
         _ui.Begin(_ptr, 1);
         SwipeGuard();

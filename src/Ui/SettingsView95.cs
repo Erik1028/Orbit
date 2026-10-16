@@ -41,6 +41,9 @@ public sealed partial class SettingsView
 
     public static int H95() => W95H;
 
+    // something runs in the background (the updater): the 95 window's cursor is the arrow with the hourglass then (SettingsWindow)
+    public bool Busy95 => _h.Updates?.Busy == true;
+
     public void Draw95(Ui ui)
     {
         if (SkinSettings(ui)) { if (ui.Changed) _h.Cfg.MarkDirty(); return; }      // a style's own settings screen (ScreenHooks.cs)
@@ -500,7 +503,7 @@ public sealed partial class SettingsView
         Hint(ui, 28, 108, 326, $"{Theme.RetroSkin.Name} draws these settings, the watch, the keyboard and the notifications at {era}, " +
                                "enlarged without smoothing.", 60);
 
-        ui.Group95(new RectangleF(16, 214, 350, 216), "Modern colours");
+        ui.Group95(new RectangleF(16, 214, 350, 106), "Modern colours");
         Hint(ui, 28, 234, 326, "The accent colour, the panel colour, the themes and the opacity belong to the Modern style; switch to it " +
                                "to change them.", 46);
         if (ui.Button95("lk95.reset", new RectangleF(28, 286, 100, 23), "&Default look"))
@@ -508,10 +511,21 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
             };
             changed = true;
         }
+
+        // Look > Motion: option buttons, one under the other (written only when not Full; it applies at once)
+        ui.Group95(new RectangleF(16, 328, 350, 102), "Motion");
+        int mi = MotionIndex(a.Motion);
+        for (int i = 0; i < Motion95.Length; i++)
+            if (ui.Radio95(Ui.Id("lk95.motion", i), 28, 348 + i * 20, Motion95[i], mi == i) && mi != i)
+            {
+                a.Motion = Motion.Id((MotionLevel)i);
+                changed = true;
+            }
+        Hint(ui, 28, 410, 326, "The window zoom, the sliding pages, the Modern style's animations.");
 
         ui.Group95(new RectangleF(376, 56, 358, 190), "Laser");
         Lbl(ui, 388, 76, "Colour:");
@@ -546,6 +560,8 @@ public sealed partial class SettingsView
         { a.NightBrightness = nb; changed = true; }
         if (changed) { ui.Changed = true; _h.AppearanceChanged(); }
     }
+
+    static readonly string[] Motion95 = { "&Full", "&Reduced - short movements only", "&Off - everything changes at once" };
 
     // ---------------- General ----------------
 
@@ -669,8 +685,9 @@ public sealed partial class SettingsView
             Updater.State.Available => $"&Update to {ulatest}",
             _ => "Check for &updates",
         };
+        // checking / downloading / installing: busy - the hourglass on the button (the desktop window's cursor turns into it too)
         if (ui.Button95("g95.upd", new RectangleF(388, 186, 130, 23), ulabel, !_h.Updates.Busy, avail, false,
-                avail ? W95Icons.Id.Download : null))
+                avail ? W95Icons.Id.Download : _h.Updates.Busy ? W95Icons.Id.Hourglass : null))
         {
             if (avail) _h.Updates.Apply();
             else _h.Updates.Check();
