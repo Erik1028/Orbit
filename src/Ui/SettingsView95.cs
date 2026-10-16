@@ -43,7 +43,7 @@ public sealed partial class SettingsView
         ui.End();
     }
 
-    public void Dispose95() { _canvas95?.Dispose(); _canvas95 = null; }
+    public void Dispose95() { _canvas95?.Dispose(); _canvas95 = null; _cyKeep?.Dispose(); _cyKeep = null; }
 
     public static int H95() => W95H;
 
