@@ -530,7 +530,7 @@ public sealed partial class SettingsView
                 a.Motion = Motion.Id((MotionLevel)i);
                 changed = true;
             }
-        Hint(ui, 28, 410, 326, Theme.RetroSkin == Skins.Xp ? "The window zoom, the sliding lists, the fading highlights, the busy bar."
+        Hint(ui, 28, 410, 326, Theme.RetroSkin == Skins.Xp ? "The window zoom, the sliding lists, the fades."
                                                             : "The window zoom, the sliding pages, the Modern style's animations.");
 
         ui.Group95(new RectangleF(376, 56, 358, 190), "Laser");
