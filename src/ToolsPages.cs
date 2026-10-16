@@ -59,8 +59,8 @@ static partial class Tools
         if (notes)
         {
             data.Notes.Add("Discord", "New message", "Alex: 2 new messages", DateTime.Now.AddMinutes(-3).AddSeconds(-5));
-            data.Notes.Add("Room", "Mira is here", "The Black Cat", DateTime.Now.AddMinutes(-2).AddSeconds(-10));
-            data.Notes.Add("Room", "Tobi joined", "The Black Cat", DateTime.Now.AddSeconds(-20));
+            data.Notes.Add("Room", Lang.F("{0} is here", "Mira"), "The Black Cat", DateTime.Now.AddMinutes(-2).AddSeconds(-10));
+            data.Notes.Add("Room", Lang.F("{0} joined", "Tobi"), "The Black Cat", DateTime.Now.AddSeconds(-20));
         }
         data.FakeMedia = (true, "Midnight City", "M83", true);
         data.FakeTimeline = (102, 243);

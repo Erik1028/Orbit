@@ -41,7 +41,7 @@ public sealed partial class RoomPanel
         _p.Text(star ? "★" : "☆", sr, star ? CyberHud.Yellow : hover ? CyberHud.White : CyberHud.Grey, 22, FontWeight.Normal, TextAlignment.Center);
         if (hover) CyberHud.Brackets(_p, RectangleF.Inflate(sr, -4, -3), CyberHud.Cyan, 6, 0, 1.5f);
         float x = sr.Right + 4;
-        string when = (gone ? "left " + Ago(p.Left, now) + " ago" : Ago(p.Joined, now)).ToUpperInvariant();
+        string when = Lang.Upper(gone ? LeftText(p.Left, now, 1) : Ago(p.Joined, now));
         float ww = CyberHud.MonoWidth(_p, when, 13, FontWeight.SemiBold) + 16;
         float nw = r.Right - x - ww - (p.Friend ? 86 : 8);
         string name = Ellipsize(p.Name, nw, 18, FontWeight.SemiBold);

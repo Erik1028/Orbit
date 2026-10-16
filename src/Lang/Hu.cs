@@ -1137,6 +1137,22 @@ static class Hu
         ("&Import a file...", "Fájl &importálása..."),
         ("&Paste text", "Szöveg &beillesztése"),
         ("A page goes as a small file or as text: its widgets, grid, name and looks. Adding one never changes your other pages.", "Egy oldal kis fájlként vagy szövegként megy: a widgetjei, rácsa, neve és kinézete. Egy hozzáadása soha nem változtatja meg a többi oldalt."),
+        // ---- Cyber's HUD screens (LINK, SYS, ONLINE / OFFLINE stay HUD jargon, like FPS) ----
+        ("{0} has its own palette and type: the accent, panel colour and font choices are Modern's.", "A {0} saját színeket és betűket használ: a kiemelőszín, a panelszín és a betűtípus a Modern stílushoz tartozik."),
+        ("{0} draws every widget its own way.", "A {0} minden widgetet a maga módján rajzol."),
+        ("INPUT // KEYBOARD", "BEVITEL // BILLENTYŰZET"),
+        ("PATCH NOTES", "ÚJDONSÁGOK"),
+        ("INCOMING", "BEJÖVŐ"),
+        ("CONFIRM", "MEGERŐSÍTÉS"),
+        ("MESSAGE", "ÜZENET"),
+        ("BUILD", "VERZIÓ"),
+        ("BUILD {0}", "VERZIÓ {0}"),
+        ("ON", "BE"),
+        ("LOCK", "ZÁR"),
+        ("CELL", "CELLA"),
+        ("MODE", "MÓD"),
+        ("TYPE", "GÉPELÉS"),
+        ("kbd|LAYOUT", "KIOSZTÁS"),
 
     };
 }

@@ -157,6 +157,7 @@ static class CyberHud
     public static float Tag(Painter p, float x, float y, string s, float wipe, float type, uint fill = Yellow, uint ink = Ink, float size = TagSize,
         float h = TagH)
     {
+        s = Lang.T(s);                   // its letters typed in the language picked
         float tw = p.MeasureWidth(s, size, FontWeight.Bold, Mono), w = tw + 2 * TagPad + TagSlant - 2, sl = TagSlant * h / TagH;
         if (wipe <= 0) return w;
         bool wiping = wipe < 1;

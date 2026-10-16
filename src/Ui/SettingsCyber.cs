@@ -70,8 +70,8 @@ public sealed partial class SettingsView
     string CyLabel(int tab)
     {
         tab = Math.Clamp(tab, 0, Tabs.Length - 1);
-        var key = (tab, Tabs[tab]);
-        if (!_cyLabels.TryGetValue(key, out var s)) _cyLabels[key] = s = CyIndex(tab) + " // " + Tabs[tab].ToUpperInvariant();
+        var key = (tab, Tabs[tab] + "|" + Lang.Code);
+        if (!_cyLabels.TryGetValue(key, out var s)) _cyLabels[key] = s = CyIndex(tab) + " // " + Lang.Upper(Tabs[tab]);
         return s;
     }
 
@@ -84,7 +84,7 @@ public sealed partial class SettingsView
         p.Logo(logo);
         CyberHud.Brackets(p, RectangleF.Inflate(logo, 4, 4), CyberHud.Cyan, 8, 0, 2);
         p.Text("ORBITOVERLAY", new RectangleF(62, 8, 200, 32), CyberHud.White, 26, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
-        CyberHud.MonoAt(p, "SETTINGS // V" + Updater.Current.ToString(3), 63, 53, 190, CyberHud.Grey, 10.5f);
+        CyberHud.MonoAt(p, Lang.Upper("Settings") + " // V" + Updater.Current.ToString(3), 63, 53, 190, CyberHud.Grey, 10.5f);
 
         // the link readout: a yellow LINK tag, the state in monospace (cyan up, red down), the live numbers under it
         bool on = _h.VrConnected;
@@ -304,7 +304,7 @@ public sealed partial class SettingsView
         p.Image(_h.Wrist.Surf.Bitmap, prev);
         if (_h.Wrist.Animating) ui.Animating = true;
         ui.Label(new RectangleF(lx, prev.Bottom + 18, 356, 40),
-            $"{CyberHud.Name} has its own palette and type: the accent, panel colour and font choices are Modern's.", Theme.Dim, 12, FontWeight.Normal, true);
+            Lang.F("{0} has its own palette and type: the accent, panel colour and font choices are Modern's.", CyberHud.Name), Theme.Dim, 12, FontWeight.Normal, true);
         if (ui.Button("look.reset", new RectangleF(lx, prev.Bottom + 70, 170, 38), "Default look", Theme.IcoRecenter, false, true, 14))
         {
             var d = new AppearanceConfig();
@@ -371,7 +371,7 @@ public sealed partial class SettingsView
         }
         Row("CELL", $"{(char)('A' + sel.X)}{sel.Y + 1}");
         Row("SIZE", $"{sel.W} × {sel.H}");
-        ui.Label(new RectangleF(x, y + 2, w, 40), $"{CyberHud.Name} draws every widget its own way.", Theme.Dim, 12, FontWeight.Normal, true);
+        ui.Label(new RectangleF(x, y + 2, w, 40), Lang.F("{0} draws every widget its own way.", CyberHud.Name), Theme.Dim, 12, FontWeight.Normal, true);
     }
 
     // ---- the editor's grid over the watch (Cyber) ----

@@ -299,6 +299,50 @@ public sealed partial class WristPanel
         "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "O’CLOCK",
     };
     const int WHalf = 2, WTen = 3, WQuarter = 4, WTwenty = 5, WFive = 6, WTo = 7, WPast = 8, WHour = 9, WOClock = 21;
+
+    // in Magyar a word clock of its own, read the Hungarian way: "MOST NEGYED NÉGY", "MOST ÖT PERC MÚLVA FÉL NÉGY", "MOST HÁROM ÓRA"
+    // (the five minutes past a quarter, a half, three quarters: "öt perccel múlt fél négy"). Two and twelve before ÓRA are KÉT /
+    // TIZENKÉT, else KETTŐ / TIZENKETTŐ. Every sentence reads in the words' order.
+    static readonly string[] ClockWordsHu =
+    {
+        "MOST", "ÖT", "TÍZ", "PERCCEL", "PERC", "MÚLT", "MÚLVA", "NEGYED", "HÁROMNEGYED", "FÉL",
+        "EGY", "KETTŐ", "KÉT", "HÁROM", "NÉGY", "ÖT", "HAT", "HÉT", "NYOLC", "KILENC", "TÍZ", "TIZENEGY", "TIZENKETTŐ", "TIZENKÉT", "ÓRA",
+    };
+    const int HFive = 1, HTen = 2, HPerccel = 3, HPerc = 4, HMult = 5, HMulva = 6, HNegyed = 7, HHaromnegyed = 8, HFel = 9, HOra = 24;
+
+    // the word clock's words in the language picked (English: as it always was)
+    static string[] ClockWordsNow => Lang.Code == "hu" ? ClockWordsHu : ClockWords;
+    static int Mask(DateTime now) => Lang.Code == "hu" ? WordMaskHu(now) : WordMask(now);
+
+    // the hour's word: 1..12, before ÓRA (the counting form of two and twelve) or not
+    static int HourHu(int h, bool ora) => h switch
+    {
+        2 => ora ? 12 : 11, 12 => ora ? 23 : 22, 1 => 10, _ => h <= 11 ? 10 + h : 22,
+    };
+
+    public static int WordMaskHu(DateTime now)
+    {
+        int m = now.Minute / 5 * 5, h = now.Hour % 12;
+        int next = h % 12 + 1, cur = h == 0 ? 12 : h;
+        int Bit(int i) => 1 << i;
+        int mask = Bit(0);            // MOST
+        mask |= m switch
+        {
+            0 => Bit(HourHu(cur, true)) | Bit(HOra),
+            5 => Bit(HFive) | Bit(HPerccel) | Bit(HMult) | Bit(HourHu(cur, false)),
+            10 => Bit(HTen) | Bit(HPerccel) | Bit(HMult) | Bit(HourHu(cur, false)),
+            15 => Bit(HNegyed) | Bit(HourHu(next, false)),
+            20 => Bit(HFive) | Bit(HPerccel) | Bit(HMult) | Bit(HNegyed) | Bit(HourHu(next, false)),
+            25 => Bit(HFive) | Bit(HPerc) | Bit(HMulva) | Bit(HFel) | Bit(HourHu(next, false)),
+            30 => Bit(HFel) | Bit(HourHu(next, false)),
+            35 => Bit(HFive) | Bit(HPerccel) | Bit(HMult) | Bit(HFel) | Bit(HourHu(next, false)),
+            40 => Bit(HTen) | Bit(HPerccel) | Bit(HMult) | Bit(HFel) | Bit(HourHu(next, false)),
+            45 => Bit(HHaromnegyed) | Bit(HourHu(next, false)),
+            50 => Bit(HFive) | Bit(HPerccel) | Bit(HMult) | Bit(HHaromnegyed) | Bit(HourHu(next, false)),
+            _ => Bit(HFive) | Bit(HPerc) | Bit(HMulva) | Bit(HourHu(next, true)) | Bit(HOra),
+        };
+        return mask;
+    }
     const float WordTrack = 0.06f, WordLine = 1.32f, WordCap = 0.7f;     // tracking, line pitch and cap height, in em
 
     // the words that tell the time (a bit each, ClockWords' order), to the five minutes before
@@ -328,12 +372,13 @@ public sealed partial class WristPanel
     // the words laid out in a box: the biggest size whose lines fit, the lines spread to its width (not the last)
     WordFit FitWords(float iw, float ih)
     {
-        var key = (iw, ih, Theme.Display);
+        var words = ClockWordsNow;
+        var key = (iw, ih, Theme.Display + "|" + Lang.Code);
         if (_wordFits.TryGetValue(key, out var fit)) return fit;
         if (_wordFits.Count > 16) _wordFits.Clear();
-        int n = ClockWords.Length;
+        int n = words.Length;
         var w100 = new float[n];
-        for (int i = 0; i < n; i++) w100[i] = _p.MeasureTracked(ClockWords[i], 100, FontWeight.SemiBold, WordTrack * 100, Theme.Display);
+        for (int i = 0; i < n; i++) w100[i] = _p.MeasureTracked(words[i], 100, FontWeight.SemiBold, WordTrack * 100, Theme.Display);
         float space = 0.34f;
         int Lines(float s)
         {
@@ -403,7 +448,8 @@ public sealed partial class WristPanel
         float top = ClockHead(r, w, d) + 4, pad = PadX(r);
         var (iw, ih) = WordBox(r, w.H);
         var fit = FitWords(iw, ih);
-        int mask = WordMask(now), extra = now.Minute % 5;
+        int mask = Mask(now), extra = now.Minute % 5;
+        var words = ClockWordsNow;
         if (!_wordFades.TryGetValue(id, out var wf)) wf = (mask, mask, extra, extra, -10);
         else if (wf.to != mask || wf.dTo != extra) wf = (wf.to, mask, wf.dTo, extra, Clock.Now);
         _wordFades[id] = wf;
@@ -412,13 +458,13 @@ public sealed partial class WristPanel
         k = k * k * (3 - 2 * k);
         float s = fit.Size;
         var (b, lh) = _p.TextLine(s, FontWeight.SemiBold, Theme.Display);
-        for (int i = 0; i < ClockWords.Length; i++)
+        for (int i = 0; i < words.Length && i < fit.W.Length; i++)
         {
             bool lit = ((mask >> i) & 1) != 0, was = ((wf.from >> i) & 1) != 0;
             uint col = lit ? Bento.Text : Bento.Faint;
             if (lit != was && k < 1) col = Theme.Mix(was ? Bento.Text : Bento.Faint, col, k);
             float x = r.X + pad + fit.X[i], by = top + fit.Y[i];
-            _p.TrackedText(ClockWords[i], new RectangleF(x, by - b, fit.W[i] + 6, lh), col, s, FontWeight.SemiBold,
+            _p.TrackedText(words[i], new RectangleF(x, by - b, fit.W[i] + 6, lh), col, s, FontWeight.SemiBold,
                 s * WordTrack, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
         }
         // the minutes past the five: four dots, that many lit
