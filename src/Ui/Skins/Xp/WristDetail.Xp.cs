@@ -14,6 +14,7 @@ public sealed partial class WristPanel
 {
     partial void DetailXp(PanelData d, WatchWidgets.Kind k, string kind, RectangleF win, ref bool done)
     {
+        if (kind == "dock") { done = true; DockDetailXp(win, d); return; }
         if (kind is not ("clock" or "calendar" or "perf" or "system" or "media")) return;
         done = true;
         string title = kind switch { "clock" => "Date and Time Properties", "media" => "Windows Media Player", _ => k.Title95 };
@@ -32,6 +33,16 @@ public sealed partial class WristPanel
             case "system": SystemDetailXp(c); break;
             case "media": MediaDetailXp(c, d); break;
         }
+    }
+
+    // Hexpad: the shared window; while it connects, XP's marquee under the message (busy, how long unknown)
+    void DockDetailXp(RectangleF win, PanelData d)
+    {
+        Dock95Detail(win, d);
+        if (_open == null || _closing || _dockIn == null || DockShown(_dockIn, d) || d.Dock == null) return;
+        if (_dockIn.Snap.State != HexpadLink.LinkState.Connecting) return;
+        var msg = new RectangleF(win.X + 6, win.Y + 26, win.Width - 12, win.Height - 32);
+        ((XpSkin)Skins.Xp).Marquee(_p, new RectangleF(msg.X + 54, msg.Y + 42, MathF.Min(190, msg.Width - 68), 13));
     }
 
     // ---- Date and Time Properties ----
@@ -130,7 +141,8 @@ public sealed partial class WristPanel
         _p.Fill(g, 0xFF000000);
         int n = Stats.CpuCount;
         float step = g.Width / SystemStats.History;
-        float scroll = n % 12 * step;
+        // the grid moves with the samples (Task Manager's), as long as they come (95's count stopped when the history was full)
+        float scroll = XpAeroFx.Moves ? MathF.Floor(CpuSeenXp() * step % 12) : n % 12 * step;
         for (float gx = g.Right - 1 - scroll % 12; gx >= g.X; gx -= 12) _p.Fill(new RectangleF(gx, g.Y, 1, g.Height), TaskGrid);
         for (float gy = g.Bottom - 1; gy >= g.Y; gy -= 10) _p.Fill(new RectangleF(g.X, gy, g.Width, 1), TaskGrid);
         float px = -1, py = 0;

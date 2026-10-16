@@ -148,10 +148,10 @@ static class Program
         try
         {
             Motion.Still = !args.Contains("--perfbench") && !args.Contains("--animstrip");     // pictures: loops held at rest
-            if (args.Contains("--animstrip"))
+            if (args.Contains("--animstrip"))       // the styles' animations as frames (ToolsAnim.cs) - --only-style modern|95|xp|aero
             {
-                int i = Array.IndexOf(args, "--animstrip");
-                return Tools.AnimStrips(i + 1 < args.Length ? args[i + 1] : "animstrip");
+                int i = Array.IndexOf(args, "--animstrip"), o = Array.IndexOf(args, "--only-style");
+                return Tools.AnimStrips(i + 1 < args.Length ? args[i + 1] : "animstrip", o >= 0 && o + 1 < args.Length ? args[o + 1] : null);
             }
             if (args.Contains("--snapshot"))
             {

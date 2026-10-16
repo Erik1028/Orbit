@@ -93,15 +93,22 @@ public sealed partial class SettingsView
             float lw = p.MeasureWidth(Tabs[i], Ui.F95, FontWeight.Bold, sk.Font), w = lw + 18;
             var r = new RectangleF(nx, cmd.Y + 2, w, cmd.Height - 5);
             bool click = ui.Clickable(Ui.Id("p7.nav", i), r, out bool hv, out bool hd);
+            // a link under the pointer: its light box, the brighter blue and the underline come up quickly and fade slowly
+            float lh = on ? 0 : XpAeroFx.Fade(XpAeroFx.Link, r, hv && !hd, AeroSkin.GlowIn, AeroSkin.GlowOut);
             if (hd && !on) AeroSkin.RoundBox(p, r, 3, 0xFF7C9BC2, 0xFFE3EEFA, 0xFFD5E5F7, 0xFFC8DCF3, 0xFFB5CFEE, 0xFFC4D9F2);
-            else if (hv && !on) AeroSkin.RoundBox(p, r, 3, 0xFFB8D2EE, 0xFFFBFDFF, 0xFFF3F8FE, 0xFFE8F1FC, 0xFFDCEAFB, 0xFFE6F0FC);
-            uint ink = on ? 0xFF000000 : hv ? 0xFF3399FF : AeroSkin.HeadBlue;
+            else if (lh > 0)
+            {
+                if (lh < 1) p.PushFade(lh);
+                AeroSkin.RoundBox(p, r, 3, 0xFFB8D2EE, 0xFFFBFDFF, 0xFFF3F8FE, 0xFFE8F1FC, 0xFFDCEAFB, 0xFFE6F0FC);
+                if (lh < 1) p.PopFade();
+            }
+            uint ink = on ? 0xFF000000 : hd ? 0xFF3399FF : lh >= 1 ? 0xFF3399FF : lh <= 0 ? AeroSkin.HeadBlue : Theme.Mix(AeroSkin.HeadBlue, 0xFF3399FF, lh);
             p.Text(Tabs[i], new RectangleF(r.X, r.Y - 2, r.Width, r.Height + 4), ink, Ui.F95, on ? FontWeight.Bold : FontWeight.Normal,
                 TextAlignment.Center, ParagraphAlignment.Center, sk.Font);
-            if (hv && !on)
+            if ((lh > 0 || hd) && !on)
             {
                 float tw = p.MeasureWidth(Tabs[i], Ui.F95, FontWeight.Normal, sk.Font);
-                p.Fill(new RectangleF(MathF.Round(r.X + (r.Width - tw) / 2), r.Y + 14, MathF.Round(tw), 1), 0xFF3399FF);
+                p.Fill(new RectangleF(MathF.Round(r.X + (r.Width - tw) / 2), r.Y + 14, MathF.Round(tw), 1), hd ? 0xFF3399FF : Theme.WithAlpha(0xFF3399FF, lh));
             }
             if (click) Tab = i;
             nx += w + 2;
@@ -186,8 +193,15 @@ public sealed partial class SettingsView
             var cell = new RectangleF(x0 + i * (cw + gap), 120, cw, 80);
             bool click = ui.Clickable(Ui.Id("lk7.s", i), cell, out bool hv, out bool hd);
             bool on = i == cur;
+            // Explorer's hot-track: the light box comes up under the pointer and fades away slowly
+            float ch = on || hd ? 0 : XpAeroFx.Fade(XpAeroFx.Cell, cell, hv, AeroSkin.GlowIn, AeroSkin.GlowOut);
             if (on || hd) AeroSkin.RoundBox(p, cell, 3, 0xFF84ACDD, 0xFFF2F8FE, 0xFFEAF3FD, 0xFFDDEBFC, 0xFFD3E5FB, 0xFFC5DDFA);
-            else if (hv) AeroSkin.RoundBox(p, cell, 3, 0xFFB8D6FB, 0xFFFAFCFF, 0xFFF4F9FE, 0xFFEBF4FE, 0xFFE3EFFD, 0xFFDCEBFD);
+            else if (ch > 0)
+            {
+                if (ch < 1) p.PushFade(ch);
+                AeroSkin.RoundBox(p, cell, 3, 0xFFB8D6FB, 0xFFFAFCFF, 0xFFF4F9FE, 0xFFEBF4FE, 0xFFE3EFFD, 0xFFDCEBFD);
+                if (ch < 1) p.PopFade();
+            }
             var pic = new RectangleF(cell.X + 7, cell.Y + 6, cell.Width - 14, 50);
             StyleChip7(p, pic, Skins.StyleIds[i]);
             ui.Text95(Skins.StyleNames[i], new RectangleF(cell.X, cell.Y + 59, cell.Width, 16), 0xFF000000, false, TextAlignment.Center);
@@ -228,8 +242,10 @@ public sealed partial class SettingsView
         float lw = ui.Width95(link);
         var lr = new RectangleF(24, 414, lw + 2, 15);
         bool lc = ui.Clickable("lk95.reset", RectangleF.Inflate(lr, 2, 3), out bool lh, out _);
-        ui.Text95(link, lr, lh ? 0xFF3399FF : AeroSkin.LinkBlue);
-        if (lh) p.Fill(new RectangleF(lr.X, lr.Bottom - 1, lw, 1), 0xFF3399FF);
+        // the link's hover: the lighter blue and the underline, up quickly, away slowly
+        float lf = XpAeroFx.Fade(XpAeroFx.Link, lr, lh, AeroSkin.GlowIn, AeroSkin.GlowOut);
+        ui.Text95(link, lr, lf >= 1 ? 0xFF3399FF : lf <= 0 ? AeroSkin.LinkBlue : Theme.Mix(AeroSkin.LinkBlue, 0xFF3399FF, lf));
+        if (lf > 0) p.Fill(new RectangleF(lr.X, lr.Bottom - 1, lw, 1), lf >= 1 ? 0xFF3399FF : Theme.WithAlpha(0xFF3399FF, lf));
         if (lc)
         {
             C.Appearance = a = new AppearanceConfig
@@ -245,13 +261,16 @@ public sealed partial class SettingsView
     // 7's colour swatch: rounded, glossy, the chosen one ringed in the selection blue
     static void Swatch7(Painter p, RectangleF r, uint c, bool on, bool hover)
     {
-        if (on || hover)
+        // the pale ring under the pointer fades up and away (the chosen one's blue ring is just there)
+        float h = on ? 1 : XpAeroFx.Fade(XpAeroFx.Swatch, r, hover, AeroSkin.GlowIn, AeroSkin.GlowOut);
+        if (h > 0)
         {
             p.Smooth(true);
-            p.FillRound(RectangleF.Inflate(r, 3, 3), on ? 0xFF3399FF : 0xFFA9CFF5, 5);
-            p.FillRound(RectangleF.Inflate(r, 2, 2), 0xFFFFFFFF, 4);
+            p.FillRound(RectangleF.Inflate(r, 3, 3), on ? 0xFF3399FF : h >= 1 ? 0xFFA9CFF5 : Theme.WithAlpha(0xFFA9CFF5, h), 5);
+            p.FillRound(RectangleF.Inflate(r, 2, 2), h >= 1 ? 0xFFFFFFFF : Theme.WithAlpha(0xFFFFFFFF, h), 4);
             p.Smooth(false);
         }
+
         p.Smooth(true);
         p.FillRound(r, Theme.Mix(c, 0xFF000000, 0.35f), 3);
         p.Smooth(false);

@@ -149,6 +149,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             if (!Theme.Classic && C.Face == "custom" && d.VrSince is { } since && (HasWidget("session") || HasWidget("time")))
                 _nextDraw = Math.Min(_nextDraw, now + 60.02 - (DateTime.Now - since).TotalSeconds % 60);
             if (_pulsing) _nextDraw = Math.Min(_nextDraw, now + 1 / 30.0);      // a charging bolt breathes: 30 frames a second is smooth
+            if (Theme.Classic) _nextDraw = Math.Min(_nextDraw, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
         }
     }
 

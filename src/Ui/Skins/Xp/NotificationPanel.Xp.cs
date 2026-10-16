@@ -15,6 +15,16 @@ public sealed partial class NotificationPanel
     partial void CardXp(Notification c, float y, ref bool done)
     {
         done = true;
+        // "Fade or slide ToolTips into view": the balloon fades in and out with its card (95 pops it up half way: the second half)
+        float fade = XpAeroFx.Moves ? Math.Clamp((c.Vis - 0.5f) * 2, 0, 1) : 1;
+        if (fade <= 0) return;
+        if (fade < 1) _p.PushFade(fade);
+        BalloonXp(c, y);
+        if (fade < 1) _p.PopFade();
+    }
+
+    void BalloonXp(Notification c, float y)
+    {
         var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
         const float stem = 12;
         // as tall as its text (a balloon fits what it says), at most the card

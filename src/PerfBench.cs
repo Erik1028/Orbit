@@ -22,6 +22,9 @@ static class PerfBench
         string real = Path.Combine(Log.Dir, "config.json"), copy = Path.Combine(dir, "config.json");
         if (File.Exists(real)) File.Copy(real, copy, true);
         var cfg = new ConfigStore(copy);
+        // ORBIT_BENCH_STYLE (xp, aero...) / ORBIT_BENCH_MOTION (full, reduced, off): your face in that style / motion, on the copy
+        if (Environment.GetEnvironmentVariable("ORBIT_BENCH_STYLE") is { Length: > 0 } bs) cfg.Data.Appearance.Style = bs;
+        if (Environment.GetEnvironmentVariable("ORBIT_BENCH_MOTION") is { Length: > 0 } bm) cfg.Data.Appearance.Motion = bm;
         Theme.Apply(cfg.Data.Appearance);
         using var gpu = new Gpu(-1);
         using var painter = new Painter(gpu);

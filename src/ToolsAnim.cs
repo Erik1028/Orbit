@@ -8,13 +8,26 @@ using System.Threading;
 
 namespace Orbit;
 
-// --animstrip <dir>: the animations as frame strips, drawn in real time (~90 Hz) and saved at a few moments each - the watch's
-// cascade, a card under the laser and pressed, a widget opening and closing, a tile going on, the page dots, a cover changing, the
-// clocks' changes, a notification coming in, a charging bolt, the settings' tab switch and toggle; the same opening with Motion
-// reduced / off; the 95 style's zoom outlines. <strip>_<frame>_<ms>.png, for looking at (nothing is checked). Its own config.
+// --animstrip <dir> [--only-style modern|95|xp|aero]: the styles' animations as frames, for looking at (nothing is checked). Without
+// --only-style every part runs: Modern and Windows 95 (here: <dir>/<strip>_<frame>_<ms>.png), then XP and Windows 7
+// (ToolsAnimXpAero.cs: <dir>/frames/*.png + <dir>/strips.txt). The Cyber HUD's frames: --snapshot with ORBIT_SNAP_ONLY=anim_cyber
+// (CyberAnimShot.cs).
+//
+// Modern and 95: drawn in real time (~90 Hz) and saved at a few moments each - the watch's cascade, a card under the laser and
+// pressed, a widget opening and closing, a tile going on, the page dots, a cover changing, the clocks' changes, a notification coming
+// in, a charging bolt, the settings' tab switch and toggle; the same opening with Motion reduced / off; the 95 style's zoom outlines.
+// Its own config.
 static partial class Tools
 {
-    public static int AnimStrips(string dir)
+    public static int AnimStrips(string dir, string only)
+    {
+        int r = 0;
+        if (only is null or "modern" or "95" or "classic") r |= AnimStripsCore(dir);
+        if (only is null or "xp" or "aero") r |= AnimStripsXpAero(dir, only is "xp" or "aero" ? only : null);
+        return r;
+    }
+
+    static int AnimStripsCore(string dir)
     {
         dir = Path.GetFullPath(dir);
         Directory.CreateDirectory(dir);

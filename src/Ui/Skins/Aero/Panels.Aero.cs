@@ -84,6 +84,25 @@ public static partial class WhatsNewView
     {
         done = true;
         var p = ui.P;
+        // 7's dialog comes up with the quick zoom and fade (from 90 % and transparent, 200 ms), once, when it appears
+        float e = XpAeroFx.Opening(XpAeroFx.Dialog, r, 0.2f);
+        if (e < 1)
+        {
+            p.PushFade(e);
+            p.PushScale(0.9f + 0.1f * e, r.X + r.Width / 2, r.Y + r.Height / 2);
+        }
+        closed = DialogAero(ui, r, list, sub);
+        if (e < 1)
+        {
+            p.PopScale();
+            p.PopFade();
+        }
+    }
+
+    // the task dialog; true when OK or its X was pressed
+    static bool DialogAero(Ui ui, RectangleF r, IReadOnlyList<WhatsNew.Entry> list, string sub)
+    {
+        var p = ui.P;
         var sk = (AeroSkin)Skins.Aero;
         var cl = AeroSkin.Window7(p, r, 26, 0xFFFFFFFF, 6);
         sk.GlowText(p, "What's New in OrbitOverlay", new RectangleF(r.X + 10, r.Y + 4, r.Width - 70, 18), 0xFF000000, 12);
@@ -118,7 +137,7 @@ public static partial class WhatsNewView
         p.Fill(foot, 0xFFF0F0F0);
         p.Fill(new RectangleF(foot.X, foot.Y, foot.Width, 1), 0xFFDFDFDF);
         bool ok = ui.Button95("wn95.ok", new RectangleF(r.Right - 18 - 75, foot.Y + 9, 75, 23), "OK", true, isDefault: true);
-        closed = ok || close;
+        return ok || close;
     }
 
     // 7's information icon: a blue glossy disc with a white "i"
@@ -142,6 +161,16 @@ public sealed partial class NotificationPanel
     partial void CardAero(Notification c, float y, ref bool done)
     {
         done = true;
+        // 7's balloon fades in and out with its card (95 pops it up half way: the second half)
+        float fade = XpAeroFx.Moves ? Math.Clamp((c.Vis - 0.5f) * 2, 0, 1) : 1;
+        if (fade <= 0) return;
+        if (fade < 1) _p.PushFade(fade);
+        BalloonAero(c, y);
+        if (fade < 1) _p.PopFade();
+    }
+
+    void BalloonAero(Notification c, float y)
+    {
         var sk = (AeroSkin)Skins.Aero;
         var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
         _p.Smooth(true);

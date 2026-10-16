@@ -174,6 +174,7 @@ public sealed partial class DockPanel : IPointerTarget, IDisposable
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
             _nextDraw = now + 1;
+            if (Theme.Classic) _nextDraw = Math.Min(_nextDraw, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
         }
         Ov.Show();
     }

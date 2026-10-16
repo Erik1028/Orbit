@@ -92,6 +92,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
             _nextDraw = now + 15;           // "joined 3 min ago" moves on by itself
+            if (Theme.Classic) _nextDraw = Math.Min(_nextDraw, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
         }
         Ov.Show();
     }

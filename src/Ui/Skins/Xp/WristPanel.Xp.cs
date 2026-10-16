@@ -502,15 +502,35 @@ public sealed partial class WristPanel
     // writes nothing over its graphs but the watch has no room beside them
     const uint TaskGrid = 0xFF008040, TaskLine = 0xFF00FF00;
 
+    // the samples that came in so far (the histories only count up to their length): Task Manager's grid moves with them
+    int _xpFrameHead = -1, _xpCpuHead = -1;
+    long _xpFrames, _xpCpu;
+
+    long FramesSeenXp(VrStats v)
+    {
+        if (_xpFrameHead >= 0) _xpFrames += (v.FrameHead - _xpFrameHead + VrStats.FrameHistory) % VrStats.FrameHistory;
+        _xpFrameHead = v.FrameHead;
+        return _xpFrames;
+    }
+
+    long CpuSeenXp()
+    {
+        if (_xpCpuHead >= 0) _xpCpu += (Stats.CpuHead - _xpCpuHead + SystemStats.History) % SystemStats.History;
+        _xpCpuHead = Stats.CpuHead;
+        return _xpCpu;
+    }
+
     void PlotXp(VrStats v, RectangleF c, bool label)
     {
         _p.Fill(c, 0xFF000000);
         var g = RectangleF.Inflate(c, -1, -1);
-        for (float gx = g.Right - 1 - (v.FrameCount / 2 % 12); gx >= g.X; gx -= 12) _p.Fill(new RectangleF(gx, g.Y, 1, g.Height), TaskGrid);
+        float step = g.Width / VrStats.FrameHistory;
+        // the grid scrolls with the frames, as Task Manager's with its samples
+        float scroll = XpAeroFx.Moves ? MathF.Floor(FramesSeenXp(v) * step % 12) : v.FrameCount / 2 % 12;
+        for (float gx = g.Right - 1 - scroll; gx >= g.X; gx -= 12) _p.Fill(new RectangleF(gx, g.Y, 1, g.Height), TaskGrid);
         for (float gy = g.Bottom - 1; gy >= g.Y; gy -= 10) _p.Fill(new RectangleF(g.X, gy, g.Width, 1), TaskGrid);
         float budget = 1000f / Math.Max(1, v.DisplayHz), top = budget * 2;
         int n = v.FrameCount;
-        float step = g.Width / VrStats.FrameHistory;
         float by = MathF.Round(g.Bottom - 1 - (g.Height - 2) * (budget / top));
         for (float dx = g.X; dx < g.Right; dx += 6) _p.Fill(new RectangleF(dx, by, MathF.Min(3, g.Right - dx), 1), 0xFFFFE000);
         float px = -1, py = 0;
@@ -602,9 +622,12 @@ public sealed partial class WristPanel
     void TaskButtonXp(RectangleF b, string name, bool on, bool hover, bool held)
     {
         uint top, bottom, edge;
+        // the lighter blue under the pointer glows up and away (a tenth of a second in, a little longer out)
+        float h = XpAeroFx.Fade(XpAeroFx.Task, b, hover && !on && !held, XpSkin.HotIn, 0.25f);
         if (on || held) (top, bottom, edge) = (0xFF1A43A9, 0xFF2156C8, 0xFF0E2E80);
-        else if (hover) (top, bottom, edge) = (0xFF6FA7FF, 0xFF4B8BF5, 0xFF2A5BCB);
-        else (top, bottom, edge) = (0xFF5A97FA, 0xFF3A7BEE, 0xFF234FB8);
+        else if (h >= 1) (top, bottom, edge) = (0xFF6FA7FF, 0xFF4B8BF5, 0xFF2A5BCB);
+        else if (h <= 0) (top, bottom, edge) = (0xFF5A97FA, 0xFF3A7BEE, 0xFF234FB8);
+        else (top, bottom, edge) = (Theme.Mix(0xFF5A97FA, 0xFF6FA7FF, h), Theme.Mix(0xFF3A7BEE, 0xFF4B8BF5, h), Theme.Mix(0xFF234FB8, 0xFF2A5BCB, h));
         var inner = RectangleF.Inflate(b, -1, -1);
         RetroSkin.RowsGradient(_p, inner, top, bottom);
         _p.Fill(new RectangleF(b.X + 1, b.Y, b.Width - 2, 1), edge);

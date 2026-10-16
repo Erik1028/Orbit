@@ -102,6 +102,7 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
             // new theme, other card selected) was drawn before the click was handled
             _dirty = _ui.Interacting || _ui.Changed || _ui.Pressed || _ui.Released;
             _nextDraw = now + 0.5;
+            if (Theme.Classic) _nextDraw = Math.Min(_nextDraw, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
         }
         Ov.Show();
     }

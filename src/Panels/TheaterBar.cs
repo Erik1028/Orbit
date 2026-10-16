@@ -33,6 +33,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
     float _vis, _lastSize, _wheelAcc, _drawnDim = -1;
     bool _dirty = true, _wasOn, _theater, _drawnCurved, _drawnKb;
     double _showUntil, _holdUntil;
+    double _skinDue = double.PositiveInfinity;      // the style's animations' next frame
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
     readonly List<ITheaterScreen> _choices = new();
@@ -158,9 +159,10 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
         }
         Ov.SetAbsolute(_world);
         Ov.SetAlpha(e);
-        if (_dirty || _ui.Animating)
+        if (_dirty || _ui.Animating || now >= _skinDue)
         {
             Draw();
+            _skinDue = Theme.Classic ? Theme.RetroSkin.NextFrame : double.PositiveInfinity;
             Ov.SetTexture(_surf.Tex);
             _retired?.Dispose();
             _retired = null;

@@ -185,13 +185,28 @@ public sealed partial class Ui
         float rowsW = inner.Width - (bar ? 16 : 0);
         int clicked = -1;
         if (bar && Hover(inner) && Wheel != 0) top = Math.Clamp(top - Math.Sign(Wheel) * 3, 0, count - visible);
+        // where the rows are drawn from: the style may glide there (smooth scrolling); the hit areas are the rows' own
+        float pos = bar ? Sk.ListScroll(P, r, top) : top;
         for (int i = 0; i < visible && top + i < count; i++)
         {
             int idx = top + i;
             var row = new RectangleF(inner.X, inner.Y + i * rowH, rowsW, rowH);
             if (Behave(K(id, "/" + i), row, out _, out _)) clicked = idx;
+            if (pos != top) continue;
             if (idx == selected) Sk.ListSelection(P, row);
             draw(idx, row, idx == selected);
+        }
+        if (pos != top)
+        {
+            P.PushClip(new RectangleF(inner.X, inner.Y, rowsW, inner.Height));
+            int first = Math.Max(0, (int)MathF.Floor(pos));
+            for (int idx = first; idx < count && idx <= first + visible; idx++)
+            {
+                var row = new RectangleF(inner.X, inner.Y + MathF.Round((idx - pos) * rowH), rowsW, rowH);
+                if (idx == selected) Sk.ListSelection(P, row);
+                draw(idx, row, idx == selected);
+            }
+            P.PopClip();
         }
         if (bar)
         {

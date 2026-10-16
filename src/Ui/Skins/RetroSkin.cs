@@ -124,6 +124,25 @@ public abstract class RetroSkin
     // ---- icons: true when the skin drew this one itself (else W95Icons' picture) ----
     public abstract bool Icon(Painter p, W95Icons.Id id, float x, float y, int scale);
 
+    // ---- motion: a style's own animations (Look > Motion). The defaults are 1995's: Win95Skin does not override them ----
+
+    // a pixel canvas starts drawing (Painter.BeginPixel): an animating skin keeps its state per canvas
+    public virtual void BeginCanvas(Painter p, object canvas) { }
+    // when the canvas drawn last wants its next frame (Clock.Now seconds; infinity: not until something changes) - the panels read
+    // it right after they drew
+    public virtual double NextFrame => double.PositiveInfinity;
+    // the watch's opened widget window zooming between its tile and the window: how long (0: at once), and how it is drawn -
+    // ZoomFrame at each step (false: 95's grey outline), or LiveZoom: the window itself all the way, opening and closing (its
+    // skin's detail hook fades / scales it)
+    public virtual double ZoomSeconds => 0.22;
+    public virtual bool ZoomFrame(Painter p, RectangleF r, float t) => false;
+    public virtual bool LiveZoom => false;
+    // a list box at row 'top': the (fractional) row it is drawn from - a skin may glide there (smooth scrolling)
+    public virtual float ListScroll(Painter p, RectangleF box, int top) => top;
+    // something busy in r (checking for updates; frac < 0: no idea how far, else how far): true when the skin drew its marquee /
+    // progress bar there (95: the words say it)
+    public virtual bool BusyBar(Painter p, RectangleF r, float frac) => false;
+
     // ---- helpers for every skin ----
 
     public float LabelWidth(Painter p, string s, bool bold = false) => TextWidth(p, Ui.Amp(s).text, bold, Ui.F95);

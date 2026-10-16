@@ -48,17 +48,20 @@ public sealed partial class AeroSkin
         p.Smooth(false);
         var inner = RectangleF.Inflate(box, -1, -1);
         p.PushRoundedClip(inner, rad - 1);
+        // the glass lights up under the pointer and dims again slowly (in steps: a few gradient brushes)
+        float h = XpAeroFx.Step(XpAeroFx.Fade(XpAeroFx.Hot, box, hover && enabled && !down, GlowIn, GlowOut), 6);
         uint top, bottom;
         if (blue)
         {
-            top = !enabled ? 0xFF9DB7D6 : down ? 0xFF3C7FCF : hover ? 0xFF8CC8FF : 0xFF63ACF0;
-            bottom = !enabled ? 0xFF6B8CB6 : down ? 0xFF0B3F86 : hover ? 0xFF2E7FD8 : 0xFF1A5EB4;
+            top = !enabled ? 0xFF9DB7D6 : down ? 0xFF3C7FCF : Theme.Mix(0xFF63ACF0, 0xFF8CC8FF, h);
+            bottom = !enabled ? 0xFF6B8CB6 : down ? 0xFF0B3F86 : Theme.Mix(0xFF1A5EB4, 0xFF2E7FD8, h);
         }
         else
         {
-            top = down ? 0xFFD3E0EE : hover ? 0xFFFFFFFF : 0xFFFBFCFE;
-            bottom = down ? 0xFFA7BCD6 : hover ? 0xFFCFE4F8 : 0xFFC6D4E6;
+            top = down ? 0xFFD3E0EE : Theme.Mix(0xFFFBFCFE, 0xFFFFFFFF, h);
+            bottom = down ? 0xFFA7BCD6 : Theme.Mix(0xFFC6D4E6, 0xFFCFE4F8, h);
         }
+
         p.GradientRaw(inner, top, bottom);
         p.Smooth(true);
         p.Circle(cx, cy - rad * 0.62f, rad * 0.78f, A(0xFFFFFFFF, blue ? 0.30f : 0.55f));

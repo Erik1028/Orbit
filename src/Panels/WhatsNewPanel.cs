@@ -22,6 +22,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
     VrSession _vr;
     float _vis, _scroll, _width = 0.75f, _twoStartWidth;
     bool _dirty = true, _placed;
+    double _skinDue = double.PositiveInfinity;      // the style's animations' next frame
     int _look = -1;
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
@@ -79,9 +80,10 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         Ov.SetAbsolute(_world);
         Ov.SetAlpha(e);
         Ov.SetWidth(_width * (0.92f + 0.08f * e));
-        if (_dirty || _ui.Animating)
+        if (_dirty || _ui.Animating || Clock.Now >= _skinDue)
         {
             Draw();
+            _skinDue = Theme.Classic ? Theme.RetroSkin.NextFrame : double.PositiveInfinity;
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
         }
