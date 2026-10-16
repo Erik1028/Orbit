@@ -891,6 +891,41 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _cfg.MarkDirty();
     }
 
+    // Recenter: the keyboard in the middle under the monitors - on the line from your eyes to just under the lowest monitor's bottom
+    // edge (measured below the middle one), at arm's length (a laser types easily there), facing you
+    const float KbReach = 0.9f;
+
+    void PlaceKeyboardUnder(DesktopPanel anchor, List<DesktopPanel> placed)
+    {
+        var a = MathUtil.FromArray(anchor.Cfg.Place.M);
+        var up = MathUtil.Up(a);
+        if (up.Length() < 0.1f) { PlaceKeyboard(); return; }
+        up = Vector3.Normalize(up);
+        var mid = a.Translation;
+        float low = 0;
+        foreach (var d in placed)
+        {
+            var m = MathUtil.FromArray(d.Cfg.Place.M);
+            float h = d.Cfg.Width * d.Mon.H / Math.Max(1f, d.Mon.W);
+            low = Math.Min(low, Vector3.Dot(m.Translation - mid, up) - h / 2);
+        }
+        var head = _vr.Hmd.Translation;
+        var dir = mid + up * (low - 0.05f) - head;
+        float len = dir.Length();
+        if (len < 0.3f) { PlaceKeyboard(); return; }
+        dir /= len;
+        var z = -dir;                                           // facing you
+        var y = up - Vector3.Dot(up, z) * z;
+        if (y.Length() < 0.1f) { PlaceKeyboard(); return; }
+        y = Vector3.Normalize(y);
+        var x = Vector3.Cross(y, z);
+        var top = head + dir * MathF.Min(len, KbReach);         // the middle of its top edge
+        float kh = C.Keyboard.Width * KeyboardPanel.TH / KeyboardPanel.TW;
+        if (C.Keyboard.Place.Attach is "head") C.Keyboard.Place.Attach = "world";
+        Placement.SetWorld(C.Keyboard.Place, _vr, MathUtil.Basis(x, y, z, top - y * (kh / 2)));
+        _cfg.MarkDirty();
+    }
+
     void PlaceKeyboard()
     {
         if (!_vr.HmdValid) return;
@@ -920,6 +955,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
     {
         if (!_vr.Connected || !_vr.HmdValid) return;
         var placed = _desktops.Where(d => d.Cfg.Enabled && Placement.IsWorld(d.Cfg.Place) && d.Cfg.Place.M != null).ToList();
+        DesktopPanel kbUnder = null;
         if (placed.Count > 0)
         {
             var anchor = placed.FirstOrDefault(d => d.Mon.Primary) ?? placed.OrderBy(d => d.Mon.X).ElementAt(placed.Count / 2);
@@ -935,6 +971,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
             var delta = MathUtil.Invert(MathUtil.FromArray(anchor.Cfg.Place.M)) * desired;
             foreach (var d in placed)
                 d.Cfg.Place.M = MathUtil.ToArray(MathUtil.FromArray(d.Cfg.Place.M) * delta);
+            kbUnder = anchor;
             foreach (var w in _windowPanels)
                 if (Placement.IsWorld(w.Cfg.Place) && w.Cfg.Place.M != null)
                     w.Cfg.Place.M = MathUtil.ToArray(MathUtil.FromArray(w.Cfg.Place.M) * delta);
@@ -944,9 +981,13 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
                 if (Placement.IsWorld(w.Cfg.Place)) PlaceWindow(w);
         var missing = _desktops.Where(d => d.Cfg.Enabled && d.Cfg.Place.M == null).ToList();
         if (missing.Count > 0) PlaceDesktops(missing);
-        // the keyboard in front too - hidden as well, when it stands in the world: it comes back where Recenter put things (Erik 10-16:
-        // a hidden one came back at its old spot, beside or behind you)
-        if (C.Keyboard.Visible || Placement.IsWorld(C.Keyboard.Place)) PlaceKeyboard();
+        // the keyboard in the middle under the monitors - hidden as well: it comes back where Recenter put things (Erik 10-16); on a
+        // hand it stays there
+        if (Placement.IsWorld(C.Keyboard.Place) || C.Keyboard.Place.Attach is "head")
+        {
+            if (kbUnder != null) PlaceKeyboardUnder(kbUnder, placed);
+            else PlaceKeyboard();
+        }
         _theater.Recenter(_vr, TheaterAnchor());
         _cfg.MarkDirty();
     }
