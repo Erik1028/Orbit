@@ -100,6 +100,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
             adapter = _vr.AdapterIndex;
         _gpu = new Gpu(adapter);
         _painter = new Painter(_gpu);
+        CyberScreenFx.Painter = _painter;   // the Cyber screens' HUD frames draw with it
         Theme.Apply(C.Appearance);
         CyberFx.Live = true;                // the Cyber style's effects may start by themselves here (not in the --snapshot tools)
         // 1.12, the watch pages: a new install starts on the VRChat and Performance pages; an older config gets them once, after its

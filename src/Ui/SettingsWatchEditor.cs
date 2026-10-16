@@ -251,6 +251,7 @@ public sealed partial class SettingsView
             }
         }
 
+        if (!classic && Theme.Cyber) CyberGridLabels(p, prev, grid, sx, sy);     // the columns' letters, the rows' numbers
         // the empty cells (the one picked for the next widget marked)
         for (int y = 0; y < grid.Rows; y++)
             for (int x = 0; x < grid.Cols; x++)
@@ -263,6 +264,7 @@ public sealed partial class SettingsView
                     if (picked) p.FillChecker(cr, 0xFF000080, Theme.W95Teal);
                     p.Stroke(new RectangleF(cr.X + 0.5f, cr.Y + 0.5f, cr.Width - 1, cr.Height - 1), 0xFF004040, 1);
                 }
+                else if (Theme.Cyber) CyberCell(p, cr, picked);       // the HUD grid: corner ticks, a crosshair (SettingsCyber.cs)
                 else
                 {
                     if (picked) p.Fill(cr, Theme.WithAlpha(Theme.Accent, 0.22f), Bento.CardRadius * sx);
@@ -288,6 +290,7 @@ public sealed partial class SettingsView
             {
                 var gr = View(WatchWidgets.CellRect(nx, ny, nw, nh, classic, grid));
                 if (classic) p.Stroke(new RectangleF(gr.X + 1, gr.Y + 1, gr.Width - 2, gr.Height - 2), ok ? 0xFF000000 : 0xFFFF0000, 2);
+                else if (Theme.Cyber) CyberTarget(p, gr, ok);
                 else
                 {
                     p.Fill(gr, ok ? Theme.WithAlpha(Theme.Accent, 0.3f) : 0x55F87171, Bento.CardRadius * sx);
@@ -316,6 +319,7 @@ public sealed partial class SettingsView
                 p.Stroke(new RectangleF(sr.X - 0.5f, sr.Y - 0.5f, sr.Width + 1, sr.Height + 1), 0xFF000000, 1);
                 p.Fill(Handle(sel), 0xFF000000);
             }
+            else if (Theme.Cyber) CyberSelection(p, sr, Handle(sel));
             else
             {
                 p.Stroke(RectangleF.Inflate(sr, 1, 1), Theme.Accent, 3, (Bento.CardRadius + 1) * sx);
@@ -333,7 +337,8 @@ public sealed partial class SettingsView
         var list = WatchLayout();
         PageStrip(ui, 222, 76, 486, 32);
         var prev = EditorPrev;
-        p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
+        if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 10, 10));
+        else p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
         p.Image(_h.Wrist.Surf.Bitmap, prev);
         if (_h.Wrist.Animating) ui.Animating = true;          // the preview springs / rolls: keep drawing
         EditGrid(ui, prev, false, list);
@@ -404,7 +409,8 @@ public sealed partial class SettingsView
                 // a clock: its designs first, then its look - both as one row of chips, so it all fits above Done
                 bool clock = WatchWidgets.VariantsOf(sel.Type) != null;
                 if (clock) ClockDesigns(ui, sel, rx, 180, rw);
-                WidgetLook(ui, list, sel, rx, clock ? 250 : 182, rw, clock);
+                if (Theme.Cyber) CyberWidgetInfo(ui, sel, rx, clock ? 268 : 200, rw);     // its Modern look does not apply (SettingsCyber.cs)
+                else WidgetLook(ui, list, sel, rx, clock ? 250 : 182, rw, clock);
             }
         }
         if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) { EditingWatch = false; _wadd = false; }

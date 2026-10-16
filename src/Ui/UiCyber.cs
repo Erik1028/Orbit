@@ -41,7 +41,9 @@ public sealed partial class Ui
             type = CyberFx.Ramp(t, 0.06, 0.025 * s.Length);
             if (type < 1) Animating = true;
         }
-        CyberHud.Tag(P, r.X, r.Y + (r.Height - 18) / 2, s, wipe, type, size: 12, h: 18);
+        float ty = r.Y + (r.Height - 18) / 2;
+        float tw = CyberHud.Tag(P, r.X, ty, s, wipe, type, size: 12, h: 18);
+        if (Hud && wipe > 0) HudSectionRule(new RectangleF(r.X, r.Y, r.Width * wipe, r.Height), tw, ty + 18);   // the rule it sits on (UiHud.cs)
     }
 
     // ---- a button's hover: a cyan outline (its cut corners) and the two corner marks closing in ----

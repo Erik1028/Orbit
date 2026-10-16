@@ -104,6 +104,24 @@ public sealed class VrOverlay : IDisposable
     public void SetSortOrder(uint o) { if (o != _sort) { _sort = o; Ov.SetOverlaySortOrder(Handle, o); } }
     public void SetFlag(VROverlayFlags f, bool on) => Ov.SetOverlayFlag(Handle, f, on);
 
+    // the part of the texture shown (uv, top-left origin; the whole of it by default) - Cyber's unfold (CyberScreenFx)
+    float _u0, _v0, _u1 = 1, _v1 = 1;
+    public void SetTextureBounds(float u0, float v0, float u1, float v1)
+    {
+        if (u0 == _u0 && v0 == _v0 && u1 == _u1 && v1 == _v1) return;
+        (_u0, _v0, _u1, _v1) = (u0, v0, u1, v1);
+        var b = new VRTextureBounds_t { uMin = u0, vMin = v0, uMax = u1, vMax = v1 };
+        Ov.SetOverlayTextureBounds(Handle, ref b);
+    }
+
+    // put another overlay where this one is (the same absolute or device-relative transform; Cyber's screen frame)
+    public void CopyTransformTo(VrOverlay o)
+    {
+        if (!_hasTransform) return;
+        if (_lastDevice == uint.MaxValue) o.SetAbsolute(_lastM);
+        else o.SetRelative(_lastDevice, _lastM);
+    }
+
     public void Show() { if (!_visible) { _visible = true; ShownAt = Clock.Now; Ov.ShowOverlay(Handle); } }
     // when it last came into view (Clock.Now; a style's opening animation starts from it)
     public double ShownAt { get; private set; } = -10;

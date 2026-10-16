@@ -83,7 +83,7 @@ public sealed partial class SettingsView
 
     public SettingsView(IOrbitHost host) { _h = host; }
 
-    public bool ShowsWristPreview => Tab == TabWrist;
+    public bool ShowsWristPreview => Tab == TabWrist || (Tab == TabLook && Theme.Cyber);     // Cyber's Look shows the watch
     public bool ShowsKeyboardPreview => Tab == TabKeyboard;
 
     Config C => _h.Cfg.Data;
@@ -108,14 +108,19 @@ public sealed partial class SettingsView
         bool modal = wn != null && wn.Count > 0;
         if (Tab != TabLook || modal) _fontsOpen = _stylesOpen = false;
         ui.Inert = modal || _fontsOpen || _stylesOpen;       // an open font / style list: the page under it is only a picture
-        p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
+        // Cyber, the VR panel coming / going: its HUD reveal (Gfx/CyberReveal.cs)
+        var cyRev = Theme.Cyber && OnClose != null ? CyberReveal.Begin(p, new RectangleF(0, 0, W, H), ShownAt, Vis, Closing) : default;
+        if (Theme.Cyber) { CyberGround(ui); ui.HudRight = CyPage.Right - 8; }     // the HUD console's frame, cards and grid (SettingsCyber.cs)
+        else p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
         DrawHeader(ui);
         if (Theme.Classic) DrawNavClassic(ui);
+        else if (Theme.Cyber) DrawNavCyber(ui);
         else DrawNav(ui);
 
         // a tab picked in the list fades in, rising a few px (DrawNav starts it; Motion off: at once)
         float tin = ui.Anim(TabIn, 1, 18);
-        bool fading = tin < 0.999f;
+        bool cyScan = Theme.Cyber && CyberScanBegin(ui);     // Cyber (Full): a scan line reveals it instead
+        bool fading = tin < 0.999f && !(Theme.Cyber && CyberFx.Full);
         if (fading) { p.PushFade(tin); p.PushOffset(0, 10 * (1 - tin)); }
         switch (Tab)
         {
@@ -129,6 +134,7 @@ public sealed partial class SettingsView
             default: DrawGeneral(ui); break;
         }
         if (fading) { p.PopScale(); p.PopFade(); }
+        if (cyScan) CyberScanEnd(ui);
         if (_fontsOpen) { ui.Inert = false; DrawFontList(ui); }
         if (_stylesOpen) { ui.Inert = false; DrawStyleList(ui); }
         // What's new over the page: the dark veil and the sheet fade in, the sheet growing from 96 %
@@ -142,6 +148,7 @@ public sealed partial class SettingsView
             if (WhatsNewView.DrawModern(ui, new RectangleF(160, 40, 680, 560), wn, WhatsNewSubShown, ref _wnScroll, Theme.Panel)) CloseWhatsNew();
             if (grow) { p.PopScale(); p.PopFade(); }
         }
+        if (cyRev.Kind != 0) CyberReveal.End(p, cyRev);
         if (ui.Changed) _h.Cfg.MarkDirty();
     }
 
@@ -198,6 +205,7 @@ public sealed partial class SettingsView
     {
         var p = ui.P;
         if (Theme.Classic) { DrawHeaderClassic(ui); return; }
+        if (Theme.Cyber) { DrawHeaderCyber(ui); return; }
         p.Fill(new RectangleF(0, 0, W, 64), Theme.Panel);
         p.Line(0, 64, W, 64, Theme.Border, 1);
         p.Logo(new RectangleF(22, 15, 34, 34));
@@ -664,7 +672,8 @@ public sealed partial class SettingsView
     RectangleF WristPreview(Painter p, float y)
     {
         var prev = new RectangleF(612, y, 372, 372f * WristPanel.TH / WristPanel.TW);
-        p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
+        if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 10, 10));
+        else p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
         p.Image(_h.Wrist.Surf.Bitmap, prev);
         return prev;
     }
@@ -706,7 +715,8 @@ public sealed partial class SettingsView
 
         float pw = 540, ph = pw * KeyboardPanel.TH / KeyboardPanel.TW;      // leaves room for the line below
         var prev = new RectangleF(232 + (752 - pw) / 2, 336, pw, ph);
-        p.Fill(RectangleF.Inflate(prev, 8, 8), Theme.Panel, 16);
+        if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 8, 8));
+        else p.Fill(RectangleF.Inflate(prev, 8, 8), Theme.Panel, 16);
         p.Image(_h.Keyboard.Surf.Bitmap, prev);
         ui.Label(new RectangleF(232, prev.Bottom + 12, 752, 36),
             "Keys follow the active Windows layout. Shift / Ctrl / Alt / AltGr / Win: once = next key, twice = locked. " +
@@ -716,6 +726,7 @@ public sealed partial class SettingsView
     // ---------------- Look ----------------
     void DrawLook(Ui ui)
     {
+        if (Theme.Cyber) { DrawLookCyber(ui); return; }      // only what Cyber uses (SettingsCyber.cs)
         var p = ui.P;
         var a = C.Appearance;
         float lx = 232, rx = 612;
@@ -848,7 +859,7 @@ public sealed partial class SettingsView
     static readonly RectangleF StyleField = new(232, 512, 356, 38);
 
     // the list over the page, above its field
-    static RectangleF StyleList => new(StyleField.X, StyleField.Y - 6 - StyleMenu.Ids.Length * FontRow - 12,
+    static RectangleF StyleList => Theme.Cyber ? CyStyleList : new(StyleField.X, StyleField.Y - 6 - StyleMenu.Ids.Length * FontRow - 12,
         StyleField.Width, StyleMenu.Ids.Length * FontRow + 12);
 
     // a style's little window: its face, its title bar, a selection (Modern: the panel and the accent)
@@ -876,17 +887,25 @@ public sealed partial class SettingsView
             return;
         }
         ui.Hover(box);
-        p.Fill(new RectangleF(box.X - 2, box.Y + 4, box.Width + 4, box.Height + 4), 0x55000000, 14);
-        p.Fill(box, Theme.Panel2, 12);
-        p.Stroke(box, Theme.Border, 1, 12);
+        if (Theme.Cyber) CyberListBox(p, box);
+        else
+        {
+            p.Fill(new RectangleF(box.X - 2, box.Y + 4, box.Width + 4, box.Height + 4), 0x55000000, 14);
+            p.Fill(box, Theme.Panel2, 12);
+            p.Stroke(box, Theme.Border, 1, 12);
+        }
         int sel = StyleMenu.IndexOf(a.Style);
         for (int i = 0; i < StyleMenu.Ids.Length; i++)
         {
             var row = new RectangleF(box.X + 6, box.Y + 6 + i * FontRow, box.Width - 12, FontRow);
             bool click = ui.Clickable(Ui.Id("look.style/", i), row, out bool hover, out _);
             bool on = i == sel;
-            if (on || hover) p.Fill(row, on ? Theme.Panel3 : Theme.WithAlpha(0x14FFFFFF, 1), 8);
-            if (on) p.Fill(new RectangleF(row.X, row.Y + 10, 4, row.Height - 20), Theme.Accent, 2);
+            if (Theme.Cyber) CyberListRow(p, row, on, hover);
+            else
+            {
+                if (on || hover) p.Fill(row, on ? Theme.Panel3 : Theme.WithAlpha(0x14FFFFFF, 1), 8);
+                if (on) p.Fill(new RectangleF(row.X, row.Y + 10, 4, row.Height - 20), Theme.Accent, 2);
+            }
             StyleChip(p, new RectangleF(row.X + 14, row.Y + 10, 28, 20), i);
             p.Text(StyleMenu.Names[i], new RectangleF(row.X + 54, row.Y, row.Width - 100, row.Height), Theme.Text, 17);
             if (on) p.Icon(Theme.IcoCheck, new RectangleF(row.Right - 34, row.Y, 24, row.Height), Theme.Accent, 14);
@@ -923,9 +942,13 @@ public sealed partial class SettingsView
             return;
         }
         ui.Hover(box);
-        p.Fill(new RectangleF(box.X - 2, box.Y + 4, box.Width + 4, box.Height + 4), 0x55000000, 14);
-        p.Fill(box, Theme.Panel2, 12);
-        p.Stroke(box, Theme.Border, 1, 12);
+        if (Theme.Cyber) CyberListBox(p, box);
+        else
+        {
+            p.Fill(new RectangleF(box.X - 2, box.Y + 4, box.Width + 4, box.Height + 4), 0x55000000, 14);
+            p.Fill(box, Theme.Panel2, 12);
+            p.Stroke(box, Theme.Border, 1, 12);
+        }
         string sel = Theme.UserFont;
         for (int i = 0; i <= Theme.FontsInstalled.Length; i++)
         {
@@ -934,8 +957,12 @@ public sealed partial class SettingsView
             var row = new RectangleF(box.X + 6, box.Y + 6 + i * FontRow, box.Width - 12, FontRow);
             bool click = ui.Clickable(Ui.Id("look.font/", i), row, out bool hover, out _);
             bool on = font == sel;
-            if (on || hover) p.Fill(row, on ? Theme.Panel3 : Theme.WithAlpha(0x14FFFFFF, 1), 8);
-            if (on) p.Fill(new RectangleF(row.X, row.Y + 10, 4, row.Height - 20), Theme.Accent, 2);
+            if (Theme.Cyber) CyberListRow(p, row, on, hover);
+            else
+            {
+                if (on || hover) p.Fill(row, on ? Theme.Panel3 : Theme.WithAlpha(0x14FFFFFF, 1), 8);
+                if (on) p.Fill(new RectangleF(row.X, row.Y + 10, 4, row.Height - 20), Theme.Accent, 2);
+            }
             string name = font ?? Theme.DefaultFontName;
             p.Text(name, new RectangleF(row.X + 14, row.Y, row.Width - 120, row.Height), Theme.Text, 17, FontWeight.Normal,
                 TextAlignment.Leading, ParagraphAlignment.Center, fam);
@@ -1052,6 +1079,7 @@ public sealed partial class SettingsView
         float rx = 618, y = 88;
         void Row(string k, string v)
         {
+            if (Theme.Cyber) { CyberRow(p, k, v, rx, y); y += 28; return; }     // a monospace readout (SettingsCyber.cs)
             p.Text(k, new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
             p.Text(v, new RectangleF(rx + 100, y, 266, 26), Theme.Text, 13);
             y += 28;
@@ -1063,8 +1091,12 @@ public sealed partial class SettingsView
         Row("Config", "%LOCALAPPDATA%\\Orbit");
         // version + updates: one button that checks, then offers the update
         var (us, umsg, uprog, ulatest) = _h.Updates.Snapshot();
-        p.Text("Version", new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
-        p.Text(Updater.Current.ToString(3), new RectangleF(rx + 100, y, 70, 26), Theme.Text, 13);
+        if (Theme.Cyber) CyberRow(p, "Version", Updater.Current.ToString(3), rx, y);
+        else
+        {
+            p.Text("Version", new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
+            p.Text(Updater.Current.ToString(3), new RectangleF(rx + 100, y, 70, 26), Theme.Text, 13);
+        }
         bool avail = us == Updater.State.Available;
         string ulabel = us switch
         {

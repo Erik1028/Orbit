@@ -22,6 +22,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
     IDirect3DDevice _dev;
     double _nextFrame, _lastNow;
     float _wheelAcc, _vis, _opacity = 1;
+    CyberScreenFx _cyFx;
     bool _hasTexture;
     readonly bool[] _hovering = new bool[2];
     Vector2 _lastPx;
@@ -62,6 +63,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
         ReleaseButtons();
         StopCapture();
         _vis = 0;
+        _cyFx?.Dispose(); _cyFx = null;
         Ov?.Dispose(); Ov = null;
         _vr = null;
     }
@@ -141,6 +143,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
             Ov.SetAlpha(_opacity * (1 - MathF.Pow(1 - _vis, 3)));
             Ov.Show();
         }
+        if (Theme.Cyber || _cyFx != null) (_cyFx ??= new CyberScreenFx(_g, Ov.Key)).Update(Ov, _vis, want, th != null, TextureSize, now);   // Cyber's unfold and HUD frame
         if (_pending is { } pb && now >= _pendingAt) { _pending = null; Press(pb, true); }
         _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
         // aside in theater mode it is still captured, slowly: switching to it shows what is on it now

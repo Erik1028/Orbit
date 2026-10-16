@@ -278,6 +278,20 @@ static class CyberHud
         p.StrokeCut(RectangleF.Inflate(all, -1.5f, -1.5f), Frame, 2, cut - 1, cut - 1, cut - 1, cut - 1);
     }
 
+    // a console (the settings window, the keyboard, the Room and Hexpad panels, What's new): the panel frame with its four cuts in
+    // yellow - the HUD's own, the watch keeps PanelFrame
+    public static void ConsoleFrame(Painter p, RectangleF all, uint fill, float cut = 18)
+    {
+        p.FillCut(all, fill, cut, cut, cut, cut);
+        var f = RectangleF.Inflate(all, -1.5f, -1.5f);
+        p.StrokeCut(f, Frame, 2, cut - 1, cut - 1, cut - 1, cut - 1);
+        float c = cut - 1, x0 = f.X + 1, y0 = f.Y + 1, x1 = f.Right - 1, y1 = f.Bottom - 1;
+        p.Line(x0, y0 + c, x0 + c, y0, Yellow, 3);
+        p.Line(x1 - c, y0, x1, y0 + c, Yellow, 3);
+        p.Line(x1, y1 - c, x1 - c, y1, Yellow, 3);
+        p.Line(x0 + c, y1, x0, y1 - c, Yellow, 3);
+    }
+
     // a little window in the style picker: the page, a card with its tag, a cyan line
     public static void Chip(Painter p, RectangleF r)
     {
