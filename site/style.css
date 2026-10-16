@@ -437,3 +437,14 @@ html[data-style="95"] .wd-dot[aria-current="true"]::after{background:#000080;wid
 html[data-style="95"] .watch{font-family:"Microsoft Sans Serif","MS Sans Serif",Tahoma,Arial,sans-serif}
 html[data-style="95"] .wd-back{background:#c0c0c0;color:#000;border:0;border-radius:0;box-shadow:var(--raised);font-weight:700}
 html[data-style="95"] .wd-back:active{box-shadow:var(--sunken)}
+
+/* scroll motion (motion.js): only when the script runs and motion is allowed */
+.motion [data-reveal]{transition:opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0ms)}
+.motion [data-reveal].pre{opacity:0;transform:translateY(40px)}
+/* the title lifts away as you scroll, and the watch steps back a little once you scroll past it */
+html.motion .intro{transform:translateY(calc(var(--sy,0) * -.15px));opacity:calc(1 - var(--sy,0) / 620)}
+html.motion .try .watch{--q:min(1, max(0, (var(--sy,0) - 180) / 560));transform:scale(calc(1 - var(--q) * .06));opacity:calc(1 - var(--q) * .3);transform-origin:50% 30%}
+.motion .card.done{transition:none}
+/* the 1990s mode stays a 1990s page: no scroll motion there */
+html.motion[data-style="95"] .intro,html.motion[data-style="95"] .try .watch{transform:none;opacity:1}
+html.motion[data-style="95"] [data-reveal]{opacity:1!important;transform:none!important;transition:none!important}
