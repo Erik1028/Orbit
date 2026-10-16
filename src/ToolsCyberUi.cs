@@ -157,7 +157,7 @@ static partial class Tools
             view.EditingWatch = true;
             ui.ResetAnimations();
             FrameW();
-            ClickW(222 + 486 - 118 - 6 - 40 + 20, 76 + 16);
+            ClickW(SettingsView.ShareMidX(WatchPages.Count(wcfg)), 76 + 16);
             bool share = ShareOpen(view);
             ptr.Leave(); wrist.Settle(); FrameW(); ui.ResetAnimations(); FrameW();
             surf.SavePng(gpu, Path.Combine(dir, "settings_wrist_share_cyber.png"));

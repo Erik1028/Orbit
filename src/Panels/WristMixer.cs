@@ -479,7 +479,8 @@ public sealed partial class WristPanel
         }
     }
 
-    // a window too low for two rows (the Terminal's 2 x 1): the top two side by side, the name over its trackbar (mute: opened)
+    // a window too low for two rows (the Terminal's 2 x 1): the top two side by side, the name over its trackbar - the name is the mute
+    // button, as on the Terminal's rows (greyed when muted)
     void Mixer95Pair(RectangleF c, int id)
     {
         float cw = MathF.Floor((c.Width - 6) / 2);
@@ -487,10 +488,13 @@ public sealed partial class WristPanel
         {
             var app = _mixShown[j];
             var col = new RectangleF(c.X + 2 + j * (cw + 2), c.Y, cw, c.Height);
+            string key = Ui.Id("wmx", id * 16 + j);
+            if (_ui.Clickable(Ui.Id(key, "m"), new RectangleF(col.X, col.Y, cw, MathF.Max(14, col.Height - 22)), out _, out _))
+            { Mixer.ToggleAppMute(app); _dirty = true; }
             _ui.Text95(Fit(app.Name, cw - 2), new RectangleF(col.X, col.Y + 1, cw, 13), app.Muted ? Gry95 : Blk95);
             var tr = new RectangleF(col.X, col.Bottom - 22, cw, 22);
             float v = app.Level;
-            if (_ui.Track95(Ui.Id(Ui.Id("wmx", id * 16 + j), "t"), tr, ref v, 0, 1, !app.Muted, 0)) { Mixer.SetApp(app, v); _dirty = true; }
+            if (_ui.Track95(Ui.Id(key, "t"), tr, ref v, 0, 1, !app.Muted, 0)) { Mixer.SetApp(app, v); _dirty = true; }
             Record95(app, new RectangleF(tr.X + 6, tr.Y + 8, tr.Width - 12, 4), new RectangleF(col.X, col.Y, cw, 14), false, false);
         }
     }

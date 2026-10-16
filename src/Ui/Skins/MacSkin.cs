@@ -486,15 +486,21 @@ public sealed partial class MacSkin : Win95Skin
         if (!string.IsNullOrEmpty(title))
         {
             t = Fit(p, title, bar.Width - 34, Ui.F95, true);
+            // too long for the middle ("Volume M..." on a 2 x 2): whole, off-centre between the close box and the edge, if it fits so
+            float room = bar.Width - (box ? 14 : 2) - 10;
+            if (t != title && ChicagoWidth(p, title) <= room) t = title;
+            // still not whole: its last word, if that fits whole ("Volume Mixer" -> "Mixer")
+            else if (t != title && title.LastIndexOf(' ') is int sp and > 0 && ChicagoWidth(p, title[(sp + 1)..]) <= room) t = title[(sp + 1)..];
             tw = ChicagoWidth(p, t);
         }
-        float tx = MathF.Floor(bar.X + (bar.Width - tw) / 2);
         float x0 = bar.X + (box ? 14 : 2), sy = bar.Y + 2;
+        float tx = MathF.Floor(bar.X + (bar.Width - tw) / 2);
+        tx = MathF.Min(MathF.Max(tx, x0 + 5), bar.Right - 4 - tw);
         if (box) TitleBox(p, bar.X + 3, bar.Y + 2, 9, CaptionKind.Close, true, false);
         if (t != null)
         {
-            Stripes(p, x0, tx - 5, sy, 5);
-            Stripes(p, tx + tw + 5, bar.Right - 2, sy, 5);
+            if (tx - 5 > x0 + 1) Stripes(p, x0, tx - 5, sy, 5);
+            if (bar.Right - 2 > tx + tw + 6) Stripes(p, tx + tw + 5, bar.Right - 2, sy, 5);
             Say(p, t, new RectangleF(tx, bar.Y, tw + 2, bar.Height), CaptionText, true, TextAlignment.Leading);
         }
         else Stripes(p, x0, bar.Right - 2, sy, 5);

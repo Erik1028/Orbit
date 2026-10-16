@@ -1038,15 +1038,16 @@ public sealed partial class WristPanel
         float tw = (a.Width - (cols - 1) * gap) / cols, th = (a.Height - (rows - 1) * gap) / rows;
         if (mode == 0)
         {
-            // the names only when every one of them fits (a row of names and bare icons looks broken)
+            // the names only when every one of them fits (a row of names and bare icons looks broken); the layout's own name does
+            // not count - it is shortened ("Desk…")
             if (th < 64) mode = 1;
             else
                 foreach (var gid in _groupIds)
-                    if (FitSize(GroupLabel(gid, d), tw - 8, 15, FontWeight.SemiBold, null) < 14) { mode = 1; break; }
+                    if (gid != "layout" && FitSize(GroupLabel(gid, d), tw - 8, 15, FontWeight.SemiBold, null) < 14) { mode = 1; break; }
         }
         else if (mode == 2)
             foreach (var gid in _groupIds)
-                if (_p.MeasureWidth(GroupLabel(gid, d), 15, FontWeight.Bold) > tw - 24 - 24 - 10)
+                if (gid != "layout" && _p.MeasureWidth(GroupLabel(gid, d), 15, FontWeight.Bold) > tw - 24 - 24 - 10)
                 {
                     // pills too narrow for the names: icons only, three a row
                     mode = 1;

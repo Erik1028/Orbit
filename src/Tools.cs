@@ -48,9 +48,9 @@ static partial class Tools
         public bool IsElevated => true;
         public void SetRunAsAdmin(bool on) { }
         public void RestartElevated() { }
-        public string NotificationStatus => "listening on UDP 42069";
+        public string NotificationStatus => Lang.F("listening on UDP {0}", 42069);
         public string StatusLinePreview => "\U0001F3B5 Midnight City \u2013 M83";
-        public string RoomStatus => "12 in Midnight Rooftop · VRCX: 120 friends";
+        public string RoomStatus => Lang.F("{0} in {1}", 12, "Midnight Rooftop") + Lang.F(" · VRCX: {0} friends", 120);
         public void ToggleRoom() { }
         public void TheaterEdited() { }
         public IReadOnlyList<WhatsNew.Entry> WhatsNewList { get; set; } = Array.Empty<WhatsNew.Entry>();

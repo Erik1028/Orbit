@@ -1138,11 +1138,13 @@ public sealed partial class WristPanel
         if (mode == 0)
         {
             if (th < 48) mode = 1;
-            else foreach (var gid in _groupIds) if (CyMonoW(Upper(GroupLabel(gid, d)), CyNote, FontWeight.Bold) > tw - 10) { mode = 1; break; }
+            // the layout's own name does not count: it is shortened ("DESK…"), the other names stay (Erik's long layout names
+            // took every name away)
+            else foreach (var gid in _groupIds) if (gid != "layout" && CyMonoW(Upper(GroupLabel(gid, d)), CyNote, FontWeight.Bold) > tw - 10) { mode = 1; break; }
         }
         else if (mode == 2)
             foreach (var gid in _groupIds)
-                if (CyMonoW(Upper(GroupLabel(gid, d)), CyNote, FontWeight.Bold) > tw - 24 - 22 - 10) { mode = 0; break; }
+                if (gid != "layout" && CyMonoW(Upper(GroupLabel(gid, d)), CyNote, FontWeight.Bold) > tw - 24 - 22 - 10) { mode = 0; break; }
         for (int j = 0; j < n; j++)
         {
             var t = new RectangleF(a.X + j % cols * (tw + gap), a.Y + j / cols * (th + gap), tw, th);
@@ -1212,6 +1214,7 @@ public sealed partial class WristPanel
         {
             float lb = t.Bottom - (card ? 14 : 9);
             _p.Icon(icon, new RectangleF(t.X, t.Y + (lb - CyberHud.CapH(_p, CyNote, FontWeight.Bold) - t.Y) / 2 - isz / 2 - 1, t.Width, isz + 4), ic, isz);
+            if (CyMonoW(label, CyNote, FontWeight.Bold) > t.Width - 10) label = Ellipsize(label, t.Width - 10, CyNote, FontWeight.Bold, CyberHud.Mono);
             CyMono(label, t.X + 4, lb, t.Width - 8, card ? lc : on ? CyInk : CyW, CyNote, FontWeight.Bold, TextAlignment.Center);
         }
         else _p.Icon(icon, t, ic, isz);

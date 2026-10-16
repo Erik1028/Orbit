@@ -336,7 +336,7 @@ public sealed partial class SettingsView
         var p = ui.P;
         var w = C.Wrist;
         var list = WatchLayout();
-        PageStrip(ui, 222, 76, 486, 32);
+        PageStrip(ui, StripX, 76, StripW, 32);
         var prev = EditorPrev;
         if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 10, 10));
         else p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
@@ -422,14 +422,28 @@ public sealed partial class SettingsView
     static readonly string[] _startPresets = WatchWidgets.Presets.Concat(new[] { "everyday", "vrchat", "performance" }).ToArray();
     static string[] StartPresets() => _startPresets;
 
-    // The pages as tabs over the watch (the one edited is the one the watch shows), "Add page" at the end
+    // The pages as tabs over the watch (the one edited is the one the watch shows), the share button and "Add page" at the end - only
+    // its + once the tabs would get narrow for their names (3 pages and more)
+    const float StripX = 222, StripW = 486, StripGap = 6, AddPageW = 118;
+
+    static (float tab, float add) StripSizes(int n)
+    {
+        float room = StripW - ShareW - StripGap * (n + 1);
+        float add = (room - AddPageW) / n >= 110 ? AddPageW : ShareW;
+        return (MathF.Min(150, (room - add) / n), add);
+    }
+
+    // the tools: the middle of the share button and of Add page with n pages
+    public static float ShareMidX(int n) => StripX + StripW - StripSizes(n).add - StripGap - ShareW / 2;
+    public static float AddPageMidX(int n) => StripX + StripW - StripSizes(n).add / 2;
+
     void PageStrip(Ui ui, float x, float y, float w, float h)
     {
         var p = ui.P;
         var wc = C.Wrist;
         int n = WatchPages.Count(wc), cur = EditPage;
-        const float addW = 118, gap = 6;
-        float tw = MathF.Min(150, (w - addW - ShareW - gap * (n + 1)) / n);     // the share button beside Add page (Extras)
+        const float gap = StripGap;
+        var (tw, addW) = StripSizes(n);
         ShareButton(ui, x + w - addW - gap - ShareW, y, h);
         for (int i = 0; i < n; i++)
         {
@@ -438,7 +452,7 @@ public sealed partial class SettingsView
             string label = Cut(p, name, tw - 16, 13);
             if (ui.Button(Ui.Id("wpg", i), r, label, null, i == cur, true, 13) && i != cur) ShowPage(i);
         }
-        if (ui.Button("we.addpage", new RectangleF(x + w - addW, y, addW, h), "Add page", Theme.IcoAdd, _wadd, n < 8, 13))
+        if (ui.Button("we.addpage", new RectangleF(x + w - addW, y, addW, h), addW >= AddPageW ? "Add page" : null, Theme.IcoAdd, _wadd, n < 8, 13))
         {
             _wadd = !_wadd;
             _wshare = false;

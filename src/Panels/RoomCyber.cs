@@ -16,8 +16,8 @@ public sealed partial class RoomPanel
         if (_s.InRoom)
         {
             int friends = _s.Here.FindAll(p => p.Friend).Count;
-            string count = _s.Here.Count == 1 ? "1 person" : $"{_s.Here.Count} people";
-            if (friends > 0) count += friends == 1 ? " · 1 friend" : $" · {friends} friends";
+            string count = _s.Here.Count == 1 ? Lang.T("1 person") : Lang.F("{0} people", _s.Here.Count);
+            if (friends > 0) count += " · " + RoomPanel.FriendsText(friends);           // in the language picked (it was English only)
             count = count.ToUpperInvariant();
             float cw = CyberHud.MonoWidth(_p, count, 15, FontWeight.Bold);
             CyberHud.MonoAt(_p, count, hx, 38, cw + 4, CyberHud.Cyan, 15, FontWeight.Bold);

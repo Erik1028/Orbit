@@ -551,7 +551,7 @@ static partial class Tools
         ClickM(222 + 40, 92);
         int tabbed = wrist.PageNow;
         // add a page: the choices, Everyday on 4 x 3
-        ClickM(222 + 486 - 59, 92);
+        ClickM(SettingsView.AddPageMidX(WatchPages.Count(wcfg)), 92);
         Settled("settings_wrist_addpage.png");
         ClickM(724 + 134 + 63, 147);              // Everyday
         ClickM(724 + 195, 257);                   // 4 x 3

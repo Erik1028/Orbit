@@ -676,6 +676,11 @@ public sealed partial class SettingsView
             w.Locked = b;
         if (ui.Button("w.reset", new RectangleF(lx + 10, 534, 170, 38), "Reset position", Theme.IcoRecenter, false, w.Enabled, 14))
             _h.ResetWrist();
+        // the Windows volume in VR (Sys/AudioMixer.cs): on = auto (Virtual Desktop's device), off = the apps keep their own; "on" (every
+        // device that sets its own volume) stays a config value, shown as on here
+        b = C.General.VolumeToApps != "off";
+        if (ui.Toggle("w.vol", new RectangleF(lx, 578, cw, 52), "Windows volume in VR", ref b, "Virtual Desktop: the apps follow the Windows slider"))
+            C.General.VolumeToApps = b ? null : "off";
 
         var prev = WristPreview(p, 92);
         string[] faces = { "full", "analog", "minimal", "time", "custom" };
@@ -1114,11 +1119,11 @@ public sealed partial class SettingsView
         // not elevated yet: its restart button beside the folder one (the language takes the row under them)
         if (elevate && ui.Button("g.elevate", new RectangleF(lx + 10, by, 178, 38), "Restart as admin", Theme.IcoRecenter, true, true, 14))
             _h.RestartElevated();
-        if (ui.Button("g.folder", elevate ? new RectangleF(lx + 196, by, 170, 38) : new RectangleF(lx + 10, by, 200, 38), "Open config folder",
+        // the folder (only its icon while the restart button is there too), then What's new (it sat on Check for updates)
+        if (ui.Button("g.folder", elevate ? new RectangleF(lx + 196, by, 40, 38) : new RectangleF(lx + 10, by, 200, 38), elevate ? null : "Open config folder",
                 Theme.IcoFolder, false, true, 14))
             _h.OpenConfigFolder();
-        // What's new beside the folder button (it sat on Check for updates); while the restart button is there it takes that place
-        if (!elevate && ui.Button("g.whatsnew", new RectangleF(lx + 220, by, 146, 38), "What's new", "\uE946", false, true, 14))
+        if (ui.Button("g.whatsnew", elevate ? new RectangleF(lx + 244, by, 122, 38) : new RectangleF(lx + 220, by, 146, 38), "What's new", "\uE946", false, true, 14))
         { _whatsNewManual = true; _wnScroll = 0; }
         // the language of every screen, each choice in its own words: it applies at once
         ui.Label(new RectangleF(lx + 10, 572, 100, 38), "Language");

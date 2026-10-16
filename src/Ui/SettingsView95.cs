@@ -423,6 +423,11 @@ public sealed partial class SettingsView
         ui.Check95("w95.lock", 28, 216, "&Lock position (the grip won't move it)", ref b, w.Enabled);
         w.Locked = b;
         if (ui.Button95("w95.reset", new RectangleF(28, 240, 100, 23), "&Reset position", w.Enabled)) _h.ResetWrist();
+        // the Windows volume in VR (Sys/AudioMixer.cs): ticked = auto (Virtual Desktop), unticked = off
+        b = C.General.VolumeToApps != "off";
+        bool vb = b;
+        ui.Check95("w95.vol", 140, 245, "&Windows volume in VR", ref b, true);
+        if (b != vb) C.General.VolumeToApps = b ? null : "off";
 
         ui.Group95(new RectangleF(16, 282, 350, 148), "Show on the watch");
         b = w.ShowBatteries;

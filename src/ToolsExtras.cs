@@ -132,7 +132,7 @@ static partial class Tools
             Face();
             int n0 = WatchPages.Count(wcfg);
             string pagesBefore = JsonSerializer.Serialize(wcfg.Pages);
-            ClickM(222 + 486 - 118 - 6 - 40 + 20, 76 + 16);             // the share button in the page strip
+            ClickM(SettingsView.ShareMidX(WatchPages.Count(wcfg)), 76 + 16);             // the share button in the page strip
             ClickM(724 + 130, 130 + 18);                                // Save to Documents
             var files = FaceShare.List();
             bool savedVr = files.Count == 1 && host.Notes.Count == 1 && host.Notes[0].text.Contains("faces");
@@ -176,7 +176,7 @@ static partial class Tools
             view.AskFile = null;
             Want($"extras share: Paste text adds the 8th page {eighth} (want True), a 9th is refused {ninthUi} (want True)", eighth && ninthUi);
             Face();
-            ClickM(222 + 486 - 118 - 6 - 40 + 20, 76 + 16);             // closed again
+            ClickM(SettingsView.ShareMidX(WatchPages.Count(wcfg)), 76 + 16);             // closed again
             view.EditingWatch = false;
 
             // ---- the fit of the new texts, Modern and Cyber: nothing sticks out of its box ----
