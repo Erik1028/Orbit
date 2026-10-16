@@ -790,7 +790,7 @@ static class Hu
         ("Smaller", "Kisebb"),
         ("Larger", "Nagyobb"),
         ("Remove", "Eltávolítás"),
-        ("Add page", "Oldal hozzáadása"),
+        ("Add page", "Új oldal"),
         ("New page", "Új oldal"),
         ("Start from", "Kiindulás"),
         ("Grid", "Rács"),
