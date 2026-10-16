@@ -604,22 +604,35 @@ public sealed partial class WristPanel
             var b = new RectangleF(3 + i * (bw + 3), y + 4, bw, TH95 - y - 6);
             bool click = _ui.Clickable(Ui.Id("wtb", i), b, out bool hover, out bool held);
             bool on = i == cur;
-            if (on || hover || held)
-            {
-                _p.Smooth(true);
-                _p.FillRound(b, Theme.WithAlpha(0xFF0B1A30, 0.65f), 3);
-                _p.Smooth(false);
-                var inner = RectangleF.Inflate(b, -1, -1);
-                uint top = held ? 0xFF4D7FBF : on ? 0xFF7FA9DA : 0xFF6F95C2, bottom = held ? 0xFF2B5C9C : on ? 0xFF3F6EA8 : 0xFF3D628F;
-                _p.GradientRaw(inner, top, bottom, 2);
-                _p.Fill(new RectangleF(inner.X + 1, inner.Y, inner.Width - 2, MathF.Round(inner.Height * 0.45f)), Theme.WithAlpha(0xFFFFFFFF, 0.18f));
-                if (on) _p.Fill(new RectangleF(inner.X + 4, inner.Bottom - 1, inner.Width - 8, 1), 0xFFBFE4FF);
-            }
+            // the superbar's hot-track: the button lights up (in quickly, away slowly) and a glow follows the pointer along it, in
+            // the pointer's (the laser's) colour where 7 took the program icon's
+            float h = XpAeroFx.Fade(XpAeroFx.Task, b, hover && !held, AeroSkin.GlowIn, AeroSkin.GlowOut);
+            if (hover && i < _glowX7.Length) _glowX7[i] = Math.Clamp(_ui.Mouse.X, b.X + 4, b.Right - 4);
+            if (on || held || h >= 1) ButtonLit7(b, on, held);
             else
             {
                 _p.Smooth(true);
                 _p.StrokeRound(new RectangleF(b.X + 0.5f, b.Y + 0.5f, b.Width - 1, b.Height - 1), Theme.WithAlpha(0xFFFFFFFF, 0.22f), 1, 3);
                 _p.Smooth(false);
+                if (h > 0)
+                {
+                    _p.PushFade(h);
+                    ButtonLit7(b, false, false);
+                    _p.PopFade();
+                }
+            }
+            if (h > 0 && !held && i < _glowX7.Length)
+            {
+                // the glow: soft rings round the pointer's place, at the button's foot, clipped to the button
+                var gi = RectangleF.Inflate(b, -1, -1);
+                float gx = XpAeroFx.Ease(XpAeroFx.Glow, b, _glowX7[i], 0.08f), gy = gi.Bottom;
+                uint lc = 0xFF000000 | (Theme.Laser & 0xFFFFFF);
+                _p.PushRoundedClip(gi, 2);
+                _p.Smooth(true);
+                for (int ring = 0; ring < 4; ring++)
+                    _p.Circle(gx, gy, gi.Height * (1.15f - ring * 0.22f), Theme.WithAlpha(Theme.Mix(lc, 0xFFFFFFFF, 0.35f), 0.16f * h));
+                _p.Smooth(false);
+                _p.PopRoundedClip();
             }
             string name = Fit(WatchPages.Name(C, i), bw - 10);
             Ae.GlowLight(_p, name, b);
@@ -627,13 +640,70 @@ public sealed partial class WristPanel
         }
     }
 
+    // the superbar's page buttons: where the pointer glow is on each (the last place, while it fades away)
+    readonly float[] _glowX7 = new float[16];
+
+    // a lit superbar button: the page in view (a light line at its foot), held (deeper), or under the pointer
+    void ButtonLit7(RectangleF b, bool on, bool held)
+    {
+        _p.Smooth(true);
+        _p.FillRound(b, Theme.WithAlpha(0xFF0B1A30, 0.65f), 3);
+        _p.Smooth(false);
+        var inner = RectangleF.Inflate(b, -1, -1);
+        uint top = held ? 0xFF4D7FBF : on ? 0xFF7FA9DA : 0xFF6F95C2, bottom = held ? 0xFF2B5C9C : on ? 0xFF3F6EA8 : 0xFF3D628F;
+        _p.GradientRaw(inner, top, bottom, 2);
+        _p.Fill(new RectangleF(inner.X + 1, inner.Y, inner.Width - 2, MathF.Round(inner.Height * 0.45f)), Theme.WithAlpha(0xFFFFFFFF, 0.18f));
+        if (on) _p.Fill(new RectangleF(inner.X + 4, inner.Bottom - 1, inner.Width - 8, 1), 0xFFBFE4FF);
+    }
+
     // ================= an opened widget: a glass window =================
+
 
     partial void DetailAero(PanelData d, WatchWidgets.Kind k, string kind, RectangleF win, ref bool done)
     {
-        if (kind is "room" or "dock") return;      // their 95 windows, in 7's skin
         done = true;
-        if (kind == "mines") { MinesDetailAero(win); return; }
+        // 7's window animation: opening, the window grows from 90 % and fades in; closing, the other way (ZoomSeconds; the shared
+        // zoom draws nothing of its own in 7 - LiveZoom). On its way it takes no taps (as 95's window is not there yet: a second
+        // tap on the tile does not land on the window's buttons).
+        double zs = Theme.RetroSkin.ZoomSeconds;
+        float e = 1;
+        if (zs > 0 && Theme.RetroSkin.LiveZoom)
+        {
+            float t = (float)Math.Clamp((Clock.Now - _openStart) / zs, 0, 1);
+            e = _closing ? (1 - t) * (1 - t) : 1 - (1 - t) * (1 - t) * (1 - t);
+        }
+        bool fx = e < 1, inert = _ui.Inert;
+        if (fx)
+        {
+            _p.PushFade(e);
+            _p.PushScale(0.9f + 0.1f * e, win.X + win.Width / 2, win.Y + win.Height / 2);
+            _ui.Inert = true;
+        }
+        if (kind == "room") Room95Detail(win, d);           // their 95 windows, in 7's skin
+        else if (kind == "dock") DockDetailAero(win, d);
+        else if (kind == "mines") MinesDetailAero(win);
+        else WindowAero(d, k, kind, win);
+        if (fx)
+        {
+            _p.PopScale();
+            _p.PopFade();
+            _ui.Inert = inert;
+        }
+    }
+
+    // Hexpad: the shared window in 7's skin; while it connects, 7's marquee under the message (busy, how long unknown)
+    void DockDetailAero(RectangleF win, PanelData d)
+    {
+        Dock95Detail(win, d);
+        if (_open == null || _closing || _dockIn == null || DockShown(_dockIn, d) || d.Dock == null) return;
+        if (_dockIn.Snap.State != HexpadLink.LinkState.Connecting) return;
+        var msg = new RectangleF(win.X + 6, win.Y + 26, win.Width - 12, win.Height - 32);
+        AeroSkin.Marquee7(_p, new RectangleF(msg.X + 54, msg.Y + 42, MathF.Min(190, msg.Width - 68), 13));
+    }
+
+    // an opened widget's own 7 window
+    void WindowAero(PanelData d, WatchWidgets.Kind k, string kind, RectangleF win)
+    {
         var cl = AeroSkin.Window7(_p, win, 24, 0xFFF0F0F0);
         Ae.GlowText(_p, TitleAero(k, kind), new RectangleF(win.X + 9, win.Y + 3, win.Width - 70, 18), 0xFF000000, 12);
         var rc = new RectangleF(win.Right - 6 - 43, win.Y + 1, 43, 18);

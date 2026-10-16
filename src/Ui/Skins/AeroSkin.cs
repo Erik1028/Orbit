@@ -181,9 +181,10 @@ public sealed partial class AeroSkin : Win95Skin
             case Painter.Edge.Raised:
                 // a details list's column header (the shared screens draw them as 16 px raised cells): 7's flat white header
                 if (r.Height == 16 && r.Width >= 24) { HeaderCell(p, r); break; }
-                ButtonFace(p, r, false, false, false, false);
+                Face7(p, r, false, false, false, false, false);
                 break;
-            case Painter.Edge.Pressed: ButtonFace(p, r, false, true, false, false); break;
+            case Painter.Edge.Pressed: Face7(p, r, false, true, false, false, false); break;
+
             case Painter.Edge.Sunken: Field(p, r, false); break;
             case Painter.Edge.Window:
                 GlassFrame(p, r);
@@ -339,17 +340,28 @@ public sealed partial class AeroSkin : Win95Skin
     public static void CaptionBox(Painter p, RectangleF r, CaptionKind kind, bool enabled, bool down, bool hover)
     {
         bool close = kind == CaptionKind.Close;
-        if (close)
+        // the glow comes up quickly and dies away slowly, as 7's title bar buttons; the close box's red spills round it
+        float h = XpAeroFx.Fade(XpAeroFx.Caption, r, hover && enabled && !down, GlowIn, GlowOut);
+        if (close && h > 0 && !down) CloseGlow(p, r, h);
+        if (down)
         {
-            if (down) RoundBox(p, r, 3, 0xFF5A1F14, 0xFFD87A66, 0xFFC7563E, 0xFFAE3A22, 0xFF8E200E, 0xFFB7442A);
-            else if (hover) RoundBox(p, r, 3, 0xFF6B2A1E, 0xFFFFC8B8, 0xFFF4A28D, 0xFFE8735A, 0xFFD2391A, 0xFFF0784F);
-            else RoundBox(p, r, 3, 0xFF6B2A1E, 0xFFEBB2A4, 0xFFE1A08E, 0xFFD06D56, 0xFFC0381C, 0xFFD45A3D);
+            if (close) RoundBox(p, r, 3, 0xFF5A1F14, 0xFFD87A66, 0xFFC7563E, 0xFFAE3A22, 0xFF8E200E, 0xFFB7442A);
+            else RoundBox(p, r, 3, 0xFF3E5672, 0xFFB7CDE6, 0xFF9DB6D4, 0xFF87A3C6, 0xFF5E80AA, 0xFF7A9AC2);
         }
         else
         {
-            if (down) RoundBox(p, r, 3, 0xFF3E5672, 0xFFB7CDE6, 0xFF9DB6D4, 0xFF87A3C6, 0xFF5E80AA, 0xFF7A9AC2);
-            else if (hover) RoundBox(p, r, 3, 0xFF3E5672, 0xFFF4F9FF, 0xFFDDEBFA, 0xFFC9DDF5, 0xFF8FB8E8, 0xFFB9D6F5);
-            else RoundBox(p, r, 3, 0xFF5A7496, 0xFFEAF1FA, 0xFFDCE7F4, 0xFFCBD9EC, 0xFFAFC4E1, 0xFFC5D6EC);
+            if (h < 1)
+            {
+                if (close) RoundBox(p, r, 3, 0xFF6B2A1E, 0xFFEBB2A4, 0xFFE1A08E, 0xFFD06D56, 0xFFC0381C, 0xFFD45A3D);
+                else RoundBox(p, r, 3, 0xFF5A7496, 0xFFEAF1FA, 0xFFDCE7F4, 0xFFCBD9EC, 0xFFAFC4E1, 0xFFC5D6EC);
+            }
+            if (h > 0)
+            {
+                if (h < 1) p.PushFade(h);
+                if (close) RoundBox(p, r, 3, 0xFF6B2A1E, 0xFFFFC8B8, 0xFFF4A28D, 0xFFE8735A, 0xFFD2391A, 0xFFF0784F);
+                else RoundBox(p, r, 3, 0xFF3E5672, 0xFFF4F9FF, 0xFFDDEBFA, 0xFFC9DDF5, 0xFF8FB8E8, 0xFFB9D6F5);
+                if (h < 1) p.PopFade();
+            }
         }
         uint ink = enabled ? 0xFFFFFFFF : 0xFFE0E8F0, edge = close ? 0xFF6B2A1E : 0xFF35506F;
         float cx = MathF.Floor(r.X + r.Width / 2), cy = MathF.Floor(r.Y + r.Height / 2);
@@ -367,6 +379,15 @@ public sealed partial class AeroSkin : Win95Skin
         p.Pixels(g, gx, gy - 1, A(edge, 0.55f));
         p.Pixels(g, gx, gy + 1, A(edge, 0.75f));
         p.Pixels(g, gx, gy, ink);
+    }
+
+    // the red glow round a close box under the pointer (to its sides and below: the window's top edge stays clean)
+    static void CloseGlow(Painter p, RectangleF r, float h)
+    {
+        p.Smooth(true);
+        p.FillRound(new RectangleF(r.X - 3, r.Y + 1, r.Width + 6, r.Height + 2), A(0xFFFF4A1E, 0.16f * h), 6);
+        p.FillRound(new RectangleF(r.X - 1.5f, r.Y + 1, r.Width + 3, r.Height + 0.5f), A(0xFFFF6A3C, 0.22f * h), 4.5f);
+        p.Smooth(false);
     }
 
     // a tile of the custom face: a gadget on the desktop - blue glass, rounded, its title small and white
@@ -403,14 +424,49 @@ public sealed partial class AeroSkin : Win95Skin
 
     // 7's push button: a 3 px rounded border, a white inner line, the two-part gloss; blue when the pointer is on it, deeper when
     // held; a default button's border blue with a light-blue inner glow; latched (a toggle that is in) stays in the hot blue
-    public override RectangleF ButtonFace(Painter p, RectangleF r, bool isDefault, bool down, bool latched, bool hover)
+    public override RectangleF ButtonFace(Painter p, RectangleF r, bool isDefault, bool down, bool latched, bool hover) =>
+        Face7(p, r, isDefault, down, latched, hover, true);
+
+    // 7's hover glow: up in a moment, away slowly
+    public const float GlowIn = 0.12f, GlowOut = 0.4f;
+
+    // fx: the hover glow fades and a default button throbs (not where a panel draws only on changes: the keyboard, a header)
+    RectangleF Face7(Painter p, RectangleF r, bool isDefault, bool down, bool latched, bool hover, bool fx)
     {
-        if (down) RoundBox(p, r, 3, BtnDownBorder, 0xFF9EB9D0, 0xFFE5F4FC, 0xFFC4E5F6, 0xFF98D1EF, 0xFF68B3DB);
-        else if (hover) RoundBox(p, r, 3, BtnHotBorder, 0xFFFCFEFF, 0xFFEAF6FD, 0xFFD9F0FC, 0xFFBEE6FD, 0xFFA7D9F5);
-        else if (latched) RoundBox(p, r, 3, BtnHotBorder, 0xFFE9F5FD, 0xFFDCEFFC, 0xFFC9E8FA, 0xFFA9DBF6, 0xFF90CDF0);
-        else if (isDefault) RoundBox(p, r, 3, BtnHotBorder, 0xFF7FD6F8, 0xFFF2F2F2, 0xFFEBEBEB, 0xFFDDDDDD, 0xFFCFCFCF);
+        float h = !fx ? (hover && !down ? 1 : 0) : XpAeroFx.Fade(XpAeroFx.Hot, r, hover && !down, GlowIn, GlowOut);
+        if (down) { RoundBox(p, r, 3, BtnDownBorder, 0xFF9EB9D0, 0xFFE5F4FC, 0xFFC4E5F6, 0xFF98D1EF, 0xFF68B3DB); return RectangleF.Inflate(r, -1, -1); }
+        if (h >= 1) { HotBox(p, r); return RectangleF.Inflate(r, -1, -1); }
+        if (latched) RoundBox(p, r, 3, BtnHotBorder, 0xFFE9F5FD, 0xFFDCEFFC, 0xFFC9E8FA, 0xFFA9DBF6, 0xFF90CDF0);
+        else if (isDefault)
+        {
+            RoundBox(p, r, 3, BtnHotBorder, 0xFF7FD6F8, 0xFFF2F2F2, 0xFFEBEBEB, 0xFFDDDDDD, 0xFFCFCFCF);
+            if (fx && h <= 0) Throb(p, r);
+        }
         else RoundBox(p, r, 3, BtnBorder, 0xFFFCFCFC, 0xFFF2F2F2, 0xFFEBEBEB, 0xFFDDDDDD, 0xFFCFCFCF);
+        if (h > 0)
+        {
+            p.PushFade(h);
+            HotBox(p, r);
+            p.PopFade();
+        }
         return RectangleF.Inflate(r, -1, -1);
+    }
+
+    static void HotBox(Painter p, RectangleF r) => RoundBox(p, r, 3, BtnHotBorder, 0xFFFCFEFF, 0xFFEAF6FD, 0xFFD9F0FC, 0xFFBEE6FD, 0xFFA7D9F5);
+
+    // Vista's and 7's default button throbs: its face glows blue and back, slowly (a breath every 2.4 s), drawn 15 times a second
+    // while it is on show (Motion Full only)
+    public const double ThrobPeriod = 2.4;
+
+    static void Throb(Painter p, RectangleF r)
+    {
+        if (!XpAeroFx.Loops) return;
+        float a = 0.5f - 0.5f * MathF.Cos((float)(XpAeroFx.Now % ThrobPeriod / ThrobPeriod * 2 * Math.PI));
+        XpAeroFx.WantTick(15);
+        if (a < 0.02f) return;
+        p.PushFade(0.85f * a);
+        HotBox(p, r);
+        p.PopFade();
     }
 
     void OffFace(Painter p, RectangleF r) => RoundBox(p, r, 3, BtnOffBorder, 0xFFFBFBFB, 0xFFF4F4F4, 0xFFF4F4F4, 0xFFF4F4F4, 0xFFF4F4F4);
@@ -456,7 +512,7 @@ public sealed partial class AeroSkin : Win95Skin
     }
 
     public override RectangleF KeyCap(Painter p, RectangleF r, bool oneShot, bool down, bool latched, bool hover) =>
-        ButtonFace(p, r, oneShot, down, latched, hover);
+        Face7(p, r, oneShot, down, latched, hover, false);
 
     // 13 x 13: a grey border, a white ring, the grey well (blue under the pointer), a dark check
     static readonly string[] Check7 = { "......kk", ".....kkk", "k...kkk.", "kk.kkk..", "kkkkk...", ".kkk....", "..k....." };
@@ -471,8 +527,11 @@ public sealed partial class AeroSkin : Win95Skin
 
     static void Box7(Painter p, RectangleF box, bool enabled, bool held, bool hover, bool round)
     {
-        uint border = !enabled ? 0xFFBCBCBC : held ? 0xFF2C628B : hover ? 0xFF3C7FB1 : 0xFF8E8F8F;
-        var (a, b) = !enabled ? (0xFFE6E6E6, 0xFFF6F6F6) : held ? (0xFF7CB9E8, 0xFFD6EEFD) : hover ? (0xFFA7D7F7, 0xFFEAF6FD) : (0xFFD6D8DB, 0xFFFDFDFD);
+        // the blue under the pointer fades up and away
+        float h = XpAeroFx.Fade(XpAeroFx.Check, box, enabled && hover && !held, GlowIn, GlowOut);
+        uint border = !enabled ? 0xFFBCBCBC : held ? 0xFF2C628B : h >= 1 ? 0xFF3C7FB1 : h <= 0 ? 0xFF8E8F8F : Theme.Mix(0xFF8E8F8F, 0xFF3C7FB1, h);
+        var (a, b) = !enabled ? (0xFFE6E6E6, 0xFFF6F6F6) : held ? (0xFF7CB9E8, 0xFFD6EEFD) : h >= 1 ? (0xFFA7D7F7, 0xFFEAF6FD)
+            : h <= 0 ? (0xFFD6D8DB, 0xFFFDFDFD) : (Theme.Mix(0xFFD6D8DB, 0xFFA7D7F7, h), Theme.Mix(0xFFFDFDFD, 0xFFEAF6FD, h));
         if (round)
         {
             float cx = box.X + 6.5f, cy = box.Y + 6.5f;
@@ -546,9 +605,12 @@ public sealed partial class AeroSkin : Win95Skin
             p.Fill(new RectangleF(tx, r.Y + 24, 1, i == 0 || i == ticks - 1 ? 4 : 3), Glass ? A(0xFFFFFFFF, 0.7f) : 0xFF8C8C8C);
         }
         float x = MathF.Round(ch.X + ch.Width * t) - 5, y = r.Y + 1;
-        uint border = !enabled ? 0xFFB5B5B5 : held ? BtnDownBorder : hover ? BtnHotBorder : 0xFF707070;
+        // the thumb's blue under the pointer fades (in steps: a few gradient brushes)
+        float h = XpAeroFx.Step(XpAeroFx.Fade(XpAeroFx.Thumb, r, enabled && hover && !held, GlowIn, GlowOut), 6);
+        uint border = !enabled ? 0xFFB5B5B5 : held ? BtnDownBorder : Theme.Mix(0xFF707070, BtnHotBorder, h);
         var (a, b, c) = !enabled ? (0xFFF4F4F4, 0xFFF0F0F0, 0xFFEAEAEA) : held ? (0xFFE5F4FC, 0xFFC4E5F6, 0xFF8AC8EA)
-            : hover ? (0xFFF2FAFE, 0xFFD9F0FC, 0xFFA9DBF6) : (0xFFF8F8F8, 0xFFE9E9E9, 0xFFD3D3D3);
+            : h >= 1 ? (0xFFF2FAFE, 0xFFD9F0FC, 0xFFA9DBF6) : h <= 0 ? (0xFFF8F8F8, 0xFFE9E9E9, 0xFFD3D3D3)
+            : (Theme.Mix(0xFFF8F8F8, 0xFFF2FAFE, h), Theme.Mix(0xFFE9E9E9, 0xFFD9F0FC, h), Theme.Mix(0xFFD3D3D3, 0xFFA9DBF6, h));
         // the outline (body 11 x 14, the point 5 rows), then the gloss inside
         var outer = new[]
         {
@@ -597,6 +659,25 @@ public sealed partial class AeroSkin : Win95Skin
             p.Fill(new RectangleF(f.Right - 1, f.Y, 1, f.Height), A(bar[4], 0.6f));
             p.Fill(new RectangleF(f.X, f.Y, 1, f.Height), A(bar[4], 0.35f));
         }
+        if (w >= 8) Sheen(p, f);
+    }
+
+    // 7's progress bar sheen: a soft light sweeping through the filled part, left to right, every 2.6 s (Motion Full only), drawn
+    // 24 times a second during its 1.3 s sweep and not at all between two
+    public const double SheenPeriod = 2.6, SheenSweep = 1.3;
+
+    static void Sheen(Painter p, RectangleF f)
+    {
+        if (!XpAeroFx.Loops) return;
+        double ph = XpAeroFx.Now % SheenPeriod;
+        if (ph >= SheenSweep) { XpAeroFx.Want(XpAeroFx.Now - ph + SheenPeriod); return; }
+        XpAeroFx.WantTick(24);
+        float bw = MathF.Round(Math.Clamp(f.Width * 0.4f, 10, 36));
+        float k = (float)(ph / SheenSweep);
+        float x = MathF.Round(f.X - bw + k * (f.Width + bw));
+        p.PushClip(f);
+        p.GradientRaw(new RectangleF(x, f.Y, bw, f.Height), 0x00FFFFFF, 0x8CFFFFFF, 0x00FFFFFF, 0, 0);
+        p.PopClip();
     }
 
     // a tab: the two-part gloss, blue under the pointer; the selected one white, merging into the white page
@@ -607,9 +688,20 @@ public sealed partial class AeroSkin : Win95Skin
         p.FillRound(o, TabLine, 2);
         p.Smooth(false);
         var i = new RectangleF(o.X + 1, o.Y + 1, o.Width - 2, o.Height - 1);
+        // the blue under the pointer fades up and away (the selected one comes 2 px bigger: its own key, no fade when picked)
+        float h = selected ? 0 : XpAeroFx.Fade(XpAeroFx.Tab, r, hover, GlowIn, GlowOut);
         if (selected) p.Fill(i, 0xFFFFFFFF);
-        else if (hover) Gloss(p, i, 0xFFEAF6FD, 0xFFD9F0FC, 0xFFBEE6FD, 0xFFA7D9F5);
-        else Gloss(p, i, 0xFFF2F2F2, 0xFFEBEBEB, 0xFFDDDDDD, 0xFFCFCFCF);
+        else if (h >= 1) Gloss(p, i, 0xFFEAF6FD, 0xFFD9F0FC, 0xFFBEE6FD, 0xFFA7D9F5);
+        else
+        {
+            Gloss(p, i, 0xFFF2F2F2, 0xFFEBEBEB, 0xFFDDDDDD, 0xFFCFCFCF);
+            if (h > 0)
+            {
+                p.PushFade(h);
+                Gloss(p, i, 0xFFEAF6FD, 0xFFD9F0FC, 0xFFBEE6FD, 0xFFA7D9F5);
+                p.PopFade();
+            }
+        }
         if (!selected) p.Fill(new RectangleF(i.X, i.Y, i.Width, 1), 0xFFFCFCFC);
         Label(p, label, new RectangleF(r.X, r.Y + (selected ? 1 : 2), r.Width, 14), true, TextAlignment.Center, WindowText, false);
     }
@@ -651,7 +743,7 @@ public sealed partial class AeroSkin : Win95Skin
 
     void Arrow7(Painter p, RectangleF r, bool up, bool held)
     {
-        if (held) ButtonFace(p, RectangleF.Inflate(r, -1, -1), false, true, false, false);
+        if (held) Face7(p, RectangleF.Inflate(r, -1, -1), false, true, false, false, false);
         p.Pixels(up ? Up7 : Down7, r.X + 4, r.Y + 6, held ? 0xFF1C3D5C : 0xFF4D6185);
     }
 
@@ -675,12 +767,32 @@ public sealed partial class AeroSkin : Win95Skin
         Glass = false;
         if (!enabled) OffFace(p, r);
         else ButtonFace(p, r, false, down || open, false, hover);
+        if (open) _openCombo = r;
         p.Pixels(Drop7, r.Right - 14, MathF.Floor(r.Y + (r.Height - 4) / 2), enabled ? 0xFF000000 : OffText);
         Text(p, text, new RectangleF(r.X + 5, r.Y + 1, r.Width - 24, r.Height - 2), WindowText, false, TextAlignment.Leading, enabled, false, Ui.F95);
         Glass = g;
     }
 
+    // the combo box whose list is open (drawn just before its list): which way the list slides out
+    RectangleF _openCombo;
+
+    // 7's "Slide open combo boxes": the list slides out of its box (down, or up when it opens above it) in 165 ms
     public override void DropList(Painter p, RectangleF r, string[] items, int hot, float rowH)
+    {
+        float e = XpAeroFx.Opening(XpAeroFx.Drop, r, 0.165f);
+        if (e < 1)
+        {
+            bool up = r.Bottom <= _openCombo.Y + 1;
+            float dy = MathF.Round((1 - e) * r.Height) * (up ? 1 : -1);
+            p.PushClip(new RectangleF(r.X, r.Y, r.Width + 2, r.Height + 2));
+            DropListAt(p, new RectangleF(r.X, r.Y + dy, r.Width, r.Height), items, hot, rowH);
+            p.PopClip();
+            return;
+        }
+        DropListAt(p, r, items, hot, rowH);
+    }
+
+    void DropListAt(Painter p, RectangleF r, string[] items, int hot, float rowH)
     {
         bool g = Glass;
         Glass = false;

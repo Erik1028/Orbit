@@ -341,9 +341,11 @@ public sealed partial class XpSkin : Win95Skin
     {
         var b = new RectangleF(r.X, r.Y - 1, 16, 16);
         bool close = kind == CaptionKind.Close;
+        // the hot box lights up quickly (in a few steps: a few gradient brushes, not one per frame)
+        float h = XpAeroFx.Step(XpAeroFx.Fade(XpAeroFx.Caption, r, hover && enabled && !down, HotIn, HotOut), 6);
         uint a, z;
-        if (close) (a, z) = down ? (0xFFB5391C, 0xFFE07152) : hover ? (0xFFF8B29C, 0xFFE55B37) : (0xFFF09C82, 0xFFD5492A);
-        else (a, z) = down ? (0xFF1C47C6, 0xFF4C86F2) : hover ? (0xFF8CBBFF, 0xFF3373F2) : (0xFF5F9CFF, 0xFF1F5EE0);
+        if (close) (a, z) = down ? (0xFFB5391C, 0xFFE07152) : (Mix(0xFFF09C82, 0xFFF8B29C, h), Mix(0xFFD5492A, 0xFFE55B37, h));
+        else (a, z) = down ? (0xFF1C47C6, 0xFF4C86F2) : (Mix(0xFF5F9CFF, 0xFF8CBBFF, h), Mix(0xFF1F5EE0, 0xFF3373F2, h));
         if (!enabled) { a = Mix(a, 0xFFC8D4F0, 0.6f); z = Mix(z, 0xFFC8D4F0, 0.6f); }
         p.GradientRaw(RectangleF.Inflate(b, -1, -1), a, z, 0f, 60f);
         Outline(p, b, enabled ? 0xFFFFFFFF : 0xFFE6ECF8, 1);
@@ -399,9 +401,15 @@ public sealed partial class XpSkin : Win95Skin
     public override RectangleF ButtonFace(Painter p, RectangleF r, bool isDefault, bool down, bool latched, bool hover) =>
         XpButton(p, r, isDefault, down, latched, hover, true, ButtonBorder, false);
 
-    RectangleF XpButton(Painter p, RectangleF r, bool isDefault, bool down, bool latched, bool hover, bool enabled, uint border, bool armed)
+    // the hot state's fade (XP lit it at once; a tenth of a second here, so the rim does not flick on and off under a laser)
+    public const float HotIn = 0.10f, HotOut = 0.18f;
+
+    // fx: the hot rim fades (not on the keyboard's keys: that panel draws only when a key changes)
+    RectangleF XpButton(Painter p, RectangleF r, bool isDefault, bool down, bool latched, bool hover, bool enabled, uint border, bool armed,
+        bool fx = true)
     {
         var inner = RectangleF.Inflate(r, -1, -1);
+        float h = !fx ? (hover ? 1 : 0) : XpAeroFx.Fade(XpAeroFx.Hot, r, hover && enabled && !down, HotIn, HotOut);
         if (!enabled)
         {
             p.Fill(inner, 0xFFF5F4EA);
@@ -414,9 +422,22 @@ public sealed partial class XpSkin : Win95Skin
         else Rows(p, inner, FaceAt, FaceCols);
         Outline(p, r, border, 1, Face);
         if (down) return inner;
-        if (hover)
+        if (h >= 1) HotRim(p, inner, 1);
+        else
         {
-            // the hot rim: two pixels of orange inside the border, light on top, deep at the bottom
+            // on its way: the default's blue rim (if it is one), the orange over it
+            if (isDefault) DefaultRim(p, inner);
+            if (h > 0) HotRim(p, inner, h);
+        }
+        return inner;
+    }
+
+    // the hot rim: two pixels of orange inside the border, light on top, deep at the bottom; a: how far it has faded in
+    static void HotRim(Painter p, RectangleF inner, float a)
+    {
+        uint A(uint c) => a >= 1 ? c : Theme.WithAlpha(c, a);
+        if (a >= 1)
+        {
             H(p, inner.X, inner.Y, inner.Width, 0xFFFFF0CF);
             H(p, inner.X, inner.Y + 1, inner.Width, 0xFFFDD889);
             V(p, inner.X, inner.Y + 1, inner.Height - 2, 0xFFFDD889);
@@ -425,19 +446,30 @@ public sealed partial class XpSkin : Win95Skin
             V(p, inner.Right - 2, inner.Y + 2, inner.Height - 4, 0xFFFBC761);
             H(p, inner.X, inner.Bottom - 2, inner.Width, 0xFFF8B330);
             H(p, inner.X, inner.Bottom - 1, inner.Width, 0xFFE5A01A);
+            return;
         }
-        else if (isDefault)
-        {
-            H(p, inner.X, inner.Y, inner.Width, 0xFFCEE7FF);
-            H(p, inner.X, inner.Y + 1, inner.Width, 0xFFBCD4F6);
-            V(p, inner.X, inner.Y + 1, inner.Height - 2, 0xFF98B8EA);
-            V(p, inner.X + 1, inner.Y + 2, inner.Height - 4, 0xFFBCD4F6);
-            V(p, inner.Right - 1, inner.Y + 1, inner.Height - 2, 0xFFBCD4F6);
-            V(p, inner.Right - 2, inner.Y + 2, inner.Height - 4, 0xFFBCD4F6);
-            H(p, inner.X, inner.Bottom - 2, inner.Width, 0xFF98B8EA);
-            H(p, inner.X, inner.Bottom - 1, inner.Width, 0xFF89ADE4);
-        }
-        return inner;
+        // translucent: every pixel once (no darker crossings)
+        H(p, inner.X, inner.Y, inner.Width, A(0xFFFFF0CF));
+        H(p, inner.X, inner.Y + 1, inner.Width, A(0xFFFDD889));
+        V(p, inner.X, inner.Y + 2, inner.Height - 4, A(0xFFFDD889));
+        V(p, inner.X + 1, inner.Y + 2, inner.Height - 4, A(0xFFFBC761));
+        V(p, inner.Right - 1, inner.Y + 2, inner.Height - 4, A(0xFFFBC761));
+        V(p, inner.Right - 2, inner.Y + 2, inner.Height - 4, A(0xFFFBC761));
+        H(p, inner.X, inner.Bottom - 2, inner.Width, A(0xFFF8B330));
+        H(p, inner.X, inner.Bottom - 1, inner.Width, A(0xFFE5A01A));
+    }
+
+    // the default button's blue rim
+    static void DefaultRim(Painter p, RectangleF inner)
+    {
+        H(p, inner.X, inner.Y, inner.Width, 0xFFCEE7FF);
+        H(p, inner.X, inner.Y + 1, inner.Width, 0xFFBCD4F6);
+        V(p, inner.X, inner.Y + 1, inner.Height - 2, 0xFF98B8EA);
+        V(p, inner.X + 1, inner.Y + 2, inner.Height - 4, 0xFFBCD4F6);
+        V(p, inner.Right - 1, inner.Y + 1, inner.Height - 2, 0xFFBCD4F6);
+        V(p, inner.Right - 2, inner.Y + 2, inner.Height - 4, 0xFFBCD4F6);
+        H(p, inner.X, inner.Bottom - 2, inner.Width, 0xFF98B8EA);
+        H(p, inner.X, inner.Bottom - 1, inner.Width, 0xFF89ADE4);
     }
 
     public override void PushButton(Painter p, RectangleF r, string label, W95Icons.Id? icon, bool enabled, bool isDefault, bool down,
@@ -488,7 +520,7 @@ public sealed partial class XpSkin : Win95Skin
 
     // a key: an XP button with the grey-blue edge of the On-Screen Keyboard's keys; armed modifier orange, locked light blue
     public override RectangleF KeyCap(Painter p, RectangleF r, bool oneShot, bool down, bool latched, bool hover) =>
-        XpButton(p, r, false, down, latched && !oneShot, hover, true, 0xFF7A8EA8, oneShot);
+        XpButton(p, r, false, down, latched && !oneShot, hover, true, 0xFF7A8EA8, oneShot, false);
 
     // ---- check box, option button ----
 
@@ -499,11 +531,13 @@ public sealed partial class XpSkin : Win95Skin
         if (!enabled) p.Fill(inner, 0xFFFFFFFF);
         else if (held) p.GradientRaw(inner, 0xFFB0B0A7, 0xFFE3E1D2, 0f, 45f);
         else p.GradientRaw(inner, 0xFFDCDCD7, 0xFFFFFFFF, 0f, 45f);
-        if (enabled && hover && !held)
+        float hot = XpAeroFx.Fade(XpAeroFx.Check, box, enabled && hover && !held, HotIn, HotOut);
+        if (hot > 0)
         {
             // the hot box: an orange-yellow ring inside the border
-            Frame(p, inner, 0xFFFEDF9C, 0xFFF8B636, 1);
-            Frame(p, RectangleF.Inflate(inner, -1, -1), 0xFFFFE9B7, 0xFFFBC968, 1);
+            uint A(uint c) => hot >= 1 ? c : Theme.WithAlpha(c, hot);
+            Frame(p, inner, A(0xFFFEDF9C), A(0xFFF8B636), 1);
+            Frame(p, RectangleF.Inflate(inner, -1, -1), A(0xFFFFE9B7), A(0xFFFBC968), 1);
         }
         Frame(p, box, enabled ? CheckBorder : 0xFFCAC8BB, enabled ? CheckBorder : 0xFFCAC8BB, 1);
         if (value) p.Pixels(CheckGlyph, x + 3, y + 3, enabled ? Tick : 0xFFCAC8BB);
@@ -513,6 +547,7 @@ public sealed partial class XpSkin : Win95Skin
     public override void Radio(Painter p, float x, float y, string label, bool on, bool enabled, bool held, bool hover)
     {
         uint border = enabled ? CheckBorder : 0xFFCAC8BB;
+        float hot = XpAeroFx.Fade(XpAeroFx.Check, new RectangleF(x, y, 13, 13), enabled && hover && !held, HotIn, HotOut);
         for (int row = 0; row < 13; row++)
         {
             string m = RadioMap[row];
@@ -526,7 +561,7 @@ public sealed partial class XpSkin : Win95Skin
                 // the inside: the box's diagonal gradient (the hot ring orange)
                 float t = (row + col) / 24f;
                 uint c = !enabled ? 0xFFFFFFFF : held ? Mix(0xFFB0B0A7, 0xFFE3E1D2, t) : Mix(0xFFDCDCD7, 0xFFFFFFFF, t);
-                if (enabled && hover && !held && RadioRing[row][col] == 'r') c = Mix(0xFFFEDF9C, 0xFFF8B636, t);
+                if (hot > 0 && RadioRing[row][col] == 'r') c = hot >= 1 ? Mix(0xFFFEDF9C, 0xFFF8B636, t) : Mix(c, Mix(0xFFFEDF9C, 0xFFF8B636, t), hot);
                 Dot(p, x + col, y + row, c);
             }
         }
@@ -583,7 +618,7 @@ public sealed partial class XpSkin : Win95Skin
         }
         float x = MathF.Round(ch.X + ch.Width * t) - 5, y = r.Y;
         var map = ticks > 1 ? ThumbDown : ThumbBoth;
-        bool hot = enabled && (hover || held);
+        float hot = XpAeroFx.Fade(XpAeroFx.Thumb, r, enabled && (hover || held), HotIn, HotOut);
         for (int row = 0; row < map.Length; row++)
             for (int col = 0; col < map[row].Length; col++)
             {
@@ -595,8 +630,8 @@ public sealed partial class XpSkin : Win95Skin
                     'w' => 0xFFFFFFFF,
                     'b' => enabled ? Mix(0xFFFDFDFB, 0xFFE4E3DB, row / (float)map.Length) : 0xFFF4F3EC,
                     's' => enabled ? 0xFFD1CEC3 : 0xFFE6E4DA,
-                    'g' => !enabled ? 0xFFDCDACF : hot ? 0xFFF8B636 : Tick,
-                    'G' => !enabled ? 0xFFE8E6DD : hot ? 0xFFFFDC8C : 0xFF7BD77B,
+                    'g' => !enabled ? 0xFFDCDACF : hot >= 1 ? 0xFFF8B636 : hot <= 0 ? Tick : Mix(Tick, 0xFFF8B636, hot),
+                    'G' => !enabled ? 0xFFE8E6DD : hot >= 1 ? 0xFFFFDC8C : hot <= 0 ? 0xFF7BD77B : Mix(0xFF7BD77B, 0xFFFFDC8C, hot),
                     _ => 0xFF000000,
                 };
                 Dot(p, x + col, y + row, col32);
@@ -642,7 +677,17 @@ public sealed partial class XpSkin : Win95Skin
         float sh = r.Height - 2 - (selected ? 1 : 0);
         V(p, r.X, r.Y + 2, sh, TabBorder);
         V(p, r.Right - 1, r.Y + 2, sh, TabBorder);
-        if (selected || hover)
+        // a tab under the pointer gets the orange top too, fading in (the selected one comes 2 px bigger: its own key, so a tab
+        // just picked does not fade)
+        float o = selected ? 1 : XpAeroFx.Fade(XpAeroFx.Tab, r, hover, HotIn, HotOut);
+        if (o > 0 && o < 1)
+        {
+            uint A(uint c) => Theme.WithAlpha(c, o);
+            H(p, r.X + 2, r.Y, r.Width - 4, A(Orange1));
+            H(p, r.X + 1, r.Y + 1, r.Width - 2, A(Orange2));
+            H(p, r.X + 1, r.Y + 2, r.Width - 2, A(Orange2));
+        }
+        else if (o >= 1)
         {
             // the orange top: one deep line, two light under it
             H(p, r.X + 2, r.Y, r.Width - 4, Orange1);
@@ -665,14 +710,19 @@ public sealed partial class XpSkin : Win95Skin
     public override void ListSelection(Painter p, RectangleF row) => p.Fill(row, Highlight);
 
     // the pale blue Luna button of a scroll bar / drop-down (hot: lighter, pressed: deeper)
-    static void BlueButton(Painter p, RectangleF r, bool hot, bool down, bool enabled = true)
+    static void BlueButton(Painter p, RectangleF r, bool hot, bool down, bool enabled = true) => BlueButton(p, r, hot ? 1f : 0f, down, enabled);
+
+    // hot 0..1: on its way to lighter (in steps: a few gradient brushes, not one per frame)
+    static void BlueButton(Painter p, RectangleF r, float hot, bool down, bool enabled)
     {
         var inner = RectangleF.Inflate(r, -1, -1);
         uint a, z, edge;
+        hot = XpAeroFx.Step(hot, 6);
         if (!enabled) (a, z, edge) = (0xFFF4F3EE, 0xFFE8E6DC, 0xFFE0DED3);
         else if (down) (a, z, edge) = (0xFF8FAAF0, 0xFFB7CAF6, 0xFF8BA4E4);
-        else if (hot) (a, z, edge) = (0xFFF2F6FF, 0xFFC5D7FC, 0xFFB4C7F5);
-        else (a, z, edge) = (0xFFE3EBFE, 0xFFB9CCF7, 0xFFB0C3F2);
+        else if (hot >= 1) (a, z, edge) = (0xFFF2F6FF, 0xFFC5D7FC, 0xFFB4C7F5);
+        else if (hot <= 0) (a, z, edge) = (0xFFE3EBFE, 0xFFB9CCF7, 0xFFB0C3F2);
+        else (a, z, edge) = (Mix(0xFFE3EBFE, 0xFFF2F6FF, hot), Mix(0xFFB9CCF7, 0xFFC5D7FC, hot), Mix(0xFFB0C3F2, 0xFFB4C7F5, hot));
         p.GradientRaw(inner, a, z, 0f, 45f);
         Outline(p, r, edge, 1, 0xFFF4F3EE);
         if (enabled && !down)
@@ -721,7 +771,8 @@ public sealed partial class XpSkin : Win95Skin
         p.Fill(r, enabled ? Window : 0xFFF5F4EA);
         Outline(p, r, enabled ? EditBorder : 0xFFC9C7BA, 0);
         var b = new RectangleF(r.Right - 18, r.Y + 1, 17, r.Height - 2);
-        BlueButton(p, b, hover && enabled, down || open && enabled, enabled);
+        BlueButton(p, b, XpAeroFx.Fade(XpAeroFx.Hot, b, hover && enabled && !down && !open, HotIn, HotOut), down || open && enabled, enabled);
+        if (open) _openCombo = r;
         float gy = MathF.Floor(b.Y + (b.Height - 5) / 2);
         p.Pixels(ChevronDown, b.X + 5, gy, !enabled ? 0xFFC9C7BA : down || open ? 0xFFFFFFFF : 0xFF4D6185);
         var tr = new RectangleF(r.X + 3, r.Y + 3, b.X - r.X - 5, r.Height - 6);
@@ -730,9 +781,30 @@ public sealed partial class XpSkin : Win95Skin
             TextAlignment.Leading, true, false, Ui.F95);
     }
 
+    // the combo box whose list is open (drawn just before its list): which way the list slides out
+    RectangleF _openCombo;
+
+    // XP's "Slide open combo boxes": the list slides out of its box (down, or up when it opens above it) in 165 ms, comctl32's
+    // own time for it
     public override void DropList(Painter p, RectangleF r, string[] items, int hot, float rowH)
     {
+        float e = XpAeroFx.Opening(XpAeroFx.Drop, r, 0.165f);
+        if (e < 1)
+        {
+            bool up = r.Bottom <= _openCombo.Y + 1;
+            float dy = MathF.Round((1 - e) * r.Height) * (up ? 1 : -1);
+            p.PushClip(r);
+            DropListAt(p, new RectangleF(r.X, r.Y + dy, r.Width, r.Height), items, hot, rowH);
+            p.PopClip();
+            return;
+        }
+        DropListAt(p, r, items, hot, rowH);
+    }
+
+    void DropListAt(Painter p, RectangleF r, string[] items, int hot, float rowH)
+    {
         p.Fill(r, Window);
+
         Outline(p, r, 0xFF000000, 0);
         for (int i = 0; i < items.Length; i++)
         {

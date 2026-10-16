@@ -675,7 +675,9 @@ public sealed partial class SettingsView
             if (avail) _h.Updates.Apply();
             else _h.Updates.Check();
         }
-        if (!string.IsNullOrEmpty(umsg))
+        // busy: the style's marquee / progress bar there (95: the words)
+        bool bar = _h.Updates.Busy && Theme.RetroSkin.BusyBar(ui.P, new RectangleF(526, 191, 196, 13), us == Updater.State.Downloading ? uprog : -1);
+        if (!string.IsNullOrEmpty(umsg) && !bar)
             ui.Text95(Fit95(ui, umsg, 196), new RectangleF(524, 191, 200, 13), us == Updater.State.Failed ? 0xFF800000 : Grey95);
         if (ui.Button95("g95.whatsnew", new RectangleF(388, 212, 130, 23), "&What's New...")) { _whatsNewManual = true; }
 

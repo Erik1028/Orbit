@@ -55,7 +55,7 @@ public sealed partial class WristPanel
     {
         // Minesweeper and the room shrink back into their tiles in both styles (95: the zoom outline the other way round)
         DockLetGo();
-        if (Theme.Classic && (DetailIs("mines") || DetailIs("room") || DetailIs("dock"))) { _closing = true; _openStart = Clock.Now; }
+        if (Theme.Classic && (DetailIs("mines") || DetailIs("room") || DetailIs("dock") || Theme.RetroSkin.LiveZoom)) { _closing = true; _openStart = Clock.Now; }
         else if (Theme.Classic) _open = null;      // a 95 dialog just goes away
         else _closing = true;
         _dirty = true;
@@ -523,23 +523,33 @@ public sealed partial class WristPanel
         string kind = k == null ? null : DetailOf(k.Id);
         if (kind == null) { _open = null; return; }
         var win = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, true);
-        double t = (Clock.Now - _openStart) / 0.22;
+        double zs = Theme.RetroSkin.ZoomSeconds;           // the style's zoom (95: 0.22 s)
+        double t = zs > 0 ? (Clock.Now - _openStart) / zs : 1;
+        bool live = Theme.RetroSkin.LiveZoom;               // the style draws the window itself all the way (it fades / scales it)
         if (_closing)
         {
             // (Minesweeper, the room) the zoom outline back into its tile, then it is gone
             if (t >= 1) { _open = null; _closing = false; return; }
-            var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
-            _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
-            return;
+            if (!live)
+            {
+                var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
+                if (!Theme.RetroSkin.ZoomFrame(_p, zc, (float)t))
+                    _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
+                return;
+            }
         }
-        if (t < 1)
+        else if (t < 1)
         {
             // the 1995 window zoom: an outline growing from the widget to the window
-            var z = Lerp(WatchWidgets.Rect(_open, true, _grid), win, (float)t);
-            _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
-            return;
+            if (!live)
+            {
+                var z = Lerp(WatchWidgets.Rect(_open, true, _grid), win, (float)t);
+                if (!Theme.RetroSkin.ZoomFrame(_p, z, (float)t))
+                    _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
+                return;
+            }
         }
         if (SkinDetail(d, k, kind, win)) return;                  // a style's own window (ScreenHooks.cs)
         if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it

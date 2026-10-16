@@ -245,7 +245,11 @@ public sealed class SettingsWindow : Form
         _nextRefresh = now + 0.5;
         _beforeDraw?.Invoke();
         EnsureTarget();
-        if (_classic) View.Render95(_ui, _ptr, _target, _k, 0, 0, Theme.W95Teal);
+        if (_classic)
+        {
+            View.Render95(_ui, _ptr, _target, _k, 0, 0, Theme.W95Teal);
+            _nextRefresh = Math.Min(_nextRefresh, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
+        }
         else
         {
             _ui.Begin(_ptr, DpiScale);

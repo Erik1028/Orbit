@@ -274,6 +274,7 @@ public sealed class Painter : IDisposable
     {
         Begin(target, clear, 1);
         PixelMode = true;
+        if (Theme.Classic) Theme.RetroSkin.BeginCanvas(this, target);       // the style's animations: which canvas this is
         Dc.AntialiasMode = AntialiasMode.Aliased;
         if (Theme.Classic && Theme.RetroSkin.SmoothText)
         {

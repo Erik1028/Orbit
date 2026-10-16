@@ -718,7 +718,10 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dashNext = now + 0.5;
         PreparePreviews(_dashView);
         if (Theme.Classic)
+        {
             _dashView.Render95(_dashUi, _dashPtr, _dashSurf.Bitmap, DashW / SettingsView.W95W, 0, 0, Theme.W95Teal);
+            _dashNext = Math.Min(_dashNext, Theme.RetroSkin.NextFrame);       // the style's animations' next frame
+        }
         else
         {
             float s = DashW / SettingsView.W;

@@ -41,10 +41,24 @@ public sealed partial class WristPanel
         _p.FillRound(RectangleF.Inflate(board, 2, 2), 0xFF2B4A74, 3);
         _p.Smooth(false);
         _p.Fill(RectangleF.Inflate(board, 1, 1), 0xFF6F8DB5);
+        Ripple7(g, under);
         for (int i = 0; i < g.Cells; i++)
         {
             var sq = new RectangleF(board.X + i % g.W * pitch, board.Y + i / g.W * pitch, pitch, pitch);
             var st = rise && i == press ? (had || _mFlagMode ? MineArt.Sq.Hidden : MineArt.Sq.Open) : Square95(g, i, press, chord);
+            float k = Turned7(i);
+            if (k < 1)
+            {
+                // still turning over in the ripple: the glass, the open square fading in over it
+                Hidden7(sq, false);
+                if (k > 0)
+                {
+                    _p.PushFade(k);
+                    Square7(sq, st, false, false);
+                    _p.PopFade();
+                }
+                continue;
+            }
             Square7(sq, st, i == under && !g.Over && st == MineArt.Sq.Hidden, i == press);
             if (rise && i == press)
             {
@@ -90,6 +104,54 @@ public sealed partial class WristPanel
         _ui.Text95(best > 0 ? $"Best time: {best} s" : "Best time: none", new RectangleF(sx, cl.Bottom - 8 - 15, sw, 15), 0xFF4C4C4C);
     }
 
+    // ---- 7's reveal ripple: the squares a tap opens turn over one after the other, outwards from the tapped one (a lost game's
+    // mines from the one that went off); each fades from glass to open in 0.16 s, 30 ms later for each square further away ----
+    bool[] _mShown7;              // each square revealed as last drawn
+    double[] _mAt7;               // when it starts turning over
+    double _mRippleEnd7;
+    MinesGame _mGame7;
+    const float Turn7 = 0.16f, Wave7 = 0.03f;
+
+    bool Revealed7(MinesGame g, int i) => g.IsOpen(i) || g.State == MinesGame.Phase.Lost && g.IsMine(i);
+
+    void Ripple7(MinesGame g, int under)
+    {
+        double now = XpAeroFx.Now;
+        bool fresh = _mGame7 != g || _mShown7 == null || _mShown7.Length != g.Cells || !XpAeroFx.Moves;
+        if (fresh)
+        {
+            _mGame7 = g;
+            if (_mShown7 == null || _mShown7.Length != g.Cells) { _mShown7 = new bool[g.Cells]; _mAt7 = new double[g.Cells]; }
+            for (int i = 0; i < g.Cells; i++) { _mShown7[i] = Revealed7(g, i); _mAt7[i] = 0; }
+            _mRippleEnd7 = 0;
+            return;
+        }
+        // where it starts: the mine that went off, the square tapped (under the laser), else the first one that opened
+        int origin = g.State == MinesGame.Phase.Lost && g.Hit >= 0 && !_mShown7[g.Hit] ? g.Hit : -1;
+        if (origin < 0 && under >= 0 && under < g.Cells && Revealed7(g, under) && !_mShown7[under]) origin = under;
+        for (int i = 0; i < g.Cells && origin < 0; i++) if (Revealed7(g, i) && !_mShown7[i]) origin = i;
+        for (int i = 0; i < g.Cells; i++)
+        {
+            bool rev = Revealed7(g, i);
+            if (rev && !_mShown7[i] && origin >= 0)
+            {
+                int dx = i % g.W - origin % g.W, dy = i / g.W - origin / g.W;
+                float dist = MathF.Sqrt(dx * dx + dy * dy);
+                _mAt7[i] = now + Math.Min(0.4, dist * Wave7);
+                _mRippleEnd7 = Math.Max(_mRippleEnd7, _mAt7[i] + Turn7);
+            }
+            _mShown7[i] = rev;
+        }
+        if (now < _mRippleEnd7) XpAeroFx.Want(now);
+    }
+
+    // how far a square has turned over (1: done)
+    float Turned7(int i)
+    {
+        if (_mAt7 == null || i >= _mAt7.Length || XpAeroFx.Now >= _mRippleEnd7) return 1;
+        return Math.Clamp((float)((XpAeroFx.Now - _mAt7[i]) / Turn7), 0, 1);
+    }
+
     // one square: blue glass while hidden (lighter under the laser), pale once open with its number, the flag, the mine
     void Square7(RectangleF r, MineArt.Sq st, bool hot, bool pressed)
     {
@@ -97,7 +159,17 @@ public sealed partial class WristPanel
         {
             case MineArt.Sq.Hidden:
             case MineArt.Sq.Flag:
-                Hidden7(r, hot);
+                // the glass lights up under the laser at once and dims slowly (7's squares)
+                float h = XpAeroFx.Fade(XpAeroFx.Mine, r, hot, 0.06f, 0.35f);
+                if (h >= 1 || h <= 0) Hidden7(r, h >= 1);
+                else
+                {
+                    Hidden7(r, false);
+                    _p.PushFade(h);
+                    Hidden7(r, true);
+                    _p.PopFade();
+                }
+
                 if (st == MineArt.Sq.Flag) Flag7(r);
                 return;
             case MineArt.Sq.Wrong:
