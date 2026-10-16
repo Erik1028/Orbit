@@ -124,24 +124,31 @@ public abstract class RetroSkin
     // ---- icons: true when the skin drew this one itself (else W95Icons' picture) ----
     public abstract bool Icon(Painter p, W95Icons.Id id, float x, float y, int scale);
 
-    // ---- motion: a style's own animations (Look > Motion). The defaults are 1995's: Win95Skin does not override them ----
+    // ---- motion: a style's own animations (Look > Motion: Motion.Level says which may run). The defaults are 1995's: Windows 95
+    // has none of these, Win95Skin does not override them. A style's animation that wants its panel's next frame asks AnimWake
+    // (Gfx/AnimWake.cs): the panel takes the soonest ask right after it drew ----
 
     // a pixel canvas starts drawing (Painter.BeginPixel): an animating skin keeps its state per canvas
     public virtual void BeginCanvas(Painter p, object canvas) { }
-    // when the canvas drawn last wants its next frame (Clock.Now seconds; infinity: not until something changes) - the panels read
-    // it right after they drew
-    public virtual double NextFrame => double.PositiveInfinity;
+    // true: a whole panel fading in or out (its 0.18 s) is drawn every frame, so the style's opening / closing shows on it
+    // (the Terminal's CRT switching on and off, the Mac's zoom rectangles)
+    public virtual bool AnimatesFade => false;
     // the watch's opened widget window zooming between its tile and the window: how long (0: at once), and how it is drawn -
-    // ZoomFrame at each step (false: 95's grey outline), or LiveZoom: the window itself all the way, opening and closing (its
-    // skin's detail hook fades / scales it)
+    // WindowZoom at each step, t 0..1 from 'from' to 'to' (closing: from the window back to its tile): true when the style drew
+    // its own (XP's title bar flying, the Mac's dotted rectangles; false: 95's grey outline) - or LiveZoom: the window itself all
+    // the way, opening and closing (its skin's detail hook fades / scales it: 7)
     public virtual double ZoomSeconds => 0.22;
-    public virtual bool ZoomFrame(Painter p, RectangleF r, float t) => false;
+    public virtual bool WindowZoom(Painter p, RectangleF from, RectangleF to, float t) => false;
     public virtual bool LiveZoom => false;
     // a list box at row 'top': the (fractional) row it is drawn from - a skin may glide there (smooth scrolling)
     public virtual float ListScroll(Painter p, RectangleF box, int top) => top;
     // something busy in r (checking for updates; frac < 0: no idea how far, else how far): true when the skin drew its marquee /
     // progress bar there (95: the words say it)
     public virtual bool BusyBar(Painter p, RectangleF r, float frac) => false;
+    // a drop-down list's row was picked and the list closes (the Mac's menu blinks the item first)
+    public virtual void MenuPicked(Ui ui, RectangleF list, string[] items, int row) { }
+    // every frame a page draws its popups without an open list: what is left of a closing one (the blink)
+    public virtual void MenuClosing(Ui ui) { }
 
     // ---- helpers for every skin ----
 

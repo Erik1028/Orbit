@@ -15,12 +15,13 @@ public sealed partial class NotificationPanel
         var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
         m.MacWindow(_p, r, string.IsNullOrEmpty(c.Source) ? "Notification" : c.Source);
         var icon = new RectangleF(r.X + 14, r.Y + 33, 32, 32);
-        if (c.Icon != null)
+        bool shown = MacIconShown(c);               // blinking as it arrives
+        if (shown && c.Icon != null)
         {
             c.Bitmap ??= _p.CreateBitmap(c.Icon, NotificationListener.IconSize, NotificationListener.IconSize);
             _p.Image(c.Bitmap, icon, 1);
         }
-        else W95Icons.Draw(_p, W95Icons.Id.Info32, icon.X, icon.Y);
+        else if (shown) W95Icons.Draw(_p, W95Icons.Id.Info32, icon.X, icon.Y);
         float tx = icon.Right + 14, tw = r.Right - tx - 12;
         _p.Text(c.Title, new RectangleF(tx, r.Y + 31, tw, 15), 0xFF000000, Ui.F95, FontWeight.Bold,
             TextAlignment.Leading, ParagraphAlignment.Center, Theme.RetroFont);

@@ -148,8 +148,8 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             // the time in VR (its card, the clock's header) moves on a whole minute after SteamVR came on: just after that too
             if (!Theme.Classic && C.Face == "custom" && d.VrSince is { } since && (HasWidget("session") || HasWidget("time")))
                 _nextDraw = Math.Min(_nextDraw, now + 60.02 - (DateTime.Now - since).TotalSeconds % 60);
-            if (_pulsing) _nextDraw = Math.Min(_nextDraw, now + 1 / 30.0);      // a charging bolt breathes: 30 frames a second is smooth
-            if (Theme.Classic) _nextDraw = Math.Min(_nextDraw, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
+            // an animation wants its next frame by a time (AnimWake.cs): a style's (a blink, a sweep, a fade), the charging bolt's breath
+            _nextDraw = Math.Min(_nextDraw, AnimWake.Take());
         }
     }
 
@@ -157,7 +157,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     // buttons), "time" (only the time on a small card, nothing to press).
     public void Draw(PanelData d)
     {
-        _rolling = _pulsing = false;
+        _rolling = false;
         if (Theme.Classic) { Draw95(d); return; }
         _ui.Begin(_ptr, 1);
         SwipeGuard();

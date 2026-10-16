@@ -717,11 +717,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dashDirty = false;
         _dashNext = now + 0.5;
         PreparePreviews(_dashView);
+        AnimWake.Take();             // the previews' asks are their own panels', not the dashboard's
         if (Theme.Classic)
-        {
             _dashView.Render95(_dashUi, _dashPtr, _dashSurf.Bitmap, DashW / SettingsView.W95W, 0, 0, Theme.W95Teal);
-            _dashNext = Math.Min(_dashNext, Theme.RetroSkin.NextFrame);       // the style's animations' next frame
-        }
         else
         {
             float s = DashW / SettingsView.W;
@@ -731,6 +729,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _painter.End();
             _dashUi.End();
         }
+        _dashNext = Math.Min(_dashNext, AnimWake.Take());       // a style's animation wants its next frame (AnimWake.cs)
         if (_dashUi.Interacting || _dashUi.Changed || _dashUi.Animating) _dashDirty = true;
         _dash.SetTexture(_dashSurf.Tex);
     }

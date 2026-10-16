@@ -25,6 +25,7 @@ public sealed partial class SettingsView
         done = true;
         var p = ui.P;
         var sk = T.It;
+        TBeginFrame(ui);
         var wn = WhatsNewShown;
         bool modal = wn != null && wn.Count > 0;
         ui.Inert = modal;
@@ -57,7 +58,7 @@ public sealed partial class SettingsView
             case TabKeyboard: Keyboard95(ui); break;
             case TabLook: LookTerm(ui); break;
             case TabVrchat: Vrchat95(ui); break;
-            default: General95(ui); break;
+            default: General95(ui); TUpdateSpinner(); break;
         }
 
         // the key line: the 95 sheet's buttons, same places, as the utility's key hints
@@ -84,14 +85,16 @@ public sealed partial class SettingsView
             ui.Inert = false;
             if (WhatsNewView.Draw95(ui, new RectangleF(155, 66, 440, 340), wn, WhatsNewSubShown)) CloseWhatsNew();
         }
+        TScreenFx(p, RectangleF.Inflate(all, -3, -3));          // the tube switching on / off, the text typing in, the band
     }
 
     // a key hint of the bottom line: "F10 SAVE", the key bright, its word dimmer; a line around it under the laser, lit while held
-    static bool TFKey(Ui ui, string id, RectangleF r, string key, string word, bool enabled = true)
+    bool TFKey(Ui ui, string id, RectangleF r, string key, string word, bool enabled = true)
     {
         var p = ui.P;
         bool click = ui.Clickable(id, r, out bool hover, out bool held) && enabled;
-        bool lit = held && enabled;
+        if (click) TFlash(id);
+        bool lit = (held || TFlashing(id)) && enabled;
         if (lit) T.Lit(p, r);
         else if (hover && enabled) T.Box(p, r, T.INK);
         string s = key + " " + word;
@@ -102,11 +105,12 @@ public sealed partial class SettingsView
     }
 
     // a value in brackets, [ENABLED ]: a click changes it (lit while held)
-    static bool TValueBox(Ui ui, string id, RectangleF r, string value, bool enabled = true)
+    bool TValueBox(Ui ui, string id, RectangleF r, string value, bool enabled = true)
     {
         var p = ui.P;
         bool click = ui.Clickable(id, r, out bool hover, out bool held) && enabled;
-        bool lit = held && enabled;
+        if (click) TFlash(id);
+        bool lit = (held || TFlashing(id)) && enabled;
         if (lit) T.Lit(p, r);
         uint fc = lit ? T.BG : !enabled ? T.DIM : hover ? T.HOT : T.FRAME;
         T.Bracket(p, r.X, r.Y + 2, r.Bottom - 2, true, fc);
@@ -130,11 +134,13 @@ public sealed partial class SettingsView
         for (int i = 0; i < rows; i++)
             if (ui.Hover(new RectangleF(8, top + i * pitch - 6, divX - 10, pitch))) _tRow = i;
         _tRow = Math.Clamp(_tRow, 0, rows - 1);
+        // the selection bar: it moves to the item pointed at (a quick slide); a name is dark where the bar is under it
+        float barY = TBarY(top + _tRow * pitch);
+        T.Lit(p, new RectangleF(lx - 6, barY, vx - lx - 2, 21));
         for (int i = 0; i < rows; i++)
         {
             float y = top + i * pitch;
-            bool cur = i == _tRow;
-            if (cur) T.Lit(p, new RectangleF(lx - 6, y, vx - lx - 2, 21));
+            bool cur = MathF.Abs(y - barY) < 10.5f;
             sk.Put(p, T.Up(names[i]), lx, y + 5, cur ? T.BG : T.INK);
         }
 

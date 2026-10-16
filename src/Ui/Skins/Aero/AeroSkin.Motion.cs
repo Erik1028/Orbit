@@ -17,7 +17,6 @@ namespace Orbit;
 public sealed partial class AeroSkin
 {
     public override void BeginCanvas(Painter p, object canvas) => XpAeroFx.Begin(canvas);
-    public override double NextFrame => XpAeroFx.NextFrame;
 
     // the watch's opened window: 7 draws the window itself, zooming and fading (0.2 s); none at all with Motion off (the
     // snapshots: 95's zoom, outline and all - their taps are timed by it)

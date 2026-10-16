@@ -28,6 +28,7 @@ public sealed partial class WristPanel
     void TBig(string s, float x, float capTop, int n, uint c = 0)
     {
         if (c == 0) c = T.INK;
+        TGlowUnder(s, x, capTop, n);            // what it showed before, fading out in the phosphor
         if (n >= 3)
         {
             uint halo = T.Ph(0.17f);
@@ -86,7 +87,8 @@ public sealed partial class WristPanel
     bool TKey(string id, RectangleF r, string label, bool on = false, bool enabled = true, string line2 = null)
     {
         bool click = _ui.Clickable(id, r, out bool hover, out bool held) && enabled;
-        bool lit = (on || held) && enabled;
+        if (click) TFlash(id);
+        bool lit = (on || held || TFlashing(id)) && enabled;
         if (lit) T.Lit(_p, r);
         else { _p.Fill(r, T.BG); T.Box(_p, r, hover && enabled ? T.INK : T.FRAME); }
         uint c = lit ? T.BG : !enabled ? T.DIM : hover ? T.HOT : T.INK;
@@ -112,6 +114,7 @@ public sealed partial class WristPanel
     partial void FaceTerm(PanelData d, ref bool done)
     {
         done = true;
+        TBeginFrame();
         string face = C.Face ?? "full";
         var now = DateTime.Now;
         bool rich = face is "full" or "analog";
@@ -128,8 +131,8 @@ public sealed partial class WristPanel
         // the banner and the command that drew this
         TCaps($"ORBIT/OS v{Updater.Current.ToString(3)}", x0, y, T.DIM);
         float bx = TW95 - 8 - 16;
-        if (TKey("w95.x", new RectangleF(bx, y - 3, 16, 13), "X")) _dismissReq = true;
-        if (TKey("w95.min", new RectangleF(bx - 18, y - 3, 16, 13), "_")) _dismissReq = true;
+        if (TKey("w95.x", new RectangleF(bx, y - 3, 16, 13), "X")) { _dismissReq = true; TOff(); }
+        if (TKey("w95.min", new RectangleF(bx - 18, y - 3, 16, 13), "_")) { _dismissReq = true; TOff(); }
         TCapsR("TTY0", bx - 24, y, T.DIM);
         TCaps("> watch --face " + face, x0, y + 13, T.MID);
         y += 30;
@@ -189,6 +192,7 @@ public sealed partial class WristPanel
             if (C.PerfGraph) TGraph(d.Vr, new RectangleF(x0, y, x1 - x0, 28), true);
             else TStatus(d, x0, y + 3, x1 - x0, true);
         }
+        TScreenFx(RectangleF.Inflate(win, -3, -3), x0);
         T.Scanlines(_p, RectangleF.Inflate(win, -3, -3));
     }
 
@@ -302,7 +306,7 @@ public sealed partial class WristPanel
                 TCaps(f[i].Item1, cx, capTop, f[i].Item2 ? T.HOT : T.MID);
                 cx += T.W(f[i].Item1);
             }
-            if (cursor && cx + 9 <= x + w && DateTime.Now.Second % 2 == 0) _p.Fill(new RectangleF(cx + 4, capTop - 1, 5, 9), T.INK);
+            if (cursor && cx + 9 <= x + w && T.CursorOn()) _p.Fill(new RectangleF(cx + 4, capTop - 1, 5, 9), T.INK);
             return;
         }
     }
@@ -392,6 +396,7 @@ public sealed partial class WristPanel
     partial void WidgetTerm(WatchWidget w, WatchWidgets.Kind k, RectangleF r, PanelData d, int id, ref bool done)
     {
         done = true;
+        _tCards.Add(r);                     // where the tube shows on a see-through face (CustomTerm)
         var now = DateTime.Now;
         if (k.Button)
         {
@@ -434,6 +439,12 @@ public sealed partial class WristPanel
                     TValue(c, lvl < 0 ? "--" : Volume.Muted ? "MUTE" : $"{lvl * 100:0}", lvl < 0 || Volume.Muted ? null : "%", T.INK);
                 }
                 else Volume95(c, w, id);
+                break;
+            case "dock" when !DockShows(d) && d.Dock?.State == HexpadLink.LinkState.Connecting:
+                // Hexpad being looked for: a spinner turns after the word
+                if (_ui.Clickable(Ui.Id("wdk", id), r, out _, out _)) OpenDetail(w);
+                string cw = w.W >= 2 ? "CONNECTING " : "CONN ";
+                TCapsC(cw + T.Spinner(), c, MathF.Floor(c.Y + (c.Height - 7) / 2), T.INK);
                 break;
             case "dock": Dock95Widget(r, c, d, w, id); break;
             case "room": TRoomWidget(r, c, d, w, id); break;
@@ -816,6 +827,7 @@ public sealed partial class WristPanel
     {
         done = true;
         float y = TH95 - WatchWidgets.Taskbar95 - 2;
+        _tCards.Add(new RectangleF(0, y, TW95, TH95 - y));
         _p.Fill(new RectangleF(0, y, TW95, TH95 - y), T.BG);
         T.Dashes(_p, 3, TW95 - 3, y + 1, T.FAINT);
         float bw = MathF.Floor(MathF.Min(104, (TW95 - 6 - (count - 1) * 3) / (float)count));

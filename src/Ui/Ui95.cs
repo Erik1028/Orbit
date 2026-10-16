@@ -281,6 +281,7 @@ public sealed partial class Ui
                 _dropField = r;
                 if (_dropPick >= 0)
                 {
+                    Sk.MenuPicked(this, _dropList, _dropItems, _dropPick);         // a style's closing menu (the Mac's blink)
                     if (_dropPick != index && _dropPick < items.Length) { index = _dropPick; changed = Changed = true; }
                     _drop = null;
                     _dropPick = -1;
@@ -308,7 +309,7 @@ public sealed partial class Ui
     // the open list goes over everything: the page calls this after drawing itself
     public void Popups95()
     {
-        if (_drop == null) return;
+        if (_drop == null) { Sk.MenuClosing(this); return; }
         if (!_dropSeen) { _drop = null; return; }
         var r = _dropList;
         float rh = Sk.DropRowH;

@@ -22,6 +22,16 @@ public sealed partial class SettingsView
         ui.Inert = modal;
         var all = new RectangleF(0, 0, W95W, W95H);
         var close = OnClose ?? OnClose95;
+        // the VR panel zooms out of its middle as it opens and back in as it closes (MacMotion.cs)
+        if (ShownAt > 0 && Motion.Any && (Closing || Vis < 1))
+        {
+            p.ClearRect(all);
+            float z = Math.Clamp(Closing ? 1 - Vis : Vis, 0, 1);
+            if (Closing) MacSkin.ZoomRects(p, all, MacSkin.Seed(all), z);
+            else MacSkin.ZoomRects(p, MacSkin.Seed(all), all, z);
+            AnimWake.At(Clock.Now);
+            return;
+        }
         m.MacWindow(p, all, "OrbitOverlay Settings");
         if (ui.CaptionClose95("p95.close", MacSkin.CloseX(all), MacSkin.BoxY(all), close != null)) close?.Invoke();
 
@@ -40,7 +50,7 @@ public sealed partial class SettingsView
             case TabKeyboard: Keyboard95(ui); break;
             case TabLook: LookMac(ui); break;
             case TabVrchat: Vrchat95(ui); break;
-            default: General95(ui); break;
+            default: General95(ui); MacUpdateBusy(ui); break;
         }
 
         // the quick actions on the left; Apply, Close and the default OK on the right (everything applies at once: Close, not Cancel)
@@ -65,6 +75,15 @@ public sealed partial class SettingsView
             ui.Inert = false;
             if (WhatsNewView.Draw95(ui, new RectangleF(155, 66, 440, 340), wn, WhatsNewSubShown)) CloseWhatsNew();
         }
+    }
+
+    // General: while the update check (the install) runs, Mac OS 8's barber pole under its line; the download, a progress bar
+    void MacUpdateBusy(Ui ui)
+    {
+        var (us, _, uprog, _) = _h.Updates.Snapshot();
+        var r = new RectangleF(524, 217, 198, 12);
+        if (us == Updater.State.Downloading) ui.Progress95(r, uprog, Theme.W95Navy);
+        else if (us is Updater.State.Checking or Updater.State.Starting) MacSkin.BarberPole(ui.P, r);
     }
 
     // a Mac dialog's row label: Chicago, set right against the control at x

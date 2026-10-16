@@ -8,8 +8,8 @@ namespace Orbit;
 // The motion of the Windows XP and Windows 7 styles. What their skins animate (a hover fading in, a combo box's list sliding
 // open, a window zooming, a default button throbbing...) is kept here per pixel canvas - every panel draws its own, and
 // Painter.BeginPixel says which (RetroSkin.BeginCanvas) - and per element (its rectangle and what it is), timed by the clock,
-// never by the frames. While something moves, the canvas asks for its next frame (RetroSkin.NextFrame: the panel that drew it
-// reads it right after drawing); a loop asks at its own low rate, and only while it is drawn. Nothing moves = no frames asked.
+// never by the frames. While something moves, the canvas asks for its next frame (AnimWake: the panel that drew it takes it
+// right after drawing); a loop asks at its own low rate, and only while it is drawn. Nothing moves = no frames asked.
 // Look > Motion: Off = everything at once; Reduced = the short transitions (Motion.Any); Full = the loops too (Motion.Full).
 // No allocations per frame: the state is a dictionary of structs, found again by a struct key.
 static class XpAeroFx
@@ -18,7 +18,7 @@ static class XpAeroFx
     public const int Hot = 1, Drop = 2, Scroll = 3, Window = 4, Link = 5, Task = 6, Cell = 7, Glow = 8, Check = 9, Tab = 10, Thumb = 11,
         Caption = 12, Swatch = 13, Mine = 14, Dialog = 15;
 
-    sealed class Canvas { public object Target; public int Index, Frame; public double Due = double.PositiveInfinity; }
+    sealed class Canvas { public object Target; public int Index, Frame; }
 
     readonly record struct Key(int Canvas, int Kind, int X, int Y, int W, int H);
 
@@ -59,17 +59,13 @@ static class XpAeroFx
             _canvases.Add(c);
         }
         c.Frame++;
-        c.Due = double.PositiveInfinity;
         _cur = c;
         if (++_begins % 600 == 0)
             foreach (var (k, v) in _e) if (Now - v.Seen > 20) _e.Remove(k);       // elements gone for a while
     }
 
-    // when the canvas drawn last wants its next frame
-    public static double NextFrame => _cur?.Due ?? double.PositiveInfinity;
-
-    // a frame at 'at' (now: as soon as possible)
-    public static void Want(double at) { if (_cur != null && at < _cur.Due) _cur.Due = at; }
+    // a frame at 'at' (now: as soon as possible) - the panel drawing this canvas takes it right after (AnimWake.cs)
+    public static void Want(double at) { if (_cur != null) AnimWake.At(at); }
 
     // a loop's next frame at its rate (fps), on whole ticks of it
     public static void WantTick(float fps) => Want((Math.Floor(Now * fps) + 1) / fps);

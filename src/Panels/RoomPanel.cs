@@ -86,13 +86,13 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         Ov.SetAlpha(e);
         Ov.SetWidth(Math.Clamp(C.Width, 0.2f, 1.2f) * (0.92f + 0.08f * e));
         if (s.Version != _seen) { _seen = s.Version; _s = s; _dirty = true; }
-        if (_dirty || now >= _nextDraw || _ui.Animating)
+        // a style's opening / closing shows on every frame of the fade
+        if (_dirty || now >= _nextDraw || _ui.Animating || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw(DateTime.Now);
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
-            _nextDraw = now + 15;           // "joined 3 min ago" moves on by itself
-            if (Theme.Classic) _nextDraw = Math.Min(_nextDraw, Theme.RetroSkin.NextFrame);     // the style's animations' next frame
+            _nextDraw = Math.Min(now + 15, AnimWake.Take());           // "joined 3 min ago" moves on by itself; a style's animation: sooner
         }
         Ov.Show();
     }

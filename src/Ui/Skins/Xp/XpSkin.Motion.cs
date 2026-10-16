@@ -15,15 +15,16 @@ namespace Orbit;
 public sealed partial class XpSkin
 {
     public override void BeginCanvas(Painter p, object canvas) => XpAeroFx.Begin(canvas);
-    public override double NextFrame => XpAeroFx.NextFrame;
 
     // the window zoom: 95's time; none at all with Motion off (the snapshots: 95's, outline and all - their taps are timed by it)
     public override double ZoomSeconds => XpAeroFx.Settled || XpAeroFx.Moves ? 0.22 : 0;
 
     // the title bar on its way: the Luna caption at the top of the rectangle between the tile and the window
-    public override bool ZoomFrame(Painter p, RectangleF r, float t)
+    public override bool WindowZoom(Painter p, RectangleF from, RectangleF to, float t)
     {
         if (XpAeroFx.Settled) return false;
+        var r = new RectangleF(from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t, from.Width + (to.Width - from.Width) * t,
+            from.Height + (to.Height - from.Height) * t);
         int rows = (int)Math.Clamp(MathF.Round(r.Height), 6, 21);
         CaptionBar(p, MathF.Round(r.X), MathF.Round(r.Right), MathF.Round(r.Y), rows, true, false);
         return true;

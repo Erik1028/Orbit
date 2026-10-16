@@ -144,6 +144,7 @@ public sealed partial class NotificationPanel : IDisposable
     readonly KeySounds _sound = new();
     VrOverlay _ov;
     bool _dirty;
+    double _wake = double.PositiveInfinity;      // a style's animation wants its next frame then (AnimWake.cs)
     const float Width = 0.42f, Distance = 0.85f;
     public NotificationHistory History;          // every card shown, for the watch's notifications widget
     float _placedAngle = float.NaN;
@@ -224,11 +225,12 @@ public sealed partial class NotificationPanel : IDisposable
         }
         if (_cards.Count == 0) { _ov.Hide(); return; }
         Place(Math.Clamp(_cfg.Data.General.NotificationAngle, 0f, 40f));
-        if (_dirty)
+        if (_dirty || now >= _wake)
         {
             Draw();
             _ov.SetTexture(_surf.Tex);
             _dirty = false;
+            _wake = AnimWake.Take();
         }
         _ov.Show();
     }

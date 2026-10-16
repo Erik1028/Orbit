@@ -353,12 +353,11 @@ public sealed partial class WristPanel
     public bool Animating => _ui.Animating || _rolling || Clock.Now - _introStart < 1.2;
 
     // A charging bolt's ink: it breathes, slow and soft (0.55..1 over 2.4 s; Motion full only - the watch then draws 30 times a second
-    // while one shows, WristPanel.Update), else steady. --snapshot holds it still.
-    bool _pulsing;
+    // while one shows: AnimWake, WristPanel.Update), else steady. --snapshot holds it still.
     uint BoltInk(uint c)
     {
         if (!Motion.Full || Motion.Still) return c;
-        _pulsing = true;
+        AnimWake.At(Clock.Now + 1 / 30.0);
         float k = 0.775f + 0.225f * MathF.Cos((float)(Clock.Now % 2.4 / 2.4) * MathF.Tau);
         return Theme.WithAlpha(c, k);
     }

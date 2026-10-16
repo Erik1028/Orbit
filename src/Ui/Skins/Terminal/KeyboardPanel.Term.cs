@@ -41,7 +41,7 @@ public sealed partial class KeyboardPanel
                 sk.Put(_p, shown, tx, cap - 2, T.INK);
                 tx += T.W(shown) + 1;
             }
-            if (_blink == 0 || text.Length == 0) _p.Fill(new RectangleF(tx + 1, cap - 1, 5, 9), T.INK);
+            if (_blink == 0 || text.Length == 0 || !Motion.Full) _p.Fill(new RectangleF(tx + 1, cap - 1, 5, 9), T.INK);     // blinks (Full)
             string count = $"{text.Length}/{ChatMax}";
             sk.Put(_p, count, f.Right - 4 - T.W(count), cap - 2, T.DIM);
         }
@@ -96,11 +96,27 @@ public sealed partial class KeyboardPanel
             if (!altgr && k.AltGr != null)
                 sk.Put(_p, k.AltGr, face.Right - 3 - T.W(k.AltGr), face.Bottom - 10, lit ? T.BG : T.FRAME);
         }
+        TTubeFx(RectangleF.Inflate(all, -3, -3));
         T.Scanlines(_p, RectangleF.Inflate(all, -3, -3));
         _p.End();
         _p.Begin(Surf.Bitmap, 0x00000000);
         _p.ImageNearest(_canvas95.Bitmap, new RectangleF(0, 0, TW, TH));
         _p.End();
+    }
+
+    // the tube switching on when the keyboard comes into view (its keys typed in row by row), collapsing when it goes away
+    double _tOnAt = -10;
+
+    void TTubeFx(RectangleF g)
+    {
+        if (Ov != null && Ov.ShownAt > _tOnAt) _tOnAt = Ov.ShownAt;
+        if (_tOnAt <= 0) return;
+        double now = Clock.Now;
+        bool want = C.Visible && C.Place.M != null;
+        float off = want ? 0 : Math.Clamp(1 - _vis, 0, 1);
+        var t = T.TubeAt(now - _tOnAt, off, true, g.Height);
+        if (t.Moving) AnimWake.At(now);
+        T.Apply(_p, g, t, g.X + 6);
     }
 
     // a box of dots (the edit bar's keys)

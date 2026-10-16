@@ -5,7 +5,8 @@ using Vortice.DirectWrite;
 namespace Orbit;
 
 // The theater bar in the Classic Mac style: Mac OS 8's Control Strip - a Platinum strip in a black outline, its controls side by
-// side between engraved dividers, the rounded tab with its grip at the right end.
+// side between engraved dividers, the rounded tab with its grip at the right end. It slides out of its tab as it comes and back
+// into it as it goes (MacMotion.cs).
 public sealed partial class TheaterBar
 {
     const int TabMacW = 12;
@@ -24,7 +25,10 @@ public sealed partial class TheaterBar
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(_w95, H95);
         _p.BeginPixel(_canvas95.Bitmap, 0x00000000);
-        // the strip and its tab
+        // the strip (cut off at its tab while it slides out or in) and its tab
+        float tabX = MathF.Round((_w95 - TabMacW) * MacStripOut());
+        bool sliding = tabX < _w95 - TabMacW;
+        if (sliding) _p.PushClip(new RectangleF(0, 0, tabX + 1, H95));
         var strip = new RectangleF(0, 0, _w95 - TabMacW + 1, H95);
         _p.Fill(strip, m.Face);
         _p.Fill(new RectangleF(0, 0, strip.Width, 1), 0xFF000000);
@@ -33,15 +37,6 @@ public sealed partial class TheaterBar
         _p.Fill(new RectangleF(1, 1, strip.Width - 1, 1), 0xFFFFFFFF);
         _p.Fill(new RectangleF(1, 1, 1, H95 - 2), 0xFFFFFFFF);
         _p.Fill(new RectangleF(1, H95 - 2, strip.Width - 1, 1), MacSkin.Grey3);
-        var tab = new RectangleF(_w95 - TabMacW, 0, TabMacW, H95);
-        MacSkin.FillRR(_p, tab, 4, MacSkin.Grey2);
-        MacSkin.StrokeRR(_p, tab, 4, 0xFF000000, 0xFF000000);
-        _p.Fill(new RectangleF(tab.X, 1, 1, H95 - 2), MacSkin.Grey2);
-        for (float gy = 9; gy < H95 - 9; gy += 3)
-        {
-            _p.Fill(new RectangleF(tab.X + 3, gy, 5, 1), MacSkin.Grey5);
-            _p.Fill(new RectangleF(tab.X + 4, gy + 1, 5, 1), 0xFFFFFFFF);
-        }
 
         float x = 4, by = (H95 - 22) / 2;
         ITheaterScreen pick = null;
@@ -81,6 +76,16 @@ public sealed partial class TheaterBar
         bool kb = _ui.Button95("thb95.kb", new RectangleF(x, by, Kb95W, 22), "Keyboard", true, false, KbOn, W95Icons.Id.Keyboard);
         x += Kb95W + 3;
         if (_theater) exit = _ui.Button95("thb95.x", new RectangleF(x, by, Exit95W, 22), "Exit");
+        if (sliding) _p.PopClip();
+        var tab = new RectangleF(tabX, 0, TabMacW, H95);
+        MacSkin.FillRR(_p, tab, 4, MacSkin.Grey2);
+        MacSkin.StrokeRR(_p, tab, 4, 0xFF000000, 0xFF000000);
+        _p.Fill(new RectangleF(tab.X, 1, 1, H95 - 2), MacSkin.Grey2);
+        for (float gy = 9; gy < H95 - 9; gy += 3)
+        {
+            _p.Fill(new RectangleF(tab.X + 3, gy, 5, 1), MacSkin.Grey5);
+            _p.Fill(new RectangleF(tab.X + 4, gy + 1, 5, 1), 0xFFFFFFFF);
+        }
         _p.End();
         _p.Begin(_surf.Bitmap, 0x00000000);
         _p.ImageNearest(_canvas95.Bitmap, new RectangleF(0, 0, _tw, _th));
