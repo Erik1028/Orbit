@@ -890,7 +890,7 @@ static class Hu
         ("Power", "Energia"),
         ("Audio", "Hang"),
         ("Mic", "Mikr."),
-        ("SEC ", "MP"),
+        ("SEC ", "MP "),
         ("{0} DEV", "{0} ESZK"),
         (" · W{0} · {1}", " · {0}. hét · {1}"),
         (" · W{0}", " · {0}. hét"),
@@ -1022,7 +1022,9 @@ static class Hu
         ("AM", "de."),
         ("PM", "du."),
         (" AM", " de."),
-        (" PM", " du.# ---- 1.14: per-game layouts, alerts, the quick gesture, sharing a watch page, the volume mixer ----"),
+        (" PM", " du."),
+
+        // ---- 1.14: per-game layouts, alerts, the quick gesture, sharing a watch page, the volume mixer ----
         ("the {0} layout", "„{0}” elrendezés"),
         ("the {0} page", "„{0}” oldal"),
         ("{0} started", "{0} elindult"),
