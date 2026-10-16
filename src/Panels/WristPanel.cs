@@ -119,7 +119,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         if (!Ov.Visible)
         {
             _dirty = true;
-            if (C.Face == "custom" && !Theme.Classic) Intro();      // the widgets cascade in
+            if ((C.Face == "custom" || Theme.Cyber) && !Theme.Classic) Intro();      // the widgets cascade in (Cyber: every face boots)
         }
         Ov.Show();
         if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
@@ -167,6 +167,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         string face = C.Face ?? "full";
         var now = DateTime.Now;
         if (face == "custom") { DrawCustom(d); _p.End(); _ui.End(); return; }
+        if (Theme.Cyber) { DrawCyberFace(face, d); _p.End(); _ui.End(); return; }      // its own HUD for each preset (WristCyberFaces.cs)
         if (face == "time") { DrawTimeOnly(now); _p.End(); _ui.End(); return; }
 
         var all = new RectangleF(0, 0, TW, TH);
