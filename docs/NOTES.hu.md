@@ -196,6 +196,13 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.13.2 – az új logó mindenhol (2026-10-16)
+
+Erik: „a logó amit mondtam még nem változott meg”. 1.13.0-ban csak az exe ikonja (`assets\orbit.ico`) és a
+`Tray.MakeIcon` lett új; a SteamVR dashboard gombja (`OrbitApp` `_thumbSurf`), a beállítások fejléce, a telepítő még a
+régi gyűrű + pötty volt, a 95-ös `W95Icons.Id.Orbit` (95 About, Windows 7 címsor) a régi bolygó. Most mind
+`Painter.Logo(r)` (az SVG 64-es rácsán, mindig simítva), a 95-ös ikon kézzel rajzolt 16 x 16-os változat.
+
 ## 1.13.1 – Cyber minden stíluslistában (2026-10-16)
 
 A Windows 7 / Mac / terminál beállítás a `Skins.StyleIds`-t használta (6 elem); most a `StyleMenu`-t (7, Cyberrel), a

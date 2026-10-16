@@ -517,6 +517,7 @@ public sealed partial class SettingsView
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
                 NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
+                LookVersion = 1,     // the reset IS the Bento look: never the 1.10 migration again (1.13.2 put pink over a green accent)
             };
             changed = true;
         }
