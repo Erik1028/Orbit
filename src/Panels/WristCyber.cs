@@ -51,7 +51,7 @@ public sealed partial class WristPanel
     void CyberDots(int count, float pos, bool cards, float x0, float pitch, float cy)
     {
         float span = (count - 1) * pitch;
-        if (cards) _p.Fill(new RectangleF(x0 - 13, TH - 10, span + 26, 10), 0xA6000000);
+        if (cards) _p.Fill(new RectangleF(x0 - 16, cy - 8, span + 32, 16), 0xB3000000);       // a dark plate in the dots' own strip
         for (int i = 0; i < count; i++) _p.Fill(new RectangleF(x0 + i * pitch - 4, cy - 1.5f, 8, 3), CyOther);
         float ax = x0 + Math.Clamp(pos, 0, count - 1) * pitch;
         _p.Fill(new RectangleF(ax - 9, cy - 2, 18, 4), CyY);

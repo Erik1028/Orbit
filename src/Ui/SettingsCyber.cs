@@ -22,6 +22,8 @@ public sealed partial class SettingsView
     double _cyTabAt = -10;
     static string[] _cyIdx = Array.Empty<string>();
     static readonly string CyClose = ((char)0xE711).ToString();
+    static readonly string CyMin = ((char)0xE921).ToString();       // ChromeMinimize
+    public const float CaptionH = 64;                               // the Modern / Cyber header: it drags the borderless window (SettingsWindow)
 
     static string CyIndex(int i)
     {
@@ -90,7 +92,8 @@ public sealed partial class SettingsView
         bool on = _h.VrConnected;
         float x = 232;
         float tw = CyberHud.Tag(p, x, 13, "LINK", size: 11, h: 17);
-        float rw = (OnClose != null ? 516 : 564) - x - tw - 14;
+        bool winBtns = OnClose == null && OnClose95 != null;      // the desktop window: no Windows frame in Cyber, its own minimise / close
+        float rw = (OnClose != null ? 516 : winBtns ? 468 : 564) - x - tw - 14;
         var (st, ss) = ui.HudFit(_h.VrStatus ?? "", rw, 12.5f, FontWeight.Bold, CyberHud.Mono);
         p.Text(st, new RectangleF(x + tw + 8, 11, rw, 21), on ? CyberHud.Cyan : CyberHud.Red, ss, FontWeight.Bold, TextAlignment.Leading,
             ParagraphAlignment.Center, CyberHud.Mono);
@@ -106,6 +109,14 @@ public sealed partial class SettingsView
         {
             bx -= 40;
             if (ui.HudButton("hdr.close", new RectangleF(bx, 14, 40, 36), null, CyClose, false, true, 14)) OnClose();
+            bx -= 8;
+        }
+        else if (winBtns)
+        {
+            bx -= 40;
+            if (ui.HudButton("hdr.wclose", new RectangleF(bx, 14, 40, 36), null, CyClose, false, true, 14)) OnClose95();
+            bx -= 48;
+            if (ui.HudButton("hdr.wmin", new RectangleF(bx, 14, 40, 36), null, CyMin, false, true, 14)) OnMinimize?.Invoke();
             bx -= 8;
         }
         bx -= 132;

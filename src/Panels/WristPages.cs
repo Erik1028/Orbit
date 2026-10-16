@@ -158,17 +158,20 @@ public sealed partial class WristPanel
         if (_swiping || _swallow) { _ui.CancelPress(); _swallow = false; }
     }
 
-    // The dots along the bottom margin: one per page, the page in view a pill in the accent (it slides with the face). A tap on a
-    // dot goes to its page, on the strip's left / right half to the page before / after (the strip reaches a little into the
-    // cards' bottom padding, where nothing is drawn: a target that big is hittable with a laser).
+    // The dots in their own strip under the cards (WatchWidgets.PageStrip): one per page, the page in view a pill in the accent (it
+    // slides with the face). A tap on a dot goes to its page, on the strip's left / right half to the page before / after (the whole
+    // strip takes the laser: a target that big is hittable).
     void PageDots(int count, float pos, bool cards)
     {
-        const float pitch = 18, rad = 3.5f, cy = TH - 5;
+        const float pitch = 18, rad = 3.5f, cy = TH - WatchWidgets.PageStrip / 2;
         float span = (count - 1) * pitch, x0 = TW / 2f - span / 2;
         if (Theme.Cyber) CyberDots(count, pos, cards, x0, pitch, cy);          // short bars (WristCyber.cs)
         else
         {
-            if (cards) _p.Fill(new RectangleF(x0 - 13, TH - 10, span + 26, 10), 0xA6000000, 5);     // no page under them: a dark pill
+            // a capsule round them, clear of the cards: dark glass with a hairline when there is no page under it
+            var cap = new RectangleF(x0 - 17, cy - 9, span + 34, 18);
+            if (cards) { _p.Fill(cap, 0xB3000000, 9); _p.Stroke(cap, 0x26FFFFFF, 1, 9); }
+            else _p.Fill(cap, 0x14FFFFFF, 9);
             uint dim = Theme.WithAlpha(Bento.Grey, 0.75f);
             for (int i = 0; i < count; i++) _p.Circle(x0 + i * pitch, cy, rad, dim);
             // the pill stretches over to the next dot on the way - its front gets there first, then its back follows
@@ -176,7 +179,7 @@ public sealed partial class WristPanel
             float a0 = x0 + (i0 + MathF.Max(0, 2 * f - 1)) * pitch, a1 = x0 + (i0 + MathF.Min(1, 2 * f)) * pitch;
             _p.Fill(new RectangleF(a0 - 9, cy - rad, a1 - a0 + 18, 2 * rad), Bento.Default.Accent, rad);
         }
-        var hit = new RectangleF(x0 - 30, TH - 16, span + 60, 16);
+        var hit = new RectangleF(x0 - 30, TH - WatchWidgets.PageStrip, span + 60, WatchWidgets.PageStrip);
         if (!_ui.Clickable("wdots", hit, out _, out _)) return;
         float mx = _ui.Mouse.X;
         int at = (int)MathF.Round((mx - x0) / pitch), cur = CurPage;
@@ -185,7 +188,7 @@ public sealed partial class WristPanel
     }
 
     // --snapshot: a tap on dot i
-    public static Vector2 DotPoint(int count, int i) => new(TW / 2f - (count - 1) * 9 + i * 18, TH - 5);
+    public static Vector2 DotPoint(int count, int i) => new(TW / 2f - (count - 1) * 9 + i * 18, TH - WatchWidgets.PageStrip / 2);
 
     // The 95 face's pages: a little taskbar along the bottom, a button per page - the one in view pushed in, as the running program's
     // button is on the real one

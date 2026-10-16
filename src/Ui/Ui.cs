@@ -95,6 +95,14 @@ public sealed partial class Ui
     // glow) or while something is pressed / dragged - otherwise the last frame is still right.
     public bool NeedsRedrawForMove(PointerState s, float scale) => NeedsRedrawForMove(s, scale, 0, 0);
 
+    // a point (in the frame's units) on one of the last frame's controls
+    public bool OverWidget(float x, float y)
+    {
+        for (int i = _hot.Count - 1; i >= 0; i--)
+            if (_hot[i].Contains(x, y)) return true;
+        return false;
+    }
+
     public bool NeedsRedrawForMove(PointerState s, float scale, float ox, float oy)
     {
         if (_active != null || s.Down) return true;

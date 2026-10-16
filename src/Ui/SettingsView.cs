@@ -225,11 +225,13 @@ public sealed partial class SettingsView
         if (Theme.Cyber) { DrawHeaderCyber(ui); return; }
         p.Fill(new RectangleF(0, 0, W, 64), Theme.Panel);
         p.Line(0, 64, W, 64, Theme.Border, 1);
+        bool winBtns = OnClose == null && OnClose95 != null;      // the desktop window: no Windows frame, its own minimise / close
+        if (winBtns) p.Stroke(new RectangleF(0.5f, 0.5f, W - 1, H - 1), 0x33FFFFFF, 1, 8);     // its edge, round like Windows 11's
         p.Logo(new RectangleF(22, 15, 34, 34));
         p.Text("OrbitOverlay", new RectangleF(64, 0, 180, 64), Theme.Text, 22, FontWeight.SemiBold);
         bool on = _h.VrConnected;
         float px = 64 + p.MeasureWidth("OrbitOverlay", 22, FontWeight.SemiBold) + 16;       // the pill right after the name
-        var pill = new RectangleF(px, 19, MathF.Min(Math.Max(190, ui.P.MeasureWidth(_h.VrStatus, 13) + 36), 500 - px), 26);
+        var pill = new RectangleF(px, 19, MathF.Min(Math.Max(190, ui.P.MeasureWidth(_h.VrStatus, 13) + 36), (winBtns ? 404 : 500) - px), 26);
         p.Fill(pill, on ? 0x2234D399u : 0x22FFFFFFu, 13);
         p.Circle(pill.X + 14, pill.Y + 13, 4.5f, on ? Theme.Good : Theme.Faint);
         p.Text(_h.VrStatus, new RectangleF(pill.X + 26, pill.Y, pill.Width - 30, pill.Height), on ? Theme.Text : Theme.Dim, 13);
@@ -240,6 +242,14 @@ public sealed partial class SettingsView
             x -= 40;
             if (ui.Button("hdr.close", new RectangleF(x, 14, 40, 36), null, "", false, true, 14))
                 OnClose();
+            x -= 8;
+        }
+        else if (winBtns)
+        {
+            x -= 40;
+            if (ui.Button("hdr.wclose", new RectangleF(x, 14, 40, 36), null, "\uE8BB", false, true, 12)) OnClose95();
+            x -= 48;
+            if (ui.Button("hdr.wmin", new RectangleF(x, 14, 40, 36), null, "\uE921", false, true, 12)) OnMinimize?.Invoke();
             x -= 8;
         }
         x -= 132;

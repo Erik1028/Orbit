@@ -277,7 +277,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "anim_cyber") return CyberAnimShot.Run(wrist, data, cfg, gpu, dir, kb, view, ui, surf, ptr, painter);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "cyberui") return CyberUiOnly(view, panelView, ui, surf, ptr, painter, gpu, cfg, wrist, data, kb, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "extras") return ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);
-        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "overlaps") { OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data); return 0; }
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "overlaps") { OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir); return 0; }
         if (only != null)
         {
             RetroShots(only);
@@ -775,7 +775,7 @@ static partial class Tools
         foreach (var sk in Skins.All) RetroShots(sk);
         CyberShots();
         ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
-        OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)
+        OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)
         FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
         PagesRun(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
         Log.Info("snapshot written to " + dir);

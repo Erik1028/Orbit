@@ -27,10 +27,11 @@ public sealed class SettingsWindow : Form
         _g = g; _p = p; View = view; _beforeDraw = beforeDraw;
         _ui = new Ui(p);
         View.OnClose95 = Hide;
+        View.OnMinimize = () => WindowState = FormWindowState.Minimized;      // the Cyber header's own button (no Windows frame there)
         View.AskFile = (save, name, then) => BeginInvoke(new Action(() => AskFileDialog(save, name, then)));     // the watch editor's Share
         Text = "OrbitOverlay";
         Icon = icon;
-        FormBorderStyle = FormBorderStyle.FixedSingle;
+        FormBorderStyle = FormBorderStyle.None;      // every style draws its own frame (ApplyStyle)
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(0x15, 0x17, 0x1C);
@@ -41,8 +42,11 @@ public sealed class SettingsWindow : Form
 
     float DpiScale => DeviceDpi / 96f;
 
-    // ---- the Windows 95 style: no Windows 11 frame; the sheet draws its own caption, which drags the window ----
+    // ---- no Windows 11 frame in any style (Erik, 10-16: "the window frame breaks the design"): the 95 family draws its own caption,
+    // which drags the window; Modern and Cyber their header, with their own minimise / close ----
     bool _classic;      // the style the window is laid out for
+    bool _cyber;
+    bool StyleChanged => _classic != Theme.Classic || _cyber != (Theme.Cyber && !Theme.Classic);
     int _k = 1;         // whole-pixel enlargement of the 750 x 480 sheet
 
     int Scale95()
@@ -56,6 +60,7 @@ public sealed class SettingsWindow : Form
     void ApplyStyle()
     {
         _classic = Theme.Classic;
+        _cyber = Theme.Cyber && !_classic;
         var centre = new Point(Left + Width / 2, Top + Height / 2);
         if (_classic)
         {
@@ -67,9 +72,9 @@ public sealed class SettingsWindow : Form
         }
         else
         {
-            FormBorderStyle = FormBorderStyle.FixedSingle;
+            FormBorderStyle = FormBorderStyle.None;
             ClientSize = new Size((int)(SettingsView.W * DpiScale), (int)(SettingsView.H * DpiScale));
-            int round = 0;      // back to the default
+            int round = _cyber ? 1 : 2;      // Cyber: square (its frame cuts its own corners); Modern: Windows 11's round ones
             Native.DwmSetWindowAttribute(Handle, 33, ref round, 4);
         }
         if (Visible && WindowState == FormWindowState.Normal)
@@ -89,7 +94,18 @@ public sealed class SettingsWindow : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        if (_classic != Theme.Classic) ApplyStyle();
+        ApplyStyle();       // the frame's corners too (Modern's are not set before)
+    }
+
+    // without a Windows frame (95, Cyber) the taskbar button still minimises / restores it
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style |= 0x00020000 | 0x00080000;     // WS_MINIMIZEBOX | WS_SYSMENU
+            return cp;
+        }
     }
 
     const int WM_NCHITTEST = 0x84, HTCLIENT = 1, HTCAPTION = 2;
@@ -137,6 +153,13 @@ public sealed class SettingsWindow : Form
             var pt = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF)));
             float x = pt.X / (float)_k, y = pt.Y / (float)_k;
             if (y >= 3 && y < 21 && x >= 3 && x < SettingsView.W95W - 5 - 16 - 2 - 16) m.Result = HTCAPTION;
+        }
+        // Modern / Cyber: the header drags the window wherever no control is
+        else if (m.Msg == WM_NCHITTEST && !_classic && (int)m.Result == HTCLIENT)
+        {
+            var pt = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF)));
+            float x = pt.X / DpiScale, y = pt.Y / DpiScale;
+            if (y < SettingsView.CaptionH && !_ui.OverWidget(x, y)) m.Result = HTCAPTION;
         }
     }
 
@@ -250,7 +273,7 @@ public sealed class SettingsWindow : Form
 
     public void ShowAndFocus()
     {
-        if (_classic != Theme.Classic) ApplyStyle();      // the right frame before it appears
+        if (StyleChanged) ApplyStyle();      // the right frame before it appears
         if (!Visible) Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Activate();
@@ -261,7 +284,7 @@ public sealed class SettingsWindow : Form
     public void Tick(double now)
     {
         if (!Visible || WindowState == FormWindowState.Minimized || _swap == null) return;
-        if (_classic != Theme.Classic) ApplyStyle();
+        if (StyleChanged) ApplyStyle();
         if (!Dirty && now < _nextRefresh) return;
         Dirty = false;
         _nextRefresh = now + 0.5;

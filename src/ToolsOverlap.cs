@@ -11,7 +11,7 @@ namespace Orbit;
 static partial class Tools
 {
     static int OverlapRun(WristPanel wrist, KeyboardPanel kb, SettingsView view, Ui ui, Surface surf, PointerState ptr, Painter painter,
-        ConfigStore cfg, PanelData data)
+        ConfigStore cfg, PanelData data, Gpu gpu, string dir)
     {
         var keep = cfg.Data.Appearance;
         int tab0 = view.Tab, total = 0;
@@ -54,6 +54,18 @@ static partial class Tools
         foreach (var sk in Skins.All)
             Style(sk.Tag, new AppearanceConfig { Style = sk.Id, Clock24h = true }, () => view.Render95(ui, ptr, surf.Bitmap, 2, 0, 0, Theme.W95Teal));
         Style("cyber", new AppearanceConfig { Style = CyberHud.Id, Clock24h = true }, Modern);
+        // Modern and Cyber as the desktop window draws them: no Windows frame, their own minimise / close in the header
+        var close0 = view.OnClose95; var min0 = view.OnMinimize;
+        view.OnClose95 = () => { }; view.OnMinimize = () => { };
+        foreach (var (name, style) in new[] { ("modern", (string)null), ("cyber", CyberHud.Id) })
+        {
+            Style(name + " window", new AppearanceConfig { Style = style, Clock24h = true }, Modern);
+            view.Tab = SettingsView.TabGeneral;
+            ui.ResetAnimations();
+            Modern();
+            surf.SavePng(gpu, System.IO.Path.Combine(dir, $"settings_window_{name}.png"));
+        }
+        view.OnClose95 = close0; view.OnMinimize = min0;
         System.Globalization.CultureInfo.CurrentCulture = culture;
         ui.HitSpy = null;
         cfg.Data.Appearance = keep;

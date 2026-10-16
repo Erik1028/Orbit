@@ -14,6 +14,7 @@ public sealed partial class SettingsView
 {
     public const int W95W = 750, W95H = 480;
     public Action OnClose95;      // the desktop window's own "close" (the VR panel uses OnClose)
+    public Action OnMinimize;     // the desktop window's minimise (the Cyber header draws it: no Windows frame there)
     // the VR panel's fade, for a style's opening / closing animation: when it came into view, how far in (0..1), going away.
     // The desktop window leaves them be (always there).
     public double ShownAt = -10;

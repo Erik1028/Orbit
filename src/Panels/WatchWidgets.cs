@@ -95,10 +95,12 @@ public static class WatchWidgets
     // margin, gap, size; mb: the bottom margin (a 95 face with pages has its little taskbar there)
     static (float m, float g, float w, float h, float mb) Metrics(bool classic, GridSpec grid = null) =>
         classic ? (4f, 4f, WristPanel.TW95, WristPanel.TH95, grid is { Paged: true } ? 4f + Taskbar95 : 4f)
-                : (10f, 10f, WristPanel.TW, WristPanel.TH, 10f);
+                : (10f, 10f, WristPanel.TW, WristPanel.TH, grid is { Paged: true } ? PageStrip : 10f);
 
     // the 95 face's page buttons along the bottom of its 320 x 220 canvas (a face with pages only)
     public const float Taskbar95 = 22;
+    // the modern face's page dots: a strip of their own under the cards (a face with pages only; they hung into the cards, Erik 10-16)
+    public const float PageStrip = 26;
 
     // grid: the page's (null = 6 x 4, the only grid before pages)
     public static RectangleF CellRect(int x, int y, int w, int h, bool classic, GridSpec grid = null)
@@ -443,7 +445,7 @@ public static class WatchWidgets
 }
 
 // A grid of the custom face: 6 x 4 (page 1 of every face from before pages) or 4 x 3 (the Bento grid: fewer, bigger cards).
-// Paged: the face has more than one page - only the 95 face's geometry changes then (its taskbar of pages at the bottom).
+// Paged: the face has more than one page - the bottom margin grows then (the 95 face's taskbar of pages, the modern page dots).
 public sealed class GridSpec
 {
     public readonly int Cols, Rows;
