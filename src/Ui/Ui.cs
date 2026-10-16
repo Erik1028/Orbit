@@ -234,6 +234,7 @@ public sealed partial class Ui
         var rr = Shrink(r, 0.03f * p);
         P.Fill(rr, bg, 8);
         if (a < 0.99f) P.Stroke(rr, Theme.WithAlpha(Theme.Mix(Theme.Border, Theme.Accent, 0.5f * h), 1 - a), 1, 8);
+        if (Theme.Cyber && enabled && a < 0.5f) CyberHover(rr, h);      // Cyber: a cyan outline, the corner marks closing in (UiCyber.cs)
         uint fg = !enabled ? Theme.Faint : Theme.Mix(Theme.Text, Theme.OnAccent, a);
         if (icon != null && !string.IsNullOrEmpty(label))
         {
@@ -453,7 +454,7 @@ public sealed partial class Ui
 
     public void Section(RectangleF r, string title)
     {
-        if (Theme.Cyber) { CyberHud.Tag(P, r.X, r.Y + (r.Height - 18) / 2, title.ToUpperInvariant(), size: 12, h: 18); return; }    // a yellow tag
+        if (Theme.Cyber) { CyberSection(r, title); return; }    // a yellow tag (it slides in: UiCyber.cs)
         if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
         // a group box title: bold black, an etched line running on after it
         string t = char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();

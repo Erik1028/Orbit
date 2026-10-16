@@ -333,12 +333,17 @@ public sealed partial class WristPanel
         _layoutSeen = false;
         _introStart = -10;
         _rolls.Clear();
+        CyberSettleFx();
     }
 
     // replays the cascade (the watch just came into view)
-    public void Intro() { _introStart = Clock.Now; _dirty = true; }
+    public void Intro()
+    {
+        if (Theme.Cyber) { CyberBoot(); return; }       // Cyber: the HUD boots instead (WristCyberFx.cs)
+        _introStart = Clock.Now; _dirty = true;
+    }
 
-    public bool Animating => _ui.Animating || _rolling || Clock.Now - _introStart < 1.2;
+    public bool Animating => _ui.Animating || _rolling || Clock.Now - _introStart < 1.2 || CyberAnimating;
 
     static float EaseOutBack(float t)
     {
@@ -543,6 +548,7 @@ public sealed partial class WristPanel
             }
             _halo = Bento.Halo;
             _haloCard = RectangleF.Empty;
+            if (Theme.Cyber) CyCardBegin(id, w, k, r);       // Cyber: the boot's clip (WristCyberFx.cs)
             // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card; the
             // 4 x 3 now playing is its cover's colours
             if (CoverCard(k, w, styled)) CoverBack(r, d);
@@ -553,6 +559,7 @@ public sealed partial class WristPanel
                 CardTap(id, w, k, r);
                 Widget(i, id, w, k, r, d, now);
             }
+            if (Theme.Cyber) CyCardEnd(id, r);              // Cyber: the boot's lines, a scan sweep
             if (styled) Bento.Reset();
             if (anim)
             {

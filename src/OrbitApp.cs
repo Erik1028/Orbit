@@ -100,6 +100,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _gpu = new Gpu(adapter);
         _painter = new Painter(_gpu);
         Theme.Apply(C.Appearance);
+        CyberFx.Live = true;                // the Cyber style's effects may start by themselves here (not in the --snapshot tools)
         // 1.12, the watch pages: a new install starts on the VRChat and Performance pages; an older config gets them once, after its
         // own face (a copy of config.json first). Only the config here - no window exists yet (1.10.0 crashed touching one).
         WatchPages.Migrate(_cfg);

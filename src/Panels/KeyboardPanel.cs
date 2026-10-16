@@ -451,6 +451,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
                 // Cyber: a hairline round every key (the actions' cyan, like the watch's buttons)
                 if (Theme.Cyber && !down && modState != 2)
                     _p.Stroke(RectangleF.Inflate(kr, -0.6f, -0.6f), k.Kind == Kind.Action ? CyberHud.CyanDim : CyberHud.Line, 1.25f, 11.4f);
+                if (Theme.Cyber) CyberKey(kr, hover, down, glow);       // hover marks, a let-go key's brackets (KeyboardCyber.cs)
                 if (modState == 1) _p.Stroke(kr, Theme.Accent, 3, 12);
                 fg = down || modState == 2 ? Theme.OnAccent : Theme.Text;
             }

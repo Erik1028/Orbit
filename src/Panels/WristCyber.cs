@@ -42,7 +42,9 @@ public sealed partial class WristPanel
     // the page: near black, an olive frame with its four corners cut
     void CyberPage()
     {
-        CyberHud.PanelFrame(_p, new RectangleF(0, 0, TW, TH), Theme.OverlayBg);
+        var all = new RectangleF(0, 0, TW, TH);
+        if (CyPageBooting) { CyberPageBoot(all); return; }      // the boot: the frame draws in (WristCyberFx.cs)
+        CyberHud.PanelFrame(_p, all, Theme.OverlayBg);
     }
 
     // the page dots: short bars, the page in view a longer yellow one
@@ -53,6 +55,7 @@ public sealed partial class WristPanel
         for (int i = 0; i < count; i++) _p.Fill(new RectangleF(x0 + i * pitch - 4, cy - 1.5f, 8, 3), CyOther);
         float ax = x0 + Math.Clamp(pos, 0, count - 1) * pitch;
         _p.Fill(new RectangleF(ax - 9, cy - 2, 18, 4), CyY);
+        CySeam(pos);                                    // sliding: a scan line on the seam (WristCyberFx.cs)
     }
 
     // A card: its fill with the corners cut, the dark-red hairline (cyan round a live microphone); the time's yellow card; a muted
@@ -61,10 +64,12 @@ public sealed partial class WristPanel
     {
         uint fill = cards ? Theme.WithAlpha(CyberHud.Card, 0.96f) : CyberHud.Card;
         _haloCard = RectangleF.Empty;
-        if (danger) { CyberHud.CardShape(_p, r, CyberHud.DangerFill, CyberHud.DangerEdge); return; }
-        if (k.Id == "time" && CyberClock(w)) { CyberTimeCard(r); return; }
+        bool edge = CyEdgeShown;                        // booting: the outline is drawn in from its corners (WristCyberFx.cs)
+        if (danger) { _cyEdgeC = CyberHud.DangerEdge; CyberHud.CardShape(_p, r, CyberHud.DangerFill, edge ? CyberHud.DangerEdge : 0); return; }
+        if (k.Id == "time" && CyberClock(w)) { CyberTimeCard(r, edge); return; }
         bool live = k.Id == "mic" && Mic.Present && !Mic.Muted;
-        CyberHud.CardShape(_p, r, fill, live ? CyberHud.CyanDim : CyberHud.Edge);
+        _cyEdgeC = live ? CyberHud.CyanDim : CyberHud.Edge;
+        CyberHud.CardShape(_p, r, fill, edge ? _cyEdgeC : 0);
         if (k.Id == "analog")
         {
             if (CyberClock(w)) { if (r.Width >= 150) CyberHud.Brackets(_p, r, CyY, 9, 6, 2, false, true); }      // the clock's corner mark
@@ -77,13 +82,15 @@ public sealed partial class WristPanel
     RectangleF CyTimeRect(RectangleF r) => new(r.X, r.Y, r.Width - CyTimeOff, r.Height - CyTimeOff);
     float CyHazard(RectangleF r) => Math.Clamp(MathF.Round(r.Height * 0.07f), 7, 14);
 
-    void CyberTimeCard(RectangleF r)
+    void CyberTimeCard(RectangleF r, bool edge = true)
     {
         var y = CyTimeRect(r);
-        _p.StrokeCut(new RectangleF(r.X + CyTimeOff + 0.6f, r.Y + CyTimeOff + 0.6f, y.Width - 1.2f, y.Height - 1.2f), CyTimeEdge, 1.25f, 6, 0, 0, 0);
+        var hair = new RectangleF(r.X + CyTimeOff, r.Y + CyTimeOff, y.Width, y.Height);
+        (_cyEdgeR, _cyEdgeC, _cyEdgeTL, _cyEdgeBR) = (hair, CyTimeEdge, 6.6f, 0);
+        if (edge) _p.StrokeCut(RectangleF.Inflate(hair, -0.6f, -0.6f), CyTimeEdge, 1.25f, 6, 0, 0, 0);
         _p.FillCut(y, CyY, 7, 0, 0, 0);
-        float hz = CyHazard(r);
-        CyberHud.Hazard(_p, new RectangleF(y.X + 1, y.Bottom - hz - 1, y.Width - 2, hz));
+        float hz = CyHazard(r), pitch = MathF.Max(8, hz * 1.25f);
+        CyberHud.Hazard(_p, new RectangleF(y.X + 1, y.Bottom - hz - 1, y.Width - 2, hz), CyInk, pitch, CyStripes(pitch));     // they crawl
     }
 
     // ================= the shared parts in Cyber =================
@@ -100,7 +107,8 @@ public sealed partial class WristPanel
             string s = Upper(f);
             float w = CyberHud.TagWidth(_p, s);
             if (w > room) continue;
-            CyberHud.Tag(_p, tx, r.Y + CyTagY, s, fill, ink);
+            // the boot: the tag wipes in, then types its letters (WristCyberFx.cs)
+            CyberHud.Tag(_p, tx, r.Y + CyTagY, s, CyberFx.EaseOut(CyIn(0.16f, 0.08f)), CyIn(0.22f, 0.025f * s.Length), fill, ink);
             return tx + w - x;
         }
         return 0;
@@ -126,23 +134,26 @@ public sealed partial class WristPanel
     }
 
     // the caption row: the tag, and the note at the right - monospace capitals, cut to what is left (left out under 36 px)
-    void CyberCaptionRow(RectangleF r, float x, float right, string note, uint noteColor, string[] forms)
+    void CyberCaptionRow(RectangleF r, float x, float right, string note, uint noteColor, string[] forms, uint tagFill = CyY)
     {
         float iw = right - x;
         string n = string.IsNullOrEmpty(note) ? null : Upper(note);
         float nw = n == null ? 0 : CyberHud.MonoWidth(_p, n, CyNote);
-        float cw = CyberCaption(x, r, nw > 0 ? MathF.Max(iw * 0.4f, iw - nw - 10) : iw, forms);
+        float cw = CyberCaption(x, r, nw > 0 ? MathF.Max(iw * 0.4f, iw - nw - 10) : iw, forms, tagFill);
         if (n == null) return;
         float left = x + (cw > 0 ? cw + 10 : 0), room = right - left;
         if (room < 36) return;
         n = Ellipsize(n, room, CyNote, FontWeight.SemiBold, CyberHud.Mono);
-        CyberHud.MonoAt(_p, n, left, r.Y + CyBase, room + 2, noteColor == Bento.Cap ? CyG : noteColor, CyNote, FontWeight.SemiBold, TextAlignment.Trailing);
+        uint c = noteColor == Bento.Cap ? CyG : noteColor;
+        float k = CyNoteIn(n);                          // typed in: the boot, a new note (WristCyberFx.cs)
+        if (k < 1) { CyTyped(n, right, r.Y + CyBase, c, k); return; }
+        CyberHud.MonoAt(_p, n, left, r.Y + CyBase, room + 2, c, CyNote, FontWeight.SemiBold, TextAlignment.Trailing);
     }
 
     // a reading's line: segments (it glides between values like the modern line)
     void CyberMeter(RectangleF bar, float frac, uint tint, string key, int n = 0)
     {
-        float f = _ui.Spring(key, frac < 0 ? 0 : Math.Clamp(frac, 0, 1), 140, 20, 0.08f);
+        float f = _ui.Spring(key, frac < 0 ? 0 : Math.Clamp(frac, 0, 1), 140, 20, 0.08f) * CyIn(0.28f, 0.3f);     // the boot fills it block by block
         float h = MathF.Max(4, bar.Height);
         CyberHud.Segments(_p, new RectangleF(bar.X, bar.Bottom - h, bar.Width, h), frac < 0 ? 0 : f, tint, CyberHud.Track, n);
     }
@@ -153,6 +164,7 @@ public sealed partial class WristPanel
     bool CyberPress(string id, RectangleF r, string icon, string label, bool on, bool enabled, float iconSize, bool accentFill, uint fill)
     {
         bool click = _ui.Clickable(id, MinHit(r), out bool hover, out bool held) && enabled;
+        if (click) CyTap(id);
         float s = _ui.Spring(Ui.Id(id, "#s"), held && enabled ? 0.9f : 1f, 420, 18);
         var b = new RectangleF(r.X + r.Width * (1 - s) / 2, r.Y + r.Height * (1 - s) / 2, r.Width * s, r.Height * s);
         float cut = MathF.Round(MathF.Min(b.Width, b.Height) * 0.22f);
@@ -179,18 +191,28 @@ public sealed partial class WristPanel
         else if (icon != null) _p.Icon(icon, b, fg, MathF.Round(iconSize * s));
         else if (label != null)
             _p.Text(Ellipsize(label, b.Width - 12, ls, FontWeight.SemiBold), b, on ? fg : CyW, ls, FontWeight.SemiBold, TextAlignment.Center);
+        CyTapFx(id, b, 0, cut);
         return click;
     }
 
     // ---- small helpers ----
 
     // a value in the condensed bold, its baseline at 'by'; a trailing % smaller (the concept's "4%"). Returns its width.
-    float CyValue(float x, float by, string v, float size, uint c)
+    float CyValue(float x, float by, string v, float size, uint c, string key = null)
     {
         if (string.IsNullOrEmpty(v)) return 0;
+        float fl = CyFlick(key, v);                     // it changed: a short flicker (WristCyberFx.cs)
+        if (_cyU < 99) v = CyberFx.CountUp(v, CyberFx.EaseOut(CyIn(0.26f, 0.32f)));      // the boot: it counts up
         bool pct = v.Length > 1 && v[^1] == '%';
         string num = pct ? CyNum(v) : v;
         float w = _p.MeasureWidth(num, size, FontWeight.Bold, Theme.Display);
+        if (fl > 0)
+        {
+            float o = MathF.Max(1.5f, size * 0.05f) * fl;
+            TextAt(num, x - o, by, w + 4, Theme.WithAlpha(0xFFE8483F, 0.8f * fl), size, FontWeight.Bold, TextAlignment.Leading, Theme.Display);
+            TextAt(num, x + o, by, w + 4, Theme.WithAlpha(0xFF4FD6DE, 0.8f * fl), size, FontWeight.Bold, TextAlignment.Leading, Theme.Display);
+            c = Theme.WithAlpha(c, 1 - 0.3f * fl);
+        }
         TextAt(num, x, by, w + 4, c, size, FontWeight.Bold, TextAlignment.Leading, Theme.Display);
         if (!pct) return w;
         float ps = MathF.Round(size * 0.6f);
@@ -237,8 +259,8 @@ public sealed partial class WristPanel
         return null;
     }
 
-    // a level's colour: red when it needs attention, else its normal one
-    static uint CyLevel(StatLevel l, uint normal) => l == StatLevel.Ok ? normal : CyR;
+    // a level's colour: red when it needs attention (pulsing softly: WristCyberFx.cs), else its normal one
+    uint CyLevel(StatLevel l, uint normal) => l == StatLevel.Ok ? normal : CyWarn();
 
     // the time zone as the concept writes it: "UTC+02:00", "UTC+2", "+2" - made when the offset changes
     TimeSpan _cyOffset = TimeSpan.MaxValue;
@@ -343,7 +365,8 @@ public sealed partial class WristPanel
         float slack = MathF.Max(8, MathF.Min(12, MathF.Ceiling(size * 0.075f)));
         size = MathF.Max(16, MathF.Floor(MathF.Min(size, 100 * (iw - sideW - slack) / w100) * 2) / 2);
         float by = top + (bottom - top + size * cap) / 2;  // the digits centred between the two
-        float dw = CyGlitch(t, x, by, size, y);
+        var (g, seed) = CyTimeGlitch(now);              // the boot, a new minute: it glitches (WristCyberFx.cs)
+        float dw = CyGlitch(t, x, by, size, y, g, seed);
         if (sideW > 0 && !small)
         {
             float sx = x + dw + slack;
@@ -381,26 +404,46 @@ public sealed partial class WristPanel
 
     // The digits black with a red copy up-left and a cyan copy down-right (see-through: the contrast check reads the black), then a
     // slice through their middle shifted right. Returns the digits' width.
-    float CyGlitch(string s, float x, float by, float size, RectangleF card)
+    // g > 0: glitching (CyTimeGlitch) - the split wider and jittered, the slice further, up to three more slices shifted sideways,
+    // all of it kept in the card; seed: the step (the same picture for the same step)
+    float CyGlitch(string s, float x, float by, float size, RectangleF card, float g = 0, int seed = 0)
     {
         float o = Math.Clamp(MathF.Round(size * 0.03f * 2) / 2, 1.5f, 4);
         var (b, h) = _p.TextLine(size, FontWeight.Bold, Theme.Display);
         float w = _p.MeasureWidth(s, size, FontWeight.Bold, Theme.Display);
+        bool glitch = g > 0.01f;
+        float om = glitch ? 1 + 1.3f * g * (0.4f + CyberFx.Hash(seed, 1)) : 1, jx = glitch ? (CyberFx.Hash(seed, 2) - 0.5f) * 5 * g : 0;
         void Layers(float dx)
         {
             var at = new RectangleF(x + dx, by - b, w + 6, h);
-            _p.Text(s, new RectangleF(at.X - o, at.Y - o * 0.5f, at.Width, at.Height), 0xD9E8483F, size, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
-            _p.Text(s, new RectangleF(at.X + o, at.Y + o * 0.5f, at.Width, at.Height), 0xD94FD6DE, size, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
+            float oo = o * om;
+            _p.Text(s, new RectangleF(at.X - oo, at.Y - oo * 0.5f, at.Width, at.Height), 0xD9E8483F, size, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
+            _p.Text(s, new RectangleF(at.X + oo, at.Y + oo * 0.5f, at.Width, at.Height), 0xD94FD6DE, size, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
             _p.Text(s, at, CyInk, size, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
         }
-        Layers(0);
+        if (glitch) _p.PushClip(RectangleF.Inflate(card, -1, -1));
+        Layers(jx);
         // the slice: a band at 45 % of the digits' height, its copy pushed right
         float cap = size * CyCap, bh = MathF.Max(2, MathF.Round(size * 0.06f)), sy = MathF.Round(by - cap * 0.52f);
         var band = new RectangleF(x - o - 1, sy, w + 2 * o + 6, bh);
         _p.PushClip(band);
         _p.Fill(band, CyY);
-        Layers(MathF.Max(2, o * 1.4f));
+        Layers(MathF.Max(2, o * 1.4f) + (glitch ? (CyberFx.Hash(seed, 3) - 0.3f) * 8 * g : 0));
         _p.PopClip();
+        if (glitch)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                if (CyberFx.Hash(seed, 10 + i) > 0.25f + 0.6f * g) continue;
+                float sh = MathF.Max(2, MathF.Round(cap * (0.05f + 0.13f * CyberFx.Hash(seed, 20 + i))));
+                var sl = new RectangleF(card.X, MathF.Round(by - cap * (0.05f + 0.9f * CyberFx.Hash(seed, 30 + i))), card.Width, sh);
+                _p.PushClip(sl);
+                _p.Fill(sl, CyY);
+                Layers(jx + (CyberFx.Hash(seed, 40 + i) - 0.5f) * 16 * g);
+                _p.PopClip();
+            }
+            _p.PopClip();
+        }
         return w;
     }
 
@@ -453,6 +496,7 @@ public sealed partial class WristPanel
             }
         }
         var (ht, mt, st) = ClockArt.Turns(now);
+        if (_cyU < 99) { float e = CyberFx.EaseOut(CyIn(0.18f, 0.4f)); ht *= e; mt *= e; st *= e; }     // the boot: the hands sweep to the time
         if (st > 0) _p.Arc(cx, cy, rad * 1.07f, 0, st, CyR, aw);
         // the hour hand: a yellow taper from a short tail
         {
@@ -528,7 +572,7 @@ public sealed partial class WristPanel
         float fit = CyFit(value, iw - uw, vs);
         if (fit < 24 && uw > 0) { uw = 0; fit = CyFit(value, iw, vs); }
         uint role = id is "vram" or "ram" ? CyC : CyY;
-        float vw = CyValue(x, by, value, fit, none ? CyberHud.Faint : CyLevel(lv, CyW));
+        float vw = CyValue(x, by, value, fit, none ? CyberHud.Faint : CyLevel(lv, CyW), key);
         if (uw > 0) CyMono(unit, x + vw + 3, by, uw + 2, CyG);
         CyberMeter(new RectangleF(x, barY, iw, barH), frac, none ? CyberHud.Faint : CyLevel(lv, role), key, 5);
     }
@@ -547,7 +591,7 @@ public sealed partial class WristPanel
         float uw = u == null ? 0 : CyMonoW(u) + 4;
         float vs = CyFit(value, iw - uw, MathF.Min((by - top) / CyCap, _big ? 62 : 42));
         uint role = id is "vram" or "ram" ? CyC : CyY;
-        float vw = CyValue(x, by, value, vs, none ? CyberHud.Faint : CyLevel(lv, CyW));
+        float vw = CyValue(x, by, value, vs, none ? CyberHud.Faint : CyLevel(lv, CyW), key);
         if (uw > 0) CyMono(u, x + vw + 4, by, uw + 2, CyG);
         CyberMeter(new RectangleF(x, barY, iw, barH), frac, none ? CyberHud.Faint : CyLevel(lv, role), key);
     }
@@ -555,7 +599,7 @@ public sealed partial class WristPanel
     // ---- the batteries: POWER ----
     // A 1x1: the emptiest, big. Two rows and up: a row each - the name, the percentage, ten segments. One row wider: a column each - the
     // name, the percentage, a short line. Cyan above half, yellow below, red when low (Orbit's battery rule).
-    static uint CyBattery(float pct, StatLevel lv) => lv != StatLevel.Ok ? CyR : pct >= 0.5f ? CyC : CyY;
+    uint CyBattery(float pct, StatLevel lv) => lv != StatLevel.Ok ? CyWarn() : pct >= 0.5f ? CyC : CyY;
 
     int _cyDevN = -1;
     string _cyDev;
@@ -588,7 +632,7 @@ public sealed partial class WristPanel
             float nw = CyMonoW(name) + (b.charging ? 14 : 0);
             float vs = CyFit(pct, iw - nw - 4, MathF.Min((by0 - r.Y - 33) / CyCap, _big ? 58 : 40));
             if (vs < 24) { nw = 0; vs = CyFit(pct, iw, MathF.Min((by0 - r.Y - 33) / CyCap, 40)); }
-            float vw = CyValue(x, by0, pct, vs, lv == StatLevel.Ok ? CyW : CyR);
+            float vw = CyValue(x, by0, pct, vs, lv == StatLevel.Ok ? CyW : CyWarn(), Ui.Id("wbt", id * 8));
             if (nw > 0)
             {
                 float nx = right - nw;
@@ -640,8 +684,8 @@ public sealed partial class WristPanel
                 if (CyMonoW(name) <= cx + cw - nx) CyMono(name, nx, nb, cx + cw - nx + 2, CyG);
                 string pct = Pct(shown);
                 float vs = CyFit(pct, cw, _big ? 34 : MathF.Min(26, (vb - nb - 6) / CyCap));
-                CyValue(cx, vb, pct, vs, lv == StatLevel.Ok ? CyW : CyR);
-                float f = _ui.Spring(Ui.Id("wbt", id * 8 + j), Math.Clamp(b.pct, 0, 1), 140, 20, 0.08f);
+                CyValue(cx, vb, pct, vs, lv == StatLevel.Ok ? CyW : CyWarn(), Ui.Id("wbt", id * 8 + j));
+                float f = _ui.Spring(Ui.Id("wbt", id * 8 + j), Math.Clamp(b.pct, 0, 1), 140, 20, 0.08f) * CyIn(0.28f, 0.3f);
                 _p.Fill(new RectangleF(cx, barY, cw, 4), CyberHud.Track);
                 if (f > 0.005f) _p.Fill(new RectangleF(cx, barY, MathF.Max(3, cw * f), 4), CyBattery(b.pct, lv));
             }
@@ -657,7 +701,7 @@ public sealed partial class WristPanel
         float barY = c.Bottom - 4 - barH, by = barY - 7;
         string pct = Pct(shown);
         float pw = CyValueW(pct, ts);
-        CyValue(c.Right - pw, by, pct, ts, lv == StatLevel.Ok ? CyW : CyR);
+        CyValue(c.Right - pw, by, pct, ts, lv == StatLevel.Ok ? CyW : CyWarn(), key);
         float nx = c.X, ns = MathF.Max(17, ts - 4);
         if (b.charging) { float bs = MathF.Min(14, ns - 4); _p.Icon(Bolt, new RectangleF(nx - 2, by - bs - 1, bs + 4, bs + 2), CyC, bs); nx += bs + 4; }
         float room = c.Right - pw - 10 - nx;
@@ -759,7 +803,7 @@ public sealed partial class WristPanel
     // the line under the title: yellow so far, a tick at where it is
     void CyProgress(RectangleF bar, double frac)
     {
-        float f = (float)Math.Clamp(frac, 0, 1);
+        float f = (float)Math.Clamp(frac, 0, 1) * CyberFx.EaseOut(CyIn(0.28f, 0.3f));
         _p.Fill(bar, CyberHud.Track);
         _p.Fill(new RectangleF(bar.X, bar.Y, bar.Width * f, bar.Height), CyY);
         _p.Fill(new RectangleF(bar.X + bar.Width * f - 1, bar.Y - 3, 2, bar.Height + 6), CyY);
@@ -785,7 +829,7 @@ public sealed partial class WristPanel
             int k = 0;
             for (int i = 0; i < 5; i++)
             {
-                float bx = x0 + i * (bw + gap), bh = h * EqBars[i];
+                float bx = x0 + i * (bw + gap), bh = h * EqBars[i] * MathF.Max(0.08f, CyberFx.EaseOut(CyIn(0.2f + 0.04f * i, 0.2f)));
                 _eq[k++] = new Vector2(bx + lean, base0 - bh);
                 _eq[k++] = new Vector2(bx + lean + bw, base0 - bh);
                 _eq[k++] = new Vector2(bx + bw, base0);
@@ -829,6 +873,7 @@ public sealed partial class WristPanel
             bool spike = flag > 0 || ms > budget;
             float h = Math.Clamp(ms / topMs, 0.05f, 1) * g.Height;
             if (spike) h = MathF.Max(h, g.Height * 0.92f);
+            if (_cyU < 99) { h *= CyberFx.EaseOut(CyIn(0.18f + 0.3f * b / bars, 0.12f)); if (h < 0.5f) continue; }     // the boot
             _p.Fill(new RectangleF(g.X + b * pitch, g.Bottom - h, bw, h), spike ? CyR : CyberHud.Bars);
         }
         float by = MathF.Round(g.Bottom - g.Height * (budget / topMs)) + 0.5f;
@@ -963,10 +1008,20 @@ public sealed partial class WristPanel
     // Live: the card's outline cyan, the microphone and LIVE in cyan, its level as segments. Muted: the danger card, MUTED in red.
     void CyberMic(RectangleF r, WatchWidget w, int id)
     {
-        if (_ui.Clickable(Ui.Id("wmic", id), r, out _, out _)) { Mic.ToggleMute(); _dirty = true; }
+        string mk = Ui.Id("wmic", id);
+        if (_ui.Clickable(mk, r, out _, out _)) { Mic.ToggleMute(); _dirty = true; CyTap(mk); }
+        CyTapFx(mk, r, CyberHud.CardTL, CyberHud.CardBR);
         bool has = Mic.Present, muted = has && Mic.Muted;
         float pad = PadX(r), x = r.X + pad, iw = r.Width - 2 * pad;
-        CyberCaption(x, r, iw + pad - CyTagX, CapMicC);
+        float tagW = CyberCaption(x, r, iw + pad - CyTagX, CapMicC);
+        if (has && !muted && r.Right - pad - 8 > x + tagW + 6)
+        {
+            // live: a cyan dot at the right of the tag row - it breathes (2.4 s; WristCyberFx.cs)
+            float br = 1;
+            if (CyLoops) { br = 1 - 0.7f * CyLoopAmp * (0.5f - 0.5f * MathF.Cos((float)(_cyT % 2.4 / 2.4) * MathF.Tau)); CyWantLoop(); }
+            float dy = r.Y + CyTagY + CyberHud.TagH / 2;
+            _p.Fill(new RectangleF(r.Right - pad - 8, dy - 4, 8, 8), Theme.WithAlpha(CyC, br * CyIn(0.4f, 0.1f)));
+        }
         string word = !has ? "NO MIC" : muted ? "MUTED" : "LIVE";
         uint c = !has ? CyberHud.Faint : muted ? CyR : CyC;
         float barH = 5, barY = r.Bottom - (_big ? 18 : 15) - barH, by = barY - (_big ? 13 : 9);
@@ -983,6 +1038,7 @@ public sealed partial class WristPanel
     // ---- the notifications: INBOX ----
     // How many as the note (cyan); a row each - where from in a red chip, what, how long ago
     int _cyNotesVersion = -2;
+    bool _cyNotesFirst = true;
     readonly List<(string chip, string text, DateTime at)> _cyNotes = new();
     string _cyNew;
     void CyNotesNow(PanelData d)
@@ -1004,13 +1060,16 @@ public sealed partial class WristPanel
         }
         int n = d.Notes.Items.Count;
         if (n > 0) _cyNew = $"{n} NEW";
+        if (n > 0) CyInboxSeen(d.Notes.Items[0].At, _cyNotesFirst);
+        _cyNotesFirst = false;
     }
 
     void CyberInbox(RectangleF r, PanelData d)
     {
         CyNotesNow(d);
         float pad = PadX(r), x = r.X + pad, right = r.Right - pad, iw = right - x;
-        CyberCaptionRow(r, x, right, _cyNew, CyC, CapInbox);
+        var (blink, lit) = CyInboxBlink();              // a new one: the tag and "N NEW" blink (WristCyberFx.cs)
+        CyberCaptionRow(r, x, right, _cyNew, blink && !lit ? Theme.WithAlpha(CyC, 0.25f) : CyC, CapInbox, blink && lit ? CyC : CyY);
         if (_cyNotes.Count == 0)
         {
             CyMono(Ellipsize("NO NOTIFICATIONS", iw, CyNote, FontWeight.SemiBold, CyberHud.Mono), x, r.Y + MathF.Min(64, r.Height * 0.5f + 14), iw + 2, CyG);
@@ -1037,8 +1096,11 @@ public sealed partial class WristPanel
             float aw = CyMonoW(age);
             CyMono(age, right, by, aw + 2, CyG, CyNote, FontWeight.SemiBold, TextAlignment.Trailing);
             float tw = right - aw - 10 - tx;
+            float typed = i == 0 && blink ? CyInboxRow() : 1;      // the newest types in
+            if (typed < 1) _p.PushClip(new RectangleF(tx, cy - 14, tw * typed, 28));
             if (tw > 20)
                 TextAt(Ellipsize(text, tw, 17, FontWeight.SemiBold, Theme.Display), tx, cy + 6, tw + 2, CyW, 17, FontWeight.SemiBold, TextAlignment.Leading, Theme.Display);
+            if (typed < 1) _p.PopClip();
         }
     }
 
@@ -1083,8 +1145,28 @@ public sealed partial class WristPanel
         bool scaled = MathF.Abs(s - 1) > 0.001f;
         if (scaled) _p.PushScale(s, t.X + t.Width / 2, t.Y + t.Height / 2);
         float tl = card ? CyberHud.CardTL + 2 : 5, br = card ? CyberHud.CardBR : 9;
+        // on / off: the cyan fill wipes in from the left (and out to it), a light edge leading (WristCyberFx.cs)
+        float f = CyOnOff(key, on);
+        if (f <= 0.004f || f >= 0.996f) CyTileFace(t, k, kid, d, mode, card, f >= 0.996f, hover, tl, br);
+        else
+        {
+            CyTileFace(t, k, kid, d, mode, card, false, hover, tl, br);
+            float wx = t.X + t.Width * f;
+            _p.PushClip(new RectangleF(t.X - 1, t.Y - 1, wx - t.X + 1, t.Height + 2));
+            CyTileFace(t, k, kid, d, mode, card, true, hover, tl, br);
+            _p.PopClip();
+            _p.Fill(new RectangleF(wx - 1, t.Y + 2, 2, t.Height - 4), 0xE6FFFFFF);
+        }
+        CyTapFx(key, t, tl, br);
+        if (scaled) _p.PopScale();
+        if (click) { CyTap(key); OnAction?.Invoke(kid); }
+    }
+
+    void CyTileFace(RectangleF t, WatchWidgets.Kind k, string kid, PanelData d, int mode, bool card, bool on, bool hover, float tl, float br)
+    {
         _p.FillCut(t, on ? CyC : hover ? CyberHud.Card3 : card ? CyberHud.Card : CyberHud.Card2, tl, 0, br, 0);
-        if (!on) _p.StrokeCut(RectangleF.Inflate(t, -0.6f, -0.6f), hover ? CyC : CyberHud.CyanDim, 1.25f, MathF.Max(0, tl - 0.3f), 0, MathF.Max(0, br - 0.3f), 0);
+        if (!on && (!card || CyEdgeShown))              // a button card booting: its outline is drawn in (WristCyberFx.cs)
+            _p.StrokeCut(RectangleF.Inflate(t, -0.6f, -0.6f), hover ? CyC : CyberHud.CyanDim, 1.25f, MathF.Max(0, tl - 0.3f), 0, MathF.Max(0, br - 0.3f), 0);
         if (card || t.Height >= 54) CyberHud.Brackets(_p, t, on ? CyInk : CyC, card ? 10 : 7, card ? 7 : 5, 2);
         uint ic = on ? CyInk : CyC, lc = on ? CyInk : CyG;
         string icon = kid == "desktops" && !d.DesktopsVisible ? Theme.IcoHide : k.Icon;
@@ -1117,8 +1199,6 @@ public sealed partial class WristPanel
             CyMono(label, t.X + 4, lb, t.Width - 8, card ? lc : on ? CyInk : CyW, CyNote, FontWeight.Bold, TextAlignment.Center);
         }
         else _p.Icon(icon, t, ic, isz);
-        if (scaled) _p.PopScale();
-        if (click) OnAction?.Invoke(kid);
     }
 
     // a button widget: the tile is its card - the icon over its name (a wide one: beside it); the layout its name and place
