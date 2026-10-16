@@ -19,8 +19,10 @@ public sealed partial class KeyboardPanel
         _canvas95 ??= new Surface(_p.Gpu, CW95, CH95);
         _p.BeginPixel(_canvas95.Bitmap, 0x00000000);
         var all = new RectangleF(0, 0, CW95, CH95);
-        var inner = AeroSkin.Window7(_p, all, 6, 0xFF1A2638, 6);
-        _p.GradientRaw(inner, 0xFF22324A, 0xFF162234, 0xFF101A28);
+        // osk.exe's window: a thick glass frame, the keys on a slate-blue client area
+        var inner = AeroSkin.Window7(_p, all, 8, 0xFF3F5272, 7);
+        _p.GradientRaw(inner, 0xFF566B8E, 0xFF425677, 0xFF303F5A);
+        _p.Fill(new RectangleF(inner.X, inner.Y, inner.Width, 1), Theme.WithAlpha(0xFFFFFFFF, 0.18f));
         bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
 
         if (_chat)
@@ -50,7 +52,8 @@ public sealed partial class KeyboardPanel
         }
 
         var drawList = new List<Key>(_keys);
-        drawList.AddRange(_chat ? _barChat : _barNormal);
+        var bar = _chat ? _barChat : _barNormal;
+        drawList.AddRange(bar);
         foreach (var k in drawList)
         {
             var r = Half(k.R);
@@ -58,7 +61,7 @@ public sealed partial class KeyboardPanel
             int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && Caps ? 2
                          : k.Action == "chat" && _chat ? 2 : 0;
             bool hover = Array.IndexOf(_hover, k) >= 0;
-            OskKey(r, k.Kind == Kind.Action, down, modState == 2 && !down, modState == 1 && !down, hover);
+            OskKey(r, bar.Contains(k), down, modState == 2 && !down, modState == 1 && !down, hover);
             bool lit = down || (modState == 2);
             uint ink = 0xFFFFFFFF, sub = lit ? 0xFFE6F3FF : 0xFFA9B9CE;
 
@@ -118,7 +121,7 @@ public sealed partial class KeyboardPanel
         else if (latched) (border, a, b, c, d) = (0xFF0E3D6E, 0xFF6FB6F2, 0xFF3D8EDB, 0xFF2271C4, 0xFF3784D3);
         else if (hover) (border, a, b, c, d) = action ? (0xFF0B1B30, 0xFF7DAEE6, 0xFF4E86C8, 0xFF2E66AA, 0xFF3D76B9) : (0xFF0B1B30, 0xFF5C7899, 0xFF41597A, 0xFF2D4462, 0xFF37506F);
         else if (action) (border, a, b, c, d) = (0xFF0B1B30, 0xFF5D8FCB, 0xFF3E72B1, 0xFF285A98, 0xFF2F64A3);
-        else (border, a, b, c, d) = (0xFF070D16, 0xFF4A586D, 0xFF39465A, 0xFF2A3546, 0xFF2F3B4D);
+        else (border, a, b, c, d) = (0xFF070D16, 0xFF465468, 0xFF333F52, 0xFF232C3B, 0xFF283242);
         AeroSkin.RoundBox(_p, r, 3, border, oneShot ? 0xFF7FC8F8 : hover && !down ? 0xFF8EC9F5 : Theme.Mix(a, 0xFFFFFFFF, 0.18f), a, b, c, d);
         if (oneShot)
         {

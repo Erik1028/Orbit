@@ -178,7 +178,11 @@ public sealed partial class AeroSkin : Win95Skin
     {
         switch (e)
         {
-            case Painter.Edge.Raised: ButtonFace(p, r, false, false, false, false); break;
+            case Painter.Edge.Raised:
+                // a details list's column header (the shared screens draw them as 16 px raised cells): 7's flat white header
+                if (r.Height == 16 && r.Width >= 24) { HeaderCell(p, r); break; }
+                ButtonFace(p, r, false, false, false, false);
+                break;
             case Painter.Edge.Pressed: ButtonFace(p, r, false, true, false, false); break;
             case Painter.Edge.Sunken: Field(p, r, false); break;
             case Painter.Edge.Window:
@@ -192,6 +196,14 @@ public sealed partial class AeroSkin : Win95Skin
                 p.Smooth(false);
                 break;
         }
+    }
+
+    // Explorer's column header: white into a hair of grey, a light line under it, a separator at its right
+    static void HeaderCell(Painter p, RectangleF r)
+    {
+        p.GradientRaw(r, 0xFFFFFFFF, 0xFFF7F8FA, 0xFFF1F2F4);
+        p.Fill(new RectangleF(r.X, r.Bottom - 1, r.Width, 1), 0xFFD5D5D5);
+        p.Fill(new RectangleF(r.Right - 1, r.Y, 1, r.Height - 1), 0xFFE3E8EE);
     }
 
     static void Outline(Painter p, RectangleF r, uint c)
@@ -375,11 +387,12 @@ public sealed partial class AeroSkin : Win95Skin
 
     public static void Tile(Painter p, RectangleF r, uint top = 0xFF4F97E2, uint bottom = 0xFF2A69BE)
     {
+        // a gadget's edge: a dark line that lets the desktop through, a light rim inside it, then the glass
         p.Smooth(true);
-        p.FillRound(r, 0xFF1B4F93, 4);
+        p.FillRound(r, A(0xFF03183A, 0.6f), 4);
         p.Smooth(false);
         var i = RectangleF.Inflate(r, -1, -1);
-        p.GradientRaw(i, Theme.Mix(top, 0xFFFFFFFF, 0.35f), top, bottom, 3);
+        p.GradientRaw(i, Theme.Mix(top, 0xFFFFFFFF, 0.45f), Theme.Mix(top, 0xFFFFFFFF, 0.15f), bottom, 3);
         p.GradientRaw(RectangleF.Inflate(i, -1, -1), top, Theme.Mix(top, bottom, 0.5f), bottom, 3);
         p.Smooth(true);
         p.FillRound(new RectangleF(i.X + 1, i.Y + 1, i.Width - 2, MathF.Round((i.Height - 2) * 0.42f)), A(0xFFFFFFFF, 0.09f), 2);
@@ -473,7 +486,14 @@ public sealed partial class AeroSkin : Win95Skin
         }
         p.Fill(box, border);
         p.Fill(RectangleF.Inflate(box, -1, -1), 0xFFF6F6F6);
-        p.GradientRaw(RectangleF.Inflate(box, -2, -2), a, b, 0, 45);
+        // the well: 9 x 9, darker at its top left, light at its bottom right (pixel by pixel along the diagonal)
+        var w = RectangleF.Inflate(box, -2, -2);
+        int n = (int)w.Width;
+        for (int d = 0; d <= 2 * (n - 1); d++)
+        {
+            uint c = Theme.Mix(a, b, d / (2f * (n - 1)));
+            for (int i = Math.Max(0, d - n + 1); i <= Math.Min(d, n - 1); i++) p.Fill(new RectangleF(w.X + i, w.Y + d - i, 1, 1), c);
+        }
     }
 
     public override void Radio(Painter p, float x, float y, string label, bool on, bool enabled, bool held, bool hover)

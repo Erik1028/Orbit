@@ -80,22 +80,29 @@ public sealed partial class SettingsView
             FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, sk.Font);
         p.Pixels(Lens7, search.Right - 16, search.Y + 7, 0xFF59708C);
 
-        // Explorer's command bar: the pages
+        // the pages: Control Panel's navigation pane (blue links on its pale gradient, the page you are on in bold black) laid along
+        // the top - the pages' controls keep the 95 sheet's places, so the pane cannot take the left edge
         var cmd = new RectangleF(client.X, client.Y, client.Width, 23);
-        p.GradientRaw(cmd, 0xFFF6FAFE, 0xFFE9F1FB, 0xFFDCE7F5);
-        p.Fill(new RectangleF(cmd.X, cmd.Bottom - 1, cmd.Width, 1), 0xFFA9B9CE);
+        p.GradientRaw(cmd, 0xFFF1F7FD, 0xFFE4EEF9, 0xFFD8E5F5);
+        p.Fill(new RectangleF(cmd.X, cmd.Bottom - 1, cmd.Width, 1), 0xFFB6C8DE);
         p.Fill(new RectangleF(cmd.X, cmd.Y, cmd.Width, 1), 0xFFFFFFFF);
-        float nx = cmd.X + 6;
+        float nx = cmd.X + 8;
         for (int i = 0; i < Tabs.Length; i++)
         {
-            float w = p.MeasureWidth(Tabs[i], Ui.F95, FontWeight.Normal, sk.Font) + 18;
+            bool on = i == Tab;
+            float lw = p.MeasureWidth(Tabs[i], Ui.F95, FontWeight.Bold, sk.Font), w = lw + 18;
             var r = new RectangleF(nx, cmd.Y + 2, w, cmd.Height - 5);
             bool click = ui.Clickable(Ui.Id("p7.nav", i), r, out bool hv, out bool hd);
-            bool on = i == Tab;
-            if (on || hd) AeroSkin.RoundBox(p, r, 3, 0xFF7C9BC2, 0xFFE3EEFA, 0xFFD5E5F7, 0xFFC8DCF3, 0xFFB5CFEE, 0xFFC4D9F2);
-            else if (hv) AeroSkin.RoundBox(p, r, 3, 0xFFA7C3E3, 0xFFFBFDFF, 0xFFF3F8FE, 0xFFE8F1FC, 0xFFDCEAFB, 0xFFE6F0FC);
-            p.Text(Tabs[i], new RectangleF(r.X, r.Y - 2, r.Width, r.Height + 4), on ? 0xFF000000 : 0xFF1E395B, Ui.F95, FontWeight.Normal,
+            if (hd && !on) AeroSkin.RoundBox(p, r, 3, 0xFF7C9BC2, 0xFFE3EEFA, 0xFFD5E5F7, 0xFFC8DCF3, 0xFFB5CFEE, 0xFFC4D9F2);
+            else if (hv && !on) AeroSkin.RoundBox(p, r, 3, 0xFFB8D2EE, 0xFFFBFDFF, 0xFFF3F8FE, 0xFFE8F1FC, 0xFFDCEAFB, 0xFFE6F0FC);
+            uint ink = on ? 0xFF000000 : hv ? 0xFF3399FF : AeroSkin.HeadBlue;
+            p.Text(Tabs[i], new RectangleF(r.X, r.Y - 2, r.Width, r.Height + 4), ink, Ui.F95, on ? FontWeight.Bold : FontWeight.Normal,
                 TextAlignment.Center, ParagraphAlignment.Center, sk.Font);
+            if (hv && !on)
+            {
+                float tw = p.MeasureWidth(Tabs[i], Ui.F95, FontWeight.Normal, sk.Font);
+                p.Fill(new RectangleF(MathF.Round(r.X + (r.Width - tw) / 2), r.Y + 14, MathF.Round(tw), 1), 0xFF3399FF);
+            }
             if (click) Tab = i;
             nx += w + 2;
         }

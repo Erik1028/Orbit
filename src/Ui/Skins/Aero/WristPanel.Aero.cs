@@ -147,6 +147,9 @@ public sealed partial class WristPanel
     // the batteries: name, 7's bar (green, yellow when low-ish, red when low, blue while charging), the percentage
     void BatteriesAero(PanelData d, RectangleF r, bool glass)
     {
+        // a tall tile: the battery meter gadget's rows - the name and the percentage on a line, the bar under them
+        int nb = Math.Min(4, d.Vr.Batteries.Count);
+        if (glass && nb > 0 && r.Width >= 80 && r.Height / nb >= 23) { BatteryRowsAero(d, r, nb); return; }
         int shown = 0, max = Math.Max(1, Math.Min(4, (int)(r.Height / 13)));
         float pitch = MathF.Min(14, MathF.Floor(r.Height / Math.Max(1, Math.Min(max, d.Vr.Batteries.Count))));
         float y0 = r.Y + MathF.Floor((r.Height - Math.Min(max, d.Vr.Batteries.Count) * pitch) / 2);
@@ -168,6 +171,35 @@ public sealed partial class WristPanel
         if (shown == 0)
             _p.Text(d.VrConnected ? "No battery info" : "SteamVR is off", new RectangleF(r.X, r.Y, r.Width, 16), glass ? 0xFFC6DCF4 : 0xFF6D6D6D, 11,
                 FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+    }
+
+    // the long names where a row has the room (the short ones of the 95 meter otherwise)
+    static string[] BatteryNamesAero(string label) => label switch
+    {
+        "L" => new[] { "Left controller", "Left", "L" },
+        "R" => new[] { "Right controller", "Right", "R" },
+        _ when label.StartsWith("Trk×", StringComparison.Ordinal) => new[] { $"{label[4..]} trackers (lowest)", $"{label[4..]} trackers", label },
+        _ => new[] { label },
+    };
+
+    void BatteryRowsAero(PanelData d, RectangleF r, int n)
+    {
+        float pitch = MathF.Min(30, MathF.Floor(r.Height / n));
+        float y = r.Y + MathF.Floor((r.Height - n * pitch) / 2) + MathF.Floor((pitch - 23) / 2);
+        for (int i = 0; i < n; i++, y += pitch)
+        {
+            var b = d.Vr.Batteries[i];
+            string pct = $"{b.pct * 100:0}%";
+            uint pc = b.charging ? 0xFFBFE2FF : b.pct <= 0.2f ? 0xFFFFA48F : 0xFFFFFFFF;
+            float pw = WAero(pct, 11) + 2, bw = b.charging ? 7 : 0;
+            float nw = r.Width - pw - bw - 6;
+            string name = Array.Find(BatteryNamesAero(b.label), x => WAero(x, 11) <= nw) ?? Fit(b.label, nw);
+            _p.Text(name, new RectangleF(r.X, y - 2, nw + 2, 16), 0xFFE8F1FC, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+            if (b.charging) _p.Pixels(BoltAero, MathF.Round(r.X + WAero(name, 11) + 4), y + 2, 0xFFFFD866);
+            _p.Text(pct, new RectangleF(r.Right - pw - 2, y - 2, pw + 2, 16), pc, 11, FontWeight.Normal, TextAlignment.Trailing, ParagraphAlignment.Center, Ae.Font);
+            uint[] col = b.charging ? AeroSkin.BarBlue : b.pct <= 0.2f ? AeroSkin.BarRed : b.pct <= 0.35f ? AeroSkin.BarYellow : AeroSkin.BarGreen;
+            AeroSkin.Bar7(_p, new RectangleF(r.X, y + 13, r.Width, 9), b.pct, col);
+        }
     }
 
     // Windows Media Player's now playing: the cover, the title and artist, |<< (play) >>| as round glass buttons
@@ -291,7 +323,7 @@ public sealed partial class WristPanel
     {
         done = true;
         var sk = Ae;
-        if (k.Button) { Button95Widget(id, w, k, r, d); return; }
+        if (k.Button) { ButtonAero(id, w, k, r, d); return; }
         var now = DateTime.Now;
         switch (k.Id)
         {
@@ -303,7 +335,7 @@ public sealed partial class WristPanel
                 return;
             case "calendar" when w.H >= 2 && r.Width >= 140: MonthTileAero(r, now); return;
             case "calendar":
-            case "date" when w.W == 1:
+            case "date":
                 DayTileAero(r, w, now);
                 return;
             case "graph":
@@ -352,7 +384,7 @@ public sealed partial class WristPanel
                 case "dock": Dock95Widget(r, c, d, w, id); break;
                 case "room": Room95Widget(r, c, d, w, id); break;
                 case "volume": Volume95(c, w, id); break;
-                case "minesweeper": Mines95Widget(c, w); break;
+                case "minesweeper": MinesTileAero(c, w); break;
                 case "mic": Mic95(r, c, w, id); break;
                 case "notifications": NotesAero(c, d); break;
                 case "buttons": Group95(c, w, d, id); break;
@@ -599,10 +631,11 @@ public sealed partial class WristPanel
 
     partial void DetailAero(PanelData d, WatchWidgets.Kind k, string kind, RectangleF win, ref bool done)
     {
-        if (kind is "mines" or "room" or "dock") return;      // their 95 windows, in 7's skin
+        if (kind is "room" or "dock") return;      // their 95 windows, in 7's skin
         done = true;
+        if (kind == "mines") { MinesDetailAero(win); return; }
         var cl = AeroSkin.Window7(_p, win, 24, 0xFFF0F0F0);
-        Ae.GlowText(_p, k.Title95, new RectangleF(win.X + 9, win.Y + 3, win.Width - 70, 18), 0xFF000000, 12);
+        Ae.GlowText(_p, TitleAero(k, kind), new RectangleF(win.X + 9, win.Y + 3, win.Width - 70, 18), 0xFF000000, 12);
         var rc = new RectangleF(win.Right - 6 - 43, win.Y + 1, 43, 18);
         bool x = _ui.Clickable("wd95x", RectangleF.Inflate(rc, 4, 4), out bool xh, out bool xd);
         AeroSkin.CaptionBox(_p, rc, CaptionKind.Close, true, xd, xh);
@@ -641,6 +674,51 @@ public sealed partial class WristPanel
             case "system": System95Detail(c); break;
             case "volume": Volume95Detail(c); break;
         }
+    }
+
+    // the programs of 2009 these windows stand for (95's CD Player, Power Meter, Volume Control...)
+    static string TitleAero(WatchWidgets.Kind k, string kind) => kind switch
+    {
+        "media" => "Windows Media Player",
+        "battery" => "Battery Meter",
+        "clock" => "Date and Time",
+        "volume" => "Volume Mixer",
+        "system" => k.Id == "ram" ? "Resource Monitor" : "Task Manager",
+        _ => k.Title95,
+    };
+
+    // a button on the face: 7's push button with its picture, the name under it (beside it when the button is wide)
+    void ButtonAero(int id, WatchWidget w, WatchWidgets.Kind k, RectangleF r, PanelData d)
+    {
+        bool layout = k.Id == "layout";
+        bool click = _ui.Clickable(Ui.Id("wcb", id), r, out bool hover, out bool held);
+        Ae.ButtonFace(_p, r, false, held, !layout && IsOn(k.Id, d), hover);
+        var icon = k.Id == "desktops" && !d.DesktopsVisible ? W95Icons.Id.ComputerOff : k.Icon95;
+        string name = layout ? d.LayoutName : w.W >= 2 ? k.Name : k.Title95;
+        float o = held ? 1 : 0;
+        if (layout && w.W >= 2)
+        {
+            _p.Text(Fit(name, r.Width - 10), new RectangleF(r.X + 4 + o, r.Y - 2 + o, r.Width - 8, r.Height + 4), 0xFF000000, 11, FontWeight.Normal,
+                TextAlignment.Center, ParagraphAlignment.Center, Ae.Font);
+        }
+        else if (w.W >= 2)
+        {
+            float tw = MathF.Min(WAero(name, 11), r.Width - 34), x = MathF.Round(r.X + (r.Width - 16 - 5 - tw) / 2);
+            W95Icons.Draw(_p, icon, x + o, MathF.Floor(r.Y + (r.Height - 16) / 2) + o);
+            _p.Text(Fit(name, tw + 1), new RectangleF(x + 21 + o, r.Y - 2 + o, tw + 4, r.Height + 4), 0xFF000000, 11, FontWeight.Normal,
+                TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+        }
+        else
+        {
+            float size = WAero(name, 11) <= r.Width - 6 ? 11 : WAero(name, 10) <= r.Width - 6 ? 10 : 0;
+            bool both = size > 0 && r.Height >= 36;
+            float iy = both ? MathF.Floor(r.Y + (r.Height - 31) / 2) : MathF.Floor(r.Y + (r.Height - 16) / 2);
+            W95Icons.Draw(_p, icon, MathF.Floor(r.X + (r.Width - 16) / 2) + o, iy + o);
+            if (both)
+                _p.Text(name, new RectangleF(r.X + 1 + o, iy + 15 + o, r.Width - 2, 18), 0xFF1E2B3A, size, FontWeight.Normal, TextAlignment.Center,
+                    ParagraphAlignment.Center, Ae.Font);
+        }
+        if (click) OnAction?.Invoke(k.Id);
     }
 
     // Windows Media Player: the cover big, the title and artist, the round buttons, the volume
