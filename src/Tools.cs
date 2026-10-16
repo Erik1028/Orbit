@@ -1282,7 +1282,7 @@ static partial class Tools
         a.Font = font0;
         Theme.Apply(a);
         // What the first start of 1.12 makes of this config (the copy: its own copy of it lands next to it, the real one is untouched):
-        // the face as page 1, unchanged, then the VRChat and Performance pages - drawn in this look, with the dots, and in 95
+        // the face as page 1, unchanged, then the VRChat and Performance pages - drawn in this look, with the dots, and in each retro style
         {
             var jo = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
             string w0 = System.Text.Json.JsonSerializer.Serialize(wc.Widgets, jo);
@@ -1295,16 +1295,17 @@ static partial class Tools
             PagesData(data);
             a.Accent = accent0;
             a.PanelColor = panel0;
-            foreach (bool classic in new[] { false, true })
+            // in Modern and in every retro style: face_page<n>.png, then face_page<n>_95 / _xp / _aero / _mac / _term.png
+            foreach (var skin in new RetroSkin[] { null }.Concat(Skins.All))
             {
-                a.Style = classic ? "classic" : "modern";
+                a.Style = skin?.Id ?? "modern";
                 Theme.Apply(a);
                 for (int i = 0; i < WatchPages.Count(wc); i++)
                 {
                     wc.Page = i;
                     wrist.Settle();
                     for (int f = 0; f < 8; f++) { wrist.Draw(data); Thread.Sleep(50); }      // a new cover fades in
-                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{(classic ? "_95" : "")}.png"));
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_page{i + 1}{(skin == null ? "" : "_" + skin.Tag)}.png"));
                 }
             }
             a.Style = "modern";
