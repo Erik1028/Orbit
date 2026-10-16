@@ -143,7 +143,9 @@ public sealed partial class WristPanel
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
         if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
-            CyberDetailTag(E, Upper(kind == "notifications" ? "Incoming" : k.Name));      // Cyber: a yellow tag (it types in: WristCyberFx.cs)
+            // Cyber: a yellow tag (it types in: WristCyberFx.cs) - the clock's CLOCK (its time card has a TIME tag of its own), the
+            // notifications' INCOMING
+            CyberDetailTag(E, Upper(kind switch { "clock" => "Clock", "notifications" => "Incoming", _ => k.Name }));
         else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
@@ -270,6 +272,7 @@ public sealed partial class WristPanel
 
     void ClockDetail(RectangleF c, PanelData d, DateTime now)
     {
+        if (Theme.Cyber) { CyberClockDetail(c, d, now); return; }      // the HUD's own (WristCyberDetail.cs)
         AnalogOrbit(new RectangleF(c.X - 8, c.Y - 8, c.Height + 16, c.Height + 16), now, Bento.Accent);
         float x = c.X + c.Height + 30, w = c.Right - x;
         bool h24 = _cfg.Data.Appearance.Clock24h;

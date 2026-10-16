@@ -898,6 +898,7 @@ static class Hu
         ("{0}H {1:00}M", "{0}Ó {1:00}P"),
         ("{0}M", "{0}P"),
         ("{0} NEW", "{0} ÚJ"),
+        ("Day", "Nap"),
         ("NO FRAMES", "NINCS KÉP"),
         ("MUTED", "NÉMÍTVA"),
 

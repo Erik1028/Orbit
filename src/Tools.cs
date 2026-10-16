@@ -1036,6 +1036,7 @@ static partial class Tools
             wrist.Stats.Sample(Clock.Now);
             SaveCustom(tag);
             SaveOpened(tag);
+            CyberDetailTools.Run(wrist, data, cfg, gpu, dir);       // its own opened views (the clock, the notifications' scan)
             if (Environment.GetEnvironmentVariable("ORBIT_SNAP_CHECKS") != "0")
             {
                 LayoutCheck("cyber");

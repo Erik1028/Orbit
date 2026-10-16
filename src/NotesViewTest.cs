@@ -222,7 +222,7 @@ static class NotesViewTools
 static partial class Tools
 {
     // ORBIT_SNAP_ONLY=notes: the opened notifications' checks, pictures and layout check (its sizes and opened only) in every style,
-    // in seconds
+    // and the Cyber opened views (CyberDetailTools), in seconds
     static int NotesOnly(WristPanel wrist, PanelData data, ConfigStore cfg, Painter painter, Gpu gpu, string dir)
     {
         var culture = System.Globalization.CultureInfo.CurrentCulture;
@@ -234,6 +234,12 @@ static partial class Tools
             NotesViewTools.Run(wrist, data, cfg, gpu, dir, tag);
             string f0 = cfg.Data.Wrist.Face;
             LayoutCheckRun(wrist, data, cfg, painter, gpu, dir, tag.Length > 0 ? tag[1..] : "modern", onlyKind: "notifications");
+            if (style == CyberHud.Id)
+            {
+                CyberDetailTools.Run(wrist, data, cfg, gpu, dir);
+                foreach (var kind in new[] { "time", "date", "analog", "session" })
+                    LayoutCheckRun(wrist, data, cfg, painter, gpu, dir, "cyber", onlyKind: kind);
+            }
             cfg.Data.Wrist.Face = f0;
             cfg.Data.Wrist.Widgets = null;
         }
