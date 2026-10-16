@@ -104,6 +104,7 @@ public sealed class SettingsWindow : Form
         {
             var cp = base.CreateParams;
             cp.Style |= 0x00020000 | 0x00080000;     // WS_MINIMIZEBOX | WS_SYSMENU
+            cp.Style &= ~0x00010000;                // no WS_MAXIMIZEBOX: a double click on the header must not blow the sheet up to the screen
             return cp;
         }
     }
