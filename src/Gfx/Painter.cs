@@ -252,8 +252,9 @@ public sealed class Painter : IDisposable
     readonly Dictionary<(string, float, FontWeight, string), float> _widths = new();
     readonly Dictionary<(string, float, FontWeight, TextAlignment, ParagraphAlignment, bool), IDWriteTextFormat> _formats = new();
     // Laid-out text, kept: DrawText lays its string out again on every call (~50 us each, 80 % of a watch frame).
-    // Keyed by the format object too, so a format thrown away (the cap below) takes its layouts with it.
-    readonly Dictionary<(string, IDWriteTextFormat, float, float), IDWriteTextLayout> _layouts = new();
+    // Keyed by the format object too, so a format thrown away (the cap below) takes its layouts with it. 'fits': its ink is a pixel
+    // or more inside its box - cut to the box (ClipText) it would look the same, so it is drawn without the clip.
+    readonly Dictionary<(string, IDWriteTextFormat, float, float), (IDWriteTextLayout lay, bool fits)> _layouts = new();
     public int FormatCount => _formats.Count;
     public int WidthCount => _widths.Count;
     public int LayoutCount => _layouts.Count;
@@ -280,7 +281,7 @@ public sealed class Painter : IDisposable
         {
             // a later Windows' grey-smoothed text (the style asks for it); shapes stay aliased
             Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;
-            Dc.TextRenderingParams = null;
+            Dc.TextRenderingParams = DefaultText;
             return;
         }
         Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Aliased;
@@ -362,27 +363,62 @@ public sealed class Painter : IDisposable
         if (_drawing) End();        // a previous frame threw half-way: close it before starting another
         _drawing = true;
         Scale = scale;
-        Dc.Target = target;
+        Dc.Target = _target = target;
         Dc.BeginDraw();
         Dc.Transform = Matrix3x2.CreateScale(scale);
         // 1995 had no anti-aliasing: the skin's bevels and squares stay pixel-sharp
         Dc.AntialiasMode = Theme.Classic ? AntialiasMode.Aliased : AntialiasMode.PerPrimitive;
         PixelMode = false;
         Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;     // what Gpu sets up (1.3.3)
-        Dc.TextRenderingParams = null;
+        Dc.TextRenderingParams = DefaultText;
         Dc.Clear(ToColor(clear));
     }
 
+    // The default text rendering (what null gives: the primary monitor's), made once - with null set, Direct2D works it out again at
+    // the first text of every frame: 0.4 ms a frame on Erik's PC, a third of a settings frame
+    IDWriteRenderingParams _defaultText;
+    IDWriteRenderingParams DefaultText => _defaultText ??= _g.DWrite.CreateRenderingParams();
+
     public void End()
     {
+        EndAside();
         _drawing = false;
         while (_fades > 0) PopFade();
         while (_transforms.Count > 0) PopScale();
         while (_clips.Count > 0) PopClip();
         while (_layers.Count > 0) PopRoundedClip();
         var r = Dc.EndDraw();
-        Dc.Target = null;
+        Dc.Target = _target = null;
         if (r.Failure) Log.Warn("EndDraw: " + r);
+    }
+
+    // ---- a picture of its own in the middle of a frame (the settings' console at rest, kept: SettingsCyber.cs) ----
+    // What is drawn until EndAside goes into 'target' (cleared, at this frame's scale); then the frame goes on where it was. Only with
+    // nothing pushed (no clip, layer, fade or transform): false - draw as usual.
+    ID2D1Image _target;              // what Begin draws into
+    bool _aside;
+    Matrix3x2 _asideTransform;
+
+    public bool BeginAside(ID2D1Image target)
+    {
+        if (!_drawing || _aside || _clips.Count > 0 || _layers.Count > 0 || _fades > 0 || _transforms.Count > 0) return false;
+        _aside = true;
+        _asideTransform = Dc.Transform;
+        Dc.Target = target;
+        Dc.Clear(ToColor(0));
+        return true;
+    }
+
+    public void EndAside()
+    {
+        if (!_aside) return;
+        while (_fades > 0) PopFade();
+        while (_transforms.Count > 0) PopScale();
+        while (_clips.Count > 0) PopClip();
+        while (_layers.Count > 0) PopRoundedClip();
+        Dc.Target = _target;
+        Dc.Transform = _asideTransform;
+        _aside = false;
     }
 
     static Color4 ToColor(uint c) => new(((c >> 16) & 0xFF) / 255f, ((c >> 8) & 0xFF) / 255f, (c & 0xFF) / 255f, ((c >> 24) & 0xFF) / 255f);
@@ -504,21 +540,95 @@ public sealed class Painter : IDisposable
     // 'count' four-point figures (4 * count points) filled as one shape (Cyber's bar segments, hazard stripes)
     public void Quads(Vector2[] pts, int count, uint c)
     {
-        if (count <= 0) return;
-        using var geo = _g.D2DFactory.CreatePathGeometry();
+        if (count > 0) FillShape(pts, 4 * count, c, true);
+    }
+
+    // ---- small shapes kept (Cyber's bar segments, hazard stripes, tags, switch blocks) ----
+    // The same figure keeps coming back, often at another place (a bar's segments on the next row, the stripes crawling, a tag):
+    // made once relative to its first point and drawn moved there - building a path geometry every frame cost more than drawing
+    // it. Its points are compared to 1/256 px (the same figure somewhere else differs by rounding); past 256 shapes they start over.
+    readonly Dictionary<ShapeKey, (Vector2[] rel, ID2D1PathGeometry geo)> _shapes = new();
+
+    readonly struct ShapeKey : IEquatable<ShapeKey>
+    {
+        readonly int _n, _hash;
+
+        public ShapeKey(Vector2[] pts, int n, bool quads)
+        {
+            var h = new HashCode();
+            h.Add(n);
+            h.Add(quads);
+            for (int i = 1; i < n; i++)
+            {
+                var d = pts[i] - pts[0];
+                h.Add(MathF.Round(d.X * 256));
+                h.Add(MathF.Round(d.Y * 256));
+            }
+            (_n, _hash) = (quads ? -n : n, h.ToHashCode());
+        }
+
+        public bool Equals(ShapeKey o) => _n == o._n && _hash == o._hash;
+        public override bool Equals(object o) => o is ShapeKey k && Equals(k);
+        public override int GetHashCode() => _hash;
+    }
+
+    // pts[0..n): one figure, or n / 4 four-point ones (quads)
+    void FillShape(Vector2[] pts, int n, uint c, bool quads)
+    {
+        var key = new ShapeKey(pts, n, quads);
+        var o = pts[0];
+        if (!_shapes.TryGetValue(key, out var sh))
+        {
+            if (_shapes.Count >= 256) DropShapes();
+            var rel = new Vector2[n];
+            for (int i = 0; i < n; i++) rel[i] = pts[i] - o;
+            _shapes[key] = sh = (rel, ShapeGeo(rel, n, quads));
+        }
+        else if (!Same(sh.rel, pts, n))
+        {
+            // another shape with the same hash (rare): this one made for the call
+            using var once = ShapeGeo(pts, n, quads);
+            Dc.FillGeometry(once, Brush(c));
+            return;
+        }
+        var old = Dc.Transform;
+        Dc.Transform = Matrix3x2.CreateTranslation(o) * old;
+        Dc.FillGeometry(sh.geo, Brush(c));
+        Dc.Transform = old;
+    }
+
+    static bool Same(Vector2[] rel, Vector2[] pts, int n)
+    {
+        if (rel.Length != n) return false;
+        for (int i = 1; i < n; i++)
+        {
+            var d = rel[i] - (pts[i] - pts[0]);
+            if (MathF.Abs(d.X) > 1 / 256f || MathF.Abs(d.Y) > 1 / 256f) return false;
+        }
+        return true;
+    }
+
+    void DropShapes()
+    {
+        foreach (var sh in _shapes.Values) sh.geo.Dispose();
+        _shapes.Clear();
+    }
+
+    ID2D1PathGeometry ShapeGeo(Vector2[] pts, int n, bool quads)
+    {
+        var geo = _g.D2DFactory.CreatePathGeometry();
         using (var sink = geo.Open())
         {
-            for (int q = 0; q < count; q++)
+            int fig = quads ? 4 : n;
+            for (int f = 0; f + fig <= n; f += fig)
             {
-                sink.BeginFigure(pts[4 * q], FigureBegin.Filled);
-                sink.AddLine(pts[4 * q + 1]);
-                sink.AddLine(pts[4 * q + 2]);
-                sink.AddLine(pts[4 * q + 3]);
+                sink.BeginFigure(pts[f], FigureBegin.Filled);
+                for (int i = 1; i < fig; i++) sink.AddLine(pts[f + i]);
                 sink.EndFigure(FigureEnd.Closed);
             }
             sink.Close();
         }
-        Dc.FillGeometry(geo, Brush(c));
+        return geo;
     }
 
     // ---- linear gradients (the modern watch's cards: the top light, two-tone fills, a glass sheen) ----
@@ -828,10 +938,11 @@ public sealed class Painter : IDisposable
         Dc.DrawGeometry(geo, Brush(c), width, _roundCaps);
     }
 
-    // the first 'count' points, filled (the frame graph's area)
+    // the first 'count' points, filled (the frame graph's area); up to four - a tag, a notch, a switch's block - kept (FillShape)
     public void Polygon(Vector2[] pts, int count, uint c)
     {
         if (count < 3) return;
+        if (count <= 4) { FillShape(pts, count, c, false); return; }
         using var geo = _g.D2DFactory.CreatePathGeometry();
         using (var sink = geo.Open())
         {
@@ -926,15 +1037,23 @@ public sealed class Painter : IDisposable
         }
         float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
         var key = (s, f, lw, lh);
-        if (!_layouts.TryGetValue(key, out var lay))
+        if (!_layouts.TryGetValue(key, out var tl))
         {
             // a ticking clock or a springing card makes new ones all the time: start over rather than grow forever
             if (_layouts.Count >= 1000) DropLayouts();
-            lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            var lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
             if (Tabular(family, s)) Figures(lay, s, family, size, w);
-            _layouts[key] = lay;
+            _layouts[key] = tl = (lay, Fits(lay));
         }
-        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
+        Dc.DrawTextLayout(new Vector2(r.X, r.Y), tl.lay, Brush(c), ClipText && !tl.fits ? DrawTextOptions.Clip : DrawTextOptions.None);
+    }
+
+    // Text cut to its box (DrawTextOptions.Clip) costs Direct2D a clip per string - with ~100 strings a third of a settings frame. Text
+    // whose ink stays a pixel inside its box loses nothing to the cut: it goes without (the same picture, the cost spared).
+    static bool Fits(IDWriteTextLayout lay)
+    {
+        var o = lay.OverhangMetrics;
+        return o.Left <= -1 && o.Top <= -1 && o.Right <= -1 && o.Bottom <= -1;
     }
 
     // Text cut to its rectangle (DrawTextOptions.Clip): the default. Off, a draw that has made sure its text fits (the modern
@@ -943,14 +1062,14 @@ public sealed class Painter : IDisposable
 
     void DropLayouts()
     {
-        foreach (var l in _layouts.Values) l.Dispose();
+        foreach (var l in _layouts.Values) l.lay.Dispose();
         _layouts.Clear();
-        foreach (var l in _tracked.Values) l.Dispose();
+        foreach (var l in _tracked.Values) l.lay.Dispose();
         _tracked.Clear();
     }
 
     // ---- letter-spaced text (the modern watch's UPPERCASE captions) ----
-    readonly Dictionary<(string, IDWriteTextFormat, float, float, float), IDWriteTextLayout> _tracked = new();
+    readonly Dictionary<(string, IDWriteTextFormat, float, float, float), (IDWriteTextLayout lay, bool fits)> _tracked = new();
 
     // text with 'tracking' px after every letter but the last (so centred and right-aligned text stays where it belongs);
     // the 95 skin's pixel text has none
@@ -968,16 +1087,16 @@ public sealed class Painter : IDisposable
         var f = Format(family, size, w, h, v, false);
         float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
         var key = (s, f, lw, lh, tracking);
-        if (!_tracked.TryGetValue(key, out var lay))
+        if (!_tracked.TryGetValue(key, out var tl))
         {
-            if (_tracked.Count >= 300) { foreach (var l in _tracked.Values) l.Dispose(); _tracked.Clear(); }
-            lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            if (_tracked.Count >= 300) { foreach (var l in _tracked.Values) l.lay.Dispose(); _tracked.Clear(); }
+            var lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
             using (var l1 = lay.QueryInterface<IDWriteTextLayout1>())
                 l1.SetCharacterSpacing(0, tracking, 0, new TextRange(0, (uint)(s.Length - 1)));
             if (Tabular(family, s)) Figures(lay, s, family, size, w, tracking);
-            _tracked[key] = lay;
+            _tracked[key] = tl = (lay, Fits(lay));
         }
-        Dc.DrawTextLayout(new Vector2(r.X, r.Y), lay, Brush(c), ClipText ? DrawTextOptions.Clip : DrawTextOptions.None);
+        Dc.DrawTextLayout(new Vector2(r.X, r.Y), tl.lay, Brush(c), ClipText && !tl.fits ? DrawTextOptions.Clip : DrawTextOptions.None);
     }
 
     public float MeasureTracked(string s, float size, FontWeight w, float tracking, string family = null)
@@ -1296,10 +1415,13 @@ public sealed class Painter : IDisposable
         DropGradients();
         DropSquircles();
         DropCuts();
+        DropShapes();
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();
         _figures?.Dispose();
         _figures = null;
+        _defaultText?.Dispose();
+        _defaultText = null;
     }
 }
