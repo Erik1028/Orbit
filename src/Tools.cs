@@ -1000,6 +1000,7 @@ static partial class Tools
                 wrist.Draw(data);
                 wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{face}{tag}.png"));
             }
+            CyberPresets(tag);
             cfg.Data.Wrist.Face = "full";
             cfg.Data.Wrist.PerfGraph = false;
             kb.Draw();
@@ -1053,6 +1054,108 @@ static partial class Tools
             System.Globalization.CultureInfo.CurrentCulture = culture;
             cfg.Data.Appearance = new AppearanceConfig { Clock24h = false };
             Theme.Apply(cfg.Data.Appearance);
+        }
+
+        // The presets' own Cyber designs (WristCyberFaces.cs) in their other forms: the numbers / the graph, without batteries, media or
+        // readings, SteamVR off with nothing playing (wrist_<face>_<form>_cyber.png). Then the old faces' buttons - a click in the middle
+        // of each of the six does what it did - and the motion: a preset boots with Motion on Full, not on Off; at rest it asks for no
+        // frame but its next second.
+        void CyberPresets(string tag)
+        {
+            var w = cfg.Data.Wrist;
+            var odd = new List<string>();               // a text cut short or under 14 px (not a value's smaller "%", nor an icon)
+            int shots = 0;
+            void Shot(string face, string name)
+            {
+                w.Face = face;
+                wrist.Settle();
+                wrist.Draw(data);
+                painter.TextSpy = (s, _, _, size, _, _) => { if (s.Contains('…') || (size < 14 && s != "%" && !(s.Length == 1 && char.GetUnicodeCategory(s[0]) == UnicodeCategory.PrivateUse))) odd.Add($"{name}: '{s}' {size:0.#} px"); };
+                wrist.Draw(data);
+                painter.TextSpy = null;
+                wrist.Surf.SavePng(gpu, Path.Combine(dir, $"wrist_{name}{tag}.png"));
+                shots++;
+            }
+            w.PerfGraph = true; Shot("full", "full_graph");
+            w.PerfGraph = false; Shot("analog", "analog_numbers");
+            w.ShowBatteries = false; Shot("full", "full_nobat"); Shot("analog", "analog_nobat");
+            w.ShowMedia = false; Shot("full", "full_perfonly");
+            w.ShowBatteries = true; w.ShowPerformance = false; Shot("full", "full_batonly");
+            w.ShowBatteries = false; Shot("analog", "analog_bare");
+            w.ShowMedia = true; Shot("full", "full_mediaonly");
+            w.ShowPerformance = w.ShowBatteries = true;
+            w.PerfGraph = true; w.ShowBatteries = w.ShowMedia = false; Shot("full", "full_graphonly");
+            w.PerfGraph = false; w.ShowBatteries = w.ShowMedia = true;
+            // a 12-hour clock (AM / PM), Hungarian dates
+            cfg.Data.Appearance.Clock24h = false;
+            Shot("full", "full_12h"); Shot("analog", "analog_12h"); Shot("time", "time_12h");
+            cfg.Data.Appearance.Clock24h = true;
+            var cul0 = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = new CultureInfo("hu-HU");
+            Shot("analog", "analog_hu"); Shot("minimal", "minimal_hu");
+            CultureInfo.CurrentCulture = cul0;
+            var vr0 = (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia);
+            var bats0 = new List<(string, float, bool)>(data.Vr.Batteries);
+            (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia) = (-1, -1, -1, false, (false, null, null, false));
+            data.Vr.Batteries.Clear();
+            Shot("full", "full_off"); Shot("analog", "analog_off"); Shot("minimal", "minimal_off");
+            (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia) = vr0;
+            data.Vr.Batteries.AddRange(bats0);
+            Log.Info($"cyber presets: {shots} pictures, texts cut short or under 14 px: {(odd.Count == 0 ? "none" : string.Join(", ", odd))} (want none)");
+            // the buttons: the middle of each old one (Buttons: 6 across from x 28, 89 wide and 10 apart, y 354-416)
+            var hits = new List<string>();
+            var act0 = wrist.OnAction;
+            wrist.OnAction = id => hits.Add(id);
+            var got = new List<string>();
+            foreach (var face in new[] { "full", "analog", "minimal" })
+            {
+                w.Face = face;
+                wrist.Settle();
+                wrist.Draw(data);
+                hits.Clear();
+                for (int i = 0; i < 6; i++)
+                {
+                    var at = new Vector2(28 + i * 99 + 44.5f, 385);
+                    wrist.PointerMove(Hand.Left, at); wrist.Draw(data);
+                    wrist.PointerButton(Hand.Left, PtrButton.Primary, true, at); wrist.Draw(data);
+                    wrist.PointerButton(Hand.Left, PtrButton.Primary, false, at); wrist.Draw(data);
+                }
+                wrist.PointerLeave(Hand.Left);
+                got.Add($"{face}: {string.Join(" ", hits)}");
+            }
+            wrist.OnAction = act0;
+            Log.Info($"cyber presets: a click in the middle of each old button - {string.Join("; ", got)} (want keyboard desktops recenter layout night settings each)");
+            // the motion; at rest as in the headset (its effects live, no warning on the face: a warning pulses for 8 s)
+            var level0 = Motion.Level;
+            CyberFx.Live = true;
+            var boots = new List<string>();
+            bool rest = true;
+            data.Vr.Batteries.Clear();
+            foreach (var face in new[] { "full", "analog", "minimal", "time" })
+            {
+                w.Face = face;
+                Motion.Level = MotionLevel.Off;
+                wrist.Settle(); wrist.Intro(); wrist.Draw(data);
+                bool off = wrist.CyberMoving;
+                Motion.Level = MotionLevel.Full;
+                wrist.Settle(); wrist.Intro(); wrist.Draw(data);
+                bool full = wrist.CyberMoving;
+                wrist.Settle();
+                wrist.CyberLive = true;
+                AnimWake.Take();
+                for (int i = 0; i < 3; i++) wrist.Draw(data);
+                double ask = AnimWake.Take() - Clock.Now, own = wrist.CyberNextFrame - Clock.Now;
+                rest &= !wrist.Animating && ask > 0 && ask < 1.05 && own > 5;
+                wrist.CyberLive = false;
+                boots.Add($"{face} {full}/{off}");
+            }
+            data.Vr.Batteries.AddRange(bats0);
+            Motion.Level = level0;
+            CyberFx.Live = false;
+            wrist.Settle();
+            Log.Info($"cyber presets: boot on Full / on Off - {string.Join(", ", boots)} (want True/False each); at rest only the next second asked, " +
+                     $"Cyber's own next frame 5 s off or more {rest} (want True)");
+            w.Face = "full";
         }
 
         // the custom face with three pages (the last on the 4 x 3 grid): the taskbar along the bottom, each page once
@@ -1391,7 +1494,7 @@ static partial class Tools
     // modern style with your look, then once more with the Bento theme's colours (accent #FF5D93, panel #0A0B10): before /
     // after pictures of a redesign. The numbers are the snapshot's made-up ones (plus a made-up room and Hexpad), the clock,
     // CPU, RAM and the system volume are live, dates in this PC's language. The pages are drawn in Windows 95 and Cyber too
-    // (face_page*_95, face_page*_cyber).
+    // (face_page*_95, face_page*_cyber), and the preset faces in Cyber (face_<face>_cyber, face_<face>_cyber_off).
     public static int FaceShot(string dir)
     {
         dir = Path.GetFullPath(dir);
@@ -1536,6 +1639,32 @@ static partial class Tools
             a.Style = "modern";
             Theme.Apply(a);
             wc.Page = 0;
+        }
+        // the preset faces in Cyber (WristCyberFaces.cs) with your options and clock: face_<face>_cyber.png; then SteamVR off, nothing
+        // playing: face_<face>_cyber_off.png
+        {
+            string face0 = wc.Face;
+            a.Style = CyberHud.Id;
+            Theme.Apply(a);
+            foreach (bool off in new[] { false, true })
+            {
+                if (off)
+                {
+                    (data.Vr.AppFps, data.Vr.ReprojPct, data.Vr.GpuMs, data.VrConnected, data.FakeMedia) = (-1, -1, -1, false, (false, null, null, false));
+                    data.Vr.Batteries.Clear();
+                }
+                foreach (var face in new[] { "full", "analog", "minimal", "time" })
+                {
+                    wc.Face = face;
+                    wrist.Settle();
+                    wrist.Draw(data);
+                    wrist.Draw(data);
+                    wrist.Surf.SavePng(gpu, Path.Combine(dir, $"face_{face}_cyber{(off ? "_off" : "")}.png"));
+                }
+            }
+            wc.Face = face0;
+            a.Style = "modern";
+            Theme.Apply(a);
         }
         Log.Info("faceshot written to " + dir);
         return 0;
