@@ -28,6 +28,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
     readonly PanelData _data = new();
     readonly GpuStats _gpuStats = new();
     readonly MediaInfo _media = new();
+    readonly AudioMixer _mixer = new();              // the output device's apps; the Windows volume in VR (Sys/AudioMixer.cs)
     readonly NotificationHistory _notes = new();     // the watch's notifications widget
     readonly HexpadLink _hexpad = new();
     readonly RoomWatcher _room = new();
@@ -110,6 +111,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _data.VramTotalGB = _gpu.DedicatedVram / (1024f * 1024 * 1024);
 
         _wrist = new WristPanel(_gpu, _painter, _cfg) { OnAction = WristAction };
+        _wrist.UseRealAudio(_mixer);                         // the watch's volume and mixer on the real output device (the tools' are made up)
         _kb = new KeyboardPanel(_gpu, _painter, _cfg);
         _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
         _dockFaces = new HexpadFaces();
@@ -549,6 +551,9 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _data.NightMode = C.Appearance.NightMode;
         _data.LayoutName = C.ActiveLayout;
         _data.KeyboardVisible = C.Keyboard.Visible;
+        // the output device's apps follow the Windows volume while SteamVR runs (a device that ignores its own); the mixer's list
+        AudioMixer.Mode = C.General.VolumeToApps is "on" or "off" ? C.General.VolumeToApps : "auto";
+        _mixer.Tick(now, _vr.Connected);
         _win.Tick(now);
         _cfg.SaveIfDue();
     }
@@ -1826,6 +1831,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _focus?.Dispose();
         _notifyPanel?.Dispose();
         _media.Dispose();
+        _mixer.Dispose();
         _sysCursor?.Dispose();
         _osc.Dispose();
         _win?.Dispose();

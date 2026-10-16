@@ -536,6 +536,7 @@ public sealed partial class WristPanel
                 break;
             case "system": SystemMacDetail(c); break;
             case "volume": Volume95Detail(c); break;
+            case "mixer": Mixer95Detail(c); break;
         }
     }
 

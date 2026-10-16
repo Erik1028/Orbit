@@ -189,6 +189,10 @@ public sealed class GeneralConfig
     public bool NotificationSound { get; set; } = true;
     public float NotificationAngle { get; set; } = 20f;  // degrees below the centre of view (first card)
     public int LaserSmoothing { get; set; } = 2;      // 0 off, 1 low, 2 medium, 3 high
+    // 1.14, the Windows volume in VR (AudioMixer): which output devices' apps follow the Windows volume - null / "auto" = the ones known
+    // to ignore their own volume (Virtual Desktop's), "on" = every device that says it sets its volume itself, "off" = none
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string VolumeToApps { get; set; }
 }
 
 public sealed class AppearanceConfig
