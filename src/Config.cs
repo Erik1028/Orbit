@@ -189,6 +189,38 @@ public sealed class GeneralConfig
     public bool NotificationSound { get; set; } = true;
     public float NotificationAngle { get; set; } = 20f;  // degrees below the centre of view (first card)
     public int LaserSmoothing { get; set; } = 2;      // 0 off, 1 low, 2 medium, 3 high
+    // 1.14 (Sys/Alerts.cs, Vr/DoublePress.cs): written only once changed from the defaults, so a config that never touched them
+    // saves exactly as before
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AlertsConfig Alerts { get; set; }          // low battery / low frame rate: a card + a buzz (null = the defaults)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string DoublePress { get; set; }           // B / Y pressed twice on an Orbit panel: null = keyboard | off | watch
+    // 1.14, the Windows volume in VR (AudioMixer): which output devices' apps follow the Windows volume - null / "auto" = the ones known
+    // to ignore their own volume (Virtual Desktop's), "on" = every device that says it sets its volume itself, "off" = none
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string VolumeToApps { get; set; }
+}
+
+// General > Alerts (Sys/Alerts.cs). Null in GeneralConfig = all of these defaults.
+public sealed class AlertsConfig
+{
+    public bool Battery { get; set; } = true;         // a controller's / tracker's battery under BatteryPct: once per drop
+    public int BatteryPct { get; set; } = 15;
+    public bool Fps { get; set; }                     // the game under FpsPct % of the headset's rate for 10 s (then 2 min quiet)
+    public int FpsPct { get; set; } = 80;
+
+    public bool IsDefault => Battery && BatteryPct == 15 && !Fps && FpsPct == 80;
+}
+
+// Layouts > Per game (Sys/GameRules.cs): when this SteamVR app starts, switch to that layout and / or watch page
+public sealed class GameRule
+{
+    public string App { get; set; }                   // the SteamVR app key (steam.app.438100 = VRChat); "*" = any other app
+    public string Name { get; set; }                  // its name, as SteamVR gave it (the settings show it)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Layout { get; set; }                // a layout profile's name; null = keep the one in use
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Page { get; set; }                    // the watch page (0 = page 1); null = keep the one shown
 }
 
 public sealed class AppearanceConfig
@@ -249,6 +281,8 @@ public sealed class Config
     public List<WindowConfig> Windows { get; set; } = new();
     public List<LayoutProfile> Layouts { get; set; } = DefaultLayouts();
     public string ActiveLayout { get; set; } = "Desk";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<GameRule> GameRules { get; set; }      // Layouts > Per game (null = none)
 
     public static List<LayoutProfile> DefaultLayouts() => new()
     {
@@ -324,6 +358,7 @@ public sealed class ConfigStore
                         cfg.Wrist.Pages.RemoveAll(p => p == null);
                         foreach (var p in cfg.Wrist.Pages) p.Widgets ??= new();
                     }
+                    cfg.GameRules?.RemoveAll(r => r == null || string.IsNullOrEmpty(r.App));
                     return cfg;
                 }
             }

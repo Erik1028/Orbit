@@ -97,49 +97,8 @@ public sealed class SystemVolume : IDisposable
         [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
     }
 
-    // the apps' own volumes on the device (the Volume Mixer's sliders): what the watch sets where the device ignores its own
-    [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IAudioSessionManager2
-    {
-        [PreserveSig] int GetAudioSessionControl(IntPtr guid, int flags, out IntPtr control);
-        [PreserveSig] int GetSimpleAudioVolume(IntPtr guid, int flags, out IntPtr volume);
-        [PreserveSig] int GetSessionEnumerator(out IAudioSessionEnumerator sessions);
-    }
-
-    [ComImport, Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IAudioSessionEnumerator
-    {
-        [PreserveSig] int GetCount(out int count);
-        [PreserveSig] int GetSession(int i, [MarshalAs(UnmanagedType.IUnknown)] out object session);
-    }
-
-    [ComImport, Guid("bfb7ff88-7239-4fc9-8fa2-07c950be9c6d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IAudioSessionControl2
-    {
-        [PreserveSig] int GetState(out int state);
-        [PreserveSig] int GetDisplayName(out IntPtr name);
-        [PreserveSig] int SetDisplayName(IntPtr name, ref Guid context);
-        [PreserveSig] int GetIconPath(out IntPtr path);
-        [PreserveSig] int SetIconPath(IntPtr path, ref Guid context);
-        [PreserveSig] int GetGroupingParam(out Guid group);
-        [PreserveSig] int SetGroupingParam(ref Guid group, ref Guid context);
-        [PreserveSig] int RegisterAudioSessionNotification(IntPtr notify);
-        [PreserveSig] int UnregisterAudioSessionNotification(IntPtr notify);
-        [PreserveSig] int GetSessionIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string id);
-        [PreserveSig] int GetSessionInstanceIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string id);
-    }
-
-    [ComImport, Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface ISimpleAudioVolume
-    {
-        [PreserveSig] int SetMasterVolume(float level, ref Guid context);
-        [PreserveSig] int GetMasterVolume(out float level);
-        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
-        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
-    }
-
     const int eRender = 0, eConsole = 0, CLSCTX_ALL = 23;
-    static Guid _ctx = Guid.Empty;
+    static Guid _ctx = CoreAudioDevice.Context;     // Orbit's own change: the mixer's callback does not take it for someone else's
     IMMDeviceEnumerator _en;
     IMMDevice _dev;
     IAudioEndpointVolume _vol;
@@ -151,17 +110,21 @@ public sealed class SystemVolume : IDisposable
     public bool Muted;
     public string DeviceName => _devName;
 
-    // Virtual Desktop's speakers say they set the volume themselves (hardware volume) and then ignore it: Windows' own slider does
-    // nothing in VR (Erik, 10-15). There the watch sets every app's own volume on that device instead - the Volume Mixer's app
-    // sliders, which Windows applies before the driver: one level for all of them, and an app that starts playing later gets it too.
-    IAudioSessionManager2 _apps;
-    float _appsLevel = -1;
-    bool _appsMute;
-    readonly System.Collections.Generic.HashSet<string> _appsSeen = new();
-    public bool PerApp => _apps != null;
+    // A device that ignores its own volume - Virtual Desktop's speakers: Windows' own slider did nothing in VR (Erik, 10-15). 1.12.1 set
+    // every app's own volume from here; since 1.14 the app's mixer (AudioMixer, on its main loop) makes the apps follow that endpoint
+    // volume whoever moves it, so the watch shows the endpoint volume like Windows does and sets it through the mixer - the endpoint
+    // and the apps at once, and the mixer does not apply it again.
+    public AudioMixer Engine;
+    public bool PerApp => Engine != null && Engine.PerApp;
+    public bool Fake;                 // the tools: a made-up level and mute, no device opened
 
     public void Sample(double now)
     {
+        if (Fake)
+        {
+            if (Level < 0) Level = 0.62f;
+            return;
+        }
         if (now < _next) return;
         _next = now + 0.25;
         try
@@ -170,9 +133,7 @@ public sealed class SystemVolume : IDisposable
             {
                 _nextDevice = now + 1;
                 if (DefaultChanged()) Acquire();
-                if (_apps != null) Apps(false);       // apps that started playing since: the same level
             }
-            if (_apps != null) { Level = _appsLevel; Muted = _appsMute; return; }
             if (_vol == null || _vol.GetMasterVolumeLevelScalar(out float l) != 0) { Level = -1; return; }
             if (_asked >= 0)
             {
@@ -197,24 +158,25 @@ public sealed class SystemVolume : IDisposable
     // up / down in steps (0.05 = 5 %); unmutes on the way up
     public void Step(float delta)
     {
-        if (_vol == null || Level < 0) return;
+        if ((!Fake && _vol == null) || Level < 0) return;
         Set(Level + delta);
         if (delta > 0 && Muted) ToggleMute();
     }
 
     public void Set(float level)
     {
-        if (_apps != null)
+        level = Math.Clamp(level, 0, 1);
+        if (Fake) { Level = level; return; }
+        if (PerApp)
         {
-            _appsLevel = Math.Clamp(level, 0, 1);
-            Level = _appsLevel;
-            try { Apps(true); } catch (Exception e) { Log.Warn("volume: " + e.Message); }
+            Engine.SetMaster(level, Muted);
+            Level = level;
+            _next = 0;
             return;
         }
         if (_vol == null) return;
         try
         {
-            level = Math.Clamp(level, 0, 1);
             int hr = _vol.SetMasterVolumeLevelScalar(level, ref _ctx);
             if (hr != 0) { Warn($"refused the new level (0x{hr:X8})"); return; }
             Level = level;
@@ -226,11 +188,12 @@ public sealed class SystemVolume : IDisposable
 
     public void ToggleMute()
     {
-        if (_apps != null)
+        if (Fake) { Muted = !Muted; return; }
+        if (PerApp)
         {
-            _appsMute = !_appsMute;
-            Muted = _appsMute;
-            try { Apps(true); } catch (Exception e) { Log.Warn("volume: " + e.Message); }
+            Engine.SetMaster(Level, !Muted);
+            Muted = !Muted;
+            _next = 0;
             return;
         }
         if (_vol == null) return;
@@ -242,47 +205,6 @@ public sealed class SystemVolume : IDisposable
             _next = 0;
         }
         catch (Exception e) { Log.Warn("volume: " + e.Message); }
-    }
-
-    // all: every app gets the level and mute; else only the apps not seen before (the first look takes the level they have:
-    // the loudest app's, so the watch starts where the mixer is)
-    void Apps(bool all)
-    {
-        if (_apps.GetSessionEnumerator(out var list) != 0 || list == null) return;
-        try
-        {
-            list.GetCount(out int n);
-            bool first = _appsLevel < 0;
-            float loudest = -1;
-            bool allMuted = n > 0;
-            for (int i = 0; i < n; i++)
-            {
-                if (list.GetSession(i, out object s) != 0 || s == null) continue;
-                try
-                {
-                    string id = (s as IAudioSessionControl2)?.GetSessionInstanceIdentifier(out string sid) == 0 ? sid : null;
-                    if (s is not ISimpleAudioVolume v) continue;
-                    bool seen = id != null && !_appsSeen.Add(id);
-                    if (first)
-                    {
-                        if (v.GetMasterVolume(out float l) == 0) loudest = MathF.Max(loudest, l);
-                        allMuted &= v.GetMute(out bool m) == 0 && m;
-                        continue;
-                    }
-                    if (!all && seen) continue;
-                    v.SetMasterVolume(_appsLevel, ref _ctx);
-                    v.SetMute(_appsMute, ref _ctx);
-                }
-                finally { Marshal.ReleaseComObject(s); }
-            }
-            if (first)
-            {
-                _appsLevel = loudest >= 0 ? loudest : 1;
-                _appsMute = allMuted;
-                Log.Info($"volume: '{_devName}' ignores its own volume - the watch sets the apps' volume instead ({n} apps, {_appsLevel * 100:0}%)");
-            }
-        }
-        finally { Marshal.ReleaseComObject(list); }
     }
 
     void Warn(string what)
@@ -314,14 +236,6 @@ public sealed class SystemVolume : IDisposable
         _warned = false;
         _asked = -1;
         Log.Info($"volume: now controlling '{_devName}'{(_vol == null ? " (no volume control)" : "")}");
-        _appsLevel = -1;
-        _appsSeen.Clear();
-        if (_devName.Contains("Virtual Desktop", StringComparison.OrdinalIgnoreCase))
-        {
-            var aid = typeof(IAudioSessionManager2).GUID;
-            if (_dev.Activate(ref aid, CLSCTX_ALL, IntPtr.Zero, out object am) == 0) _apps = am as IAudioSessionManager2;
-            if (_apps != null) Apps(false);
-        }
     }
 
     // "Speakers (Virtual Desktop Audio)": the device's name as the Sound settings show it (registry, read only)
@@ -341,7 +255,6 @@ public sealed class SystemVolume : IDisposable
 
     void Release()
     {
-        if (_apps != null) { Marshal.ReleaseComObject(_apps); _apps = null; }
         if (_vol != null) { Marshal.ReleaseComObject(_vol); _vol = null; }
         if (_dev != null) { Marshal.ReleaseComObject(_dev); _dev = null; }
     }

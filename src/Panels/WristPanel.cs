@@ -119,7 +119,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         if (!Ov.Visible)
         {
             _dirty = true;
-            if (C.Face == "custom" && !Theme.Classic) Intro();      // the widgets cascade in
+            if ((C.Face == "custom" || Theme.Cyber) && !Theme.Classic) Intro();      // the widgets cascade in (Cyber: every face boots)
         }
         Ov.Show();
         if (_themeVersion != Theme.Version) { _themeVersion = Theme.Version; _dirty = true; }
@@ -131,6 +131,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             _dockVersion = dv;
             if (C.Face == "custom" && (HasWidget("dock") || _open?.Type == "dock")) _dirty = true;
         }
+        if (MixerChanged()) _dirty = true;           // the mixer's apps: a level moved, an app came or went (WristMixer.cs)
         // motion is drawn at the headset's rate (it was 45 fps; laid-out text is kept now, a frame is ~1.5 ms)
         if (_dirty || now >= _nextDraw || Animating)
         {
@@ -166,6 +167,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         string face = C.Face ?? "full";
         var now = DateTime.Now;
         if (face == "custom") { DrawCustom(d); _p.End(); _ui.End(); return; }
+        if (Theme.Cyber) { DrawCyberFace(face, d); _p.End(); _ui.End(); return; }      // its own HUD for each preset (WristCyberFaces.cs)
         if (face == "time") { DrawTimeOnly(now); _p.End(); _ui.End(); return; }
 
         var all = new RectangleF(0, 0, TW, TH);
@@ -494,6 +496,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     public void PointerScroll(Hand h, float n, Vector2 px)
     {
         if (DockLive) { DockIn.Scroll(px, n); if (DockIn.TakeDirty()) _dirty = true; return; }      // the stick over a knob turns it
+        if (MixerScroll(px, n)) return;            // the stick over a mixer's slider moves it, in the opened mixer off them it scrolls
         if (!DetailIs("room") || _closing) return;
         if (Theme.Classic)
         {
@@ -529,5 +532,5 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
 
     public void GrabEnd() { _grabbing = false; }
 
-    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); Volume.Dispose(); Mic.Dispose(); }
+    public void Dispose() { DestroyOverlay(); Surf.Dispose(); Canvas95?.Dispose(); Volume.Dispose(); Mic.Dispose(); MixDispose(); }
 }

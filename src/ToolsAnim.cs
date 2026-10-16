@@ -8,10 +8,10 @@ using System.Threading;
 
 namespace Orbit;
 
-// --animstrip <dir> [--only-style modern|95|xp|aero]: the styles' animations as frames, for looking at (nothing is checked). Without
+// --animstrip <dir> [--only-style modern|95|xp|aero|cyber]: the styles' animations as frames, for looking at (nothing is checked). Without
 // --only-style every part runs: Modern and Windows 95 (here: <dir>/<strip>_<frame>_<ms>.png), then XP and Windows 7
 // (ToolsAnimXpAero.cs: <dir>/frames/*.png + <dir>/strips.txt). The Cyber HUD's frames: --snapshot with ORBIT_SNAP_ONLY=anim_cyber
-// (CyberAnimShot.cs).
+// (CyberAnimShot.cs); --only-style cyber: its preset faces' (CyberAnimShot.Faces).
 //
 // Modern and 95: drawn in real time (~90 Hz) and saved at a few moments each - the watch's cascade, a card under the laser and
 // pressed, a widget opening and closing, a tile going on, the page dots, a cover changing, the clocks' changes, a notification coming
@@ -24,6 +24,7 @@ static partial class Tools
         int r = 0;
         if (only is null or "modern" or "95" or "classic") r |= AnimStripsCore(dir);
         if (only is null or "xp" or "aero") r |= AnimStripsXpAero(dir, only is "xp" or "aero" ? only : null);
+        if (only is "cyber") r |= CyberAnimShot.Faces(dir);       // the Cyber preset faces (the custom face's: ORBIT_SNAP_ONLY=anim_cyber)
         return r;
     }
 

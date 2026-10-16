@@ -328,6 +328,7 @@ public sealed partial class SettingsView
 
     void Layouts95(Ui ui)
     {
+        bool inert95 = Dialog95Begin(ui, _rulesOpen);      // the Per game dialog over the page (SettingsView95.Extras.cs)
         var list = C.Layouts;
         if (_selLayout == null || !list.Any(l => l.Name == _selLayout)) _selLayout = C.ActiveLayout;
         ui.Group95(new RectangleF(16, 56, 350, 236), "Layout profiles");
@@ -360,6 +361,7 @@ public sealed partial class SettingsView
                 ? "The first time you switch to it, everything comes to where you are looking - lying in bed, that is above you."
                 : "Switching puts every panel back where it was in this profile. Recenter still brings everything in front of you.", 60);
         Theater95(ui);
+        PerGame95(ui, inert95);
     }
 
     // theater mode: the same settings as on the bar under a screen in VR, and the bar itself on / off
@@ -621,6 +623,7 @@ public sealed partial class SettingsView
         rm.NotifyEveryone = b;
         if (ui.Button95("vc95.open", new RectangleF(388, 186, 140, 23), rm.Visible ? "Hide Room &panel" : "Show Room &panel", _h.VrConnected && rm.Enabled))
             _h.ToggleRoom();
+        Gesture95(ui);                // B / Y twice (SettingsView95.Extras.cs)
     }
 
     void General95(Ui ui)
@@ -717,5 +720,6 @@ public sealed partial class SettingsView
         float na = g.NotificationAngle;
         TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, $"{Math.Round(na):0}° below eyes", g.Notifications);
         g.NotificationAngle = MathF.Round(na);
+        Alerts95(ui);                 // low battery / frame rate (SettingsView95.Extras.cs)
     }
 }

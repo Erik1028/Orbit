@@ -310,7 +310,8 @@ public sealed partial class WristPanel
     // One row: the zone at the top right, the digits big, the seconds small on their baseline. Two rows and up: the TIME tag (black on
     // the yellow), the digits huge, "SEC 32" and the date along the bottom. A 1x1: the seconds over the digits. Black digits with a red
     // and a cyan copy a little off them, a slice through their middle shifted sideways - drawn the same every time (no flicker).
-    void CyberTime(RectangleF r, WatchWidget w, DateTime now)
+    // hero: a preset face's big card (WristCyberFaces.cs) - the digits centred, the date along the bottom a black tag
+    void CyberTime(RectangleF r, WatchWidget w, DateTime now, bool hero = false)
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
@@ -335,10 +336,17 @@ public sealed partial class WristPanel
             string secText = "SEC " + sec;
             float sw = CyMonoW(secText, bs, FontWeight.Bold);
             CyMono(secText, x, floor, sw + 2, CyInk, bs, FontWeight.Bold);
-            string date = CyMonoFit(CyDateForms(now), iw - sw - 16, bs, FontWeight.Bold);
-            if (date != null) CyMono(date, right, floor, iw, CyInk, bs, FontWeight.Bold, TextAlignment.Trailing);
+            string date = CyMonoFit(CyDateForms(now), iw - sw - 16 - (hero ? 2 * CyberHud.TagPad + CyberHud.TagSlant : 0), bs, FontWeight.Bold);
+            if (date != null && hero)
+            {
+                // its text on the seconds' baseline (the boot wipes it in and types it, as a caption)
+                float th = MathF.Round(bs * 1.34f), tgw = CyberHud.TagWidth(_p, date, bs);
+                CyberHud.Tag(_p, right - tgw, floor - (th + CyberHud.CapH(_p, bs, FontWeight.Bold)) / 2, date, CyberFx.EaseOut(CyIn(0.2f, 0.08f)),
+                    CyIn(0.26f, 0.02f * date.Length), CyInk, CyY, bs, th);
+            }
+            else if (date != null) CyMono(date, right, floor, iw, CyInk, bs, FontWeight.Bold, TextAlignment.Trailing);
             top = r.Y + 36;
-            bottom = floor - CyberHud.CapH(_p, bs, FontWeight.Bold) - 12;
+            bottom = floor - CyberHud.CapH(_p, bs, FontWeight.Bold) - (hero ? 18 : 12);      // (the date tag reaches above its text)
             if (ampm != null) { secS = bs; sideW = CyMonoW(ampm, bs, FontWeight.Bold) + 10; }
         }
         else if (small)
@@ -366,10 +374,11 @@ public sealed partial class WristPanel
         size = MathF.Max(16, MathF.Floor(MathF.Min(size, 100 * (iw - sideW - slack) / w100) * 2) / 2);
         float by = top + (bottom - top + size * cap) / 2;  // the digits centred between the two
         var (g, seed) = CyTimeGlitch(now);              // the boot, a new minute: it glitches (WristCyberFx.cs)
-        float dw = CyGlitch(t, x, by, size, y, g, seed);
+        float dx = !hero ? x : x + MathF.Max(0, (iw - (sideW > 0 ? sideW + slack : 0) - _p.MeasureWidth(t, size, FontWeight.Bold, Theme.Display)) / 2);
+        float dw = CyGlitch(t, dx, by, size, y, g, seed);
         if (sideW > 0 && !small)
         {
-            float sx = x + dw + slack;
+            float sx = dx + dw + slack;
             if (!tall) CyMono(sec, sx, by, sideW, CyInk, secS, FontWeight.Bold);
             if (ampm != null) CyMono(ampm, sx, by - size * cap + CyberHud.CapH(_p, tall ? secS : CyNote, FontWeight.Bold), sideW, CyInk,
                 tall ? secS : CyNote, FontWeight.Bold);
@@ -531,12 +540,17 @@ public sealed partial class WristPanel
     // ---- the date: the day big in yellow, the month and the weekday beside it ----
     void CyberDate(RectangleF r, WatchWidget w, DateTime now)
     {
-        Words(now);
         float pad = PadX(r), x = r.X + pad, right = r.Right - pad, iw = right - x;
         CyberCaption(x, r, iw, CapDate);
+        CyDateBody(x, right, r.Y + 34, r.Bottom - 12, w.W == 1, now);
+    }
+
+    // the date's lines from x to right, the day's digits between top and bottom (its baseline) - the date card's, the analog face's clock's
+    void CyDateBody(float x, float right, float top, float bottom, bool s1, DateTime now)
+    {
+        Words(now);
         string day = _dayNum, wd = Upper(_capWeekday[1]).TrimEnd('.');
-        float cap = CyCap, top = r.Y + 34, bottom = r.Bottom - 12;
-        bool s1 = w.W == 1;
+        float cap = CyCap;
         // the day as tall as the space allows (the concept's: about 40 px of digit on a one-row card)
         float ds = MathF.Floor(MathF.Min(bottom - top, _big ? 64 : s1 ? 34 : 42) / cap);
         float dw = _p.MeasureWidth(day, ds, FontWeight.Bold, Theme.Display);
