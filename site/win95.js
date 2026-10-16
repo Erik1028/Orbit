@@ -9,11 +9,11 @@
   var L = HU ? {
     on: 'Windows 95 stílus', start: 'Start', watch: 'Az óra', desktop: 'Asztal', keyboard: 'Billentyűzet',
     install: 'Telepítés', guide: 'Útmutató', github: 'Forráskód (GitHub)', lang: 'English', langHref: base + './',
-    off: 'Vissza a modern stílusra…', welcome: 'Üdvözlet', task: 'OrbitOverlay'
+    off: 'Vissza a modern stílusra…', exit: 'Modern nézet', welcome: 'Üdvözlet', task: 'OrbitOverlay'
   } : {
     on: 'Windows 95 style', start: 'Start', watch: 'The watch', desktop: 'Desktop', keyboard: 'Keyboard',
     install: 'Install', guide: 'Guide', github: 'Source code (GitHub)', lang: 'Magyar', langHref: base + 'hu/',
-    off: 'Back to the modern look…', welcome: 'Welcome', task: 'OrbitOverlay'
+    off: 'Back to the modern look…', exit: 'Modern look', welcome: 'Welcome', task: 'OrbitOverlay'
   };
   var home = /guide\.html$/.test(location.pathname) ? base + './' : '';
   var ids = HU ? { watch: 'ora', desktop: 'asztal', keyboard: 'billentyuzet', install: 'telepites' }
@@ -49,6 +49,7 @@
   bar.innerHTML =
     '<button type="button" class="w95-start" aria-expanded="false" aria-controls="w95-menu"><img src="' + base + 'favicon.svg" width="18" height="18" alt=""><b>' + L.start + '</b></button>' +
     '<a class="w95-task" href="#top"><img src="' + base + 'favicon.svg" width="16" height="16" alt="">' + L.task + '</a>' +
+    '<button type="button" class="w95-exit" title="' + L.off + '">' + L.exit + ' ✕</button>' +
     '<span class="w95-tray"><time class="w95-clock"></time></span>';
   var menu = document.createElement('div');
   menu.className = 'w95-menu';
@@ -65,6 +66,7 @@
   document.body.appendChild(bar);
 
   var startBtn = bar.querySelector('.w95-start');
+  bar.querySelector('.w95-exit').addEventListener('click', function () { set(false); openMenu(false); window.scrollTo(0, 0); });
   function openMenu(open) {
     menu.hidden = !open;
     startBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -99,6 +101,8 @@
   function set(on) {
     if (on) html.setAttribute('data-style', '95'); else html.removeAttribute('data-style');
     save(on);
+    // a #win95 link only switches it on; once switched off, drop it so a reload stays modern
+    if (!on && location.hash === '#win95' && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
     toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
     if (theme) theme.setAttribute('content', on ? '#008080' : '#171a24');
     document.dispatchEvent(new CustomEvent('orbit-style'));
