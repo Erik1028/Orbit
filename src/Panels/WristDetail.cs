@@ -181,9 +181,10 @@ public sealed partial class WristPanel
     // a bar with a knob: drag along it (or tap) to set 0..1; its empty part the cards' track
     void Slider(string id, RectangleF bar, float value, uint col, bool enabled, Action<float> set)
     {
-        _ui.Clickable(id, RectangleF.Inflate(bar, 8, 20), out _, out bool held);
+        _ui.Clickable(id, RectangleF.Inflate(bar, 8, 20), out bool hover, out bool held);
         if (held && enabled) set(Math.Clamp((_ui.Mouse.X - bar.X) / bar.Width, 0, 1));
         float v = Math.Clamp(value, 0, 1), h = bar.Height;
+        if (Theme.Cyber) { CySlider(bar, v, col, enabled, hover || held); return; }      // segments and a mark (WristCyberDetail.cs)
         _p.Fill(bar, Bento.Track, h / 2);
         if (!enabled) return;
         float x = bar.X + bar.Width * v;
@@ -194,6 +195,7 @@ public sealed partial class WristPanel
 
     void MediaDetail(RectangleF c, PanelData d)
     {
+        if (Theme.Cyber) { CyberMediaDetail(c, d); return; }      // the HUD's own (WristCyberDetail.cs)
         var (has, title, artist, playing) = MediaNow(d);
         Volume.Sample(Clock.Now);
         float s = MathF.Min(c.Height, c.Width * 0.44f);
@@ -431,6 +433,7 @@ public sealed partial class WristPanel
     // the four frame numbers as gauges in their role colours (amber / red when they need attention), the frames under them
     void PerfDetail(RectangleF c, PanelData d)
     {
+        if (Theme.Cyber) { CyberPerfDetail(c, d); return; }       // the HUD's own (WristCyberDetail.cs)
         float gw = c.Width / 4;
         for (int j = 0; j < 4; j++)
         {
@@ -465,6 +468,7 @@ public sealed partial class WristPanel
     // the CPU (purple) and the memory (blue): a gauge each with its facts beside it, the last minute of CPU load under them
     void SystemDetail(RectangleF c, PanelData d)
     {
+        if (Theme.Cyber) { CyberSystemDetail(c, d); return; }     // the HUD's own (WristCyberDetail.cs)
         var (cf, cv, _, _, cl) = Reading("cpu", d);
         var (rf, rv, ru, _, rl) = Reading("ram", d);
         // the opened widget's own colour only for its own reading: the other keeps its role colour (two gauges in one

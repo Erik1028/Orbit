@@ -237,7 +237,7 @@ static partial class Tools
             if (style == CyberHud.Id)
             {
                 CyberDetailTools.Run(wrist, data, cfg, gpu, dir);
-                foreach (var kind in new[] { "time", "date", "analog", "session" })
+                foreach (var kind in new[] { "time", "date", "analog", "session", "media", "fps", "cpu", "volume" })
                     LayoutCheckRun(wrist, data, cfg, painter, gpu, dir, "cyber", onlyKind: kind);
             }
             cfg.Data.Wrist.Face = f0;

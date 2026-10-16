@@ -899,6 +899,10 @@ static class Hu
         ("{0}M", "{0}P"),
         ("{0} NEW", "{0} ÚJ"),
         ("Day", "Nap"),
+        ("Average", "Átlag"),
+        ("Worst", "Legrosszabb"),
+        ("Dropped", "Kiesett"),
+        ("CPU, last minute", "CPU, utolsó perc"),
         ("NO FRAMES", "NINCS KÉP"),
         ("MUTED", "NÉMÍTVA"),
 
