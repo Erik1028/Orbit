@@ -208,9 +208,13 @@ public sealed partial class Ui
         return Inside && r.Contains(Mouse.X, Mouse.Y);
     }
 
+    // --snapshot's overlap check (ToolsOverlap.cs): every control's hit area as it is drawn
+    public Action<string, RectangleF> HitSpy;
+
     // returns true on click (press and release inside)
     bool Behave(string id, RectangleF r, out bool hover, out bool held)
     {
+        if (!Inert) HitSpy?.Invoke(id, r);
         hover = Hover(r);
         if (hover && Pressed) _active = id;
         held = _active == id && (Down || Pressed);
@@ -480,6 +484,8 @@ public sealed partial class Ui
 
     public void Section(RectangleF r, string title)
     {
+        if (HitSpy != null && !Inert)       // the title itself (not the whole row): a control over it is a crossing too
+            HitSpy("section:" + title, new RectangleF(r.X, r.Y, P.MeasureWidth(title.ToUpperInvariant(), 12, FontWeight.SemiBold) + (Theme.Cyber ? 24 : 4), r.Height));
         if (Theme.Cyber) { CyberSection(r, title); return; }    // a yellow tag (it slides in: UiCyber.cs)
         if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
         // a group box title: bold black, an etched line running on after it

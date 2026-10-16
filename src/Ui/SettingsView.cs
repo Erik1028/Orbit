@@ -835,7 +835,7 @@ public sealed partial class SettingsView
         if (ui.Toggle("night", new RectangleF(rx - 10, 450, 376, 54), "Night mode", ref night, "dims every panel in VR - also on the watch (moon)"))
             a.NightMode = night;
         float nb = a.NightBrightness;
-        if (ui.Slider("night.b", new RectangleF(rx - 10, 512, 376, 58), "Night brightness", ref nb, 0.15f, 0.9f, f => $"{f * 100:0}%"))
+        if (ui.Slider("night.b", new RectangleF(rx - 10, 512, 376, 54), "Night brightness", ref nb, 0.15f, 0.9f, f => $"{f * 100:0}%"))
             a.NightBrightness = nb;
         // how much things move (Gfx/Motion.cs), what it means beside the title; written only when not Full, it applies at once
         ui.Section(new RectangleF(rx, 566, 360, 20), "Motion");
@@ -1075,14 +1075,15 @@ public sealed partial class SettingsView
         }
         if (ui.Button("g.folder", new RectangleF(lx + 10, by, 200, 38), "Open config folder", Theme.IcoFolder, false, true, 14))
             _h.OpenConfigFolder();
+        if (ui.Button("g.whatsnew", new RectangleF(lx + 220, by, 146, 38), "What's new", "", false, true, 14)) { _whatsNewManual = true; _wnScroll = 0; }
 
         float rx = 618, y = 88;
         void Row(string k, string v)
         {
-            if (Theme.Cyber) { CyberRow(p, k, v, rx, y); y += 28; return; }     // a monospace readout (SettingsCyber.cs)
+            if (Theme.Cyber) { CyberRow(p, k, v, rx, y); y += 26; return; }     // a monospace readout (SettingsCyber.cs)
             p.Text(k, new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
             p.Text(v, new RectangleF(rx + 100, y, 266, 26), Theme.Text, 13);
-            y += 28;
+            y += 26;
         }
         Row("SteamVR", _h.VrStatus);
         Row("Input", _h.InputStatus);
@@ -1112,10 +1113,9 @@ public sealed partial class SettingsView
             if (avail) _h.Updates.Apply();
             else _h.Updates.Check();
         }
-        y += 28;
+        y += 30;
         if (!string.IsNullOrEmpty(umsg))
-            p.Text(umsg, new RectangleF(rx + 100, y - 2, 176, 20), us == Updater.State.Failed ? Theme.Warn : Theme.Dim, 12);
-        if (ui.Button("g.whatsnew", new RectangleF(rx + 276, y - 4, 90, 26), "What's new", null, false, true, 12)) { _whatsNewManual = true; _wnScroll = 0; }
+            p.Text(umsg, new RectangleF(rx + 100, y, 266, 18), us == Updater.State.Failed ? Theme.Warn : Theme.Dim, 12);
 
         ui.Section(new RectangleF(rx, 268, 360, 20), "Notifications");
         b = g.Notifications;
