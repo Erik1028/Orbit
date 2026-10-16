@@ -225,7 +225,7 @@ public sealed partial class WristPanel
         }
         _cyMinuteAt = _cyT;
         double t = _cyT - _cyGlitchAt;
-        if (t >= CyGlitchLen || t < 0) return (0, 0);
+        if (t >= CyGlitchLen || t < 0 || !CyLiveFx) return (0, 0);
         int step = (int)(t / CyGlitchStep);
         CyWant(_cyGlitchAt + (step + 1) * CyGlitchStep);
         return (MathF.Pow(1 - (float)(t / CyGlitchLen), 0.6f), step * 7 + m * 131);
@@ -256,7 +256,7 @@ public sealed partial class WristPanel
         }
         s.Seen = _cyT;
         double t = _cyT - s.At;
-        if (t >= 0.14 || t < 0) return 0;
+        if (t >= 0.14 || t < 0 || !CyLiveFx) return 0;
         CyWant(s.At + (t < 0.07 ? 0.07 : 0.14));
         return t < 0.07 ? 1 : 0.4f;
     }
@@ -277,7 +277,7 @@ public sealed partial class WristPanel
         }
         s.Seen = _cyT;
         float t = (float)(_cyT - s.At), len = 0.02f * n.Length + 0.06f;
-        if (t >= 0 && t < len) { _cyBusy = true; k = MathF.Min(k, t / len); }
+        if (t >= 0 && t < len && CyLiveFx) { _cyBusy = true; k = MathF.Min(k, t / len); }
         return k;
     }
 
@@ -316,7 +316,7 @@ public sealed partial class WristPanel
     (bool on, bool lit) CyInboxBlink()
     {
         double t = _cyT - _cyInboxAt;
-        if (t < 0 || t >= 1.2) return (false, false);
+        if (t < 0 || t >= 1.2 || !CyLiveFx) return (false, false);
         int ph = (int)(t / 0.2);
         CyWant(_cyInboxAt + (ph + 1) * 0.2);
         return (true, ph % 2 == 0);

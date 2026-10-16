@@ -23,7 +23,8 @@ static class CyberAnimShot
         string qa = Path.Combine(dir, "qa");
         Directory.CreateDirectory(qa);
         foreach (var f in Directory.GetFiles(qa, "anim_cyber_*")) File.Delete(f);
-        cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true };
+        // ORBIT_ANIM_MOTION=reduced / off: the same frames at that Look > Motion (what still moves)
+        cfg.Data.Appearance = new AppearanceConfig { Style = CyberHud.Id, Clock24h = true, Motion = Environment.GetEnvironmentVariable("ORBIT_ANIM_MOTION") };
         Theme.Apply(cfg.Data.Appearance);
         System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
         CyberFx.Live = true;
