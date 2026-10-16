@@ -35,6 +35,7 @@ public sealed partial class KeyboardPanel
         Array.Clear(_hover); Array.Clear(_down); Array.Clear(_held95);
         _flash.Clear();
         _cyLatch.Clear();
+        _cyBaseOk = false;
         BuildLayout();
         _hkl = IntPtr.Zero;            // the key caps again (Draw)
         _dirty = true;
@@ -73,25 +74,84 @@ public sealed partial class KeyboardPanel
         }
         double now = Clock.Now;
         var all = new RectangleF(0, 0, TW, TH);
-        _p.Begin(Surf.Bitmap, 0x00000000);
-        var rev = CyberReveal.Begin(_p, all, Ov != null ? Ov.ShownAt : OpenAtForTest, Ov != null ? _vis : 1, Ov != null && !(C.Visible && C.Place.M != null));
-        CyberHud.ConsoleFrame(_p, all, Theme.OverlayBg, 22);
+        double shownAt = Ov != null ? Ov.ShownAt : OpenAtForTest;
+        float vis = Ov != null ? _vis : 1;
+        bool closing = Ov != null && !(C.Visible && C.Place.M != null);
         bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
-        foreach (var key in new List<Key>(_flash.Keys))
+        _cyCaps = Caps;
+        _cyFlashKeys.Clear();
+        _cyFlashKeys.AddRange(_flash.Keys);
+        foreach (var key in _cyFlashKeys)
         {
             if (Array.IndexOf(_down, key) >= 0) continue;
             float f = Motion.Any ? _flash[key] - _lastDt / 0.25f : 0;
             if (f <= 0) _flash.Remove(key); else _flash[key] = f;
         }
-        CyHeader();
+        for (int s = 0; s < _hover.Length; s++)
+            if (_cyHoverKey[s] != _hover[s]) { _cyHoverKey[s] = _hover[s]; _cyHoverAt[s] = now; }
+        // the picture at rest, kept: made again only when it has changed; the opening / closing and the --snapshot's text checks draw
+        // all of it, as before
+        bool live = CyberReveal.Running(shownAt, vis, closing) || _p.FitSpy != null || Painter.FitAll != null || _p.TextSpy != null || _p.NoText;
+        if (!live)
+        {
+            int sig = CyBaseSig(shift, altgr);
+            if (_cyBase == null || !_cyBaseOk || sig != _cyBaseSig) CyDrawBase(shift, altgr, now, sig);
+        }
+        _p.Begin(Surf.Bitmap, 0x00000000);
+        var rev = CyberReveal.Begin(_p, all, shownAt, vis, closing);
+        if (live)
+        {
+            CyberHud.ConsoleFrame(_p, all, Theme.OverlayBg, 22);
+            CyHeader();
+        }
+        else _p.Image(_cyBase.Bitmap, all);
         if (_chat) CyChatField(now);
         // the opening's scan line: the rows it has just passed flash (Full)
         float scanY = rev.Kind == 1 && CyberFx.Full ? CyberReveal.ScanY(rev) : -1;
-        var drawList = new List<Key>(_keys);
-        drawList.AddRange(_chat ? _barChat : _barNormal);
-        foreach (var k in drawList) CyKey(k, shift, altgr, now, scanY);
+        int mode = live ? KeyLive : KeyOver;
+        foreach (var k in _keys) CyKey(k, shift, altgr, now, scanY, mode);
+        foreach (var k in _chat ? _barChat : _barNormal) CyKey(k, shift, altgr, now, scanY, mode);
         CyberReveal.End(_p, rev);
         _p.End();
+    }
+
+    // ---- the picture at rest, kept ----
+    // The frame, the header and every key as it looks with nothing on it, in a texture of its own: made again when that picture
+    // changes (a modifier, Caps, the layout, Chatbox, the look, the language). A frame is that texture, the Chatbox line and only the
+    // keys doing something over it - under a laser, held, fading out, latching: ~0.2 ms instead of ~2.5 (Erik, 10-16: "better
+    // performance overall"; the settings' Keyboard tab draws the keyboard in every frame of its own).
+    Surface _cyBase;
+    int _cyBaseSig;
+    bool _cyBaseOk, _cyCaps;
+    readonly List<Key> _cyFlashKeys = new();
+    readonly Key[] _cyHoverKey = new Key[3];
+    readonly double[] _cyHoverAt = new double[3];
+
+    int CyBaseSig(bool shift, bool altgr)
+    {
+        var h = new HashCode();
+        h.Add(Theme.Version);
+        h.Add(Lang.Code);
+        h.Add(shift);
+        h.Add(altgr);
+        h.Add(_cyCaps);
+        h.Add(_chat);
+        foreach (var v in _mods.Values) h.Add(v);
+        foreach (var k in _keys) { h.Add(k.Normal); h.Add(k.Shifted); h.Add(k.AltGr); h.Add(k.Fixed); }
+        return h.ToHashCode();
+    }
+
+    void CyDrawBase(bool shift, bool altgr, double now, int sig)
+    {
+        _cyBase ??= new Surface(_p.Gpu, TW, TH);
+        _p.Begin(_cyBase.Bitmap, 0x00000000);
+        CyberHud.ConsoleFrame(_p, new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 22);
+        CyHeader();
+        foreach (var k in _keys) CyKey(k, shift, altgr, now, -1, KeyBase);
+        foreach (var k in _chat ? _barChat : _barNormal) CyKey(k, shift, altgr, now, -1, KeyBase);
+        _p.End();
+        _cyBaseSig = sig;
+        _cyBaseOk = true;
     }
 
     // ---- the header strip: the tag, the readouts, the modifier lamps, a hazard chip ----
@@ -161,35 +221,59 @@ public sealed partial class KeyboardPanel
                 _p.Fill(new RectangleF(cx, f.Y + 15, 12, f.Height - 30), CyberHud.Cyan);
             }
         }
-        _p.Text($"{text.Length}/{ChatMax}", new RectangleF(f.Right - 120, f.Y, 104, f.Height), CyberHud.Grey, 15, FontWeight.SemiBold,
+        if (_cyCountLen != text.Length || _cyCount == null) { _cyCountLen = text.Length; _cyCount = $"{text.Length}/{ChatMax}"; }
+        _p.Text(_cyCount, new RectangleF(f.Right - 120, f.Y, 104, f.Height), CyberHud.Grey, 15, FontWeight.SemiBold,
             TextAlignment.Trailing, ParagraphAlignment.Center, CyberHud.Mono);
     }
 
+    string _cyCount;
+    int _cyCountLen = -1;
+
     static readonly Vector2[] _cyTick = new Vector2[4];
 
+    // how a key is drawn: as it is now; as it looks with nothing on it (the kept picture); over the kept picture - only when it is
+    // doing something (nothing drawn otherwise)
+    const int KeyLive = 0, KeyBase = 1, KeyOver = 2;
+
     // ---- one key ----
-    void CyKey(Key k, bool shift, bool altgr, double now, float scanY)
+    void CyKey(Key k, bool shift, bool altgr, double now, float scanY, int mode)
     {
-        bool hover = Array.IndexOf(_hover, k) >= 0;
-        bool down = Array.IndexOf(_down, k) >= 0;
-        _flash.TryGetValue(k, out float glow);
-        int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && Caps ? 2 : k.Action == "chat" && _chat ? 2 : 0;
-        float latch = k.Kind is Kind.Modifier or Kind.Caps || k.Action == "chat" ? CyLatch(k, modState, now, out int prevState) : 1;
+        bool rest = mode == KeyBase;
+        int hs = rest ? -1 : Array.IndexOf(_hover, k), ds = rest ? -1 : Array.IndexOf(_down, k);
+        bool hover = hs >= 0, down = ds >= 0;
+        float glow = 0;
+        if (!rest) _flash.TryGetValue(k, out glow);
+        int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && _cyCaps ? 2 : k.Action == "chat" && _chat ? 2 : 0;
+        float latch = !rest && (k.Kind is Kind.Modifier or Kind.Caps || k.Action == "chat") ? CyLatch(k, modState, now, out _) : 1;
+        // the laser coming onto it: its brackets close in from outside (0.12 s); held: the cap sinks in (0.06 s) white-hot, a ring of
+        // brackets kicking out (0.18 s, Full)
+        float hin = hover && CyberFx.Any ? CyberFx.EaseOut(CyberFx.Ramp(now - _cyHoverAt[hs], 0, 0.12)) : 1;
+        double dt = down ? now - _downAt[ds] : 10;
+        float sink = down && CyberFx.Any ? CyberFx.EaseOut(CyberFx.Ramp(dt, 0, 0.06)) : 1;
+        float kick = down && CyberFx.Full ? CyberFx.Ramp(dt, 0, 0.18) : 1;
+        if (hin < 1 || sink < 1 || kick < 1) AnimWake.At(now);
+        if (mode == KeyOver && !hover && !down && glow <= 0 && latch >= 1) return;
         bool action = k.Kind == Kind.Action && k.Action != "lang";
         bool primary = k.Action == "send";
-        var kr = down ? RectangleF.Inflate(k.R, -3, -3) : k.R;
+        var kr = k.R;
         float cut = action ? 12 : 10;
         bool lit = down || modState == 2;
-        // the plate
-        uint bg = primary ? CyberHud.Yellow : hover ? CyberHud.Card3 : CyberHud.Card2;
+        // the plate (held: a dark socket the cap sits in)
+        uint bg = down ? CyberHud.Page : primary ? CyberHud.Yellow : hover ? CyberHud.Card3 : CyberHud.Card2;
         if (!down && glow > 0) bg = Theme.Mix(bg, CyberHud.Cyan, glow * 0.6f);
         _p.FillCut(kr, bg, 0, 0, cut, 0);
+        if (down)
+        {
+            _p.StrokeCut(RectangleF.Inflate(kr, -0.75f, -0.75f), CyberHud.Cyan, 1.5f, 0, 0, cut - 0.45f, 0);
+            kr = RectangleF.Inflate(kr, -3 * sink, -3 * sink);
+        }
         if (lit)
         {
-            // pressed / locked: the cyan block (locking: it wipes in from the left)
+            // held / locked: the cyan block (locking: it wipes in from the left; held: white-hot for its first moments)
             float wk = down ? 1 : latch;
+            uint cc = down && kick < 1 ? Theme.Mix(CyberHud.White, CyberHud.Cyan, CyberFx.EaseOut(kick * 2)) : CyberHud.Cyan;
             if (wk < 1) _p.PushClip(new RectangleF(kr.X, kr.Y, kr.Width * wk, kr.Height));
-            _p.FillCut(kr, CyberHud.Cyan, 0, 0, cut, 0);
+            _p.FillCut(kr, cc, 0, 0, cut, 0);
             if (wk < 1) _p.PopClip();
         }
         // the row the opening's scan line just passed: a cyan flash
@@ -214,12 +298,23 @@ public sealed partial class KeyboardPanel
         }
         // a modifier on once: its brackets (snapping in when it latches); hover: brackets closing in
         if (modState == 1) CyberHud.Brackets(_p, kr, CyberHud.Cyan, 10, 5 - 10 * (1 - latch), 2);
-        else if (hover && !down) CyberHud.Brackets(_p, kr, CyberHud.Cyan, 9, 5, 2);
+        else if (hover && !down) CyberHud.Brackets(_p, kr, Theme.WithAlpha(CyberHud.Cyan, 0.4f + 0.6f * hin), 9, 5 - 9 * (1 - hin), 2);
         if (modState == 2 && !down && k.Kind != Kind.Action)
             CyberHud.MonoAt(_p, "LOCK", kr.Right - 50, kr.Y + 20, 46, Theme.WithAlpha(CyberHud.Ink, 0.7f), 13, FontWeight.Bold);
-        // let go: the brackets fly out as the glow fades
+        // held: the ring kicking out round the socket
+        if (kick < 1)
+            CyberFx.Corners(_p, k.R, Theme.WithAlpha(CyberHud.White, 1 - kick), 12, 2, 2 + 12 * CyberFx.EaseOut(kick));
+        // let go: the brackets fly out as the glow fades, a scan line runs down the key (Full)
         if (glow > 0.01f && !down && Motion.Any)
+        {
             CyberFx.Corners(_p, kr, Theme.WithAlpha(CyberHud.Cyan, glow), 10, 2, 1 + 8 * (1 - glow));
+            if (CyberFx.Full)
+            {
+                float y = kr.Y + 4 + (kr.Height - 8) * (1 - glow), x1 = kr.Right - 4 - MathF.Max(0, y - (kr.Bottom - cut));
+                _p.Fill(new RectangleF(kr.X + 4, y - 7, x1 - kr.X - 4, 6), Theme.WithAlpha(CyberHud.Cyan, 0.16f * glow));
+                _p.Fill(new RectangleF(kr.X + 4, y - 1, x1 - kr.X - 4, 2), Theme.WithAlpha(CyberHud.White, 0.85f * glow));
+            }
+        }
         // the glitch: for the first moments after it is let go the legend splits red / cyan (Full)
         float split = glow > 0.55f && !down && CyberFx.Full ? (glow - 0.55f) / 0.45f * 3f : 0;
         CyLegend(k, kr, lit, primary, shift, altgr, split);
@@ -240,7 +335,7 @@ public sealed partial class KeyboardPanel
                     TextAlignment.Leading, ParagraphAlignment.Center, CyberHud.Mono);
                 return;
             }
-            string label = k.Fixed.ToUpperInvariant();
+            string label = CyUpper(k.Fixed);
             float fs = 21;
             float tw = _p.MeasureWidth(label, fs, FontWeight.SemiBold);
             if (28 + 10 + tw > kr.Width - 20) { fs = 18; tw = _p.MeasureWidth(label, fs, FontWeight.SemiBold); }
@@ -251,8 +346,7 @@ public sealed partial class KeyboardPanel
         }
         if (k.Icon != null)
         {
-            Split(() => _p.Icon(k.Icon, kr, ink != 0 ? ink : CyberHud.Cyan, 28), split, () => _p.Icon(k.Icon, Off(kr, -split), CyberHud.Red, 28),
-                () => _p.Icon(k.Icon, Off(kr, split), CyberHud.Cyan, 28));
+            CySplit(k.Icon, kr, ink != 0 ? ink : CyberHud.Cyan, 28, FontWeight.Normal, Theme.IconFont, split);
             return;
         }
         if (k.Fixed == " ")
@@ -266,24 +360,16 @@ public sealed partial class KeyboardPanel
         }
         if (k.Fixed != null)
         {
-            string s = k.Fixed.ToUpperInvariant();
+            string s = CyUpper(k.Fixed);
             bool fkey = s.Length >= 2 && s[0] == 'F' && char.IsDigit(s[1]);
             uint c = ink != 0 ? ink : CyCommand(k) ? CyberHud.Cyan : fkey ? CyberHud.Grey : CyberHud.White;
-            float fs = s.Length > 4 ? 19 : 22;
-            var tr = new RectangleF(kr.X, kr.Y + 1, kr.Width, kr.Height);
-            Split(() => _p.Text(s, tr, c, fs, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono), split,
-                () => _p.Text(s, Off(tr, -split), CyberHud.Red, fs, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono),
-                () => _p.Text(s, Off(tr, split), CyberHud.Cyan, fs, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono));
+            CySplit(s, new RectangleF(kr.X, kr.Y + 1, kr.Width, kr.Height), c, s.Length > 4 ? 19 : 22, FontWeight.Bold, CyberHud.Mono, split);
             return;
         }
         string main = altgr && k.AltGr != null ? k.AltGr : shift ? k.Shifted ?? k.Normal : k.Normal;
-        if (main != null && main.Length == 1 && char.IsLetter(main[0]) && Caps && !altgr)
-            main = shift ? main.ToLowerInvariant() : main.ToUpperInvariant();
-        uint mc = ink != 0 ? ink : CyberHud.White;
-        var mr = new RectangleF(kr.X, kr.Y + 2, kr.Width, kr.Height - 2);
-        Split(() => _p.Text(main, mr, mc, 40, FontWeight.SemiBold, TextAlignment.Center, ParagraphAlignment.Center, Theme.Display), split,
-            () => _p.Text(main, Off(mr, -split), CyberHud.Red, 40, FontWeight.SemiBold, TextAlignment.Center, ParagraphAlignment.Center, Theme.Display),
-            () => _p.Text(main, Off(mr, split), CyberHud.Cyan, 40, FontWeight.SemiBold, TextAlignment.Center, ParagraphAlignment.Center, Theme.Display));
+        if (main != null && main.Length == 1 && char.IsLetter(main[0]) && _cyCaps && !altgr)
+            main = shift ? CyLower(main) : CyUpper(main);
+        CySplit(main, new RectangleF(kr.X, kr.Y + 2, kr.Width, kr.Height - 2), ink != 0 ? ink : CyberHud.White, 40, FontWeight.SemiBold, Theme.Display, split);
         // the small legends: the shifted symbol top-left (grey), the AltGr one bottom-right (cyan)
         if (!shift && k.Shifted != null && k.Normal != null && !char.IsLetter(k.Normal[0]))
             _p.Text(k.Shifted, new RectangleF(kr.X + 14, kr.Y + 6, 34, 28), ink != 0 ? ink : CyberHud.Grey, 20, FontWeight.SemiBold, TextAlignment.Leading,
@@ -295,11 +381,31 @@ public sealed partial class KeyboardPanel
 
     static RectangleF Off(RectangleF r, float dx) => new(r.X + dx, r.Y, r.Width, r.Height);
 
-    // the legend, with a red ghost to the left and a cyan one to the right while it glitches
-    static void Split(Action main, float split, Action red, Action cyan)
+    // a legend centred in r, with a red ghost to the left and a cyan one to the right while it glitches
+    void CySplit(string s, RectangleF r, uint c, float size, FontWeight w, string family, float split)
     {
-        if (split > 0.3f) { red(); cyan(); }
-        main();
+        if (split > 0.3f)
+        {
+            _p.Text(s, Off(r, -split), CyberHud.Red, size, w, TextAlignment.Center, ParagraphAlignment.Center, family);
+            _p.Text(s, Off(r, split), CyberHud.Cyan, size, w, TextAlignment.Center, ParagraphAlignment.Center, family);
+        }
+        _p.Text(s, r, c, size, w, TextAlignment.Center, ParagraphAlignment.Center, family);
+    }
+
+    // a legend in capitals / small letters, each made once (not a new string per key per frame)
+    readonly Dictionary<string, string> _cyUpper = new(), _cyLower = new();
+
+    string CyUpper(string s)
+    {
+        if (s == null) return null;
+        if (!_cyUpper.TryGetValue(s, out var u)) { if (_cyUpper.Count > 400) _cyUpper.Clear(); _cyUpper[s] = u = s.ToUpperInvariant(); }
+        return u;
+    }
+
+    string CyLower(string s)
+    {
+        if (!_cyLower.TryGetValue(s, out var u)) { if (_cyLower.Count > 400) _cyLower.Clear(); _cyLower[s] = u = s.ToLowerInvariant(); }
+        return u;
     }
 
     // --animshot: key i let go just now (its glow)
@@ -316,7 +422,7 @@ public sealed partial class KeyboardPanel
     public void HoldForTest(int i, bool down)
     {
         if (i < 0 || i >= _keys.Count) return;
-        if (down) { _down[2] = _keys[i]; _flash[_keys[i]] = 1; }
+        if (down) { _down[2] = _keys[i]; _downAt[2] = Clock.Now; _flash[_keys[i]] = 1; }
         else _down[2] = null;
         _lastDt = 1 / 120f;
         _dirty = true;

@@ -125,9 +125,17 @@ public sealed partial class SettingsView
         bool modal = wn != null && wn.Count > 0;
         if (Tab != TabLook || modal) _fontsOpen = _stylesOpen = false;
         ui.Inert = modal || _fontsOpen || _stylesOpen;       // an open font / style list: the page under it is only a picture
-        // Cyber, the VR panel coming / going: its HUD reveal (Gfx/CyberReveal.cs)
+        // Cyber, the VR panel coming / going: its HUD reveal (Gfx/CyberReveal.cs); the console at rest kept as a picture (SettingsCyber.cs)
+        if (Theme.Cyber) CyberKeep(ui);
         var cyRev = Theme.Cyber && OnClose != null ? CyberReveal.Begin(p, new RectangleF(0, 0, W, H), ShownAt, Vis, Closing) : default;
-        if (Theme.Cyber) { CyberGround(ui); ui.HudRight = CyPage.Right - 8; }     // the HUD console's frame, cards and grid (SettingsCyber.cs)
+        if (Theme.Cyber)
+        {
+            // the HUD console's frame, cards and grid (SettingsCyber.cs), the page's label
+            if (_cyKept) p.Image(_cyKeep.Bitmap, new RectangleF(0, 0, W, H));
+            else CyberGround(ui);
+            CyberPageLabel(ui);
+            ui.HudRight = CyPage.Right - 8;
+        }
         else p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
         DrawHeader(ui);
         if (Theme.Classic) DrawNavClassic(ui);

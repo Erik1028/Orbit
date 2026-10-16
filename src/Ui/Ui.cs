@@ -121,6 +121,7 @@ public sealed partial class Ui
     {
         _anim.Clear();
         _springs.Clear();
+        _cyAt.Clear();
         _lastBegin = 0;
         _lastHot = -2;
     }

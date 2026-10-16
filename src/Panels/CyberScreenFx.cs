@@ -12,7 +12,8 @@ namespace Orbit;
 //  - a HUD frame (Full): a second, see-through overlay over the screen (the same place, bend and size, a margin round it) for the
 //    0.25-0.5 s it lasts - yellow corner brackets locking on from outside, a bright line with a red / cyan split riding each edge of
 //    the unfold, a faint grid over what was just revealed; going away the brackets close in on the line. Taking the theater the
-//    brackets lock on round the growing screen and a scan line runs down it; leaving it they let go.
+//    brackets lock on round the growing screen, a reticle closes in on its middle and snaps a square round it, a LOCK tag types in
+//    at the top-left bracket and a scan line with a red / cyan split runs down it; leaving it they let go.
 // At rest none of it is there: the bounds are the whole texture again, the frame overlay hidden, nothing drawn. Every other style:
 // nothing at all (this is not even made).
 public sealed class CyberScreenFx : IDisposable
@@ -137,7 +138,35 @@ public sealed class CyberScreenFx : IDisposable
             float fade = 1 - CyberFx.Ramp(tl, 0.42, 0.18);
             CyberFx.Corners(p, inner, Theme.WithAlpha(CyberHud.Yellow, fade), arm * 1.2f, 6, (1 - lk) * (M - 4) + 2);
             float s = CyberFx.EaseInOut(CyberFx.Ramp(tl, 0.05, 0.45));
-            if (s > 0 && s < 1) CyberFx.ScanH(p, inner.X, inner.Right, inner.Y + inner.Height * s, CyberHud.Cyan, 1.5f * (1 - s * 0.5f));
+            if (s > 0 && s < 1)
+            {
+                // the scan line with its red / cyan split
+                float sy = inner.Y + inner.Height * s, a = 1 - s * 0.5f;
+                CyberFx.ScanH(p, inner.X, inner.Right, sy, CyberHud.Cyan, 1.5f * a);
+                p.Fill(new RectangleF(inner.X, sy - 7, inner.Width, 2), Theme.WithAlpha(CyberHud.Red, 0.6f * a));
+                p.Fill(new RectangleF(inner.X, sy + 4, inner.Width, 2), Theme.WithAlpha(CyberHud.Cyan, 0.45f * a));
+            }
+            // a reticle closing in on the middle (0.22 s), a square snapping round it as it locks, then gone with the brackets
+            float rk = CyberFx.EaseOut(CyberFx.Ramp(tl, 0, 0.22)), rf = 1 - CyberFx.Ramp(tl, 0.36, 0.2);
+            if (rf > 0.01f)
+            {
+                float cx = inner.X + inner.Width / 2, m = MathF.Min(inner.Width, inner.Height);
+                float gap = m * (0.3f - 0.22f * rk), len = m * 0.06f;
+                uint rc = Theme.WithAlpha(CyberHud.Cyan, rf * (0.4f + 0.6f * rk));
+                p.Fill(new RectangleF(cx - gap - len, cy - 1.5f, len, 3), rc);
+                p.Fill(new RectangleF(cx + gap, cy - 1.5f, len, 3), rc);
+                p.Fill(new RectangleF(cx - 1.5f, cy - gap - len, 3, len), rc);
+                p.Fill(new RectangleF(cx - 1.5f, cy + gap, 3, len), rc);
+                if (rk >= 1)
+                {
+                    float q = gap * (1.25f - 0.25f * CyberFx.EaseOut(CyberFx.Ramp(tl, 0.22, 0.08)));
+                    CyberFx.Corners(p, new RectangleF(cx - q, cy - q, 2 * q, 2 * q), Theme.WithAlpha(CyberHud.Yellow, rf), len * 0.6f, 3);
+                }
+            }
+            // LOCK: a tag wiping in at the top-left bracket as it locks, its letters typing
+            float tw = CyberFx.Ramp(tl, 0.16, 0.08), tt = CyberFx.Ramp(tl, 0.2, 0.1);
+            if (tw > 0 && fade > 0.01f)
+                CyberHud.Tag(p, inner.X + arm * 1.2f + 14, inner.Y + 10, "LOCK", tw, tt, Theme.WithAlpha(CyberHud.Yellow, fade), Theme.WithAlpha(CyberHud.Ink, fade), 22, 30);
         }
         if (tr >= 0)
         {

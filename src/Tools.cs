@@ -276,6 +276,7 @@ static partial class Tools
         var panelView = new SettingsView(host) { OnClose = () => { }, Tab = SettingsView.TabGeneral };
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "anim_cyber") return CyberAnimShot.Run(wrist, data, cfg, gpu, dir, kb, view, ui, surf, ptr, painter);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "cyberui") return CyberUiOnly(view, panelView, ui, surf, ptr, painter, gpu, cfg, wrist, data, kb, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "cyberperf") return CyberPerfOnly(view, ui, surf, ptr, painter, gpu, cfg, kb);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "extras") return ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "overlaps") { OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir); return 0; }
         if (only != null)

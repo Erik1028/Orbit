@@ -13,8 +13,10 @@ namespace Orbit;
 //    (Keyboard / Desktops lit cyan while shown);
 //  - the nav: a column of HUD tabs - index, icon, name in capitals; the open one a lit plate with a yellow marker bar and cyan
 //    brackets that slides to the tab picked; a SYS block under the tabs (build, link, time in VR) over a strip of hazard stripes.
-// Motion (Full): a tab picked - a cyan scan line sweeps down the page and reveals it (its tags type in behind it, UiCyber.cs);
-// the VR panel opening / closing - CyberReveal. Reduced: the modern fade; Off: at once.
+// Motion (Full): a tab picked - a cyan scan line sweeps down the page and reveals it, the page rising the last few px into place,
+// the grid lighting up in the scanner's wake and a few glitch bars riding the line (its tags type in behind it, UiCyber.cs); the page's
+// label decodes; the nav's plate slides over with a trail of its outline. The VR panel opening / closing - CyberReveal. Reduced: the
+// modern fade; Off: at once.
 public sealed partial class SettingsView
 {
     static readonly RectangleF CyNav = new(10, 70, 196, 564), CyPage = new(216, 70, 776, 564);
@@ -57,8 +59,15 @@ public sealed partial class SettingsView
         for (float x = CyPage.X + 24; x < CyPage.Right - 8; x += 24) p.Fill(new RectangleF(x, CyPage.Y + 2, 1, CyPage.Height - 4), g);
         for (float y = CyPage.Y + 24; y < CyPage.Bottom - 8; y += 24) p.Fill(new RectangleF(CyPage.X + 2, y, CyPage.Width - 4, 1), g);
         CyberHud.Brackets(p, CyPage, CyberHud.Yellow, 12, 5, 2, topRight: false);
-        // the page's label on its card's top edge, right: its number and name
+    }
+
+    // the page's label on its card's top edge, right: its number and name (a tab picked: it decodes from noise, Full)
+    void CyberPageLabel(Ui ui)
+    {
+        var p = ui.P;
         string label = CyLabel(Tab);
+        double lt = Clock.Now - _cyTabAt;
+        if (CyberFx.Full && lt >= 0 && lt < CyScanTime) label = CyDecode(label, (float)(lt / CyScanTime));
         float lw = CyberHud.MonoWidth(p, label, 10.5f, FontWeight.Bold) + 16;
         var lr = new RectangleF(CyPage.Right - 24 - lw, CyPage.Y - 7, lw, 14);
         p.Fill(lr, CyberHud.Page);
@@ -66,13 +75,29 @@ public sealed partial class SettingsView
         p.Fill(new RectangleF(lr.X - 6, CyPage.Y - 2, 4, 4), CyberHud.Yellow);
     }
 
-    readonly System.Collections.Generic.Dictionary<(int, string), string> _cyLabels = new();
+    readonly System.Collections.Generic.Dictionary<(int, string, string), string> _cyLabels = new();
+    readonly System.Collections.Generic.Dictionary<(string, int), string> _cyNoise = new();
+    const string CyNoise = "#%&*+=<>/\\|01X$";
+
+    // s decoding at k (0..1): the first part as it is, the rest a jitter of HUD characters that changes every ~30 ms (each string made
+    // once per step)
+    string CyDecode(string s, float k)
+    {
+        int step = (int)(k * 8), n = Math.Clamp((int)(CyberFx.EaseOut(k) * s.Length), 0, s.Length);
+        if (n >= s.Length) return s;
+        if (_cyNoise.TryGetValue((s, step), out var d)) return d;
+        if (_cyNoise.Count > 96) _cyNoise.Clear();
+        var c = s.ToCharArray();
+        for (int i = n; i < c.Length; i++)
+            if (c[i] != ' ') c[i] = CyNoise[(int)(CyberFx.Hash(i, step) * CyNoise.Length) % CyNoise.Length];
+        return _cyNoise[(s, step)] = new string(c);
+    }
 
     // "03 // LAYOUTS"
     string CyLabel(int tab)
     {
         tab = Math.Clamp(tab, 0, Tabs.Length - 1);
-        var key = (tab, Tabs[tab] + "|" + Lang.Code);
+        var key = (tab, Tabs[tab], Lang.Code);
         if (!_cyLabels.TryGetValue(key, out var s)) _cyLabels[key] = s = CyIndex(tab) + " // " + Lang.Upper(Tabs[tab]);
         return s;
     }
@@ -81,28 +106,12 @@ public sealed partial class SettingsView
     void DrawHeaderCyber(Ui ui)
     {
         var p = ui.P;
-        // the logo (Erik's, Painter.Logo) in a pair of cyan brackets
-        var logo = new RectangleF(19, 13, 38, 38);
-        p.Logo(logo);
-        CyberHud.Brackets(p, RectangleF.Inflate(logo, 4, 4), CyberHud.Cyan, 8, 0, 2);
-        p.Text("ORBITOVERLAY", new RectangleF(62, 8, 200, 32), CyberHud.White, 26, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
-        CyberHud.MonoAt(p, Lang.Upper("Settings") + " // V" + Updater.Current.ToString(3), 63, 53, 190, CyberHud.Grey, 10.5f);
-
-        // the link readout: a yellow LINK tag, the state in monospace (cyan up, red down), the live numbers under it
-        bool on = _h.VrConnected;
-        float x = 232;
-        float tw = CyberHud.Tag(p, x, 13, "LINK", size: 11, h: 17);
+        if (!_cyKept) CyberHeaderStill(ui);
+        // the live numbers under the link's state (FPS, the headset's battery)
         bool winBtns = OnClose == null && OnClose95 != null;      // the desktop window: no Windows frame in Cyber, its own minimise / close
-        float rw = (OnClose != null ? 516 : winBtns ? 468 : 564) - x - tw - 14;
-        var (st, ss) = ui.HudFit(_h.VrStatus ?? "", rw, 12.5f, FontWeight.Bold, CyberHud.Mono);
-        p.Text(st, new RectangleF(x + tw + 8, 11, rw, 21), on ? CyberHud.Cyan : CyberHud.Red, ss, FontWeight.Bold, TextAlignment.Leading,
-            ParagraphAlignment.Center, CyberHud.Mono);
+        float x = 232, tw = CyberHud.TagWidth(p, "LINK", 11), rw = (OnClose != null ? 516 : winBtns ? 468 : 564) - x - tw - 14;
         string live = CyberLiveLine();
         if (live != null) CyberHud.MonoAt(p, live, x, 52, rw + tw + 8, CyberHud.Grey, 10.5f);
-        // a short hazard strip under it: the console's one warning-coloured mark up here
-        var hz = new RectangleF(x, 58, 64, 5);
-        p.Fill(hz, CyberHud.Yellow);
-        CyberHud.Hazard(p, hz, CyberHud.Ink, 9);
 
         float bx = W - 16;
         if (OnClose != null)
@@ -131,6 +140,32 @@ public sealed partial class SettingsView
             _h.Recenter();
     }
 
+    // what in the header does not move: the logo (Erik's, Painter.Logo) in a pair of cyan brackets, the name, the link readout - a
+    // yellow LINK tag and the state in monospace (cyan up, red down) - and a short hazard strip, the console's one warning-coloured mark
+    void CyberHeaderStill(Ui ui)
+    {
+        var p = ui.P;
+        var logo = new RectangleF(19, 13, 38, 38);
+        p.Logo(logo);
+        CyberHud.Brackets(p, RectangleF.Inflate(logo, 4, 4), CyberHud.Cyan, 8, 0, 2);
+        p.Text("ORBITOVERLAY", new RectangleF(62, 8, 200, 32), CyberHud.White, 26, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
+        if (_cyVersionLang != Lang.Code || _cyVersion == null) { _cyVersionLang = Lang.Code; _cyVersion = Lang.Upper("Settings") + " // V" + Updater.Current.ToString(3); }
+        CyberHud.MonoAt(p, _cyVersion, 63, 53, 190, CyberHud.Grey, 10.5f);
+        bool on = _h.VrConnected;
+        float x = 232;
+        float tw = CyberHud.Tag(p, x, 13, "LINK", size: 11, h: 17);
+        bool winBtns = OnClose == null && OnClose95 != null;
+        float rw = (OnClose != null ? 516 : winBtns ? 468 : 564) - x - tw - 14;
+        var (st, ss) = ui.HudFit(_h.VrStatus ?? "", rw, 12.5f, FontWeight.Bold, CyberHud.Mono);
+        p.Text(st, new RectangleF(x + tw + 8, 11, rw, 21), on ? CyberHud.Cyan : CyberHud.Red, ss, FontWeight.Bold, TextAlignment.Leading,
+            ParagraphAlignment.Center, CyberHud.Mono);
+        var hz = new RectangleF(x, 58, 64, 5);
+        p.Fill(hz, CyberHud.Yellow);
+        CyberHud.Hazard(p, hz, CyberHud.Ink, 9);
+    }
+
+    string _cyVersion, _cyVersionLang;
+
     // FPS 86/90 · HMD 71% (only what the link has: nothing while SteamVR is down)
     string _cyLive;
     (float, float, float) _cyLiveKey = (-1, -1, -1);
@@ -153,26 +188,53 @@ public sealed partial class SettingsView
     }
 
     // ---- the nav: HUD tabs ----
+    float[] _cyNavHv = Array.Empty<float>();
+
     void DrawNavCyber(Ui ui)
     {
         var p = ui.P;
         float ny = ui.Anim("nav", Tab, 14);
+        if (_cyNavHv.Length != Tabs.Length) _cyNavHv = new float[Tabs.Length];
+        bool rest = MathF.Abs(ny - Tab) < 0.001f;
         for (int i = 0; i < Tabs.Length; i++)
         {
             var r = new RectangleF(16, 84 + i * 50, 180, 42);
             bool hov = ui.Hover(r) && Tab != i;
-            float hv = ui.Anim(Ui.Id("nav/", i), hov ? 1 : 0, 18);
-            p.FillCut(r, Theme.Mix(CyberHud.Card2, CyberHud.Card3, hv), 0, 0, 8, 0);
-            p.StrokeCut(RectangleF.Inflate(r, -0.6f, -0.6f), Theme.Mix(CyberHud.Line, CyberHud.CyanDim, hv), 1.25f, 0, 0, 7.7f, 0);
-            if (hv > 0.01f) CyberHud.Brackets(p, r, Theme.WithAlpha(CyberHud.CyanDim, hv), 6, 4 - 5 * (1 - hv), 2);
+            float hv = _cyNavHv[i] = ui.Anim(Ui.Id("nav/", i), hov ? 1 : 0, 18);
+            if (hv > 0.01f) rest = false;
             if (ui.Hover(r) && ui.Pressed && Tab != i)
             {
                 Tab = i;
                 ui.AnimFrom(TabIn, 0);
                 _cyTabAt = Clock.Now;
+                rest = false;
             }
         }
-        // the open tab: a lit plate sliding to it, a yellow marker bar, cyan brackets
+        if (_cyKept && rest) return;                 // the kept picture has it as it is
+        if (_cyKept) CyberHud.CardShape(p, CyNav, CyberHud.Card, CyberHud.Edge);       // over the kept one: its own card first
+        CyberNav(ui, ny, _cyNavHv);
+    }
+
+    // the tabs (hv: each one's hover), the open one's plate at ny, the SYS block
+    void CyberNav(Ui ui, float ny, float[] hvs)
+    {
+        var p = ui.P;
+        for (int i = 0; i < Tabs.Length; i++)
+        {
+            var r = new RectangleF(16, 84 + i * 50, 180, 42);
+            float hv = hvs[i];
+            p.FillCut(r, Theme.Mix(CyberHud.Card2, CyberHud.Card3, hv), 0, 0, 8, 0);
+            p.StrokeCut(RectangleF.Inflate(r, -0.6f, -0.6f), Theme.Mix(CyberHud.Line, CyberHud.CyanDim, hv), 1.25f, 0, 0, 7.7f, 0);
+            if (hv > 0.01f) CyberHud.Brackets(p, r, Theme.WithAlpha(CyberHud.CyanDim, hv), 6, 4 - 5 * (1 - hv), 2);
+        }
+        // the open tab: a lit plate sliding to it, a yellow marker bar, cyan brackets (Full: two ghosts of its outline trailing it)
+        float run = Tab - ny;
+        if (CyberFx.Full && MathF.Abs(run) > 0.02f)
+            for (int g = 1; g <= 2; g++)
+            {
+                var gr = new RectangleF(16, 84 + (ny - run * 0.22f * g) * 50, 180, 42);
+                p.StrokeCut(RectangleF.Inflate(gr, -0.75f, -0.75f), Theme.WithAlpha(CyberHud.Cyan, MathF.Min(1, MathF.Abs(run)) * 0.45f / g), 1.5f, 0, 0, 7.6f, 0);
+            }
         var pill = new RectangleF(16, 84 + ny * 50, 180, 42);
         p.FillCut(pill, Theme.Mix(CyberHud.Card3, CyberHud.Cyan, 0.07f), 0, 0, 8, 0);
         p.StrokeCut(RectangleF.Inflate(pill, -0.75f, -0.75f), CyberHud.Cyan, 1.5f, 0, 0, 7.6f, 0);
@@ -227,6 +289,43 @@ public sealed partial class SettingsView
         return _cyVr;
     }
 
+    // ---- the console at rest, kept (Erik, 10-16: "better performance overall") ----
+    // The frame, the cards and the grid, the header's still parts and the nav at rest (its tabs, the open one's plate, the SYS block) go
+    // into a texture of their own at the frame's scale, made again when any of them changes (the tab, the look, the language, the
+    // link, the minute in VR). A frame draws that texture and over it only what moves: the page and its label, the live numbers, the
+    // header's buttons, the nav while it is hovered or sliding. Drawn as before: a scale that is not whole pixels, a --snapshot text
+    // check (it reads every text as it is drawn).
+    Surface _cyKeep;
+    int _cyKeepSig;
+    bool _cyKept;                 // this frame draws the kept picture
+    float[] _cyNavRest = Array.Empty<float>();
+
+    void CyberKeep(Ui ui)
+    {
+        var p = ui.P;
+        _cyKept = false;
+        float sc = p.Scale;
+        int pw = (int)MathF.Round(W * sc), ph = (int)MathF.Round(H * sc);
+        if (MathF.Abs(pw - W * sc) > 0.01f || MathF.Abs(ph - H * sc) > 0.01f || p.FitSpy != null || Painter.FitAll != null || p.TextSpy != null || p.NoText)
+            return;
+        var h = new HashCode();
+        h.Add(Theme.Version); h.Add(Lang.Code); h.Add(Tab); h.Add(sc); h.Add(_h.VrConnected); h.Add(_h.VrStatus); h.Add(CyberVrTime());
+        h.Add(OnClose != null); h.Add(OnClose95 != null);
+        int sig = h.ToHashCode();
+        if (_cyKeep == null || _cyKeep.W != pw || _cyKeep.H != ph || sig != _cyKeepSig)
+        {
+            if (_cyKeep == null || _cyKeep.W != pw || _cyKeep.H != ph) { _cyKeep?.Dispose(); _cyKeep = new Surface(p.Gpu, pw, ph); _cyKeepSig = 0; }
+            if (!p.BeginAside(_cyKeep.Bitmap)) return;
+            if (_cyNavRest.Length != Tabs.Length) _cyNavRest = new float[Tabs.Length];
+            CyberGround(ui);
+            CyberHeaderStill(ui);
+            CyberNav(ui, Tab, _cyNavRest);
+            p.EndAside();
+            _cyKeepSig = sig;
+        }
+        _cyKept = true;
+    }
+
     // ---- a tab picked (Full): the page is revealed under a scan line ----
     const double CyScanTime = 0.24;
 
@@ -237,6 +336,7 @@ public sealed partial class SettingsView
         if (t < 0 || t >= CyScanTime) return false;
         float k = CyberFx.EaseOut(CyberFx.Clamp01((float)(t / CyScanTime)));
         ui.P.PushClip(new RectangleF(CyPage.X, CyPage.Y, CyPage.Width, CyPage.Height * k));
+        ui.P.PushOffset(0, 8 * (1 - k));            // what the line has revealed rises the last few px into place
         ui.Animating = true;
         return true;
     }
@@ -244,12 +344,27 @@ public sealed partial class SettingsView
     void CyberScanEnd(Ui ui)
     {
         var p = ui.P;
+        p.PopScale();
         p.PopClip();
         double t = Clock.Now - _cyTabAt;
         float k = CyberFx.EaseOut(CyberFx.Clamp01((float)(t / CyScanTime)));
-        float y = CyPage.Y + CyPage.Height * k;
-        CyberFx.ScanH(p, CyPage.X + 3, CyPage.Right - 3, y, CyberHud.Cyan, 1 - 0.5f * k);
-        p.Fill(new RectangleF(CyPage.X + 3, y - 4, CyPage.Width - 6, 1), Theme.WithAlpha(CyberHud.Red, 0.5f * (1 - k)));
+        float y = CyPage.Y + CyPage.Height * k, x0 = CyPage.X + 3, x1 = CyPage.Right - 3;
+        // the grid lights up in the line's wake (the ground's lines, every 24 px)
+        float gy0 = MathF.Max(CyPage.Y + 2, y - 110);
+        uint g = Theme.WithAlpha(CyberHud.Cyan, 0.09f * (1 - 0.6f * k));
+        for (float gx = CyPage.X + 24; gx < CyPage.Right - 8; gx += 24) p.Fill(new RectangleF(gx, gy0, 1, y - gy0), g);
+        for (float gy = CyPage.Y + 24; gy < y; gy += 24) if (gy > gy0) p.Fill(new RectangleF(x0, gy, x1 - x0, 1), g);
+        // the line: its glow trail, a red edge above and a cyan one below (the split), a few bars of glitch riding it
+        CyberFx.ScanH(p, x0, x1, y, CyberHud.Cyan, 1 - 0.5f * k);
+        p.Fill(new RectangleF(x0, y - 4, x1 - x0, 1), Theme.WithAlpha(CyberHud.Red, 0.55f * (1 - k)));
+        p.Fill(new RectangleF(x0, y + 2, x1 - x0, 1), Theme.WithAlpha(CyberHud.Cyan, 0.4f * (1 - k)));
+        int step = (int)(t / 0.035);
+        for (int i = 0; i < 4; i++)
+        {
+            float bx = x0 + CyberFx.Hash(i, step) * (x1 - x0 - 120), bw = 30 + CyberFx.Hash(i + 7, step) * 90, by = y - 12 + CyberFx.Hash(i + 13, step) * 18;
+            uint bc = i == 0 ? CyberHud.Yellow : i % 2 == 0 ? CyberHud.Red : CyberHud.Cyan;
+            p.Fill(new RectangleF(bx, by, bw, 1 + (i & 1) * 2), Theme.WithAlpha(bc, 0.5f * (1 - k)));
+        }
     }
 
     // ---- lists over the page (Look > Style / Font): a terminal list, the pick on a cyan bar ----
@@ -272,10 +387,13 @@ public sealed partial class SettingsView
             CyberHud.MonoAt(p, ">", row.X + 5, row.Y + row.Height / 2 + 4.5f, 10, on ? CyberHud.Cyan : CyberHud.Grey, 12, FontWeight.Bold);
     }
 
-    // General's facts: the key in grey monospace capitals, the value in monospace
+    // General's facts: the key in grey monospace capitals (each made once), the value in monospace
+    static readonly System.Collections.Generic.Dictionary<string, string> _cyRowKeys = new();
+
     static void CyberRow(Painter p, string k, string v, float x, float y)
     {
-        p.Text(k.ToUpperInvariant(), new RectangleF(x, y, 100, 26), CyberHud.Grey, 11, FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, CyberHud.Mono);
+        if (!_cyRowKeys.TryGetValue(k, out var uk)) _cyRowKeys[k] = uk = k.ToUpperInvariant();
+        p.Text(uk, new RectangleF(x, y, 100, 26), CyberHud.Grey, 11, FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, CyberHud.Mono);
         p.Text(v, new RectangleF(x + 100, y, 266, 26), CyberHud.White, 12, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, CyberHud.Mono);
     }
 

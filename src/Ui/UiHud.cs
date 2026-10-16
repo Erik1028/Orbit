@@ -87,13 +87,19 @@ public sealed partial class Ui
     }
 
     // ---------------- button: a plate, its bottom-right corner cut ----------------
-    // accent: the main thing / a pick that is on - a yellow plate (onCyan: cyan, a state like "shown"); an icon that deletes: red edge
+    // accent: the main thing / a pick that is on - a yellow plate (onCyan: cyan, a state like "shown"); an icon that deletes: red edge.
+    // Full: the pointer coming onto it sends a light across the plate (0.24 s); held, its label splits red / cyan; a click kicks its
+    // corners out and the split dies away (0.22 s)
+    const double HudSweepTime = 0.24, HudKickTime = 0.22;
+
     public bool HudButton(string id, RectangleF r, string label, string icon, bool accent, bool enabled, float fontSize, bool onCyan = false)
     {
         bool click = Behave(id, r, out bool hover, out bool held) && enabled;
         float h = Anim(K(id, "#h"), hover && enabled ? 1 : 0, 18);
         float pr = Anim(K(id, "#p"), held && enabled ? 1 : 0, 30);
         float a = Anim(K(id, "#a"), accent ? 1 : 0, 14);
+        float sweep = CyFx(K(id, "#hs"), hover && enabled, HudSweepTime), kick = CyFx(K(id, "#ck"), click, HudKickTime);
+        float split = held && enabled && CyberFx.Full ? 1.5f : kick < 1 ? 2.5f * (1 - kick) : 0;
         bool danger = icon == Theme.IcoDelete;
         uint on = onCyan ? CyberHud.Cyan : CyberHud.Yellow;
         var b = Shrink(r, 0.03f * pr);
@@ -102,12 +108,14 @@ public sealed partial class Ui
         if (!enabled && accent) bg = Theme.Mix(CyberHud.Card2, on, 0.18f);
         bg = Theme.Mix(bg, 0xFF000000, 0.25f * pr);
         P.FillCut(b, bg, 0, 0, cut, 0);
+        if (sweep < 1) HudSweep(b, cut, sweep, a > 0.5f ? CyberHud.White : CyberHud.Cyan);
         if (a < 0.99f)
         {
             uint edge = !enabled ? CyberHud.Line : danger ? Theme.Mix(CyberHud.DangerEdge, CyberHud.Red, h) : Theme.Mix(CyberHud.CyanDim, CyberHud.Cyan, h);
             P.StrokeCut(RectangleF.Inflate(b, -0.6f, -0.6f), Theme.WithAlpha(edge, 1 - a), 1.25f, 0, 0, MathF.Max(0, cut - 0.3f), 0);
         }
         if (enabled && b.Height >= 26) HudBrackets(b, h * (1 - 0.6f * a), a > 0.5f ? CyberHud.White : CyberHud.Cyan);
+        if (kick < 1) CyberFx.Corners(P, b, Theme.WithAlpha(a > 0.5f ? on : CyberHud.Cyan, 1 - kick), 7, 2, 1 + 7 * CyberFx.EaseOut(kick));
         uint fg = !enabled ? CyberHud.Faint : Theme.Mix(danger ? CyberHud.Red : CyberHud.White, CyberHud.Ink, a);
         uint ic = !enabled ? CyberHud.Faint : Theme.Mix(danger ? CyberHud.Red : CyberHud.Cyan, CyberHud.Ink, a);
         if (icon != null && !string.IsNullOrEmpty(label))
@@ -115,14 +123,14 @@ public sealed partial class Ui
             var (s, fs) = HudFit(label, b.Width - fontSize - 8 - 18, fontSize);
             float tw = P.MeasureWidth(s, fs, FontWeight.SemiBold);
             float total = fontSize + 8 + tw, x = b.X + (b.Width - total) / 2;
-            P.Icon(icon, new RectangleF(x, b.Y, fontSize, b.Height), ic, fontSize);
-            P.Text(s, new RectangleF(x + fontSize + 8, b.Y, tw + 4, b.Height), fg, fs, FontWeight.SemiBold);
+            HudSplit(icon, new RectangleF(x, b.Y, fontSize, b.Height), ic, fontSize, FontWeight.Normal, TextAlignment.Center, Theme.IconFont, split);
+            HudSplit(s, new RectangleF(x + fontSize + 8, b.Y, tw + 4, b.Height), fg, fs, FontWeight.SemiBold, TextAlignment.Leading, null, split);
         }
-        else if (icon != null) P.Icon(icon, b, ic, fontSize + 3);
+        else if (icon != null) HudSplit(icon, b, ic, fontSize + 3, FontWeight.Normal, TextAlignment.Center, Theme.IconFont, split);
         else
         {
             var (s, fs) = HudFit(label, b.Width - 12, fontSize);
-            P.Text(s, b, fg, fs, FontWeight.SemiBold, TextAlignment.Center);
+            HudSplit(s, b, fg, fs, FontWeight.SemiBold, TextAlignment.Center, null, split);
         }
         return click;
     }
@@ -136,12 +144,13 @@ public sealed partial class Ui
         if (click) { value = !value; Changed = true; }
         float h = Anim(K(id, "#h"), hover && enabled ? 1 : 0, 18);
         float k = Anim(K(id, "#k"), value ? 1 : 0, 16);
+        float flip = MathF.Min(CyFx(K(id, "#f1"), value, HudFlipTime), CyFx(K(id, "#f0"), !value, HudFlipTime));
         if (h > 0.01f)
         {
             P.FillCut(r, Theme.WithAlpha(CyberHud.Card3, 0.45f * h), 0, 0, 8, 0);
             HudBrackets(RectangleF.Inflate(r, -1, -1), h, CyberHud.CyanDim, 6);
         }
-        HudSwitch(new RectangleF(r.Right - HudSwitchW - 10, r.Y + (r.Height - HudSwitchH) / 2, HudSwitchW, HudSwitchH), k, enabled, h);
+        HudSwitch(new RectangleF(r.Right - HudSwitchW - 10, r.Y + (r.Height - HudSwitchH) / 2, HudSwitchW, HudSwitchH), k, enabled, h, flip);
         uint fg = enabled ? CyberHud.White : CyberHud.Faint;
         float tw = r.Width - HudSwitchW - 30;
         if (hint == null)
@@ -156,19 +165,36 @@ public sealed partial class Ui
 
     static readonly Vector2[] _sw = new Vector2[4];
 
-    // k: 0 off .. 1 on (eased); the fill wipes in from the left, the block rides to the right, the word turns over half-way
-    public void HudSwitch(RectangleF t, float k, bool enabled, float hover = 0)
+    // k: 0 off .. 1 on (eased); the fill wipes in from the left, the block rides to the right, the word turns over half-way.
+    // Full: the wipe has a bright front; a flip (flip 0..1 of HudFlipTime after it, 1: none) kicks the housing's corners out and
+    // splits the word red / cyan for a moment
+    const double HudFlipTime = 0.2;
+
+    public void HudSwitch(RectangleF t, float k, bool enabled, float hover = 0, float flip = 1)
     {
         const float cut = 7;
-        P.FillCut(t, CyberHud.Page, 0, 0, cut, 0);
-        if (k > 0.01f)
+        uint fill = enabled ? CyberHud.Cyan : Theme.Mix(CyberHud.Card3, CyberHud.CyanDim, 0.5f);
+        bool full = k >= 0.999f;
+        // on: the fill alone (its edge is its own colour); a wipe: the dark housing, the fill clipped to how far it has come
+        if (full) P.FillCut(t, fill, 0, 0, cut, 0);
+        else
         {
-            P.PushClip(new RectangleF(t.X, t.Y, t.Width * k, t.Height));
-            P.FillCut(t, enabled ? CyberHud.Cyan : Theme.Mix(CyberHud.Card3, CyberHud.CyanDim, 0.5f), 0, 0, cut, 0);
-            P.PopClip();
+            P.FillCut(t, CyberHud.Page, 0, 0, cut, 0);
+            if (k > 0.01f)
+            {
+                P.PushClip(new RectangleF(t.X, t.Y, t.Width * k, t.Height));
+                P.FillCut(t, fill, 0, 0, cut, 0);
+                P.PopClip();
+                if (CyberFx.Full && enabled)
+                {
+                    float fx = t.X + t.Width * k, fb = MathF.Min(t.Bottom - 2, t.Bottom - (fx - (t.Right - cut)));
+                    if (fb > t.Y + 4) P.Fill(new RectangleF(fx - 1.5f, t.Y + 2, 2, fb - t.Y - 2), Theme.WithAlpha(CyberHud.White, 0.9f));
+                }
+            }
         }
         uint edge = !enabled ? CyberHud.Line : k > 0.5f ? CyberHud.Cyan : Theme.Mix(CyberHud.Line, CyberHud.CyanDim, 0.4f + 0.6f * hover);
-        P.StrokeCut(RectangleF.Inflate(t, -0.6f, -0.6f), edge, 1.25f, 0, 0, cut - 0.3f, 0);
+        if (!full || !enabled) P.StrokeCut(RectangleF.Inflate(t, -0.6f, -0.6f), edge, 1.25f, 0, 0, cut - 0.3f, 0);
+        if (flip < 1) CyberFx.Corners(P, t, Theme.WithAlpha(CyberHud.Cyan, 1 - flip), 6, 1.5f, 1 + 6 * CyberFx.EaseOut(flip));
         // the block: a slanted bar that rides from the left end to the right
         float bw = 9, bx = t.X + 5 + (t.Width - 10 - bw - 3) * k, by = t.Y + 5, bh = t.Height - 10;
         _sw[0] = new Vector2(bx + 3, by); _sw[1] = new Vector2(bx + 3 + bw, by); _sw[2] = new Vector2(bx + bw, by + bh); _sw[3] = new Vector2(bx, by + bh);
@@ -178,7 +204,7 @@ public sealed partial class Ui
         string word = onWord ? "ON" : "OFF";
         var tr = onWord ? new RectangleF(t.X + 4, t.Y, t.Width - bw - 18, t.Height) : new RectangleF(t.X + bw + 12, t.Y, t.Width - bw - 18, t.Height);
         uint wc = !enabled ? CyberHud.Faint : onWord ? CyberHud.Ink : CyberHud.Grey;
-        P.Text(word, tr, wc, 11.5f, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono);
+        HudSplit(word, tr, wc, 11.5f, FontWeight.Bold, TextAlignment.Center, CyberHud.Mono, flip < 1 ? 2 * (1 - flip) : 0);
     }
 
     // ---------------- slider: a segmented bar, a notch on it, the value in monospace ----------------
@@ -226,17 +252,21 @@ public sealed partial class Ui
             if (hv > 0.01f) P.Fill(cell, Theme.WithAlpha(CyberHud.Card3, hv));
             if (i > 0) P.Fill(new RectangleF(r.X + i * w - 0.5f, r.Y + 9, 1, r.Height - 18), CyberHud.Line);
         }
-        // the pick: a faint cyan wash and its underline, both sliding
+        // the pick: a faint cyan wash and its underline, both sliding (Full: the underline's front runs ahead and its tail catches up -
+        // it stretches across and settles; the new pick's name glitches red / cyan for a moment)
         var hl = new RectangleF(r.X + pos * w + 3, r.Y + 3, w - 6, r.Height - 6);
         P.Fill(hl, Theme.WithAlpha(enabled ? CyberHud.Cyan : CyberHud.Faint, 0.13f));
-        P.Fill(new RectangleF(hl.X + 4, hl.Bottom - 3, hl.Width - 8, 3), enabled ? CyberHud.Cyan : CyberHud.Faint);
+        float lead = CyberFx.Full ? Anim(K(id, "#lead"), index, 30) : pos, u0 = MathF.Min(pos, lead), u1 = MathF.Max(pos, lead);
+        P.Fill(new RectangleF(r.X + u0 * w + 7, hl.Bottom - 3, (u1 - u0) * w + w - 14, 3), enabled ? CyberHud.Cyan : CyberHud.Faint);
+        float pick = CyFx(K(id, "#pk"), changed, HudKickTime);
         for (int i = 0; i < n; i++)
         {
             var cell = new RectangleF(r.X + i * w + 3, r.Y + 3, w - 6, r.Height - 6);
             float onSel = Math.Clamp(1 - MathF.Abs(pos - i), 0, 1);
             uint fg = !enabled ? CyberHud.Faint : Theme.Mix(CyberHud.Grey, CyberHud.Cyan, onSel);
             var (s, fs) = HudFit(options[i], cell.Width - 8, 13);
-            P.Text(s, new RectangleF(cell.X, cell.Y, cell.Width, cell.Height - 1), fg, fs, FontWeight.SemiBold, TextAlignment.Center);
+            HudSplit(s, new RectangleF(cell.X, cell.Y, cell.Width, cell.Height - 1), fg, fs, FontWeight.SemiBold, TextAlignment.Center, null,
+                i == index && pick < 1 ? 2.5f * (1 - pick) : 0);
         }
         return changed;
     }
