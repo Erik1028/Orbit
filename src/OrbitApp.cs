@@ -944,7 +944,9 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
                 if (Placement.IsWorld(w.Cfg.Place)) PlaceWindow(w);
         var missing = _desktops.Where(d => d.Cfg.Enabled && d.Cfg.Place.M == null).ToList();
         if (missing.Count > 0) PlaceDesktops(missing);
-        if (C.Keyboard.Visible) PlaceKeyboard();
+        // the keyboard in front too - hidden as well, when it stands in the world: it comes back where Recenter put things (Erik 10-16:
+        // a hidden one came back at its old spot, beside or behind you)
+        if (C.Keyboard.Visible || Placement.IsWorld(C.Keyboard.Place)) PlaceKeyboard();
         _theater.Recenter(_vr, TheaterAnchor());
         _cfg.MarkDirty();
     }
