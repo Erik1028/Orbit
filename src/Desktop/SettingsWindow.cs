@@ -27,6 +27,7 @@ public sealed class SettingsWindow : Form
         _g = g; _p = p; View = view; _beforeDraw = beforeDraw;
         _ui = new Ui(p);
         View.OnClose95 = Hide;
+        View.AskFile = (save, name, then) => BeginInvoke(new Action(() => AskFileDialog(save, name, then)));     // the watch editor's Share
         Text = "OrbitOverlay";
         Icon = icon;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -99,6 +100,27 @@ public sealed class SettingsWindow : Form
     // and the app's loop stops until the button is let go - in VR the laser lets it go from that loop, so everything froze
     // for good. A timer keeps the frames coming meanwhile.
     public Action ModalTick;
+
+    // The watch editor's export / import: a Save / Open dialog. Asked from inside a frame (the view is drawing then), so it runs a
+    // moment later from the message loop, outside the frame; the modal timer keeps VR's frames coming while it is up (ModalTick).
+    void AskFileDialog(bool save, string name, Action<string> then)
+    {
+        string path = null;
+        Native.SetTimer(Handle, ModalTimer, 10, IntPtr.Zero);
+        try
+        {
+            try { System.IO.Directory.CreateDirectory(FaceShare.Folder); } catch { }
+            using FileDialog d = save ? new SaveFileDialog { FileName = name, OverwritePrompt = true, DefaultExt = "json", Title = "Export the watch page" }
+                : new OpenFileDialog { CheckFileExists = true, Title = "Import a watch page" };
+            d.Filter = "Watch page (*.json)|*.json|All files (*.*)|*.*";
+            d.InitialDirectory = FaceShare.Folder;
+            if (d.ShowDialog(this) == DialogResult.OK) path = d.FileName;
+        }
+        catch (Exception e) { Log.Warn("file dialog: " + e.Message); }
+        finally { Native.KillTimer(Handle, ModalTimer); }
+        try { then(path); } catch (Exception e) { Log.Warn("file dialog: " + e.Message); }
+        Dirty = true;
+    }
 
     protected override void WndProc(ref Message m)
     {
