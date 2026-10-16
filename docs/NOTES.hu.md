@@ -196,6 +196,25 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.14.0 – magyar nyelv, keverő, figyelmeztetések, Cyber HUD, saját ablakkeret (2026-10-16)
+
+Erik: „1 mehet, 2 később, 3 mehet, 4 is mehet” (nyelvválasztó, hangerő mindenhol + keverő, figyelmeztetések, B/Y kétszer,
+játékonkénti elrendezés, óraoldal export/import), majd a Cyber teljes redesign (beállítások, billentyűzet, panelek,
+animációk; a Full/Analog/Minimal/Time számlapok is), apró UI-hibák, ablakkeret minden stílusban. Az 1.13.2 csak piszkozat
+volt (nem jelent meg): a logó-pontja ide került. Ágak: extras, mixer, cyber-faces, cyber-ui, language2 → main.
+- **Nyelv**: `src/Lang` (`Lang.T` / `Lang.F`, `Hu.cs` tábla), General › Language; a HUD-zsargon (LINK, SYS) angol marad.
+- **Hangerő VR-ben**: `Sys/AudioMixer.cs` (lásd lent a „mixer” részt); kapcsoló: Wrist › „Windows volume in VR”
+  (`General.VolumeToApps`: null = auto, "off"). TRAP (javítva): a Windows egyetlen MMDeviceEnumerator objektumot ad a
+  folyamatnak – a `new XxxCom()` egy második osztályban „Specified cast is not valid”-ot dobott (a keverő VR-ben el sem
+  indult; 1.12.3 mikrofon). `CoreAudio.NewEnumerator()`: típus nélkül, aztán interfész-cast. VR-ben ellenőrizve.
+- **Ellenőrző**: `--snapshot` „overlaps” sorai (`Ui.HitSpy`): egymást keresztező vezérlők / szekciócímek minden fülön minden
+  stílusban (+ Modern/Cyber asztali ablakként); `ORBIT_SNAP_ONLY=overlaps`.
+- **Ablak**: keret nélküli minden stílusban (`SettingsWindow`: a Modern/Cyber fejléc a caption ahol nincs vezérlő –
+  `Ui.OverWidget`; saját kis méret / bezárás; nincs WS_MAXIMIZEBOX).
+- **Lapjelző**: `WatchWidgets.PageStrip` (26 px) a többoldalas modern órákon.
+- **Default look** TRAP (javítva): az új `AppearanceConfig` LookVersion 0-t írt → a következő verzió 1.10-es migrációja
+  rózsaszínt tett Erik zöldje fölé.
+
 ## Következő – hangerőkeverő widget, a Windows hangerő VR-ben (2026-10-16, `mixer` ág, nincs kiadva)
 
 - **A Windows hangerő VR-ben** (`Sys/AudioMixer.cs`): a Virtual Desktop hangszórója hardveres hangerőt jelez és nem
@@ -233,7 +252,7 @@ dotnet publish -c Release -o dist
 - **Nincs VR-ben kipróbálva**: a követés a valódi VD eszközön (a kód útja kitalált eszközön tesztelve, a valódi
   eszközön csak olvasva).
 
-## 1.13.2 – az új logó mindenhol (2026-10-16)
+## 1.13.2 – az új logó mindenhol (2026-10-16, csak piszkozat: az 1.14.0-ban jelent meg)
 
 Erik: „a logó amit mondtam még nem változott meg”. 1.13.0-ban csak az exe ikonja (`assets\orbit.ico`) és a
 `Tray.MakeIcon` lett új; a SteamVR dashboard gombja (`OrbitApp` `_thumbSurf`), a beállítások fejléce, a telepítő még a

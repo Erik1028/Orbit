@@ -3,9 +3,25 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
-## 1.13.2 | The new logo everywhere
-- The new OrbitOverlay logo is now also on the SteamVR dashboard button, in the settings header, in the Windows 95
-  and Windows 7 settings and in the installer (only the desktop, taskbar and tray icons had it).
+## 1.14.0 | Magyar, a volume mixer, alerts and a real Cyber HUD
+- Settings > General > Language: English or Magyar, in every style.
+- The Windows volume works in VR: with Virtual Desktop the apps follow the Windows slider, the volume keys and
+  Hexpad's knob, each keeping its own balance (Wrist > "Windows volume in VR" turns it off).
+- A new Volume mixer widget: the apps playing, each with its own slider and a tap on its icon to mute; opened, it is
+  the whole mixer (in the retro styles the Windows 95 Volume Control).
+- Alerts: a card and a buzz in the controller when a battery runs low (and, if you turn it on, when the frame rate
+  stays low for 10 s) - Settings > General > Alerts.
+- B / Y twice on an OrbitOverlay panel shows the keyboard (or pins the watch) - Settings > VRChat.
+- Per game layouts: when a SteamVR app starts, OrbitOverlay can switch to a layout and a watch page of your choice.
+- Share a watch page: save it as a file or copy it as text (it fits a Discord message), and add one from a file or the
+  clipboard - the editor's share button.
+- Cyber: the settings, the keyboard, the panels and every watch face are now a real HUD, with its own animations for
+  the menu, the monitors, theater mode and the keyboard; the Look tab shows only what Cyber uses.
+- No Windows frame on the settings window in any style: it draws its own, with its own minimise and close.
+- The widgets in the editor in ABC order; the page dots in a strip of their own under the cards.
+- The new logo is now also on the SteamVR dashboard button, in the settings and in the installer.
+- Fixed: "Default look" could put the pink default colours back over your own after an update; the microphone and
+  the volume could stop working after an audio error; "What's new" sat on "Check for updates".
 
 ## 1.13.1 | Cyber in every style list
 - The Style list in the Windows 7, Classic Mac and Terminal settings now offers Cyber too (it had six styles
