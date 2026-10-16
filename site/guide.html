@@ -27,11 +27,28 @@
 
 <div class="page-head">
 <h1>Guide</h1>
-<p>Every widget you can put on the watch, and what to do when something doesn't work.</p>
-<div class="toc"><a href="#widgets">Watch widgets</a><a href="#help">Troubleshooting</a><a href="#files">Where your files are</a></div>
+<p>Controls, every watch widget, fixes and questions.</p>
+<div class="toc"><a href="#controls">Controls</a><a href="#widgets">Watch widgets</a><a href="#help">Troubleshooting</a><a href="#faq">Questions</a><a href="#files">Where your files are</a></div>
 </div>
 
-<section class="log" id="widgets" style="padding-top:48px">
+<section class="log" id="controls" style="padding-top:48px">
+<h2>Controls</h2>
+<div style="margin-top:24px;max-width:760px">
+<table class="ctl">
+<tbody>
+<tr><td>Point at a panel</td><td>Laser. On a screen it moves the mouse.</td></tr>
+<tr><td><kbd>Trigger</kbd></td><td>Click</td></tr>
+<tr><td><kbd>B</kbd> or <kbd>Y</kbd></td><td>Right click</td></tr>
+<tr><td><kbd>Stick</kbd> up / down</td><td>Scroll</td></tr>
+<tr><td><kbd>Grip</kbd> on a panel</td><td>Grab and move it. Stick changes the distance, the other hand's grip resizes.</td></tr>
+<tr><td>Both <kbd>Grip</kbd>s, twice quickly</td><td>Hide or show all screens and the keyboard</td></tr>
+<tr><td>Look at your wrist</td><td>The watch appears</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="log" id="widgets">
 <h2>Watch widgets</h2>
 <p style="color:var(--dim);margin-top:12px;max-width:44em">The custom face is a grid of 6 × 4 cells. Sizes are width × height in cells. Add and arrange widgets in Settings › Wrist › Edit layout: drag to move, drag the corner to resize. Tap a widget on your wrist to open it big.</p>
 <div class="wtable-wrap">
@@ -108,6 +125,18 @@
 <p><a href="https://github.com/Erik1028/OrbitOverlay/issues">Open an issue on GitHub</a>. Say which headset, which version, and what you did. Attaching the log from the folder below helps a lot.</p></div></div>
 
 </div>
+</section>
+
+<section class="facts two" id="faq">
+<h2>Questions</h2>
+<dl>
+<div><dt>Does it work with Quest, Pico or Virtual Desktop?</dt><dd>Yes, as long as the game runs through SteamVR. In Virtual Desktop, pick SteamVR instead of VDXR / OpenXR.</dd></div>
+<div><dt>How do I update?</dt><dd>Settings › General › Check for updates. The app updates itself and shows what changed.</dd></div>
+<div><dt>Does it work with my XSOverlay add-ons?</dt><dd>Notifications use XSOverlay's format, and the VRChat avatar parameters work with DXOverlay and similar add-ons.</dd></div>
+<div><dt>Why does it ask for administrator rights?</dt><dd>Only so the laser can click into admin windows. You can say no; everything else works.</dd></div>
+<div><dt>Does it collect data?</dt><dd>No account, no telemetry. The only internet request is the update check, when you press it.</dd></div>
+<div><dt>How was it made?</dt><dd>Largely written with an AI assistant, from my own ideas and a lot of testing in the headset. The source is on GitHub, MIT license.</dd></div>
+</dl>
 </section>
 
 <section class="log" id="files">

@@ -63,6 +63,22 @@
       });
       if (!versions.length) return;
       log.innerHTML = '';
+      var limit = +log.getAttribute('data-count') || 0;
+      if (limit) {
+        // the home page: only the newest version, then a link to all of them
+        var all = document.createElement('p');
+        all.className = 'all';
+        all.innerHTML = '<a href="https://github.com/Erik1028/OrbitOverlay/blob/main/docs/CHANGELOG.md">' + (HU ? 'Az összes változás' : 'All changes') + '</a>';
+        log.appendChild(all);
+        versions.slice(0, limit).forEach(function (x) {
+          var el = document.createElement('article');
+          el.className = 'ver';
+          el.innerHTML = '<span class="v">' + esc(x.v) + '</span><div><h3>' + esc(x.t) + '</h3><ul>' +
+            x.pts.map(function (p) { return '<li>' + inline(p) + '</li>'; }).join('') + '</ul></div>';
+          log.insertBefore(el, all);
+        });
+        return;
+      }
       var more = document.createElement('button');
       more.className = 'more';
       more.type = 'button';
