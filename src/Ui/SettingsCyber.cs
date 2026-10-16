@@ -8,7 +8,7 @@ namespace Orbit;
 // HUD's own in UiHud.cs - so whatever a page gets later is part of it too). The chrome:
 //  - the window: near black, an olive frame with its corners cut (the cuts yellow), the nav and the page as two cards with the
 //    watch's dark-red edge, the page's card on a faint grid;
-//  - the header: a reticle for the logo, the name in the condensed bold, a monospace line under it; the SteamVR link as a readout
+//  - the header: the logo in brackets, the name in the condensed bold, a monospace line under it; the SteamVR link as a readout
 //    (LINK: STEAMVR 90 HZ, red when it is down) with the live frame rate and the headset's battery beside it; the three buttons
 //    (Keyboard / Desktops lit cyan while shown);
 //  - the nav: a column of HUD tabs - index, icon, name in capitals; the open one a lit plate with a yellow marker bar and cyan
@@ -55,19 +55,34 @@ public sealed partial class SettingsView
         for (float x = CyPage.X + 24; x < CyPage.Right - 8; x += 24) p.Fill(new RectangleF(x, CyPage.Y + 2, 1, CyPage.Height - 4), g);
         for (float y = CyPage.Y + 24; y < CyPage.Bottom - 8; y += 24) p.Fill(new RectangleF(CyPage.X + 2, y, CyPage.Width - 4, 1), g);
         CyberHud.Brackets(p, CyPage, CyberHud.Yellow, 12, 5, 2, topRight: false);
+        // the page's label on its card's top edge, right: its number and name
+        string label = CyLabel(Tab);
+        float lw = CyberHud.MonoWidth(p, label, 10.5f, FontWeight.Bold) + 16;
+        var lr = new RectangleF(CyPage.Right - 24 - lw, CyPage.Y - 7, lw, 14);
+        p.Fill(lr, CyberHud.Page);
+        p.Text(label, lr, CyberHud.Grey, 10.5f, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono);
+        p.Fill(new RectangleF(lr.X - 6, CyPage.Y - 2, 4, 4), CyberHud.Yellow);
+    }
+
+    readonly System.Collections.Generic.Dictionary<(int, string), string> _cyLabels = new();
+
+    // "03 // LAYOUTS"
+    string CyLabel(int tab)
+    {
+        tab = Math.Clamp(tab, 0, Tabs.Length - 1);
+        var key = (tab, Tabs[tab]);
+        if (!_cyLabels.TryGetValue(key, out var s)) _cyLabels[key] = s = CyIndex(tab) + " // " + Tabs[tab].ToUpperInvariant();
+        return s;
     }
 
     // ---- the header ----
     void DrawHeaderCyber(Ui ui)
     {
         var p = ui.P;
-        // the reticle: a broken cyan ring, the yellow moon
-        float cx = 38, cy = 33;
-        p.Arc(cx, cy, 13, 0.03f, 0.22f, CyberHud.Cyan, 3.5f);
-        p.Arc(cx, cy, 13, 0.3f, 0.4f, CyberHud.Cyan, 3.5f);
-        p.Arc(cx, cy, 13, 0.75f, 0.12f, CyberHud.Cyan, 3.5f);
-        p.Fill(new RectangleF(cx + 8, cy - 17, 7, 7), CyberHud.Yellow);
-        p.Fill(new RectangleF(cx - 1, cy - 1, 2, 2), CyberHud.Cyan);
+        // the logo (Erik's, Painter.Logo) in a pair of cyan brackets
+        var logo = new RectangleF(19, 13, 38, 38);
+        p.Logo(logo);
+        CyberHud.Brackets(p, RectangleF.Inflate(logo, 4, 4), CyberHud.Cyan, 8, 0, 2);
         p.Text("ORBITOVERLAY", new RectangleF(62, 8, 200, 32), CyberHud.White, 26, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
         CyberHud.MonoAt(p, "SETTINGS // V" + Updater.Current.ToString(3), 63, 53, 190, CyberHud.Grey, 10.5f);
 
@@ -243,7 +258,7 @@ public sealed partial class SettingsView
         }
         else if (hover) p.Fill(row, CyberHud.Card3);
         if (on || hover)
-            CyberHud.MonoAt(p, ">", row.X + 4, row.Y + row.Height / 2 + 4.5f, 10, on ? CyberHud.Cyan : CyberHud.Grey, 12, FontWeight.Bold);
+            CyberHud.MonoAt(p, ">", row.X + 5, row.Y + row.Height / 2 + 4.5f, 10, on ? CyberHud.Cyan : CyberHud.Grey, 12, FontWeight.Bold);
     }
 
     // General's facts: the key in grey monospace capitals, the value in monospace
@@ -251,5 +266,160 @@ public sealed partial class SettingsView
     {
         p.Text(k.ToUpperInvariant(), new RectangleF(x, y, 100, 26), CyberHud.Grey, 11, FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, CyberHud.Mono);
         p.Text(v, new RectangleF(x + 100, y, 266, 26), CyberHud.White, 12, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, CyberHud.Mono);
+    }
+
+    // ---- Look in Cyber: only what Cyber uses (Erik, 1.13.2: "why is there a colour picker if it does nothing") ----
+    // The accent, the panel colour, the themes and Font are Modern's: Cyber has its own palette and type, so they are not offered
+    // here. What is: the style (with the watch beside it, live), the laser, night mode, the panel opacity, Motion; Default look
+    // puts back what this page sets (the opacity, the laser colour) and leaves Modern's colours alone.
+    static readonly RectangleF CyStyleField = new(232, 108, 356, 38);
+    static RectangleF CyStyleList => new(CyStyleField.X, CyStyleField.Bottom + 6, CyStyleField.Width, StyleMenu.Ids.Length * FontRow + 12);
+    public static RectangleF CyStyleFieldForTest => CyStyleField;
+    public static RectangleF CyStyleListForTest => CyStyleList;
+    public static readonly RectangleF CyLookPreview = new(242, 168, 336, 336f * WristPanel.TH / WristPanel.TW);
+
+    void DrawLookCyber(Ui ui)
+    {
+        var p = ui.P;
+        var a = C.Appearance;
+        float lx = 232, rx = 612;
+        bool changed = false;
+        // left: the style, the watch in it, the reset
+        ui.Section(new RectangleF(lx, 84, 360, 20), "Style");
+        {
+            var field = CyStyleField;
+            bool click = ui.Clickable("look.style", field, out bool hover, out _);
+            float hv = ui.Anim("look.style#h", hover || _stylesOpen ? 1 : 0, 18);
+            p.FillCut(field, Theme.Mix(CyberHud.Page, CyberHud.Card3, hv), 0, 0, 9, 0);
+            p.StrokeCut(RectangleF.Inflate(field, -0.6f, -0.6f), _stylesOpen ? CyberHud.Cyan : Theme.Mix(CyberHud.CyanDim, CyberHud.Cyan, hv), 1.25f, 0, 0, 8.7f, 0);
+            if (hv > 0.01f) CyberHud.Brackets(p, field, Theme.WithAlpha(CyberHud.Cyan, hv), 7, 4 - 5 * (1 - hv), 2);
+            StyleChip(p, new RectangleF(field.X + 12, field.Y + 9, 28, 20), StyleMenu.IndexOf(a.Style));
+            var (sn, ss) = ui.HudFit(StyleMenu.Names[StyleMenu.IndexOf(a.Style)], field.Width - 100, 17);
+            p.Text(sn, new RectangleF(field.X + 50, field.Y, field.Width - 88, field.Height), CyberHud.White, ss, FontWeight.SemiBold);
+            p.Icon(_stylesOpen ? Theme.IcoUp : Theme.IcoDown, new RectangleF(field.Right - 36, field.Y, 24, field.Height), CyberHud.Cyan, 14);
+            if (click) _stylesOpen = true;
+        }
+        var prev = CyLookPreview;
+        CyberPreviewFrame(p, RectangleF.Inflate(prev, 8, 8));
+        p.Image(_h.Wrist.Surf.Bitmap, prev);
+        if (_h.Wrist.Animating) ui.Animating = true;
+        ui.Label(new RectangleF(lx, prev.Bottom + 18, 356, 40),
+            $"{CyberHud.Name} has its own palette and type: the accent, panel colour and font choices are Modern's.", Theme.Dim, 12, FontWeight.Normal, true);
+        if (ui.Button("look.reset", new RectangleF(lx, prev.Bottom + 70, 170, 38), "Default look", Theme.IcoRecenter, false, true, 14))
+        {
+            var d = new AppearanceConfig();
+            a.PanelOpacity = d.PanelOpacity;
+            a.LaserColor = d.LaserColor;
+            changed = true;
+        }
+
+        // right: the laser, night mode, the panel opacity, Motion
+        ui.Section(new RectangleF(rx, 84, 360, 20), "Laser");
+        if (ui.Swatch("las.acc", rx + 18, 126, 14, Theme.Accent, a.LaserColor == 0, "A")) { a.LaserColor = 0; changed = true; }
+        for (int i = 0; i < Theme.AccentPresets.Length - 1; i++)
+        {
+            uint c = Theme.AccentPresets[i];
+            if (ui.Swatch(Ui.Id("las", i), rx + 18 + (i + 1) * 36, 126, 11, c, a.LaserColor != 0 && (a.LaserColor & 0xFFFFFF) == (c & 0xFFFFFF)))
+            { a.LaserColor = c; changed = true; }
+        }
+        float th = a.LaserThickness;
+        if (ui.Slider("las.th", new RectangleF(rx - 10, 152, 376, 58), "Thickness", ref th, 1.5f, 8f, f => $"{f:0.0} mm"))
+        { a.LaserThickness = MathF.Round(th * 2) / 2; changed = true; }
+        bool always = a.LaserAlways;
+        if (ui.Toggle("las.always", new RectangleF(rx - 10, 214, 376, 54), "Always show the beam", ref always,
+                "otherwise only while pointing at a panel"))
+        { a.LaserAlways = always; changed = true; }
+        ui.Section(new RectangleF(rx, 288, 360, 20), "Night mode");
+        bool night = a.NightMode;
+        if (ui.Toggle("night", new RectangleF(rx - 10, 310, 376, 54), "Night mode", ref night, "dims every panel in VR - also on the watch (moon)"))
+            a.NightMode = night;
+        float nb = a.NightBrightness;
+        if (ui.Slider("night.b", new RectangleF(rx - 10, 370, 376, 58), "Night brightness", ref nb, 0.15f, 0.9f, f => $"{f * 100:0}%"))
+            a.NightBrightness = nb;
+        float op = a.PanelOpacity;
+        if (ui.Slider("pan.op", new RectangleF(rx - 10, 438, 376, 58), "Panel opacity", ref op, 0.4f, 1f, f => $"{f * 100:0}%"))
+        { a.PanelOpacity = op; changed = true; }
+        ui.Section(new RectangleF(rx, 566, 360, 20), "Motion");
+        int mi = MotionIndex(a.Motion);
+        p.Text(MotionHints[mi], new RectangleF(rx + 96, 566, 260, 20), Theme.Dim, 12, FontWeight.Normal, TextAlignment.Trailing);
+        if (ui.Segmented("look.motion", new RectangleF(rx, 588, 356, 38), MotionNames, ref mi))
+        {
+            a.Motion = Motion.Id((MotionLevel)mi);
+            changed = true;
+        }
+        if (changed) _h.AppearanceChanged();
+    }
+
+    // a preview (the watch, the keyboard) in a HUD frame: a dark card, its edge, cyan brackets, the grid's ticks along the top
+    static void CyberPreviewFrame(Painter p, RectangleF r)
+    {
+        CyberHud.CardShape(p, r, CyberHud.Card, CyberHud.Edge);
+        CyberHud.Brackets(p, RectangleF.Inflate(r, 4, 4), CyberHud.Cyan, 12, 0, 2);
+        for (float x = r.X + 24; x < r.Right - 24; x += 24) p.Fill(new RectangleF(x, r.Y + 2, 1, 4), CyberHud.Line);
+    }
+
+    // the editor's selected widget in Cyber: where it is and how big, as a readout (its Modern look - style, colour - is not offered:
+    // Cyber draws every widget its own way)
+    void CyberWidgetInfo(Ui ui, WatchWidget sel, float x, float y, float w)
+    {
+        var p = ui.P;
+        void Row(string k, string v)
+        {
+            CyberHud.MonoAt(p, k, x, y, 70, CyberHud.Grey, 12.5f, FontWeight.SemiBold);
+            CyberHud.MonoAt(p, v, x + 64, y, w - 64, CyberHud.White, 12.5f, FontWeight.SemiBold);
+            y += 20;
+        }
+        Row("CELL", $"{(char)('A' + sel.X)}{sel.Y + 1}");
+        Row("SIZE", $"{sel.W} × {sel.H}");
+        ui.Label(new RectangleF(x, y + 2, w, 40), $"{CyberHud.Name} draws every widget its own way.", Theme.Dim, 12, FontWeight.Normal, true);
+    }
+
+    // ---- the editor's grid over the watch (Cyber) ----
+    static void CyberCell(Painter p, RectangleF cr, bool picked)
+    {
+        var r = RectangleF.Inflate(cr, -2, -2);
+        if (picked) p.FillCut(r, Theme.WithAlpha(CyberHud.Cyan, 0.18f), 0, 0, 6, 0);
+        CyberFx.Corners(p, r, picked ? CyberHud.Cyan : 0x60FFFFFF, MathF.Min(7, r.Width * 0.18f), picked ? 2 : 1.25f);
+        float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2, a = picked ? 7 : 4;
+        uint c = picked ? CyberHud.Cyan : 0x50FFFFFF;
+        p.Fill(new RectangleF(cx - a, cy - 0.6f, 2 * a, 1.2f), c);
+        p.Fill(new RectangleF(cx - 0.6f, cy - a, 1.2f, 2 * a), c);
+    }
+
+    static void CyberTarget(Painter p, RectangleF gr, bool ok)
+    {
+        uint c = ok ? CyberHud.Cyan : CyberHud.Red;
+        p.FillCut(gr, Theme.WithAlpha(c, 0.24f), 0, 0, 8, 0);
+        p.StrokeCut(RectangleF.Inflate(gr, -1, -1), c, 2, 0, 0, 7.4f, 0);
+        CyberFx.Corners(p, gr, c, 9, 2, 3);
+    }
+
+    static readonly System.Numerics.Vector2[] _cyNotch = new System.Numerics.Vector2[3];
+
+    static void CyberSelection(Painter p, RectangleF sr, RectangleF handle)
+    {
+        p.StrokeCut(RectangleF.Inflate(sr, 1, 1), CyberHud.Cyan, 2, 0, 0, 7, 0);
+        CyberFx.Corners(p, sr, CyberHud.Yellow, 10, 2.5f, 5);
+        // the handle: a notch pointing out of the corner
+        _cyNotch[0] = new(handle.Right + 2, handle.Y - 2); _cyNotch[1] = new(handle.Right + 2, handle.Bottom + 2); _cyNotch[2] = new(handle.X - 2, handle.Bottom + 2);
+        p.Polygon(_cyNotch, 3, CyberHud.Cyan);
+    }
+
+    static string[] _cyCols = { "A", "B", "C", "D", "E", "F", "G", "H" }, _cyRows = { "1", "2", "3", "4", "5", "6" };
+
+    static void CyberGridLabels(Painter p, RectangleF prev, GridSpec grid, float sx, float sy)
+    {
+        for (int x = 0; x < grid.Cols && x < _cyCols.Length; x++)
+        {
+            var c = WatchWidgets.CellRect(x, 0, 1, 1, false, grid);
+            p.Text(_cyCols[x], new RectangleF(prev.X + c.X * sx, prev.Y - 10, c.Width * sx, 10), CyberHud.Grey, 9, FontWeight.Bold,
+                TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono);
+        }
+        for (int y = 0; y < grid.Rows && y < _cyRows.Length; y++)
+        {
+            var c = WatchWidgets.CellRect(0, y, 1, 1, false, grid);
+            p.Text(_cyRows[y], new RectangleF(prev.X - 10, prev.Y + c.Y * sy, 10, c.Height * sy), CyberHud.Grey, 9, FontWeight.Bold,
+                TextAlignment.Center, ParagraphAlignment.Center, CyberHud.Mono);
+        }
     }
 }

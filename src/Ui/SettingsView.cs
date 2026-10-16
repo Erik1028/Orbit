@@ -80,7 +80,7 @@ public sealed partial class SettingsView
 
     public SettingsView(IOrbitHost host) { _h = host; }
 
-    public bool ShowsWristPreview => Tab == TabWrist;
+    public bool ShowsWristPreview => Tab == TabWrist || (Tab == TabLook && Theme.Cyber);     // Cyber's Look shows the watch
     public bool ShowsKeyboardPreview => Tab == TabKeyboard;
 
     Config C => _h.Cfg.Data;
@@ -667,7 +667,8 @@ public sealed partial class SettingsView
     RectangleF WristPreview(Painter p, float y)
     {
         var prev = new RectangleF(612, y, 372, 372f * WristPanel.TH / WristPanel.TW);
-        p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
+        if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 10, 10));
+        else p.Fill(RectangleF.Inflate(prev, 10, 10), Theme.Panel, 18);
         p.Image(_h.Wrist.Surf.Bitmap, prev);
         return prev;
     }
@@ -709,7 +710,8 @@ public sealed partial class SettingsView
 
         float pw = 540, ph = pw * KeyboardPanel.TH / KeyboardPanel.TW;      // leaves room for the line below
         var prev = new RectangleF(232 + (752 - pw) / 2, 336, pw, ph);
-        p.Fill(RectangleF.Inflate(prev, 8, 8), Theme.Panel, 16);
+        if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 8, 8));
+        else p.Fill(RectangleF.Inflate(prev, 8, 8), Theme.Panel, 16);
         p.Image(_h.Keyboard.Surf.Bitmap, prev);
         ui.Label(new RectangleF(232, prev.Bottom + 12, 752, 36),
             "Keys follow the active Windows layout. Shift / Ctrl / Alt / AltGr / Win: once = next key, twice = locked. " +
@@ -719,6 +721,7 @@ public sealed partial class SettingsView
     // ---------------- Look ----------------
     void DrawLook(Ui ui)
     {
+        if (Theme.Cyber) { DrawLookCyber(ui); return; }      // only what Cyber uses (SettingsCyber.cs)
         var p = ui.P;
         var a = C.Appearance;
         float lx = 232, rx = 612;
@@ -851,7 +854,7 @@ public sealed partial class SettingsView
     static readonly RectangleF StyleField = new(232, 512, 356, 38);
 
     // the list over the page, above its field
-    static RectangleF StyleList => new(StyleField.X, StyleField.Y - 6 - StyleMenu.Ids.Length * FontRow - 12,
+    static RectangleF StyleList => Theme.Cyber ? CyStyleList : new(StyleField.X, StyleField.Y - 6 - StyleMenu.Ids.Length * FontRow - 12,
         StyleField.Width, StyleMenu.Ids.Length * FontRow + 12);
 
     // a style's little window: its face, its title bar, a selection (Modern: the panel and the accent)
@@ -1081,8 +1084,12 @@ public sealed partial class SettingsView
         Row("Config", "%LOCALAPPDATA%\\Orbit");
         // version + updates: one button that checks, then offers the update
         var (us, umsg, uprog, ulatest) = _h.Updates.Snapshot();
-        p.Text("Version", new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
-        p.Text(Updater.Current.ToString(3), new RectangleF(rx + 100, y, 70, 26), Theme.Text, 13);
+        if (Theme.Cyber) CyberRow(p, "Version", Updater.Current.ToString(3), rx, y);
+        else
+        {
+            p.Text("Version", new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
+            p.Text(Updater.Current.ToString(3), new RectangleF(rx + 100, y, 70, 26), Theme.Text, 13);
+        }
         bool avail = us == Updater.State.Available;
         string ulabel = us switch
         {

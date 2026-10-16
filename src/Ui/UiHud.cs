@@ -63,14 +63,20 @@ public sealed partial class Ui
     }
 
     // a hint / note: monospace where it fits on its line (11, then 10 px), else the condensed text face
-    public void HudHint(string s, RectangleF r, uint c, float size = 11, TextAlignment al = TextAlignment.Leading,
+    public void HudHint(string s, RectangleF r, uint c, float size = 12, TextAlignment al = TextAlignment.Leading,
         ParagraphAlignment v = ParagraphAlignment.Near)
     {
         if (string.IsNullOrEmpty(s)) return;
         string mono = CyberHud.Mono;
         if (P.MeasureWidth(s, size, FontWeight.Normal, mono) <= r.Width) P.Text(s, r, c, size, FontWeight.Normal, al, v, mono);
         else if (P.MeasureWidth(s, size - 1, FontWeight.Normal, mono) <= r.Width) P.Text(s, r, c, size - 1, FontWeight.Normal, al, v, mono);
-        else P.Text(s, r, c, size + 1, FontWeight.Normal, al, v);
+        else
+        {
+            // the condensed face at the modern hint's size, smaller if even that is too long
+            float w12 = P.MeasureWidth(s, 12, FontWeight.Normal);
+            float fs = w12 <= r.Width ? 12 : MathF.Max(9.5f, MathF.Floor(12 * r.Width / w12 * 2) / 2);
+            P.Text(s, r, c, fs, FontWeight.Normal, al, v);
+        }
     }
 
     // the corners that close in on what is under the pointer (top-right and bottom-left, as on the watch's buttons)
@@ -183,7 +189,7 @@ public sealed partial class Ui
         uint fg = enabled ? CyberHud.White : CyberHud.Faint;
         P.Text(label, new RectangleF(r.X + 10, r.Y, r.Width / 2, r.Height - 22), fg, 15);
         uint vc = !enabled ? CyberHud.Faint : held ? CyberHud.Cyan : Theme.Mix(CyberHud.Grey, CyberHud.White, MathF.Min(1, h));
-        P.Text(fmt(value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), vc, 12.5f, FontWeight.SemiBold,
+        P.Text(fmt(value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), vc, 13.5f, FontWeight.SemiBold,
             TextAlignment.Trailing, ParagraphAlignment.Center, CyberHud.Mono);
         float t = max > min ? Math.Clamp((value - min) / (max - min), 0, 1) : 0;
         float shown = Anim(K(id, "#v"), t, held ? 60 : 14);           // the segments fill block by block after a jump
@@ -274,13 +280,13 @@ public sealed partial class Ui
         string mono = CyberHud.Mono;
         if (!wrap && color == Theme.Dim && w == FontWeight.Normal)
         {
-            var (s, fs) = HudFit(text, r.Width, MathF.Min(12, size - 1), FontWeight.SemiBold, mono);
+            var (s, fs) = HudFit(text, r.Width, MathF.Min(12.5f, size), FontWeight.SemiBold, mono);
             P.Text(s, r, CyberHud.Grey, fs, FontWeight.SemiBold, TextAlignment.Leading, ParagraphAlignment.Center, mono);
             return;
         }
         if (wrap && color == Theme.Dim)
         {
-            float ms = MathF.Min(11.5f, size - 1);
+            float ms = MathF.Min(12.5f, size);
             if (P.MeasureHeight(text, ms, FontWeight.Normal, r.Width, mono) <= r.Height)
             {
                 P.Text(text, r, CyberHud.Grey, ms, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Near, mono, true);
@@ -290,13 +296,14 @@ public sealed partial class Ui
         P.Text(text, r, color, size, w, TextAlignment.Leading, wrap ? ParagraphAlignment.Near : ParagraphAlignment.Center, null, wrap);
     }
 
-    // ---------------- section: the yellow tag on a rule, three ticks at its end ----------------
+    // ---------------- section: the yellow tag on a rule, three ticks after it ----------------
+    // (the ticks right after the tag, not at the rule's end: a page may put a note at the right of its section's line)
     void HudSectionRule(RectangleF r, float tagW, float tagBottom)
     {
-        float x0 = r.X + tagW + 6, x1 = MathF.Min(r.Right, HudRight) - 16;
+        float x0 = r.X + tagW + 6, x1 = MathF.Min(r.Right, HudRight);
         if (x1 - x0 < 20) return;
         P.Fill(new RectangleF(r.X, tagBottom - 1, x1 - r.X, 1), CyberHud.Line);
         for (int i = 0; i < 3; i++)
-            P.Fill(new RectangleF(x1 + 2 + i * 5, tagBottom - 4, 3, 3), i == 2 ? CyberHud.Yellow : CyberHud.Edge);
+            P.Fill(new RectangleF(x0 + i * 5, tagBottom - 5, 3, 3), i == 0 ? CyberHud.Yellow : CyberHud.Edge);
     }
 }

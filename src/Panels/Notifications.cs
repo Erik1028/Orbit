@@ -258,6 +258,7 @@ public sealed partial class NotificationPanel : IDisposable
     public void Draw()
     {
         if (Theme.Classic) { Draw95(); return; }
+        if (Theme.Cyber) { DrawCyber(); return; }        // HUD alerts (NotificationsCyber.cs)
         _p.Begin(_surf.Bitmap, 0x00000000);
         float y = 0;
         foreach (var c in _cards)

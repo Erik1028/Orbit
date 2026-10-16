@@ -58,6 +58,10 @@ static class CyberReveal
         return st;
     }
 
+    // where the opening's scan line is (texture px; it has not started: the top)
+    public static float ScanY(in State st) =>
+        st.All.Y + st.All.Height * CyberFx.EaseInOut(CyberFx.Ramp(st.T, 0.08, OpenTime - 0.08));
+
     public static void End(Painter p, in State st)
     {
         if (st.Clipped) p.PopClip();

@@ -212,7 +212,8 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         var all = new RectangleF(0, 0, TW, TH);
-        if (Theme.Cyber) CyberHud.PanelFrame(_p, all, Theme.OverlayBg);
+        var cyRev = CyberReveal.Begin(_p, all, Ov != null ? Ov.ShownAt : -10, Ov != null ? _vis : 1, !Shown);     // Cyber: its reveal
+        if (Theme.Cyber) CyberHud.ConsoleFrame(_p, all, Theme.OverlayBg);
         else
         {
             _p.Fill(all, Theme.OverlayBg, 30);
@@ -220,6 +221,9 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
         }
         uint sub = Theme.Mix(Theme.Text, Theme.OverlayBg, 0.42f);
 
+        if (Theme.Cyber) CyberHeader();            // a ROOM tag, the count and the world as readouts (RoomCyber.cs)
+        else
+        {
         _p.Text("Room", new RectangleF(Pad + 4, 14, 100, 38), Theme.Text, 22, FontWeight.SemiBold);
         float hx = Pad + 4 + _p.MeasureWidth("Room", 22, FontWeight.SemiBold) + 14;
         int friends = _s.Here.FindAll(p => p.Friend).Count;
@@ -235,6 +239,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
             if (ww > 60 && _s.World.Length > 0)
                 _p.Text(Ellipsize(_s.World, ww, 15), new RectangleF(hx, 19, ww, 30), sub, 15);
         }
+        }
         if (HeaderButton("rm.x", new RectangleF(TW - Pad - 40, 14, 40, 40), "")) Toggle();
         if (HeaderButton("rm.here", new RectangleF(TW - Pad - 90, 14, 40, 40), Theme.IcoRecenter)) BringHere();
 
@@ -246,7 +251,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
             _p.Text(Empty(), new RectangleF(0, list.Y + 40, TW, 40), Theme.Text, 22, FontWeight.SemiBold, TextAlignment.Center);
             if (!_s.VrcxFound && _s.LogFound)
                 _p.Text("install VRCX to see your friends first", new RectangleF(0, list.Y + 82, TW, 26), sub, 15, FontWeight.Normal, TextAlignment.Center);
-            if (_s.Gone.Count == 0) { _p.End(); _ui.End(); return; }
+            if (_s.Gone.Count == 0) { if (cyRev.Kind != 0) CyberReveal.End(_p, cyRev); _p.End(); _ui.End(); return; }
         }
         // the stick scrolls, a row at a time
         float max = MathF.Max(0, rows * RowH - list.Height);
@@ -278,12 +283,14 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
             float bh = list.Height * list.Height / (rows * RowH), by = list.Y + (list.Height - bh) * (_scroll / max);
             _p.Fill(new RectangleF(list.Right - 4, by, 4, bh), Theme.WithAlpha(Theme.Text, 0.3f), 2);
         }
+        if (cyRev.Kind != 0) CyberReveal.End(_p, cyRev);
         _p.End();
         _ui.End();
     }
 
     void Row(RoomWatcher.Person p, RectangleF r, DateTime now, bool gone, uint sub, int index)
     {
+        if (Theme.Cyber) { CyberRow(p, r, now, gone, index); return; }      // a HUD list row (RoomCyber.cs)
         bool star = Starred(p);
         _p.Fill(r, gone ? Theme.WithAlpha(Theme.Panel3, 0.35f) : Theme.Panel3, 12);
         // the star: tap to have them announced
@@ -316,6 +323,7 @@ public sealed partial class RoomPanel : IPointerTarget, IDisposable
 
     bool HeaderButton(string id, RectangleF r, string icon)
     {
+        if (Theme.Cyber) return _ui.HudButton(id, r, null, icon, false, true, 13);        // a HUD plate
         bool click = _ui.Clickable(id, r, out bool hover, out bool held);
         _p.Fill(r, held ? Theme.Accent : hover ? Theme.Mix(Theme.Panel3, 0xFFFFFFFF, 0.12f) : Theme.Panel3, r.Height / 2);
         _p.Icon(icon, r, held ? Theme.OnAccent : Theme.Text, 16);

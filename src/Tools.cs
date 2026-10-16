@@ -1046,6 +1046,7 @@ static partial class Tools
             view.Tab = 0;
             TheaterShots(tag);
             PanelShots(tag);
+            CyberUiRun(view, panelView, ui, surf, ptr, painter, gpu, cfg, host, wrist, data, kb, dir, Gallery);     // its own UI (ToolsCyberUi.cs)
             MinesTools.Run(wrist, data, cfg, gpu, dir, tag);
             PageShots(tag);
             wcfg.Face = face0;

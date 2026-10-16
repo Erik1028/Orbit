@@ -21,7 +21,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
     public VrOverlay Ov { get; private set; }
     VrSession _vr;
     float _vis, _scroll, _width = 0.75f, _twoStartWidth;
-    bool _dirty = true, _placed;
+    bool _dirty = true, _placed, _cyClosing;
     double _wake = double.PositiveInfinity;         // a style's animation wants its next frame then (AnimWake.cs)
     int _look = -1;
     Hand? _owner;
@@ -80,7 +80,8 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         Ov.SetAbsolute(_world);
         Ov.SetAlpha(e);
         Ov.SetWidth(_width * (0.92f + 0.08f * e));
-        if (_dirty || _ui.Animating || Clock.Now >= _wake)
+        _cyClosing = !want;
+        if (_dirty || _ui.Animating || Clock.Now >= _wake || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw();
             _wake = AnimWake.Take();
@@ -110,7 +111,9 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         {
             _ui.Begin(_ptr, 1);
             _p.Begin(Surf.Bitmap, 0x00000000);
+            var rev = CyberReveal.Begin(_p, new RectangleF(0, 0, TW, TH), Ov != null ? Ov.ShownAt : -10, Ov != null ? _vis : 1, _cyClosing);   // Cyber
             ok = WhatsNewView.DrawModern(_ui, new RectangleF(0, 0, TW, TH), _list, _sub, ref _scroll, Theme.OverlayBg);
+            CyberReveal.End(_p, rev);
             _p.End();
             _ui.End();
         }

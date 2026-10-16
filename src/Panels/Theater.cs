@@ -58,7 +58,7 @@ public sealed class TheaterView
 // In and out: a monitor that is about where the big screen goes (the middle one) grows out of its own place and goes
 // back into it; one off to the side fades in / out where the big screen is, with a slight zoom (gliding across from
 // the side looked odd). Switching: the new one fades in over the old one, which stays until it is covered - no dip.
-public sealed class Theater : IDisposable
+public sealed partial class Theater : IDisposable
 {
     public const float MinWidth = 0.8f, MaxWidth = 8f;
     const float Glide = 0.45f, Appear = 0.3f;    // seconds: growing out of its place / fading in where it plays
@@ -87,6 +87,7 @@ public sealed class Theater : IDisposable
         _dim = new VrOverlay("erik.orbit.theater.dim", "OrbitOverlay theater dim");
         _dim.SetSortOrder(1);
         _dim.SetTexture(_black.Tex);
+        _gridOn = false;                    // (Cyber: its grid, TheaterCyber.cs)
         _dim.SetCurvature(0.5f);
     }
 
@@ -267,6 +268,7 @@ public sealed class Theater : IDisposable
                 _dim.SetAbsolute(Matrix4x4.CreateTranslation(0, 0, -Behind) * _view.World);
                 _dim.SetWidth(MathF.PI * r);        // half a circle around you at that radius (curvature 0.5)
                 _dim.SetAlpha(a);
+                CyberWall();                // Cyber: a faint HUD grid (TheaterCyber.cs)
                 _dim.Show();
             }
         }
@@ -318,5 +320,6 @@ public sealed class Theater : IDisposable
     {
         _dim?.Dispose();
         _black?.Dispose();
+        DisposeCyber();
     }
 }

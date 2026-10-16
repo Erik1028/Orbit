@@ -59,6 +59,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
         _cap?.Dispose(); _cap = null;
         _hasTexture = false;
         _vis = 0;
+        _cyFx?.Dispose(); _cyFx = null;
         Ov?.Dispose(); Ov = null;
         _vr = null;
     }
@@ -96,6 +97,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
             Ov.SetAlpha(_opacity * (1 - MathF.Pow(1 - _vis, 3)));
             Ov.Show();
         }
+        if (Theme.Cyber || _cyFx != null) (_cyFx ??= new CyberScreenFx(_g, Ov.Key)).Update(Ov, _vis, want, th != null, TextureSize, now);   // Cyber's unfold and HUD frame
         _cap?.SetCursorCapture(!(want && _mouse.Panel == this && _mouse.Hand != null && Cfg.Mouse));
         // aside in theater mode it is still captured, slowly: switching to it shows what is on it now, not the
         // picture from when it was hidden (that jumped to the new one a moment later)
@@ -157,6 +159,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
 
     bool _hasTexture;
     float _vis, _opacity = 1;
+    CyberScreenFx _cyFx;
     double _lastNow;
 
     // ---- IPointerTarget ----
