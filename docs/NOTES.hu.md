@@ -196,6 +196,23 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.13.0 – öt új stílus, animációk, Mozgás (2026-10-16)
+
+Erik: „egy nagy munka: több windows stílus” (retró koncepció) + a Cyber HUD koncepció (cyber_1/2), majd „minden
+kapjon stílusához illő animációkat teljes körűen, a cyberpunk főleg”. Ágak: retro-base (alap: `RetroSkin` réteg a
+95-ös primitívek alatt, `Theme.Retro`, `AppearanceConfig.Style` xp/aero/mac/terminal; leírás docs/retro-styles-brief.md)
+→ style-xp/-aero/-mac/-terminal (párhuzamos ügynökök, saját worktree) → style-cyber (a modern renderelő testvére:
+src/Gfx/Cyber.cs, src/Panels/WristCyber.cs) → anim-core/-xpaero/-macterm/-cyber → minden a retro-base-en, aztán main.
+- **Mozgás**: `AppearanceConfig.Motion` (null = full | reduced | off), `Motion.Full`/`Motion.Any`; Off = a rugók egy
+  képkocka alatt célba érnek; minden stílus beállításában (modern szegmens, 95/XP rádiógombok, 7 lenyíló, Mac pop-up,
+  terminál `MOTION [FULL]` sor).
+- **Egy „következő képkocka” szabály**: `AnimWake` – egy animáció kéri a panelje következő képkockáját; nyugalomban nincs
+  extra rajzolás (a mérés: nyugalomban +0,01–0,02 ms).
+- Eszközök: `--animstrip <dir> [--only-style ...]`, `ORBIT_SNAP_ONLY=anim_cyber`, `ORBIT_BENCH_STYLE`/`_MOTION`, a
+  `--snapshot` 'layout xp/aero/mac/term/cyber' sorai.
+- **Új ikon**: Erik `orbitoverlay.svg`-je (assets/), `orbit.ico` minden méretben külön renderelve, `Tray.MakeIcon` ugyanaz.
+- **Mikrofon/hangerő**: hiba után az eszközlista is újraépül (1.12.3-ban a mikrofon `DefaultChanged`-ben elakadt).
+
 ## 1.12.3 – folyamatos Hexpad az órán (2026-10-15)
 
 Erik: „a hexpad elég kevés fps-el mozog”. Az óra csak `_dirty`-ra vagy az időzítőre (0,1 / 0,5 s) rajzolt újra, a

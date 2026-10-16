@@ -3,6 +3,22 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.13.0 | Seven styles, all of them moving
+- Settings > Look > Style has five new styles besides Modern and Windows 95: Windows XP, Windows 7, Classic Mac, a
+  green Terminal and Cyber. Each one draws the watch, the settings, the keyboard, notifications, the screen bar and
+  the Room and Hexpad views the way that system really looked.
+- Windows XP: Luna windows, Tahoma, green progress blocks; opened widgets become Date and Time Properties, Task
+  Manager and Windows Media Player; notifications are tray balloons.
+- Windows 7: glass windows, the Control Panel look, the On-Screen Keyboard and the Windows 7 Minesweeper.
+- Classic Mac: platinum windows with Chicago and Geneva type; the room is a Finder list, the screen bar a Control Strip.
+- Terminal: green phosphor with scanlines, a BIOS-style setup screen and Unix broadcast messages.
+- Cyber: a sci-fi HUD with yellow tags, cut corners, segmented bars and a glitching time card.
+- Every style has its own animations: Cyber boots its HUD, Terminal switches on like a CRT, the Mac zooms its
+  windows, XP and Windows 7 fade and glow, Modern springs and slides. Windows 95 stays as still as it was.
+- Settings > Look > Motion: Full, Reduced (short transitions only) or Off (nothing moves).
+- A new OrbitOverlay icon on the desktop, the taskbar and the tray.
+- Fixed: the microphone widget no longer gives up after an audio error.
+
 ## 1.12.3 | Smooth Hexpad on the watch
 - Hexpad's keys and knobs on the watch now move as smoothly as Hexpad sends them, instead of a few times a second.
 
