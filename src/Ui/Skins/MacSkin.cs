@@ -325,6 +325,92 @@ public sealed partial class MacSkin : Win95Skin
             TextAlignment.Leading);
     }
 
+    // ---- whole windows (the screens in Mac/*.Mac.cs) ----
+
+    // a Platinum window: the black outline and raised frame, the title bar (stripes, the title centred), the dark line under it.
+    // The boxes come after it - the close box on the LEFT (CloseX), the collapse box on the right (CollapseX). Returns the face
+    // under the title bar.
+    public RectangleF MacWindow(Painter p, RectangleF win, string title, bool active = true)
+    {
+        p.Fill(win, Face);
+        Bevel(p, win, Painter.Edge.Window);
+        Caption(p, new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), title, null, active);
+        p.Fill(new RectangleF(win.X + 1, win.Y + 21, win.Width - 2, 1), Grey5);
+        p.Fill(new RectangleF(win.X + 2, win.Y + 22, win.Width - 4, 1), Hilight);
+        return new RectangleF(win.X + 2, win.Y + 22, win.Width - 4, win.Height - 24);
+    }
+
+    // where a window's boxes go (the 16 x 14 targets Ui.CaptionClose95 / CaptionMin95 take)
+    public static float CloseX(RectangleF win) => win.X + 5;
+    public static float CollapseX(RectangleF win) => win.Right - 5 - 16;
+    public static float BoxY(RectangleF win) => win.Y + 5;
+
+    // a white well with QuickDraw's black frame (a text field, a clock's face, a graph)
+    public void Well(Painter p, RectangleF r, uint fill = 0xFFFFFFFF)
+    {
+        p.Fill(r, fill);
+        Bevel(p, r, Painter.Edge.Sunken);
+    }
+
+    // a placard / an inset group: a light line outside a grey one (the Finder's info strip, a Mac OS 8 secondary group box)
+    public void Inset(Painter p, RectangleF r)
+    {
+        Rect(p, r, Shadow, Hilight);
+        Rect(p, RectangleF.Inflate(r, -1, -1), Hilight, Shadow);
+    }
+
+    // a filled circle on whole pixels (QuickDraw's PaintOval / FrameOval): the fill, then an edge 'edgeW' thick
+    public static void Disc(Painter p, float cx, float cy, float r, uint fill, uint edge, int edgeW)
+    {
+        int R = (int)MathF.Round(r), x0 = (int)MathF.Round(cx), y0 = (int)MathF.Round(cy);
+        int ri = R - edgeW;
+        for (int dy = -R; dy <= R; dy++)
+        {
+            int ho = (int)MathF.Floor(MathF.Sqrt(MathF.Max(0, R * R - dy * dy)) + 0.5f);
+            int hi = Math.Abs(dy) < ri ? (int)MathF.Floor(MathF.Sqrt(MathF.Max(0, ri * ri - dy * dy)) + 0.5f) : -1;
+            if (hi >= 0)
+            {
+                if (fill != 0) p.Fill(new RectangleF(x0 - hi, y0 + dy, 2 * hi + 1, 1), fill);
+                p.Fill(new RectangleF(x0 - ho, y0 + dy, ho - hi, 1), edge);
+                p.Fill(new RectangleF(x0 + hi + 1, y0 + dy, ho - hi, 1), edge);
+            }
+            else p.Fill(new RectangleF(x0 - ho, y0 + dy, 2 * ho + 1, 1), edge);
+        }
+    }
+
+    // a modal alert's frame (no title bar): the black outline, the raised Platinum border, the dark line inside it
+    public static void AlertFrame(Painter p, RectangleF r)
+    {
+        p.Fill(r, 0xFFDDDDDD);
+        Rect(p, r, 0xFF000000, 0xFF000000);
+        Rect(p, RectangleF.Inflate(r, -1, -1), 0xFFFFFFFF, 0xFF999999);
+        Rect(p, RectangleF.Inflate(r, -3, -3), 0xFF999999, 0xFFFFFFFF);
+    }
+
+    // the caution icon (32 x 32): the yellow triangle with its black edge and "!"
+    public static void Caution(Painter p, float x, float y)
+    {
+        x = MathF.Round(x); y = MathF.Round(y);
+        for (int i = 0; i < 28; i++)
+        {
+            int half = i * 15 / 27 + 1;
+            float cx = x + 16, ry = y + 2 + i;
+            if (i == 27) { p.Fill(new RectangleF(cx - half, ry, 2 * half, 2), 0xFF000000); break; }
+            p.Fill(new RectangleF(cx - half, ry, 2 * half, 1), i < 2 ? 0xFF000000 : 0xFFFFCC00);
+            p.Fill(new RectangleF(cx - half, ry, 2, 1), 0xFF000000);
+            p.Fill(new RectangleF(cx + half - 2, ry, 2, 1), 0xFF000000);
+        }
+        p.Fill(new RectangleF(x + 15, y + 10, 2, 11), 0xFF000000);
+        p.Fill(new RectangleF(x + 14, y + 11, 4, 8), 0xFF000000);
+        p.Fill(new RectangleF(x + 14, y + 23, 4, 3), 0xFF000000);
+    }
+
+    // a dotted line across (QuickDraw's grey pattern pen): every other pixel
+    public static void DotsH(Painter p, float x0, float x1, float y, uint c, int step = 2)
+    {
+        for (float x = x0; x < x1; x += step) p.Fill(new RectangleF(x, y, 1, 1), c);
+    }
+
     // the boxes of a title bar: close (a plain box), zoom (a box in the box), collapse (the window shade's bar), help (Balloon Help's ?)
     static readonly string[] BoxHelp = { ".kkk.", "k...k", "...k.", "..k..", "..k..", ".....", "..k.." };
 
@@ -491,9 +577,17 @@ public sealed partial class MacSkin : Win95Skin
     public override RectangleF KeyCap(Painter p, RectangleF r, bool oneShot, bool down, bool latched, bool hover)
     {
         var o = RectangleF.Inflate(r, -1, -1);
-        if (down || latched)
+        if (latched && !down)
         {
-            FillRR(p, o, 3, latched && !down ? Grey3 : Grey2);
+            // locked: black, its words white (the keyboard draws them)
+            FillRR(p, o, 3, Grey7);
+            FillRR(p, new RectangleF(o.X + 1, o.Y + 1, o.Width - 2, o.Height - 3), 3, DarkShadow);
+            StrokeRR(p, o, 3, DarkShadow, DarkShadow);
+            return new RectangleF(o.X + 2, o.Y + 1, o.Width - 4, o.Height - 4);
+        }
+        if (down)
+        {
+            FillRR(p, o, 3, Grey2);
             p.Fill(new RectangleF(o.X + 2, o.Y + 1, o.Width - 4, 1), Grey5);
             StrokeRR(p, o, 3, Grey6, Grey6);
             return new RectangleF(o.X + 2, o.Y + 2, o.Width - 4, o.Height - 4);

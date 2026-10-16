@@ -1,0 +1,30 @@
+using System;
+using System.Drawing;
+using Vortice.DirectWrite;
+
+namespace Orbit;
+
+// A notification in the Classic Mac style: what the Notification Manager put up - a Platinum window titled with the sender,
+// the note icon (or the app's own), the title in Chicago and the words in Geneva.
+public sealed partial class NotificationPanel
+{
+    partial void CardMac(Notification c, float y, ref bool done)
+    {
+        done = true;
+        var m = (MacSkin)Skins.Mac;
+        var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
+        m.MacWindow(_p, r, string.IsNullOrEmpty(c.Source) ? "Notification" : c.Source);
+        var icon = new RectangleF(r.X + 14, r.Y + 33, 32, 32);
+        if (c.Icon != null)
+        {
+            c.Bitmap ??= _p.CreateBitmap(c.Icon, NotificationListener.IconSize, NotificationListener.IconSize);
+            _p.Image(c.Bitmap, icon, 1);
+        }
+        else W95Icons.Draw(_p, W95Icons.Id.Info32, icon.X, icon.Y);
+        float tx = icon.Right + 14, tw = r.Right - tx - 12;
+        _p.Text(c.Title, new RectangleF(tx, r.Y + 31, tw, 15), 0xFF000000, Ui.F95, FontWeight.Bold,
+            TextAlignment.Leading, ParagraphAlignment.Center, Theme.RetroFont);
+        _p.Text(c.Content, new RectangleF(tx, r.Y + 48, tw, r.Bottom - r.Y - 52), 0xFF000000, Ui.F95, FontWeight.Normal,
+            TextAlignment.Leading, ParagraphAlignment.Near, Theme.RetroFont, true);
+    }
+}

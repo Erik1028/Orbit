@@ -20,6 +20,7 @@ public sealed partial class MacSkin
     static string[] MacMap(W95Icons.Id id) => id switch
     {
         W95Icons.Id.Computer or W95Icons.Id.ComputerOff => Compact(id == W95Icons.Id.Computer ? 'c' : 'd'),
+        W95Icons.Id.Info32 => Note32(),
         W95Icons.Id.Keyboard => new[]
         {
             "................", "................", "................", "................",
@@ -66,6 +67,35 @@ public sealed partial class MacSkin
         _ => null,
     };
 
+    // the note alert's icon (32 x 32): a speech balloon with lines of words in it
+    static string[] Note32()
+    {
+        var g = new char[32][];
+        for (int y = 0; y < 32; y++) { g[y] = new char[32]; System.Array.Fill(g[y], '.'); }
+        int x0 = 2, x1 = 29, y0 = 3, y1 = 22;
+        int[] corner = { 3, 2, 1 };
+        for (int y = y0; y <= y1; y++)
+        {
+            int k = System.Math.Min(y - y0, y1 - y), ins = k < 3 ? corner[k] : 0;
+            for (int x = x0 + ins; x <= x1 - ins; x++)
+                g[y][x] = y == y0 || y == y1 || x == x0 + ins || x == x1 - ins || (k < 3 && (x < x0 + (k > 0 ? corner[k - 1] : 99) || x > x1 - (k > 0 ? corner[k - 1] : 99))) ? 'k' : 'w';
+        }
+        // the tail, down to the left
+        for (int i = 0; i < 7; i++)
+        {
+            int y = y1 + i, xa = 8 - i, xb = 13 - i * 13 / 7;
+            for (int x = System.Math.Max(0, xa); x <= xb; x++) g[y][x] = x == xa || x == xb ? 'k' : 'w';
+        }
+        for (int x = 8; x <= 13; x++) g[y1][x] = 'w';
+        g[y1][7] = 'k';
+        // the words
+        foreach (var (y, a, b) in new[] { (8, 7, 24), (12, 7, 24), (16, 7, 18) })
+            for (int x = a; x <= b; x++) g[y][x] = (x - a) % 6 == 5 ? 'w' : 'g';
+        var rows = new string[32];
+        for (int y = 0; y < 32; y++) rows[y] = new string(g[y]);
+        return rows;
+    }
+
     // the compact Macintosh: a lit screen ('c') or a dark one ('d')
     static string[] Compact(char screen)
     {
@@ -96,7 +126,7 @@ public sealed partial class MacSkin
             _icons[(p, id)] = bmp;
         }
         if (bmp == null) return false;
-        int n = 16 * scale;
+        int n = (int)bmp.PixelSize.Width * scale;
         p.ImageNearest(bmp, new System.Drawing.RectangleF(x, y, n, n));
         return true;
     }
