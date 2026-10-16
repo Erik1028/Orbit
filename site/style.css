@@ -63,6 +63,29 @@ kbd{font-family:var(--mono);font-size:13.5px;background:var(--panel);border:1px 
 @media (max-width:900px){.try{grid-template-columns:1fr}}
 
 .cap{margin-top:12px;color:var(--dim);font-size:14.5px}
+
+/* the stage: the try-it watch floats over SteamVR's grid floor, like the watch in an empty VR room */
+body{background:radial-gradient(1100px 620px at 42% 420px,#232a40 0%,rgba(35,42,64,0) 70%) no-repeat,var(--bg)}
+.try{position:relative;isolation:isolate;padding-bottom:40px}
+.try .watch{position:relative}
+/* sized so that even its near, perspective-widened edge stays inside the watch's own width: nothing to clip */
+.try .watch::before{content:"";position:absolute;z-index:-2;left:10%;width:80%;top:calc(100% - 64px);height:220px;
+  background-image:radial-gradient(ellipse 40% 30% at 50% 0,rgba(255,93,147,.22),transparent 70%),
+    linear-gradient(rgba(160,180,240,.55) 2px,transparent 2px),linear-gradient(90deg,rgba(160,180,240,.55) 2px,transparent 2px);
+  background-size:auto,56px 56px,56px 56px;background-position:0 0,center 0,center 0;
+  transform:perspective(800px) rotateX(62deg);transform-origin:50% 0;
+  -webkit-mask-image:radial-gradient(ellipse 50% 95% at 50% 0,#000 35%,transparent 100%);mask-image:radial-gradient(ellipse 50% 95% at 50% 0,#000 35%,transparent 100%)}
+.try .watch::after{content:"";position:absolute;z-index:-1;left:10%;right:10%;bottom:18px;height:60px;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(0,0,0,.65),transparent 72%);animation:shade 7s ease-in-out infinite}
+.wd-frame{box-shadow:0 30px 70px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.03);animation:hover 7s ease-in-out infinite}
+@keyframes hover{50%{transform:translateY(-8px)}}
+@keyframes shade{50%{transform:scaleX(.9);opacity:.7}}
+@media (prefers-reduced-motion:reduce){.wd-frame,.try .watch::after{animation:none}}
+@media (max-width:900px){.try .watch::before{height:120px}.try aside{margin-top:18px}}
+html[data-style="95"] .try .watch::before,html[data-style="95"] .try .watch::after{display:none}
+html[data-style="95"] .wd-frame{animation:none;box-shadow:none}
+
+
 .clip{margin:72px 0 0}
 .clip video{display:block;width:100%;height:auto}
 
