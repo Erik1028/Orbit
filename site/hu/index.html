@@ -25,7 +25,7 @@
 <header class="top">
 <div class="wrap">
 <a class="logo" href="#top"><img src="../favicon.svg" width="30" height="30" alt="">OrbitOverlay</a>
-<nav aria-label="Részek"><a class="opt" href="#ora">Óra</a><a class="opt" href="#asztal">Asztal</a><a class="opt" href="#telepites">Telepítés</a><a href="../guide.html" hreflang="en">Útmutató</a><a class="opt" href="https://github.com/Erik1028/OrbitOverlay">GitHub</a><a class="lang" href="../" hreflang="en" lang="en">EN</a></nav>
+<nav aria-label="Részek"><a class="opt" href="#features">Funkciók</a><a class="opt" href="#install">Telepítés</a><a href="../guide.html" hreflang="en">Útmutató</a><a class="opt" href="https://github.com/Erik1028/OrbitOverlay">GitHub</a><a class="lang" href="../" hreflang="en" lang="en">EN</a></nav>
 </div>
 </header>
 
@@ -34,7 +34,7 @@
 <section class="intro">
 <div>
 <h1>OrbitOverlay</h1>
-<p>Ingyenes SteamVR overlay Windowsra. Óra a csuklódon, a géped képernyői körülötted, a lézer az egered, és egy billentyűzet, ami magától előjön, ha szövegmezőbe kattintasz.</p>
+<p>Ingyenes SteamVR overlay Windowsra: óra a csuklódon, a géped képernyői körülötted, és billentyűzet, amikor kell.</p>
 </div>
 <div class="get">
 <a class="btn" href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitOverlaySetup.exe"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M6 10l6 6 6-6M4 21h16"/></svg>OrbitOverlaySetup.exe letöltése</a>
@@ -45,126 +45,46 @@
 <section class="try" aria-label="Próbáld ki az órát">
 <div class="watch" id="watch-demo"><img src="../img/watch-widgets.png" width="1328" height="472" alt="Az OrbitOverlay óra widgetekkel"></div>
 <aside>
-<p><b>Próbáld ki.</b> Ez az egyéni számlap, böngészőre átültetve.</p>
-<ul>
-<li>Koppints egy widgetre, és nagyban megnyílik, mint a csuklódon</li>
-<li>Húzd el, vagy használd a pöttyöket a második laphoz</li>
-<li>Az időzítő, a stopper és a hangerő működik</li>
-<li>A hold gomb az éjszakai mód</li>
-</ul>
-<p class="note">Az idő és a dátum élő. Az akkuk, a frame idők és a zeneszám mintaértékek; VR-ben ezek a SteamVR-ből és a Windowsból jönnek.</p>
+<p><b>Próbáld ki.</b> Koppints egy widgetre, és húzd el a második laphoz.</p>
+<p class="note">Az akkuk, a frame idők és a zeneszám mintaértékek.</p>
 </aside>
 </section>
 
 <figure class="clip" id="clip" hidden data-src="../img/demo.mp4"><div class="shot"></div><figcaption class="cap">A headsetben: az óra, egy lézerrel megfogott ablak és a billentyűzet.</figcaption></figure>
 
-<section class="part" id="ora">
-<div class="txt">
-<h2>Az óra</h2>
-<p>Fordítsd magad felé a csuklód, és megjelenik az óra. A számlapot te rakod össze widgetekből egy 6 × 4-es rácson, mindegyiknek saját stílust és színt adhatsz, és több oldalra is szétoszthatod őket. Koppints egy widgetre, és nagyban megnyílik.</p>
-<ul class="plain">
-<li>Órák: analóg, lapozós, szegmenses, szavas, svájci vasúti</li>
-<li>A headset, mindkét kontroller és a trackerek akkuja</li>
-<li>Most szóló zene, hangerő, időzítő, stopper, naptár</li>
-<li>Frame idő, reprojekció, GPU, CPU és memória</li>
-<li>Mikrofon, értesítések, gombok, és aknakereső</li>
-</ul>
-<p><a href="../guide.html#widgets" hreflang="en">Az összes widget a méreteivel (angolul)</a></p>
+<section class="features" id="features">
+<h2>Mi van benne</h2>
+<div class="cards">
+<article class="card"><div class="shot"><img src="../img/watch-faces.png" width="1352" height="952" alt="A beépített számlapok: teljes, analóg, minimál és csak idő" loading="lazy"></div><h3>Az óra</h3><p>Nézz a csuklódra. A számlapot <a href="../guide.html#widgets" hreflang="en">24 widgetből</a> rakod össze: órák, akkuk, zene, frame idők.</p></article>
+<article class="card"><div class="shot"><img src="../img/keyboard.png" width="1480" height="676" alt="A VR-billentyűzet gyorsgombsávval" loading="lazy"></div><h3>Asztal és billentyűzet</h3><p>Monitorok és ablakok ívelt képernyőként, a lézer az egered, a billentyűzet magától előjön.</p></article>
+<article class="card"><div class="shot"><img src="../img/windows95.png" width="790" height="520" alt="A beállítások és az óra Windows 95 stílusban" loading="lazy"></div><h3>A te stílusod</h3><p>Bármilyen kiemelőszín, éjszakai mód, vagy minden Windows 95 stílusban.</p></article>
 </div>
-<div class="shot"><img src="../img/watch-faces.png" width="1352" height="952" alt="A beépített számlapok egymás mellett: teljes, analóg, minimál és csak idő" loading="lazy"></div>
+<p class="extras">Még: VRChat szoba és chatbox · XSOverlay értesítések · Desk, Bed és Couch elrendezések · Hexpad stream dock · nincs telemetria</p>
 </section>
 
-<section class="part" id="asztal">
-<div class="txt">
-<h2>Az asztalod VR-ben</h2>
-<p>Minden monitor, vagy akár egyetlen alkalmazásablak, egy ívelt képernyővé válik, amit bárhová tehetsz. Ha rámutatsz, a lézer a valódi egérmutatót mozgatja. Az okos képkockaszám mindig azt a képernyőt tartja simán, amelyiket nézed.</p>
-<p>Mozi módban egy képernyő óriásira nő, és mögötte elsötétül a világ.</p>
-</div>
-<div>
-<table class="ctl">
-<tbody>
-<tr><td>Rámutatsz egy panelre</td><td>Lézer. Képernyőn az egeret mozgatja.</td></tr>
-<tr><td><kbd>Trigger</kbd></td><td>Kattintás</td></tr>
-<tr><td><kbd>B</kbd> vagy <kbd>Y</kbd></td><td>Jobb klikk</td></tr>
-<tr><td><kbd>Stick</kbd> fel / le</td><td>Görgetés</td></tr>
-<tr><td><kbd>Grip</kbd> egy panelen</td><td>Megfogod és mozgatod. A stick a távolságot állítja, a másik kéz gripje átméretez.</td></tr>
-<tr><td>Mindkét <kbd>Grip</kbd>, kétszer gyorsan</td><td>Elrejti vagy előhozza a képernyőket és a billentyűzetet</td></tr>
-<tr><td>A csuklódra nézel</td><td>Megjelenik az óra</td></tr>
-</tbody>
-</table>
-</div>
-</section>
-
-<section class="part" id="billentyuzet">
-<div class="txt">
-<h2>Billentyűzet</h2>
-<p>A Windows billentyűzetkiosztásodat követi, és magától megnyílik, ha szövegmezőbe kattintasz. A gyorsgombsávon van másolás, beillesztés és visszavonás, chatbox módban pedig egyenesen a VRChatbe gépel.</p>
-</div>
-<div class="shot"><img src="../img/keyboard.png" width="1480" height="676" alt="A VR-billentyűzet gyorsgombsávval: másolás, beillesztés, visszavonás és VRChat chatbox" loading="lazy"></div>
-</section>
-
-<section class="part" id="kinezet">
-<div class="txt">
-<h2>Beállítások és kinézet</h2>
-<p>A beállítások az asztalon és VR-ben, panelként is megnyílnak. Választhatsz kiemelőszínt, panelszínt, témát és lézerszínt. Az éjszakai mód minden panelt elsötétít, és egy koppintás az órán.</p>
-<p>Ha úgy tetszik, a beállítások, az óra, a billentyűzet és az értesítések mind átválthatnak Windows 95 stílusra, kiemelkedő gombokkal és egy Dátum/Idő ablakkal a csuklódon.</p>
-</div>
-<div class="shots">
-<div class="shot"><img src="../img/settings-look.png" width="1500" height="960" alt="A beállítások ablak Look füle: kiemelőszín, panelszín, témák, lézer és éjszakai mód" loading="lazy"></div>
-<div class="shot"><img src="../img/windows95.png" width="790" height="520" alt="A beállítások és az óra Windows 95 stílusban" loading="lazy"></div>
-</div>
-</section>
-
-<section class="facts" id="vrchat">
-<h2>Ami még benne van</h2>
-<dl>
-<div><dt>VRChat</dt><dd>Látod, ki van az instance-odban, kártyát kapsz, ha egy barátod megérkezik, és a chatboxban megmutathatod, mit hallgatsz.</dd></div>
-<div><dt>Nincs véletlen kattintás</dt><dd>Amíg egy panelre mutatsz, a játék nem kapja meg a triggert.</dd></div>
-<div><dt>Értesítések</dt><dd>Az XSOverlay formátumát használja az UDP 42069-es porton, így például a VRCX is tud küldeni neki.</dd></div>
-<div><dt>Elrendezésprofilok</dt><dd>A Desk, Bed és Couch profil megjegyzi, hol volt minden. Ágyban a képernyők föléd kerülnek.</dd></div>
-<div><dt>Stream dock</dt><dd>A Hexpaddal futó Ajazz AKP03 megjelenik VR-ben. A gombokat és a tekerőket a lézerrel kezeled.</dd></div>
-<div><dt>Semmi nem hagyja el a géped</dt><dd>Nincs fiók és nincs telemetria. Az egyetlen internetes kérés a frissítéskeresés, amikor megnyomod.</dd></div>
-</dl>
-</section>
-
-<section class="install" id="telepites">
+<section class="install" id="install">
 <div>
 <h2>Telepítés</h2>
 </div>
 <div>
 <ol>
-<li><a href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitOverlaySetup.exe">Töltsd le az OrbitOverlaySetup.exe-t</a>. A link mindig a legújabb kiadásra mutat.</li>
-<li>Futtasd. Csak a te Windows-felhasználódnak telepít, rendszergazdai jog nélkül, és indulhat a SteamVR-rel együtt.</li>
+<li><a href="https://github.com/Erik1028/OrbitOverlay/releases/latest/download/OrbitOverlaySetup.exe">Töltsd le</a> és futtasd. Rendszergazdai jog nem kell.</li>
 <li>Vedd fel a headsetet, és nézz a bal csuklódra.</li>
 </ol>
-<p class="aside"><b>A Windows SmartScreen</b> figyelmeztethet, mert a telepítő még nincs digitálisan aláírva. Kattints a <i>További információ</i>, majd a <i>Futtatás mindenképp</i> gombra. Első indításkor az OrbitOverlay egyszer rendszergazdai jogot kér, hogy a lézer a rendszergazdaként futó ablakokba is tudjon kattintani. Mondhatsz nemet, minden más ugyanúgy működik.</p>
-<p class="aside">Kell hozzá Windows 10 (2004 vagy újabb) vagy 11, DirectX 11-es videókártya és SteamVR. Virtual Desktopnál a SteamVR-t válaszd futtatókörnyezetnek. Valami nem működik? Nézd meg a <a href="../guide.html#help" hreflang="en">hibaelhárítást (angolul)</a>.</p>
+<p class="aside">Windows 10 / 11 és SteamVR kell hozzá. A SmartScreen figyelmeztethet, mert a telepítő még nincs aláírva: <i>További információ › Futtatás mindenképp</i>. Irányítás, kérdések és hibaelhárítás az <a href="../guide.html" hreflang="en">útmutatóban (angolul)</a>.</p>
 </div>
 </section>
 
-<section class="facts two" id="kerdesek">
-<h2>Kérdések</h2>
-<dl>
-<div><dt>Működik Questtel, Picóval vagy Virtual Desktoppal?</dt><dd>Igen, ha a játék SteamVR-en keresztül fut. Virtual Desktopban a SteamVR-t válaszd a VDXR / OpenXR helyett, különben az overlayek nem látszanak.</dd></div>
-<div><dt>Hogyan frissítem?</dt><dd>Beállítások › General › Check for updates. A telepített app magától frissül a GitHub kiadásaiból, és megmutatja, mi változott.</dd></div>
-<div><dt>Működik az XSOverlay kiegészítőimmel?</dt><dd>Az értesítések az XSOverlay formátumát használják, a VRChat avatarparaméterek pedig működnek a DXOverlayjel és a hasonló kiegészítőkkel.</dd></div>
-<div><dt>Hogyan készült?</dt><dd>Nagyrészt egy AI-asszisztenssel írtam, a saját ötleteimből és rengeteg headsetes teszteléssel. A teljes forráskód fent van a GitHubon, MIT licenccel.</dd></div>
-<div><dt>Hogyan távolítom el?</dt><dd>Windows Gépházban: Alkalmazások › OrbitOverlay › Eltávolítás. A beállításaid a <code>%LOCALAPPDATA%\Orbit</code> mappában maradnak.</dd></div>
-<div><dt>Hibát találtál?</dt><dd><a href="https://github.com/Erik1028/OrbitOverlay/issues">Nyiss egy issue-t a GitHubon</a>, és írd meg, milyen headsetet és melyik verziót használod.</dd></div>
-</dl>
-</section>
-
 <section class="log">
-<h2>Változásnapló</h2>
-<p style="color:var(--dim);margin-top:12px">Angolul, ugyanaz, amit az app frissítés után mutat.</p>
-<div id="log"><p style="color:var(--dim);margin-top:16px">A teljes lista a <a href="https://github.com/Erik1028/OrbitOverlay/blob/main/docs/CHANGELOG.md">CHANGELOG.md</a>-ben van.</p></div>
+<h2>Legutóbbi frissítés</h2>
+<div id="log" data-count="1"><p style="color:var(--dim);margin-top:16px">Lásd: <a href="https://github.com/Erik1028/OrbitOverlay/blob/main/docs/CHANGELOG.md">CHANGELOG.md</a>.</p></div>
 </section>
 
 </main>
 
 <footer>
 <div class="wrap">
-<p>OrbitOverlay, készítette <a href="https://github.com/Erik1028">Erik1028</a>. Ingyenes és nyílt forrású, MIT licenccel. Nem áll kapcsolatban a Valve-val, a VRChattel vagy egyik headsetgyártóval sem.</p>
+<p>OrbitOverlay, készítette <a href="https://github.com/Erik1028">Erik1028</a>. Ingyenes és nyílt forrású, MIT licenc. Nem áll kapcsolatban a Valve-val, a VRChattel vagy headsetgyártóval.</p>
 <span><a href="https://github.com/Erik1028/OrbitOverlay">Forráskód</a> · <a href="https://github.com/Erik1028/OrbitOverlay/releases">Kiadások</a> · <a href="../guide.html" hreflang="en">Útmutató</a></span>
 </div>
 </footer>

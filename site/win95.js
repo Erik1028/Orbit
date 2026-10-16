@@ -13,7 +13,7 @@
   var L = HU ? {
     toggle: '1990-es évekbeli honlap', welcome: 'Üdvözöllek az OrbitOverlay honlapján!',
     marquee: function (v) { return '*** Üdvözöllek az OrbitOverlay honlapján! *** ' + (v ? 'Megjelent a ' + v + '! ' : '') + 'Ingyenes letöltés lent! *** Óra a csuklódon, asztal a VR-ben *** Köszönöm, hogy benéztél! ***'; },
-    nav: [['', 'Kezdőlap'], ['#ora', 'Az óra'], ['#asztal', 'Asztal'], ['#telepites', 'Letöltés'], ['guide', 'Útmutató'], ['#kerdesek', 'GYIK']],
+    nav: [['', 'Kezdőlap'], ['#features', 'Funkciók'], ['#install', 'Letöltés'], ['guide', 'Útmutató']],
     lang: ['English', base + './'], back: 'Vissza 2026-ba',
     modem: function (mb) { var h = Math.round(mb * 8 * 1048.576 / 56 / 3600 * 2) / 2; return '(' + String(mb).replace('.', ',') + ' MB · 56k modemmel kb. ' + String(h).replace('.', ',') + ' óra)'; },
     counter: 'Letöltések eddig:', guest: 'Írj a vendégkönyvembe!', guestNote: '(GitHub Issues)',
@@ -22,7 +22,7 @@
   } : {
     toggle: '1990s homepage', welcome: 'Welcome to the OrbitOverlay homepage!',
     marquee: function (v) { return '*** Welcome to the OrbitOverlay homepage! *** ' + (v ? v + ' is out now! ' : '') + 'Free download below! *** A watch on your wrist and your desktop in VR *** Thanks for stopping by! ***'; },
-    nav: [['', 'Home'], ['#watch', 'The Watch'], ['#desktop', 'Desktop'], ['#install', 'Download'], ['guide', 'Guide'], ['#faq', 'FAQ']],
+    nav: [['', 'Home'], ['#features', 'Features'], ['#install', 'Download'], ['guide', 'Guide']],
     lang: ['Magyar', base + 'hu/'], back: 'Back to 2026',
     modem: function (mb) { var h = Math.round(mb * 8 * 1048.576 / 56 / 3600 * 2) / 2; return '(' + mb + ' MB · about ' + h + ' hour' + (h === 1 ? '' : 's') + ' on a 56k modem)'; },
     counter: 'Downloads so far:', guest: 'Sign my guestbook!', guestNote: '(GitHub Issues)',
