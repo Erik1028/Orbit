@@ -12,7 +12,7 @@ using Windows.Graphics.DirectX.Direct3D11;
 
 namespace Orbit;
 
-public sealed class OrbitApp : IOrbitHost, IDisposable
+public sealed partial class OrbitApp : IOrbitHost, IDisposable
 {
     public const string AppKey = "erik.orbit";
     public const string ExitEventName = @"Local\OrbitOverlayExit", ShowEventName = @"Local\OrbitOverlayShow";
@@ -481,6 +481,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _awake = awake;
             _lasers[0].Update(_vr, targets, awake && !dash && lh != "right", dt, C.General.Haptics);
             _lasers[1].Update(_vr, targets, awake && !dash && lh != "left", dt, C.General.Haptics);
+            UpdateExtras(now, awake, dash);     // B / Y twice (before the block moves on), alerts, per-game rules (OrbitApp.Extras.cs)
             BlockGameInput(awake && !dash, now);
             foreach (var la in _lasers) if (la.Hovered is ITheaterScreen sc) _lastScreen = sc;
             Perf(1, ref t);
@@ -757,6 +758,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dockPanel.DestroyOverlay();
         _roomPanel.DestroyOverlay();
         _whatsNewPanel.DestroyOverlay();
+        ExtrasReset();
         if (_theater.On) StopTheater(glide: false);
         _theater.DestroyOverlay();
         _theaterBar.DestroyOverlay();

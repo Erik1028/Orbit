@@ -357,7 +357,9 @@ public sealed partial class SettingsView
             }
         }
 
-        if (_wadd) NewPagePanel(ui, rx, rw);
+        if (sel != null) _wshare = false;                      // a widget picked: its settings, not the sharing
+        if (_wshare) SharePanel(ui, rx, rw);                   // export / import / copy / paste (SettingsView.Extras.cs)
+        else if (_wadd) NewPagePanel(ui, rx, rw);
         else if (sel == null)
         {
             // the page shown: its grid, remove it; the background (all pages); start this page over
@@ -419,7 +421,8 @@ public sealed partial class SettingsView
         var wc = C.Wrist;
         int n = WatchPages.Count(wc), cur = EditPage;
         const float addW = 118, gap = 6;
-        float tw = MathF.Min(150, (w - addW - gap * n) / n);
+        float tw = MathF.Min(150, (w - addW - ShareW - gap * (n + 1)) / n);     // the share button beside Add page (Extras)
+        ShareButton(ui, x + w - addW - gap - ShareW, y, h);
         for (int i = 0; i < n; i++)
         {
             var r = new RectangleF(x + i * (tw + gap), y, tw, h);
@@ -430,6 +433,7 @@ public sealed partial class SettingsView
         if (ui.Button("we.addpage", new RectangleF(x + w - addW, y, addW, h), "Add page", Theme.IcoAdd, _wadd, n < 8, 13))
         {
             _wadd = !_wadd;
+            _wshare = false;
             _wselW = null;
         }
     }
@@ -606,6 +610,7 @@ public sealed partial class SettingsView
     void Wrist95Editor(Ui ui)
     {
         if (SkinWatchEditor(ui)) return;          // a style's own editor (ScreenHooks.cs)
+        bool inert95 = Dialog95Begin(ui, _wshare);     // the Share dialog over the page (SettingsView95.Extras.cs)
         var p = ui.P;
         var w = C.Wrist;
         var list = WatchLayout();
@@ -701,5 +706,6 @@ public sealed partial class SettingsView
         if (ComboRow(ui, "we95.bg", 376, 392, 468, 130, "&Background:", new[] { "Desktop", "Windows only" }, ref bg))
             w.Background = bg == 1 ? "cards" : "panel";
         if (ui.Button95("we95.done", new RectangleF(659, 405, 75, 23), "&Done", true, true)) EditingWatch = false;
+        Share95(ui, inert95);
     }
 }

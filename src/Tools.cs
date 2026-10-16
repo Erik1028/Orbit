@@ -74,6 +74,10 @@ static partial class Tools
         public void SwitchLayout(string name) => Cfg.Data.ActiveLayout = name;
         public Updater Updates { get; } = new();
         public void ForgetLayout(string name) { }
+        // 1.14 (ToolsExtras.cs): a made-up running app; the cards asked for
+        public (string key, string name) RunningApp { get; set; }
+        public readonly List<(string title, string text)> Notes = new();
+        public void Notify(string title, string text) => Notes.Add((title, text));
     }
 
     // onlyStyle (--only-style 95 | xp | aero | mac | term, or ORBIT_SNAP_STYLE): that retro style's screens alone, in seconds - the
@@ -270,6 +274,7 @@ static partial class Tools
         string face0 = wcfg.Face;
         var panelView = new SettingsView(host) { OnClose = () => { }, Tab = SettingsView.TabGeneral };
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "anim_cyber") return CyberAnimShot.Run(wrist, data, cfg, gpu, dir, kb, view, ui, surf, ptr, painter);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "extras") return ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);
         if (only != null)
         {
             RetroShots(only);
@@ -764,6 +769,7 @@ static partial class Tools
         // the retro styles: every screen once more in each, Windows 95 first (its pictures keep their *_95 names); then Cyber
         foreach (var sk in Skins.All) RetroShots(sk);
         CyberShots();
+        ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
         PagesRun(wrist, data, cfg, painter, gpu, dir, view, ui, surf);
         Log.Info("snapshot written to " + dir);

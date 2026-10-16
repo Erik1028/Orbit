@@ -58,6 +58,9 @@ public interface IOrbitHost
     void ResetWindow(WindowConfig w);
     void SetWindowAttach(WindowConfig w, string attach);
     void SetWindowEnabled(WindowConfig w, bool on);
+    // 1.14: the SteamVR app running now (Layouts > Per game offers it); a card in VR (an in-VR export says where the file went)
+    (string key, string name) RunningApp => (null, null);
+    void Notify(string title, string text) { }
 }
 
 // The settings screen. Same code draws the desktop window and the SteamVR dashboard tab.
@@ -416,9 +419,10 @@ public sealed partial class SettingsView
             "Whatever you change is kept in the profile you are in when you switch away.",
             Theme.Dim, 13, FontWeight.Normal, true);
 
+        float wx = 602, cw = 382;
+        if (_rulesOpen) { DrawRules(ui, wx, cw); DrawTheater(ui, lx, wx, cw); return; }      // Per game, in place of the profile (Extras)
         var sel = list.First(l => l.Name == _selLayout);
         bool isActive = sel.Name == C.ActiveLayout;
-        float wx = 602, cw = 382;
         p.Text(sel.Name, new RectangleF(wx + 10, 78, cw - 10, 30), Theme.Text, 20, FontWeight.SemiBold);
         p.Text(isActive ? "in use now" : sel.Saved is { } t ? $"last used {t:MMM d, HH:mm}" : "not used yet",
             new RectangleF(wx + 10, 106, cw - 10, 20), Theme.Dim, 13);
@@ -437,6 +441,7 @@ public sealed partial class SettingsView
                 ? "The first time you switch to it, everything comes to where you are looking - lying in bed, that is above you - and is remembered from then on."
                 : "Switching puts every panel back where it was in this profile. Recenter still brings the whole arrangement in front of you.",
             Theme.Dim, 13, FontWeight.Normal, true);
+        PerGameButton(ui, wx, cw, 394);
         DrawTheater(ui, lx, wx, cw);
     }
 
@@ -985,6 +990,8 @@ public sealed partial class SettingsView
         b = g.BlockGameInput;
         if (ui.Toggle("vc.block", new RectangleF(lx, 436, cw, 54), "Keep clicks from the game", ref b, "while a laser is on an OrbitOverlay panel"))
             g.BlockGameInput = b;
+        DrawGesture(ui, lx, cw, 496);     // B / Y twice (SettingsView.Extras.cs)
+        DrawControlsHelp(ui, rx + 10, 392);
 
         ui.Section(new RectangleF(rx + 10, 84, rw, 22), "Who is in the room");
         b = rm.Enabled;
@@ -1091,16 +1098,6 @@ public sealed partial class SettingsView
         if (ui.Slider("g.nang", new RectangleF(rx - 10, 392, 376, 58), "Height", ref na, 5, 35,
                 f => $"{Math.Round(f):0}° below eye level", g.Notifications))
             g.NotificationAngle = MathF.Round(na);
-
-        ui.Section(new RectangleF(rx, 460, 360, 20), "Controls");
-        string[] lines =
-        {
-            "Trigger: click  ·  B / Y: right click  ·  stick: scroll",
-            "Grip: grab & move  ·  stick ↕ distance, ↔ bend",
-            "2nd hand's grip: resize  ·  B/Y + grip: leave row",
-            "Both grips twice: hide / show monitors + keyboard",
-        };
-        y = 484;
-        foreach (var l in lines) { p.Text(l, new RectangleF(rx, y, 366, 24), Theme.Dim, 13); y += 24; }
+        DrawAlerts(ui, rx, 460);          // low battery / frame rate (SettingsView.Extras.cs; the controls' summary is on the VRChat tab now)
     }
 }
