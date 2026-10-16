@@ -48,6 +48,7 @@ public sealed partial class WristPanel
 
     void Window95(PanelData d)
     {
+        if (SkinFace(d)) return;                  // a style's own face (ScreenHooks.cs)
         string face = C.Face ?? "full";
         var now = DateTime.Now;
         bool rich = face is "full" or "analog";

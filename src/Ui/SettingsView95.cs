@@ -14,6 +14,11 @@ public sealed partial class SettingsView
 {
     public const int W95W = 750, W95H = 480;
     public Action OnClose95;      // the desktop window's own "close" (the VR panel uses OnClose)
+    // the VR panel's fade, for a style's opening / closing animation: when it came into view, how far in (0..1), going away.
+    // The desktop window leaves them be (always there).
+    public double ShownAt = -10;
+    public float Vis = 1;
+    public bool Closing;
 
     const uint K95 = 0xFF000000, W95 = 0xFFFFFFFF, Grey95 = 0xFF808080;
     const float RowH = 21;        // a drop-down list / text box row
@@ -41,8 +46,12 @@ public sealed partial class SettingsView
 
     public static int H95() => W95H;
 
+    // something runs in the background (the updater): the 95 window's cursor is the arrow with the hourglass then (SettingsWindow)
+    public bool Busy95 => _h.Updates?.Busy == true;
+
     public void Draw95(Ui ui)
     {
+        if (SkinSettings(ui)) { if (ui.Changed) _h.Cfg.MarkDirty(); return; }      // a style's own settings screen (ScreenHooks.cs)
         var p = ui.P;
         // "What's new" over the sheet (after an update until OK, or from General): the sheet is only a picture
         var wn = WhatsNewShown;
@@ -59,7 +68,7 @@ public sealed partial class SettingsView
         // the page first, then the tabs over its top edge
         var page = new RectangleF(6, 46, W95W - 12, 394);
         p.Fill(page, Theme.W95Face);
-        p.Bevel(page, Painter.Edge.Window);
+        p.Bevel(page, Painter.Edge.Page);
         int t = Tab;
         if (ui.Tabs95("p95.tabs", 8, 28, Tabs, ref t)) Tab = t;
 
@@ -425,7 +434,7 @@ public sealed partial class SettingsView
         // the watch itself, pixel for pixel, on the 95 desktop
         ui.Group95(new RectangleF(376, 56, 358, 374), "Preview");
         var desk = new RectangleF(388, 76, 334, 256);
-        p.Fill(desk, Theme.W95Teal);
+        Theme.RetroSkin.FillDesktop(p, desk);
         p.Bevel(desk, Painter.Edge.Sunken);
         var c95 = _h.Wrist.Canvas95;
         if (c95 != null)
@@ -489,16 +498,17 @@ public sealed partial class SettingsView
         var a = C.Appearance;
         bool changed = false;
         ui.Group95(new RectangleF(16, 56, 350, 150), "Style");
-        int si = a.Style == "classic" ? 1 : 0;
-        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", new[] { "Modern", "Windows 95" }, ref si))
+        int si = StyleMenu.IndexOf(a.Style);
+        if (ComboRow(ui, "lk95.style", 28, 76, 108, 150, "&Style:", StyleMenu.Names, ref si))
         {
-            a.Style = si == 1 ? "classic" : "modern";
+            a.Style = StyleMenu.Ids[si];
             changed = true;
         }
-        Hint(ui, 28, 108, 326, "Windows 95 draws these settings, the watch, the keyboard and the notifications at their real 1995 " +
-                               "pixel size, enlarged without smoothing.", 60);
+        string era = Theme.Retro == RetroStyle.Win95 ? "their real 1995 pixel size" : "the real pixel size of its day";
+        Hint(ui, 28, 108, 326, $"{Theme.RetroSkin.Name} draws these settings, the watch, the keyboard and the notifications at {era}, " +
+                               "enlarged without smoothing.", 60);
 
-        ui.Group95(new RectangleF(16, 214, 350, 216), "Modern colours");
+        ui.Group95(new RectangleF(16, 214, 350, 106), "Modern colours");
         Hint(ui, 28, 234, 326, "The accent colour, the panel colour, the themes and the opacity belong to the Modern style; switch to it " +
                                "to change them.", 46);
         if (ui.Button95("lk95.reset", new RectangleF(28, 286, 100, 23), "&Default look"))
@@ -506,10 +516,22 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
             };
             changed = true;
         }
+
+        // Look > Motion: option buttons, one under the other (written only when not Full; it applies at once)
+        ui.Group95(new RectangleF(16, 328, 350, 102), "Motion");
+        int mi = MotionIndex(a.Motion);
+        for (int i = 0; i < Motion95.Length; i++)
+            if (ui.Radio95(Ui.Id("lk95.motion", i), 28, 348 + i * 20, Motion95[i], mi == i) && mi != i)
+            {
+                a.Motion = Motion.Id((MotionLevel)i);
+                changed = true;
+            }
+        Hint(ui, 28, 410, 326, Theme.RetroSkin == Skins.Xp ? "The window zoom, the sliding lists, the fades."
+                                                            : "The window zoom, the sliding pages, the Modern style's animations.");
 
         ui.Group95(new RectangleF(376, 56, 358, 190), "Laser");
         Lbl(ui, 388, 76, "Colour:");
@@ -544,6 +566,8 @@ public sealed partial class SettingsView
         { a.NightBrightness = nb; changed = true; }
         if (changed) { ui.Changed = true; _h.AppearanceChanged(); }
     }
+
+    static readonly string[] Motion95 = { "&Full", "&Reduced - short movements only", "&Off - everything changes at once" };
 
     // ---------------- General ----------------
 
@@ -667,13 +691,16 @@ public sealed partial class SettingsView
             Updater.State.Available => $"&Update to {ulatest}",
             _ => "Check for &updates",
         };
+        // checking / downloading / installing: busy - the hourglass on the button (the desktop window's cursor turns into it too)
         if (ui.Button95("g95.upd", new RectangleF(388, 186, 130, 23), ulabel, !_h.Updates.Busy, avail, false,
-                avail ? W95Icons.Id.Download : null))
+                avail ? W95Icons.Id.Download : _h.Updates.Busy ? W95Icons.Id.Hourglass : null))
         {
             if (avail) _h.Updates.Apply();
             else _h.Updates.Check();
         }
-        if (!string.IsNullOrEmpty(umsg))
+        // busy: the style's marquee / progress bar there (95: the words)
+        bool bar = _h.Updates.Busy && Theme.RetroSkin.BusyBar(ui.P, new RectangleF(526, 191, 196, 13), us == Updater.State.Downloading ? uprog : -1);
+        if (!string.IsNullOrEmpty(umsg) && !bar)
             ui.Text95(Fit95(ui, umsg, 196), new RectangleF(524, 191, 200, 13), us == Updater.State.Failed ? 0xFF800000 : Grey95);
         if (ui.Button95("g95.whatsnew", new RectangleF(388, 212, 130, 23), "&What's New...")) { _whatsNewManual = true; }
 

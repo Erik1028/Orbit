@@ -100,6 +100,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _gpu = new Gpu(adapter);
         _painter = new Painter(_gpu);
         Theme.Apply(C.Appearance);
+        CyberFx.Live = true;                // the Cyber style's effects may start by themselves here (not in the --snapshot tools)
         // 1.12, the watch pages: a new install starts on the VRChat and Performance pages; an older config gets them once, after its
         // own face (a copy of config.json first). Only the config here - no window exists yet (1.10.0 crashed touching one).
         WatchPages.Migrate(_cfg);
@@ -515,7 +516,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             AutoKeyboard(now);
             // night mode fades in / out over a moment
             float dimWant = C.Appearance.NightMode ? Math.Clamp(C.Appearance.NightBrightness, 0.1f, 1f) : 1f;
-            _dimNow += (dimWant - _dimNow) * Math.Min(1f, dt * 8);
+            _dimNow = Motion.Any ? _dimNow + (dimWant - _dimNow) * Math.Min(1f, dt * 8) : dimWant;      // Motion off: at once
             if (MathF.Abs(dimWant - _dimNow) < 0.004f) _dimNow = dimWant;
             VrOverlay.SetDim(_dimNow);
             if (C.General.Osc && now >= _nextOsc)       // 10 Hz is plenty for avatar parameters
@@ -717,6 +718,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
         _dashDirty = false;
         _dashNext = now + 0.5;
         PreparePreviews(_dashView);
+        AnimWake.Take();             // the previews' asks are their own panels', not the dashboard's
         if (Theme.Classic)
             _dashView.Render95(_dashUi, _dashPtr, _dashSurf.Bitmap, DashW / SettingsView.W95W, 0, 0, Theme.W95Teal);
         else
@@ -728,6 +730,7 @@ public sealed class OrbitApp : IOrbitHost, IDisposable
             _painter.End();
             _dashUi.End();
         }
+        _dashNext = Math.Min(_dashNext, AnimWake.Take());       // a style's animation wants its next frame (AnimWake.cs)
         if (_dashUi.Interacting || _dashUi.Changed || _dashUi.Animating) _dashDirty = true;
         _dash.SetTexture(_dashSurf.Tex);
     }

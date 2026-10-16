@@ -80,7 +80,7 @@ public sealed class DesktopPanel : ITheaterScreen, IDisposable
             else if (!Placement.Apply(Cfg.Place, vr, Ov)) want = false;     // attached to a device that is gone
         }
         // fade in once there is a picture, fade out when hidden
-        _vis = Math.Clamp(_vis + (want && _hasTexture ? dt : -dt) / 0.2f, 0, 1);
+        _vis = Motion.Step(_vis, want && _hasTexture, dt, 0.2f);         // Look > Motion off: at once
         if (!want && Ov.Visible) ReleaseButtons();
         if (_vis <= 0) Ov.Hide();
         else

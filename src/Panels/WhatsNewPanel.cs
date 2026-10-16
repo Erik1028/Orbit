@@ -22,6 +22,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
     VrSession _vr;
     float _vis, _scroll, _width = 0.75f, _twoStartWidth;
     bool _dirty = true, _placed;
+    double _wake = double.PositiveInfinity;         // a style's animation wants its next frame then (AnimWake.cs)
     int _look = -1;
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
@@ -68,7 +69,7 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         if (want && (!ReferenceEquals(list, _list) || sub != _sub)) { _list = list; _sub = sub; _scroll = 0; _dirty = true; }
         if (_look != Theme.Version) { _look = Theme.Version; _dirty = true; }      // a new look (colours, font): drawn again
         if (want && !_placed) BringHere();
-        _vis = Math.Clamp(_vis + Math.Sign((want ? 1 : 0) - _vis) * dt / 0.22f, 0, 1);
+        _vis = Motion.Step(_vis, want, dt, 0.22f);                       // Look > Motion off: at once
         if (_vis <= 0 || !_placed)
         {
             if (_vis <= 0) { _ptr.Leave(); if (!want) _placed = false; }      // next time: in front of you again
@@ -79,9 +80,10 @@ public sealed class WhatsNewPanel : IPointerTarget, IDisposable
         Ov.SetAbsolute(_world);
         Ov.SetAlpha(e);
         Ov.SetWidth(_width * (0.92f + 0.08f * e));
-        if (_dirty || _ui.Animating)
+        if (_dirty || _ui.Animating || Clock.Now >= _wake)
         {
             Draw();
+            _wake = AnimWake.Take();
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
         }

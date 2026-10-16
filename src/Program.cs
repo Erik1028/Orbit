@@ -38,7 +38,7 @@ static class Program
         int uf = Array.IndexOf(args, "--updated-from");
         if (uf >= 0 && uf + 1 < args.Length) UpdatedFrom = args[uf + 1];
         bool has(string a) => args.Contains(a);
-        bool tool = has("--snapshot") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest") || has("--voltest");
+        bool tool = has("--snapshot") || has("--animstrip") || has("--faceshot") || has("--clockshot") || has("--selftest") || has("--scene") || has("--osctest") || has("--tasktest") || has("--filtertest") || has("--focustest") || has("--leaktest") || has("--raytest") || has("--updatetest") || has("--wintest") || has("--docktest") || has("--roomtest") || has("--theatertest") || has("--perfbench") || has("--ovdump") || has("--pacetest") || has("--pacertest") || has("--capturetest") || has("--voltest");
         if (tool) return RunTool(args);
 
         // install / uninstall (the same exe: named "OrbitSetup.exe" it is the installer)
@@ -147,10 +147,16 @@ static class Program
         Log.Info($"Orbit {typeof(Program).Assembly.GetName().Version} tool, args: {string.Join(' ', args)}, elevated: {Elevation.IsElevated}");
         try
         {
+            Motion.Still = !args.Contains("--perfbench") && !args.Contains("--animstrip");     // pictures: loops held at rest
+            if (args.Contains("--animstrip"))       // the styles' animations as frames (ToolsAnim.cs) - --only-style modern|95|xp|aero
+            {
+                int i = Array.IndexOf(args, "--animstrip"), o = Array.IndexOf(args, "--only-style");
+                return Tools.AnimStrips(i + 1 < args.Length ? args[i + 1] : "animstrip", o >= 0 && o + 1 < args.Length ? args[o + 1] : null);
+            }
             if (args.Contains("--snapshot"))
             {
-                int i = Array.IndexOf(args, "--snapshot");
-                return Tools.Snapshot(i + 1 < args.Length ? args[i + 1] : "snapshot");
+                int i = Array.IndexOf(args, "--snapshot"), o = Array.IndexOf(args, "--only-style");    // --only-style 95|xp|aero|mac|term
+                return Tools.Snapshot(i + 1 < args.Length ? args[i + 1] : "snapshot", o >= 0 && o + 1 < args.Length ? args[o + 1] : null);
             }
             if (args.Contains("--clockshot"))
             {

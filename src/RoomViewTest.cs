@@ -47,7 +47,7 @@ static class RoomViewTools
     };
 
     // a made-up room: n here (every fifth a friend, from the second), 'gone' who left lately, there since 'since' minutes
-    static RoomWatcher.Snapshot Room(int n, int gone = 0, string world = "The Black Cat", double since = 47)
+    internal static RoomWatcher.Snapshot Room(int n, int gone = 0, string world = "The Black Cat", double since = 47)
     {
         var s = new RoomWatcher.Snapshot { Version = 100 + n, LogFound = true, InRoom = true, World = world, VrcxFound = true, Friends = 120,
             Since = DateTime.Now.AddMinutes(-since) };

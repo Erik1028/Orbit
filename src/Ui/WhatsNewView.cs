@@ -9,7 +9,7 @@ namespace Orbit;
 // panel / dashboard (SettingsView): the versions since the one you came from, newest first - each a version chip with
 // its title, then its points. Modern: a card with a scroll list and OK. Windows 95: a dialog with a read-only list
 // and a real 95 scroll bar.
-public static class WhatsNewView
+public static partial class WhatsNewView
 {
     // Returns true when OK (or the close box) is pressed. scroll: pixels, kept by the caller.
     public static bool DrawModern(Ui ui, RectangleF r, IReadOnlyList<WhatsNew.Entry> list, string sub, ref float scroll, uint bg)
@@ -69,6 +69,8 @@ public static class WhatsNewView
     // Windows 95: r in canvas pixels. Returns true for OK / the close box.
     public static bool Draw95(Ui ui, RectangleF r, IReadOnlyList<WhatsNew.Entry> list, string sub)
     {
+        bool closed = false;
+        if (SkinWhatsNew(ui, r, list, sub, ref closed)) return closed;      // a style's own window (ScreenHooks.cs)
         var p = ui.P;
         p.Fill(r, Theme.W95Face);
         p.Bevel(r, Painter.Edge.Window);

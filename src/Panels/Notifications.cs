@@ -22,6 +22,7 @@ public sealed class Notification
     // display state (main thread)
     public double Shown = -1;
     public float Vis;
+    public float Y = float.NaN;                 // where it is in the stack now (it glides to its place: NotificationPanel.Update)
     public bool Leaving;
     public Vortice.Direct2D1.ID2D1Bitmap Bitmap;
 }
@@ -132,7 +133,7 @@ public sealed class NotificationListener : IDisposable
 }
 
 // Shows notifications as cards in the lower part of the view (head-locked), up to three stacked.
-public sealed class NotificationPanel : IDisposable
+public sealed partial class NotificationPanel : IDisposable
 {
     public const int TW = 960, TH = 640;
     const float CardH = 190, CardGap = 14;
@@ -143,6 +144,7 @@ public sealed class NotificationPanel : IDisposable
     readonly KeySounds _sound = new();
     VrOverlay _ov;
     bool _dirty;
+    double _wake = double.PositiveInfinity;      // a style's animation wants its next frame then (AnimWake.cs)
     const float Width = 0.42f, Distance = 0.85f;
     public NotificationHistory History;          // every card shown, for the watch's notifications widget
     float _placedAngle = float.NaN;
@@ -206,18 +208,29 @@ public sealed class NotificationPanel : IDisposable
         {
             var c = _cards[i];
             if (!c.Leaving && now - c.Shown > c.Timeout) c.Leaving = true;
-            float target = c.Leaving ? 0 : 1;
-            float nv = Math.Clamp(c.Vis + Math.Sign(target - c.Vis) * dt / (c.Leaving ? 0.3f : 0.22f), 0, 1);
+            float nv = Motion.Step(c.Vis, !c.Leaving, dt, c.Leaving ? 0.3f : 0.22f);       // Motion off: at once
             if (nv != c.Vis) { c.Vis = nv; _dirty = true; }
             if (c.Leaving && c.Vis <= 0) { c.Bitmap?.Dispose(); _cards.RemoveAt(i); _dirty = true; }
         }
+        // the stack, newest on top: a card pushed down by a new one (or moving up into a gap) glides to its place - modern only, the 95
+        // windows just are where they are
+        float ty = 0;
+        foreach (var c in _cards)
+        {
+            if (float.IsNaN(c.Y)) c.Y = ty;              // a new one: at its place, sliding in from the side (Draw)
+            float ny = Motion.Any && !Theme.Classic ? c.Y + (ty - c.Y) * Math.Min(1, dt * 12) : ty;
+            if (MathF.Abs(ny - ty) < 0.5f) ny = ty;
+            if (ny != c.Y) { c.Y = ny; _dirty = true; }
+            ty += CardH + CardGap;
+        }
         if (_cards.Count == 0) { _ov.Hide(); return; }
         Place(Math.Clamp(_cfg.Data.General.NotificationAngle, 0f, 40f));
-        if (_dirty)
+        if (_dirty || now >= _wake)
         {
             Draw();
             _ov.SetTexture(_surf.Tex);
             _dirty = false;
+            _wake = AnimWake.Take();
         }
         _ov.Show();
     }
@@ -250,7 +263,7 @@ public sealed class NotificationPanel : IDisposable
         foreach (var c in _cards)
         {
             float e = 1 - MathF.Pow(1 - c.Vis, 3);
-            var r = new RectangleF(20 + (1 - e) * 40, y, TW - 40, CardH);
+            var r = new RectangleF(20 + (1 - e) * 40, float.IsNaN(c.Y) ? y : c.Y, TW - 40, CardH);
             uint A(uint col) => Theme.WithAlpha(col, e);
             _p.Fill(r, A(Theme.WithAlpha(Theme.Bg, 0.96f)), 24);
             _p.Stroke(r, A(Theme.WithAlpha(Theme.Accent, 0.6f)), 2, 24);
@@ -281,13 +294,14 @@ public sealed class NotificationPanel : IDisposable
     // the title in bold and the text, all in 8 pt MS Sans Serif
     void DrawClassicCard(Notification c, float y)
     {
+        if (SkinCard(c, y)) return;         // a style's own card (ScreenHooks.cs)
         var r = new RectangleF(10, y, TW / 2 - 20, CardH / 2);
         _p.Fill(r, Theme.W95Face);
         _p.Bevel(r, Painter.Edge.Window);
         var cap = new RectangleF(r.X + 3, r.Y + 3, r.Width - 6, 18);
         _p.Fill(cap, Theme.W95Navy);
         _p.Text(string.IsNullOrEmpty(c.Source) ? "Notification" : c.Source, new RectangleF(cap.X + 3, cap.Y, cap.Width - 6, cap.Height),
-            Theme.W95Hi, Ui.F95, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.ClassicFont);
+            Theme.W95Hi, Ui.F95, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.RetroFont);
         var icon = new RectangleF(r.X + 14, cap.Bottom + 12, 32, 32);
         if (c.Icon != null)
         {
@@ -297,9 +311,9 @@ public sealed class NotificationPanel : IDisposable
         else W95Icons.Draw(_p, W95Icons.Id.Info32, icon.X, icon.Y);
         float tx = icon.Right + 14, tw = r.Right - tx - 12;
         _p.Text(c.Title, new RectangleF(tx, cap.Bottom + 10, tw, 15), Theme.W95Dark, Ui.F95, FontWeight.Bold,
-            TextAlignment.Leading, ParagraphAlignment.Center, Theme.ClassicFont);
+            TextAlignment.Leading, ParagraphAlignment.Center, Theme.RetroFont);
         _p.Text(c.Content, new RectangleF(tx, cap.Bottom + 27, tw, r.Bottom - cap.Bottom - 31), Theme.W95Dark, Ui.F95, FontWeight.Normal,
-            TextAlignment.Leading, ParagraphAlignment.Near, Theme.ClassicFont, true);
+            TextAlignment.Leading, ParagraphAlignment.Near, Theme.RetroFont, true);
     }
 
     // snapshot tool: draw a sample card

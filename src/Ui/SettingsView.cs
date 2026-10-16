@@ -103,13 +103,17 @@ public sealed partial class SettingsView
         var p = ui.P;
         var wn = WhatsNewShown;
         bool modal = wn != null && wn.Count > 0;
-        if (Tab != TabLook || modal) _fontsOpen = false;
-        ui.Inert = modal || _fontsOpen;       // an open font list: the page under it is only a picture
+        if (Tab != TabLook || modal) _fontsOpen = _stylesOpen = false;
+        ui.Inert = modal || _fontsOpen || _stylesOpen;       // an open font / style list: the page under it is only a picture
         p.Fill(new RectangleF(0, 0, W, H), Theme.Bg);
         DrawHeader(ui);
         if (Theme.Classic) DrawNavClassic(ui);
         else DrawNav(ui);
 
+        // a tab picked in the list fades in, rising a few px (DrawNav starts it; Motion off: at once)
+        float tin = ui.Anim(TabIn, 1, 18);
+        bool fading = tin < 0.999f;
+        if (fading) { p.PushFade(tin); p.PushOffset(0, 10 * (1 - tin)); }
         switch (Tab)
         {
             case TabDesktops: DrawDesktops(ui); break;
@@ -121,12 +125,19 @@ public sealed partial class SettingsView
             case TabVrchat: DrawVrchat(ui); break;
             default: DrawGeneral(ui); break;
         }
+        if (fading) { p.PopScale(); p.PopFade(); }
         if (_fontsOpen) { ui.Inert = false; DrawFontList(ui); }
+        if (_stylesOpen) { ui.Inert = false; DrawStyleList(ui); }
+        // What's new over the page: the dark veil and the sheet fade in, the sheet growing from 96 %
+        float wa = ui.Anim("wn#in", modal ? 1 : 0, 16);
         if (modal)
         {
             ui.Inert = false;
-            p.Fill(new RectangleF(0, 0, W, H), 0x99000000);
+            p.Fill(new RectangleF(0, 0, W, H), Theme.WithAlpha(0x99000000, wa));
+            bool grow = wa < 0.999f;
+            if (grow) { p.PushFade(wa); p.PushScale(0.96f + 0.04f * wa, 500, 320); }
             if (WhatsNewView.DrawModern(ui, new RectangleF(160, 40, 680, 560), wn, WhatsNewSubShown, ref _wnScroll, Theme.Panel)) CloseWhatsNew();
+            if (grow) { p.PopScale(); p.PopFade(); }
         }
         if (ui.Changed) _h.Cfg.MarkDirty();
     }
@@ -152,6 +163,8 @@ public sealed partial class SettingsView
         p.Fill(new RectangleF(212 + p.Px, 76, p.Px, H - 92), Theme.W95Hi);
     }
 
+    const string TabIn = "tab#in";
+
     void DrawNav(Ui ui)
     {
         var p = ui.P;
@@ -163,7 +176,7 @@ public sealed partial class SettingsView
             var r = new RectangleF(16, 84 + i * 50, 180, 42);
             float hv = ui.Anim(Ui.Id("nav/", i), ui.Hover(r) && Tab != i ? 1 : 0, 18);
             if (hv > 0) p.Fill(r, Theme.WithAlpha(Theme.Panel, hv), 10);
-            if (ui.Hover(r) && ui.Pressed) Tab = i;
+            if (ui.Hover(r) && ui.Pressed && Tab != i) { Tab = i; ui.AnimFrom(TabIn, 0); }      // the page fades in (Draw)
         }
         p.Fill(pill, Theme.Panel3, 10);
         p.Fill(new RectangleF(pill.X, pill.Y + 10, 4, pill.Height - 20), Theme.Accent, 2);
@@ -737,19 +750,28 @@ public sealed partial class SettingsView
             C.Appearance = a = new AppearanceConfig
             {
                 LaserThickness = a.LaserThickness, LaserAlways = a.LaserAlways, Clock24h = a.Clock24h,
-                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font,
+                NightMode = a.NightMode, NightBrightness = a.NightBrightness, Style = a.Style, Font = a.Font, Motion = a.Motion,
             };
             changed = true;
         }
+        // the style: Modern or a retro one, its name in a field; the list opens over the page (DrawStyleList)
         ui.Section(new RectangleF(lx, 488, 360, 20), "Style");
-        int si = a.Style == "classic" ? 1 : 0;
-        if (ui.Segmented("look.style", new RectangleF(lx, 512, 356, 38), new[] { "Modern", "Windows 95" }, ref si))
         {
-            a.Style = si == 1 ? "classic" : "modern";
-            changed = true;
+            var field = StyleField;
+            bool click = ui.Clickable("look.style", field, out bool hover, out _);
+            float hv = ui.Anim("look.style#h", hover || _stylesOpen ? 1 : 0, 18);
+            p.Fill(field, Theme.Mix(Theme.Panel, 0xFFFFFFFF, 0.05f * hv), 9);
+            p.Stroke(field, _stylesOpen ? Theme.Accent : Theme.Mix(Theme.Border, Theme.Accent, 0.5f * hv), 1, 9);
+            StyleChip(p, new RectangleF(field.X + 12, field.Y + 9, 28, 20), StyleMenu.IndexOf(a.Style));
+            p.Text(StyleMenu.Names[StyleMenu.IndexOf(a.Style)], new RectangleF(field.X + 50, field.Y, field.Width - 88, field.Height), Theme.Text, 16);
+            p.Icon(_stylesOpen ? Theme.IcoUp : Theme.IcoDown, new RectangleF(field.Right - 36, field.Y, 24, field.Height), Theme.Dim, 14);
+            if (click) _stylesOpen = true;
         }
         if (Theme.Classic)
-            ui.Label(new RectangleF(lx, 556, 356, 40), "Windows 95 has its own colours; the ones above are for Modern.",
+            ui.Label(new RectangleF(lx, 556, 356, 40), $"{Theme.RetroSkin.Name} has its own colours; the ones above are for Modern.",
+                Theme.Dim, 12, FontWeight.Normal, true);
+        else if (Theme.Cyber)
+            ui.Label(new RectangleF(lx, 556, 356, 40), $"{CyberHud.Name} has its own colours and fonts; the ones above (and Font) are for Modern.",
                 Theme.Dim, 12, FontWeight.Normal, true);
         else
         {
@@ -800,7 +822,81 @@ public sealed partial class SettingsView
         float nb = a.NightBrightness;
         if (ui.Slider("night.b", new RectangleF(rx - 10, 512, 376, 58), "Night brightness", ref nb, 0.15f, 0.9f, f => $"{f * 100:0}%"))
             a.NightBrightness = nb;
+        // how much things move (Gfx/Motion.cs), what it means beside the title; written only when not Full, it applies at once
+        ui.Section(new RectangleF(rx, 566, 360, 20), "Motion");
+        int mi = MotionIndex(a.Motion);
+        p.Text(MotionHints[mi], new RectangleF(rx + 96, 566, 260, 20), Theme.Dim, 12, FontWeight.Normal, TextAlignment.Trailing);
+        if (ui.Segmented("look.motion", new RectangleF(rx, 588, 356, 38), MotionNames, ref mi))
+        {
+            a.Motion = Motion.Id((MotionLevel)mi);
+            changed = true;
+        }
         if (changed) _h.AppearanceChanged();
+    }
+
+    // Look > Motion: Full / Reduced / Off (AppearanceConfig.Motion: null / "reduced" / "off")
+    static readonly string[] MotionNames = { "Full", "Reduced", "Off" };
+    static readonly string[] MotionHints = { "every animation of the style", "short transitions only, no loops", "nothing moves, changes at once" };
+    static int MotionIndex(string m) => m == "reduced" ? 1 : m == "off" ? 2 : 0;
+
+    // ---- Look > Style: Modern and the retro styles, each with a little window in its colours; a pick applies at once ----
+    bool _stylesOpen;
+    static readonly RectangleF StyleField = new(232, 512, 356, 38);
+
+    // the list over the page, above its field
+    static RectangleF StyleList => new(StyleField.X, StyleField.Y - 6 - StyleMenu.Ids.Length * FontRow - 12,
+        StyleField.Width, StyleMenu.Ids.Length * FontRow + 12);
+
+    // a style's little window: its face, its title bar, a selection (Modern: the panel and the accent)
+    static void StyleChip(Painter p, RectangleF r, int i)
+    {
+        if (StyleMenu.Ids[Math.Clamp(i, 0, StyleMenu.Ids.Length - 1)] == CyberHud.Id) { CyberHud.Chip(p, r); return; }
+        uint face, cap, sel;
+        if (i <= 0) { face = Theme.Panel3; cap = Theme.Accent; sel = Theme.Accent; }
+        else { var sk = Skins.All[i - 1]; face = sk.Face; cap = sk.ActiveCaption; sel = sk.Highlight; }
+        p.Fill(r, face, 3);
+        p.Fill(new RectangleF(r.X, r.Y, r.Width, 6), cap, 3);
+        p.Fill(new RectangleF(r.X, r.Y + 3, r.Width, 3), cap);
+        p.Fill(new RectangleF(r.X + 4, r.Y + 10, r.Width - 8, 4), sel, 1);
+        p.Stroke(r, 0x33FFFFFF, 1, 3);
+    }
+
+    void DrawStyleList(Ui ui)
+    {
+        var p = ui.P;
+        var a = C.Appearance;
+        var box = StyleList;
+        if (ui.Pressed && !box.Contains(ui.Mouse.X, ui.Mouse.Y))
+        {
+            _stylesOpen = false;         // a click beside it only closes it (the page under it was a picture this frame)
+            return;
+        }
+        ui.Hover(box);
+        p.Fill(new RectangleF(box.X - 2, box.Y + 4, box.Width + 4, box.Height + 4), 0x55000000, 14);
+        p.Fill(box, Theme.Panel2, 12);
+        p.Stroke(box, Theme.Border, 1, 12);
+        int sel = StyleMenu.IndexOf(a.Style);
+        for (int i = 0; i < StyleMenu.Ids.Length; i++)
+        {
+            var row = new RectangleF(box.X + 6, box.Y + 6 + i * FontRow, box.Width - 12, FontRow);
+            bool click = ui.Clickable(Ui.Id("look.style/", i), row, out bool hover, out _);
+            bool on = i == sel;
+            if (on || hover) p.Fill(row, on ? Theme.Panel3 : Theme.WithAlpha(0x14FFFFFF, 1), 8);
+            if (on) p.Fill(new RectangleF(row.X, row.Y + 10, 4, row.Height - 20), Theme.Accent, 2);
+            StyleChip(p, new RectangleF(row.X + 14, row.Y + 10, 28, 20), i);
+            p.Text(StyleMenu.Names[i], new RectangleF(row.X + 54, row.Y, row.Width - 100, row.Height), Theme.Text, 17);
+            if (on) p.Icon(Theme.IcoCheck, new RectangleF(row.Right - 34, row.Y, 24, row.Height), Theme.Accent, 14);
+            if (click)
+            {
+                _stylesOpen = false;
+                if (StyleMenu.Ids[i] != (a.Style ?? "modern"))
+                {
+                    a.Style = StyleMenu.Ids[i];
+                    ui.Changed = true;
+                    _h.AppearanceChanged();
+                }
+            }
+        }
     }
 
     // ---- Look > Font: the list of typefaces, each name drawn in itself with a clock beside it; a pick applies at once ----

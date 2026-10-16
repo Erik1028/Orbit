@@ -9,47 +9,28 @@ namespace Orbit;
 // 13 x 13 check boxes, 12 x 12 option buttons, etched group boxes, trackbars with a pointed thumb,
 // block progress bars, property sheet tabs, list boxes with scroll bars, navy captions. Coordinates are
 // pixels of the small 95 canvas (Painter.BeginPixel); the canvas is enlarged afterwards with whole pixels.
+// What they do (hit areas, values, the open list) is here, the same in every retro style; how they look is the style's skin
+// (Theme.RetroSkin: Win95Skin and the styles derived from it).
 public sealed partial class Ui
 {
     public const float F95 = 11;                       // 8 pt
-    const uint Blk = 0xFF000000, Wh = 0xFFFFFFFF, Face = 0xFFC0C0C0, Sh = 0xFF808080, Lt = 0xFFDFDFDF, Navy = 0xFF000080;
+    const uint Blk = 0xFF000000, Navy = 0xFF000080;    // the defaults of the colour arguments below
 
-    static readonly string[] CheckGlyph =
-    {
-        "......k", ".....kk", "k...kkk", "kk.kkk.", "kkkkk..", ".kkk...", "..k....",
-    };
-    static readonly string[] CloseGlyph =
-    {
-        "kk....kk", ".kk..kk.", "..kkkk..", "...kk...", "..kkkk..", ".kk..kk.", "kk....kk",
-    };
-    static readonly string[] HelpGlyph = { ".kkkk.", "kk..kk", "...kk.", "..kk..", "..kk..", "......", "..kk..", };
-    static readonly string[] MinGlyph = { "kkkkkk", "kkkkkk" };
-    static readonly string[] MaxGlyph =
-    {
-        "kkkkkkkkk", "kkkkkkkkk", "k.......k", "k.......k", "k.......k", "k.......k", "k.......k", "kkkkkkkkk",
-    };
-    static readonly string[] UpGlyph = { "...k...", "..kkk..", ".kkkkk.", "kkkkkkk" };
-    static readonly string[] DownGlyph = { "kkkkkkk", ".kkkkk.", "..kkk..", "...k..." };
+    static RetroSkin Sk => Theme.RetroSkin;
 
     // ---- text ----
 
     public void Text95(string s, RectangleF r, uint c = Blk, bool bold = false, TextAlignment al = TextAlignment.Leading,
-        bool enabled = true, bool wrap = false, float size = F95)
-    {
-        if (string.IsNullOrEmpty(s)) return;
-        var w = bold ? FontWeight.Bold : FontWeight.Normal;
-        if (!enabled) { P.DisabledText(s, r, size, w, al, wrap ? ParagraphAlignment.Near : ParagraphAlignment.Center); return; }
-        P.Text(s, r, c, size, w, al, wrap ? ParagraphAlignment.Near : ParagraphAlignment.Center, Theme.ClassicFont, wrap);
-    }
+        bool enabled = true, bool wrap = false, float size = F95) =>
+        Sk.Text(P, s, r, c, bold, al, enabled, wrap, size);
 
-    public float Width95(string s, bool bold = false, float size = F95) =>
-        P.MeasureWidth(s, size, bold ? FontWeight.Bold : FontWeight.Normal, Theme.ClassicFont);
+    public float Width95(string s, bool bold = false, float size = F95) => Sk.TextWidth(P, s, bold, size);
 
     // ---- access keys: "&Size:" shows "Size:" with the S underlined (Alt+S in 1995); "&&" is a plain & ----
 
     static readonly Dictionary<string, (string text, int key)> _amp = new();
 
-    static (string text, int key) Amp(string s)
+    public static (string text, int key) Amp(string s)
     {
         if (string.IsNullOrEmpty(s) || s.IndexOf('&') < 0) return (s, -1);
         if (_amp.TryGetValue(s, out var v)) return v;
@@ -74,20 +55,8 @@ public sealed partial class Ui
     public float LabelWidth95(string s, bool bold = false) => Width95(Amp(s).text, bold);
 
     public void Label95(string s, RectangleF r, bool enabled = true, TextAlignment al = TextAlignment.Leading, uint c = Blk,
-        bool bold = false)
-    {
-        var (t, key) = Amp(s);
-        if (string.IsNullOrEmpty(t)) return;
-        Text95(t, r, c, bold, al, enabled);
-        if (key < 0) return;
-        float full = Width95(t, bold);
-        float x = al == TextAlignment.Center ? r.X + MathF.Floor((r.Width - full) / 2) : al == TextAlignment.Trailing ? r.Right - full : r.X;
-        x = MathF.Round(x + Width95(t[..key], bold));
-        float uw = Math.Max(1, MathF.Round(Width95(t.Substring(key, 1), bold)) - 1);
-        float y = MathF.Floor(r.Y + (r.Height - 13) / 2) + 11;
-        if (!enabled) P.Fill(new RectangleF(x + 1, y + 1, uw, 1), Wh);
-        P.Fill(new RectangleF(x, y, uw, 1), enabled ? c : Sh);
-    }
+        bool bold = false) =>
+        Sk.Label(P, s, r, enabled, al, c, bold);
 
     // ---- push button ----
 
@@ -95,36 +64,16 @@ public sealed partial class Ui
     public bool Button95(string id, RectangleF r, string text, bool enabled = true, bool isDefault = false, bool latched = false,
         W95Icons.Id? icon = null)
     {
-        bool click = Behave(id, r, out _, out bool held) && enabled;
-        bool down = held && enabled;
-        var b = ButtonFrame95(r, isDefault, down, latched);
-        float o = down || latched ? 1 : 0;
-        if (icon is { } ic)
-        {
-            int n = W95Icons.Size(ic);
-            float tw = string.IsNullOrEmpty(text) ? 0 : LabelWidth95(text) + 4;
-            float x = b.X + (b.Width - n - tw) / 2 + o, y = b.Y + (b.Height - n) / 2 + o;
-            if (enabled) W95Icons.Draw(P, ic, MathF.Round(x), MathF.Round(y));
-            else P.ImageNearest(W95Icons.Get(P, ic), new RectangleF(MathF.Round(x), MathF.Round(y), n, n));
-            if (tw > 0) Label95(text, new RectangleF(MathF.Round(x + n + 4), b.Y + o, tw, b.Height), enabled);
-        }
-        else
-            Label95(text, new RectangleF(b.X + o, b.Y + o, b.Width, b.Height), enabled, TextAlignment.Center);
+        bool click = Behave(id, r, out bool hover, out bool held) && enabled;
+        Sk.PushButton(P, r, text, icon, enabled, isDefault, held && enabled, latched, hover);
         return click;
     }
-
-    RectangleF ButtonFrame95(RectangleF r, bool isDefault, bool down, bool latched) => P.ButtonFace95(r, isDefault, down, latched);
 
     // a push button with a little pixel picture (the CD Player's |<<  >  >>|)
     public bool GlyphButton95(string id, RectangleF r, string[] glyph, bool enabled = true)
     {
-        bool click = Behave(id, r, out _, out bool held) && enabled;
-        bool down = held && enabled;
-        var b = ButtonFrame95(r, false, down, false);
-        float o = down ? 1 : 0, gw = glyph[0].Length, gh = glyph.Length;
-        float gx = b.X + MathF.Floor((b.Width - gw) / 2) + o, gy = b.Y + MathF.Floor((b.Height - gh) / 2) + o;
-        if (!enabled) P.Pixels(glyph, gx + 1, gy + 1, Wh);
-        P.Pixels(glyph, gx, gy, enabled ? Blk : Sh);
+        bool click = Behave(id, r, out bool hover, out bool held) && enabled;
+        Sk.GlyphButton(P, r, glyph, enabled, held && enabled, hover);
         return click;
     }
 
@@ -133,23 +82,18 @@ public sealed partial class Ui
     public bool Check95(string id, float x, float y, string text, ref bool value, bool enabled = true)
     {
         var hit = new RectangleF(x, y - 2, 19 + LabelWidth95(text) + 4, 17);
-        bool click = Behave(id, hit, out _, out bool held) && enabled;
+        bool click = Behave(id, hit, out bool hover, out bool held) && enabled;
         if (click) { value = !value; Changed = true; }
-        var box = new RectangleF(x, y, 13, 13);
-        P.Fill(box, enabled && !(held && enabled) ? Wh : Face);
-        P.Bevel(box, Painter.Edge.Sunken);
-        if (value) P.Pixels(CheckGlyph, x + 3, y + 3, enabled ? Blk : Sh);
-        Label95(text, new RectangleF(x + 19, y - 1, 400, 15), enabled);
+        Sk.CheckBox(P, x, y, text, value, enabled, held, hover);
         return click;
     }
 
     public bool Radio95(string id, float x, float y, string text, bool on, bool enabled = true)
     {
         var hit = new RectangleF(x, y - 2, 18 + LabelWidth95(text) + 4, 16);
-        bool click = Behave(id, hit, out _, out _) && enabled;
+        bool click = Behave(id, hit, out bool hover, out bool held) && enabled;
         if (click && !on) Changed = true;
-        W95Icons.Draw(P, on ? W95Icons.Id.RadioOn : W95Icons.Id.RadioOff, x, y);
-        Label95(text, new RectangleF(x + 18, y - 2, 400, 15), enabled);
+        Sk.Radio(P, x, y, text, on, enabled, held, hover);
         return click && enabled;
     }
 
@@ -172,16 +116,7 @@ public sealed partial class Ui
 
     // ---- group box, etched line ----
 
-    public void Group95(RectangleF r, string title)
-    {
-        float y = r.Y + 6;
-        P.Stroke(new RectangleF(r.X + 0.5f, y + 0.5f, r.Width - 2, r.Bottom - y - 2), Sh, 1);
-        P.Stroke(new RectangleF(r.X + 1.5f, y + 1.5f, r.Width - 2, r.Bottom - y - 2), Wh, 1);
-        if (string.IsNullOrEmpty(title)) return;
-        float tw = LabelWidth95(title);
-        P.Fill(new RectangleF(r.X + 6, r.Y, tw + 4, 13), Face);
-        Label95(title, new RectangleF(r.X + 8, r.Y, tw + 2, 13));
-    }
+    public void Group95(RectangleF r, string title) => Sk.GroupBox(P, r, title);
 
     // ---- trackbar ----
 
@@ -203,52 +138,14 @@ public sealed partial class Ui
             changed = true;
         }
         if (changed) Changed = true;
-        // the channel: a 4 pixel groove
-        P.Fill(ch, Wh);
-        P.Bevel(ch, Painter.Edge.Sunken);
-        // tick marks under it
-        for (int i = 0; i < ticks; i++)
-        {
-            float tx = MathF.Round(ch.X + (ch.Width - 1) * i / (ticks - 1));
-            P.Fill(new RectangleF(tx, r.Y + 24, 1, i == 0 || i == ticks - 1 ? 4 : 3), Blk);
-        }
-        // the thumb: 11 wide, square top, pointing down
         float t2 = Math.Clamp((value - min) / (max - min), 0, 1);
-        float x = MathF.Round(ch.X + ch.Width * t2) - 5, y = r.Y;
-        P.Fill(new RectangleF(x, y, 11, 15), Face);
-        for (int i = 0; i < 5; i++) P.Fill(new RectangleF(x + i + 1, y + 15 + i, 9 - 2 * i, 1), Face);
-        P.Fill(new RectangleF(x, y, 10, 1), Wh);                 // top + left light edge
-        P.Fill(new RectangleF(x, y, 1, 15), Wh);
-        P.Fill(new RectangleF(x + 10, y, 1, 15), Blk);             // right dark edge
-        P.Fill(new RectangleF(x + 9, y + 1, 1, 14), Sh);
-        for (int i = 0; i < 5; i++)
-        {
-            P.Fill(new RectangleF(x + i, y + 15 + i, 1, 1), Wh);                 // the point: light on the left
-            P.Fill(new RectangleF(x + 10 - i, y + 15 + i, 1, 1), Blk);            // dark on the right
-            if (i < 4) P.Fill(new RectangleF(x + 9 - i, y + 15 + i, 1, 1), Sh);
-        }
-        P.Fill(new RectangleF(x + 5, y + 20, 1, 1), Blk);
-        if (!enabled) P.Fill(new RectangleF(x + 3, y + 3, 5, 9), Face);
+        Sk.Trackbar(P, r, t2, enabled, ticks, hover, held);
         return changed;
     }
 
     // ---- progress bar (blocks) ----
 
-    public void Progress95(RectangleF r, float frac, uint block = Navy)
-    {
-        P.Fill(r, Face);
-        P.Fill(new RectangleF(r.X, r.Y, r.Width, 1), Sh);
-        P.Fill(new RectangleF(r.X, r.Y, 1, r.Height), Sh);
-        P.Fill(new RectangleF(r.X, r.Bottom - 1, r.Width, 1), Wh);
-        P.Fill(new RectangleF(r.Right - 1, r.Y, 1, r.Height), Wh);
-        var inner = RectangleF.Inflate(r, -2, -2);
-        float bw = Math.Max(4, MathF.Round(inner.Height * 0.66f));
-        int n = (int)((inner.Width + 2) / (bw + 2));
-        int on = (int)MathF.Round(Math.Clamp(frac, 0, 1) * n);
-        if (on == 0 && frac >= 0.01f) on = 1;           // a low battery still shows its one red block
-        float x0 = inner.X + MathF.Floor((inner.Width + 2 - n * (bw + 2)) / 2);     // the leftover split on both ends
-        for (int i = 0; i < on; i++) P.Fill(new RectangleF(x0 + i * (bw + 2), inner.Y, bw, inner.Height), block);
-    }
+    public void Progress95(RectangleF r, float frac, uint block = Navy) => Sk.Progress(P, r, frac, block);
 
     // ---- property sheet tabs + page ----
 
@@ -257,31 +154,19 @@ public sealed partial class Ui
         bool changed = false;
         float cx = x;
         var rects = new RectangleF[tabs.Length];
+        var hot = new bool[tabs.Length];
         for (int i = 0; i < tabs.Length; i++)
         {
             float w = LabelWidth95(tabs[i]) + 14;
             rects[i] = new RectangleF(cx, y, w, 18);
-            if (Behave(K(id, Seg[Math.Min(i, Seg.Length - 1)]), rects[i], out _, out _) && sel != i) { sel = i; changed = true; }
+            if (Behave(K(id, Seg[Math.Min(i, Seg.Length - 1)]), rects[i], out hot[i], out _) && sel != i) { sel = i; changed = true; }
             cx += w;
         }
         for (int i = 0; i < tabs.Length; i++)
-            if (i != sel) TabShape(rects[i], tabs[i], false);
+            if (i != sel) Sk.Tab(P, rects[i], tabs[i], false, hot[i]);
         var s = rects[sel];
-        TabShape(new RectangleF(s.X - 2, s.Y - 2, s.Width + 4, s.Height + 4), tabs[sel], true);
+        Sk.Tab(P, new RectangleF(s.X - 2, s.Y - 2, s.Width + 4, s.Height + 4), tabs[sel], true, hot[sel]);
         return changed;
-    }
-
-    void TabShape(RectangleF r, string text, bool selected)
-    {
-        P.Fill(new RectangleF(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 1), Face);
-        P.Fill(new RectangleF(r.X, r.Y + 2, 1, r.Height - 2), Wh);              // left
-        P.Fill(new RectangleF(r.X + 1, r.Y + 1, 1, 1), Wh);                      // the chamfered corner
-        P.Fill(new RectangleF(r.X + 2, r.Y, r.Width - 4, 1), Wh);               // top
-        P.Fill(new RectangleF(r.Right - 2, r.Y + 1, 1, 1), Blk);
-        float rh = r.Height - 2 - (selected ? 2 : 0);
-        P.Fill(new RectangleF(r.Right - 1, r.Y + 2, 1, rh), Blk);       // right
-        P.Fill(new RectangleF(r.Right - 2, r.Y + 2, 1, rh), Sh);
-        Label95(text, new RectangleF(r.X, r.Y + (selected ? 1 : 2), r.Width, 14), true, TextAlignment.Center);
     }
 
     // ---- list box with a vertical scroll bar ----
@@ -291,8 +176,7 @@ public sealed partial class Ui
     // returns the item clicked this frame (or -1); draw(index, row rect, selected) paints a row
     public int List95(string id, RectangleF r, int count, int selected, Action<int, RectangleF, bool> draw, float rowH = 16)
     {
-        P.Fill(r, Wh);
-        P.Bevel(r, Painter.Edge.Sunken);
+        Sk.ListBox(P, r);
         var inner = RectangleF.Inflate(r, -2, -2);
         int visible = Math.Max(1, (int)(inner.Height / rowH));
         bool bar = count > visible;
@@ -301,82 +185,68 @@ public sealed partial class Ui
         float rowsW = inner.Width - (bar ? 16 : 0);
         int clicked = -1;
         if (bar && Hover(inner) && Wheel != 0) top = Math.Clamp(top - Math.Sign(Wheel) * 3, 0, count - visible);
+        // where the rows are drawn from: the style may glide there (smooth scrolling); the hit areas are the rows' own
+        float pos = bar ? Sk.ListScroll(P, r, top) : top;
         for (int i = 0; i < visible && top + i < count; i++)
         {
             int idx = top + i;
             var row = new RectangleF(inner.X, inner.Y + i * rowH, rowsW, rowH);
             if (Behave(K(id, "/" + i), row, out _, out _)) clicked = idx;
-            if (idx == selected) P.Fill(row, Navy);
+            if (pos != top) continue;
+            if (idx == selected) Sk.ListSelection(P, row);
             draw(idx, row, idx == selected);
+        }
+        if (pos != top)
+        {
+            P.PushClip(new RectangleF(inner.X, inner.Y, rowsW, inner.Height));
+            int first = Math.Max(0, (int)MathF.Floor(pos));
+            for (int idx = first; idx < count && idx <= first + visible; idx++)
+            {
+                var row = new RectangleF(inner.X, inner.Y + MathF.Round((idx - pos) * rowH), rowsW, rowH);
+                if (idx == selected) Sk.ListSelection(P, row);
+                draw(idx, row, idx == selected);
+            }
+            P.PopClip();
         }
         if (bar)
         {
             var sb = new RectangleF(inner.Right - 16, inner.Y, 16, inner.Height);
-            P.FillChecker(sb);
             var up = new RectangleF(sb.X, sb.Y, 16, 16);
             var dn = new RectangleF(sb.X, sb.Bottom - 16, 16, 16);
-            if (ArrowButton(K(id, "#up"), up, UpGlyph)) top = Math.Max(0, top - 1);
-            if (ArrowButton(K(id, "#dn"), dn, DownGlyph)) top = Math.Min(count - visible, top + 1);
+            if (Behave(K(id, "#up"), up, out _, out bool upHeld)) top = Math.Max(0, top - 1);
+            if (Behave(K(id, "#dn"), dn, out _, out bool dnHeld)) top = Math.Min(count - visible, top + 1);
             float track = sb.Height - 32;
             float th = Math.Max(8, track * visible / count);
             float ty = sb.Y + 16 + (track - th) * top / Math.Max(1, count - visible);
             var thumb = new RectangleF(sb.X, MathF.Round(ty), 16, MathF.Round(th));
-            P.Fill(thumb, Face);
-            P.Bevel(thumb, Painter.Edge.Raised);
+            Sk.ScrollBar(P, sb, up, dn, thumb, upHeld, dnHeld);
         }
         _scroll95[id] = top;
         return clicked;
     }
 
-    bool ArrowButton(string id, RectangleF r, string[] glyph)
-    {
-        bool click = Behave(id, r, out _, out bool held);
-        P.Fill(r, Face);
-        if (held) P.Stroke(new RectangleF(r.X + 0.5f, r.Y + 0.5f, r.Width - 1, r.Height - 1), Sh, 1);
-        else P.Bevel(r, Painter.Edge.Raised);
-        float o = held ? 1 : 0;
-        P.Pixels(glyph, r.X + 4 + o, r.Y + 6 + o, Blk);
-        return click;
-    }
-
     // ---- window parts ----
 
-    public void Caption95(RectangleF r, string title, W95Icons.Id? icon = null, bool active = true)
-    {
-        P.Fill(r, active ? Navy : Sh);
-        float tx = r.X + 3;
-        if (icon is { } ic) { W95Icons.Draw(P, ic, r.X + 2, r.Y + (r.Height - 16) / 2); tx = r.X + 21; }
-        Text95(title, new RectangleF(tx, r.Y, r.Width - (tx - r.X) - 40, r.Height), active ? Wh : Face, true);
-    }
+    public void Caption95(RectangleF r, string title, W95Icons.Id? icon = null, bool active = true) => Sk.Caption(P, r, title, icon, active);
 
     // the boxes in a caption (16 x 14): close, help, minimise, maximise
     // pad: a bigger, invisible target around the 16x14 button (a laser in VR)
-    bool CaptionButton95(string id, float x, float y, string[] glyph, float gx, float gy, bool enabled, float pad = 0)
+    bool CaptionButton95(string id, float x, float y, CaptionKind kind, bool enabled, float pad = 0)
     {
         var r = new RectangleF(x, y, 16, 14);
-        bool click = Behave(id, RectangleF.Inflate(r, pad, pad), out _, out bool held) && enabled;
-        bool down = held && enabled;
-        P.Fill(r, Face);
-        P.Bevel(r, down ? Painter.Edge.Pressed : Painter.Edge.Raised);
-        float o = down ? 1 : 0;
-        if (!enabled) P.Pixels(glyph, x + gx + 1, y + gy + 1, Wh);
-        P.Pixels(glyph, x + gx + o, y + gy + o, enabled ? Blk : Sh);
+        bool click = Behave(id, RectangleF.Inflate(r, pad, pad), out bool hover, out bool held) && enabled;
+        Sk.CaptionButton(P, r, kind, enabled, held && enabled, hover);
         return click;
     }
 
-    public bool CaptionClose95(string id, float x, float y, bool enabled = true, float pad = 0) => CaptionButton95(id, x, y, CloseGlyph, 4, 3, enabled, pad);
-    public bool CaptionHelp95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, HelpGlyph, 5, 3, enabled);
-    public bool CaptionMin95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, MinGlyph, 4, 9, enabled);
-    public bool CaptionMax95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, MaxGlyph, 3, 2, enabled);
+    public bool CaptionClose95(string id, float x, float y, bool enabled = true, float pad = 0) => CaptionButton95(id, x, y, CaptionKind.Close, enabled, pad);
+    public bool CaptionHelp95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, CaptionKind.Help, enabled);
+    public bool CaptionMin95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, CaptionKind.Min, enabled);
+    public bool CaptionMax95(string id, float x, float y, bool enabled = true) => CaptionButton95(id, x, y, CaptionKind.Max, enabled);
 
     // ---- text box (read-only here: Orbit types with its own keyboard, not into its settings) ----
 
-    public void Edit95(RectangleF r, string text, bool enabled = true)
-    {
-        P.Fill(r, enabled ? Wh : Face);
-        P.Bevel(r, Painter.Edge.Sunken);
-        Text95(text, new RectangleF(r.X + 4, r.Y + 2, r.Width - 6, r.Height - 4), enabled ? Blk : Sh);
-    }
+    public void Edit95(RectangleF r, string text, bool enabled = true) => Sk.EditBox(P, r, text, enabled);
 
     // ---- drop-down list: the field, the arrow button, and the list that opens under it ----
 
@@ -411,84 +281,53 @@ public sealed partial class Ui
                 _dropField = r;
                 if (_dropPick >= 0)
                 {
+                    Sk.MenuPicked(this, _dropList, _dropItems, _dropPick);         // a style's closing menu (the Mac's blink)
                     if (_dropPick != index && _dropPick < items.Length) { index = _dropPick; changed = Changed = true; }
                     _drop = null;
                     _dropPick = -1;
                 }
             }
         }
-        bool click = Behave(id, r, out _, out bool held) && enabled;
+        bool click = Behave(id, r, out bool hover, out bool held) && enabled;
         if (click)
         {
             if (_drop == id) _drop = null;
             else
             {
                 _drop = id; _dropSeen = true; _dropField = r; _dropItems = items; _dropHot = index; _dropPick = -1;
-                float h = items.Length * 13 + 2;
+                float h = items.Length * Sk.DropRowH + 2;
                 float y = r.Bottom + h <= Canvas95.Height ? r.Bottom : r.Y - h;
                 _dropList = new RectangleF(r.X, y, r.Width, h);
             }
         }
         bool open = _drop == id, down = held && enabled;
-        P.Fill(r, enabled ? Wh : Face);
-        P.Bevel(r, Painter.Edge.Sunken);
-        var b = new RectangleF(r.Right - 18, r.Y + 2, 16, r.Height - 4);
-        P.Fill(b, Face);
-        if (down) P.Stroke(new RectangleF(b.X + 0.5f, b.Y + 0.5f, b.Width - 1, b.Height - 1), Sh, 1);
-        else P.Bevel(b, Painter.Edge.Raised);
-        float o = down ? 1 : 0, gy = MathF.Floor(b.Y + (b.Height - 4) / 2);
-        if (!enabled) P.Pixels(DownGlyph, b.X + 5, gy + 1, Wh);
-        P.Pixels(DownGlyph, b.X + 4 + o, gy + o, enabled ? Blk : Sh);
         string t = index >= 0 && index < items.Length ? items[index] : "";
-        var tr = new RectangleF(r.X + 3, r.Y + 3, b.X - r.X - 4, r.Height - 6);
-        if (open) P.Fill(tr, Navy);
-        Text95(t, new RectangleF(tr.X + 2, tr.Y, tr.Width - 2, tr.Height), open ? Wh : enabled ? Blk : Sh);
+        Sk.ComboBox(P, r, t, enabled, down, open, hover);
         return changed;
     }
 
     // the open list goes over everything: the page calls this after drawing itself
     public void Popups95()
     {
-        if (_drop == null) return;
+        if (_drop == null) { Sk.MenuClosing(this); return; }
         if (!_dropSeen) { _drop = null; return; }
         var r = _dropList;
+        float rh = Sk.DropRowH;
         _inPopup = true;
         for (int i = 0; i < _dropItems.Length; i++)
         {
-            var row = new RectangleF(r.X + 1, r.Y + 1 + i * 13, r.Width - 2, 13);
+            var row = new RectangleF(r.X + 1, r.Y + 1 + i * rh, r.Width - 2, rh);
             if (!Hover(row)) continue;
             _dropHot = i;                                   // the bar follows the pointer
             if (Released) { _dropPick = i; Animating = true; }   // taken by the combo in the next frame
         }
         _inPopup = false;
-        P.Fill(r, Wh);
-        P.Stroke(new RectangleF(r.X + 0.5f, r.Y + 0.5f, r.Width - 1, r.Height - 1), Blk, 1);
-        for (int i = 0; i < _dropItems.Length; i++)
-        {
-            var row = new RectangleF(r.X + 1, r.Y + 1 + i * 13, r.Width - 2, 13);
-            bool on = i == _dropHot;
-            if (on) P.Fill(row, Navy);
-            Text95(_dropItems[i], new RectangleF(row.X + 2, row.Y, row.Width - 4, 13), on ? Wh : Blk);
-        }
+        Sk.DropList(P, r, _dropItems, _dropHot, rh);
     }
 
     // status bar panes: thin sunken fields
-    public void Pane95(RectangleF r, string text, uint dot = 0)
-    {
-        P.Fill(new RectangleF(r.X, r.Y, r.Width, 1), Sh);
-        P.Fill(new RectangleF(r.X, r.Y, 1, r.Height), Sh);
-        P.Fill(new RectangleF(r.X, r.Bottom - 1, r.Width, 1), Wh);
-        P.Fill(new RectangleF(r.Right - 1, r.Y, 1, r.Height), Wh);
-        float x = r.X + 4;
-        if (dot != 0) { P.Fill(new RectangleF(x, r.Y + (r.Height - 6) / 2, 6, 6), dot); x += 10; }
-        Text95(text, new RectangleF(x, r.Y, r.Right - x - 2, r.Height));
-    }
+    public void Pane95(RectangleF r, string text, uint dot = 0) => Sk.StatusPane(P, r, text, dot);
 
     // a menu bar's item, its access key underlined
-    public void Menu95(float x, float y, string text)
-    {
-        Text95(text, new RectangleF(x, y, Width95(text) + 2, 15));
-        float u = Width95(text[..1]);
-        P.Fill(new RectangleF(x, y + 12, u, 1), Blk);
-    }
+    public void Menu95(float x, float y, string text) => Sk.MenuItem(P, x, y, text);
 }

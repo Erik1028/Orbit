@@ -125,7 +125,7 @@ public sealed class WindowPanel : ITheaterScreen, IDisposable
             if (th != null) Ov.SetAbsolute(th.World);
             else if (!Placement.Apply(Cfg.Place, vr, Ov)) want = false;
         }
-        _vis = Math.Clamp(_vis + (want && _hasTexture ? dt : -dt) / 0.2f, 0, 1);
+        _vis = Motion.Step(_vis, want && _hasTexture, dt, 0.2f);         // Look > Motion off: at once
         if (!want && Ov.Visible) ReleaseButtons();
         if (_vis <= 0) Ov.Hide();
         else

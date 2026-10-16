@@ -53,10 +53,12 @@ public sealed partial class WristPanel
 
     void CloseDetail()
     {
-        // Minesweeper and the room shrink back into their tiles in both styles (95: the zoom outline the other way round)
+        // modern: it shrinks back into its card; the retro styles: every window zooms back into its widget as it opened - the 1995
+        // zoom outline the other way round, or the style's own (RetroSkin.WindowZoom; LiveZoom: 7's window fading out) (Motion off:
+        // gone at once)
         DockLetGo();
-        if (Theme.Classic && (DetailIs("mines") || DetailIs("room") || DetailIs("dock"))) { _closing = true; _openStart = Clock.Now; }
-        else if (Theme.Classic) _open = null;      // a 95 dialog just goes away
+        if (Theme.Classic && Motion.Any) { _closing = true; _openStart = Clock.Now; }
+        else if (Theme.Classic) _open = null;
         else _closing = true;
         _dirty = true;
     }
@@ -109,6 +111,7 @@ public sealed partial class WristPanel
         var r = Lerp(WatchWidgets.Rect(_open, false, _grid), target, e);
         _p.Fill(r, Bento.Card, CardRadius);
         _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), Bento.Edge, Bento.EdgeWidth, CardRadius - 0.6f);
+        if (Theme.Cyber) CyberUnfold(WatchWidgets.Rect(_open, false, _grid), target, e);     // brackets leading it (WristCyberFx.cs)
         _ui.Clickable("wcard", r, out _, out _);           // the card itself is not "beside"
         // Minesweeper grows out of its tile: its game is in the card from the start, scaled with it (and back on closing) - the
         // same widget getting bigger; playable once it is big
@@ -118,10 +121,13 @@ public sealed partial class WristPanel
         _halo = Bento.Card;                    // the opened card is flat
         _haloCard = RectangleF.Empty;
         // a widget with a colour of its own keeps it as the accent of its opened view (the card stays the default one)
-        bool own = _open.Color.HasValue;
+        bool own = _open.Color.HasValue && !Theme.Cyber;
         if (own) Bento.Use(LookOf(0, _open.Color.Value | 0xFF000000, 0, true, false, false));
         if (!LayoutTest) _p.PushClip(r);
         if (ca < 0.999f) _p.PushFade(ca);
+        // the content of a view that does not grow with its card fades in after the card and rises the last few px into place
+        bool rise = !grow && ca < 0.999f;
+        if (rise) _p.PushOffset(0, 14 * (1 - ca) * (1 - ca));
         float gs = grow ? MathF.Min(r.Width / target.Width, r.Height / target.Height) : 1;
         bool zoom = MathF.Abs(gs - 1) > 0.002f, inert = _ui.Inert;
         if (zoom)
@@ -132,7 +138,9 @@ public sealed partial class WristPanel
         }
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
-        if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
+        if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
+            CyberDetailTag(E, Upper(k.Name));           // Cyber: a yellow tag (it types in: WristCyberFx.cs)
+        else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
         if (Press("wclose", new RectangleF(E.Right - 22 - 46, E.Y + 14, 46, 46), "\uE711", null, false, !_closing, 18, true))
@@ -156,6 +164,7 @@ public sealed partial class WristPanel
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
+        if (rise) _p.PopScale();
         if (ca < 0.999f) _p.PopFade();
         if (!LayoutTest) _p.PopClip();
         if (own) Bento.Reset();
@@ -514,6 +523,15 @@ public sealed partial class WristPanel
 
     // ================= Windows 95 =================
 
+    // a step of the window zoom, t 0..1 from 'from' to 'to': the style's own (XP's title bar flying, the Mac's dotted zoom
+    // rectangles: RetroSkin.WindowZoom), else 1995's grey outline
+    void Zoom95(RectangleF from, RectangleF to, float t)
+    {
+        if (Theme.RetroSkin.WindowZoom(_p, from, to, t)) return;
+        var z = Lerp(from, to, t);
+        _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
+    }
+
     void DrawDetail95(PanelData d, List<WatchWidget> list)
     {
         if (_open == null) return;
@@ -521,24 +539,23 @@ public sealed partial class WristPanel
         string kind = k == null ? null : DetailOf(k.Id);
         if (kind == null) { _open = null; return; }
         var win = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, true);
-        double t = (Clock.Now - _openStart) / 0.22;
+        double zs = Motion.Any ? Theme.RetroSkin.ZoomSeconds : 0;       // the style's zoom (95: 0.22 s); Motion off: none, the window at once
+        double t = zs > 0 ? (Clock.Now - _openStart) / zs : 1;
+        bool live = Theme.RetroSkin.LiveZoom;               // the style draws the window itself all the way (it fades / scales it)
         if (_closing)
         {
-            // (Minesweeper, the room) the zoom outline back into its tile, then it is gone
+            // the zoom outline back into its widget, then it is gone
             if (t >= 1) { _open = null; _closing = false; return; }
-            var zc = Lerp(win, WatchWidgets.Rect(_open, true, _grid), (float)t);
-            _p.Stroke(new RectangleF(MathF.Round(zc.X) + 1, MathF.Round(zc.Y) + 1, MathF.Round(zc.Width) - 2, MathF.Round(zc.Height) - 2), 0xFF808080, 2);
             _ui.Animating = true;
-            return;
+            if (!live) { Zoom95(win, WatchWidgets.Rect(_open, true, _grid), (float)t); return; }
         }
-        if (t < 1)
+        else if (t < 1)
         {
-            // the 1995 window zoom: an outline growing from the widget to the window
-            var z = Lerp(WatchWidgets.Rect(_open, true, _grid), win, (float)t);
-            _p.Stroke(new RectangleF(MathF.Round(z.X) + 1, MathF.Round(z.Y) + 1, MathF.Round(z.Width) - 2, MathF.Round(z.Height) - 2), 0xFF808080, 2);
+            // the 1995 window zoom: an outline growing from the widget to the window (or the style's own)
             _ui.Animating = true;
-            return;
+            if (!live) { Zoom95(WatchWidgets.Rect(_open, true, _grid), win, (float)t); return; }
         }
+        if (SkinDetail(d, k, kind, win)) return;                  // a style's own window (ScreenHooks.cs)
         if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it
         if (kind == "room") { Room95Detail(win, d); return; }     // the Room window: a details list and a status bar
         if (kind == "dock") { Dock95Detail(win, d); return; }     // the Hexpad window

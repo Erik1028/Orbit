@@ -49,7 +49,7 @@ static class DockViewTools
     }
 
     // a colour per key with its number (the sharp faces with a ring too), a dangerous key, the knobs: two abs sliders and a jog
-    static HexpadLink.Snapshot Fake()
+    internal static HexpadLink.Snapshot Fake()
     {
         var f = new HexpadLink.Snapshot
         {

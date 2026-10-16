@@ -16,7 +16,7 @@ namespace Orbit;
 //   and Exit.
 // - Both: a keyboard button (lit while the keyboard is shown).
 // It fades away when you are not using it, so nothing sits under the picture. Turned off: Settings > Monitors.
-public sealed class TheaterBar : IPointerTarget, IDisposable
+public sealed partial class TheaterBar : IPointerTarget, IDisposable
 {
     // modern: pills on a rounded bar; 95: push buttons, trackbars and a check box on a strip, half-size canvas drawn 2x
     const int H = 84, Pad = 10, ChipW = 230, Gap = 8, GoW = 196, SliderW = 210, CurveW = 168;
@@ -32,7 +32,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
     public VrOverlay Ov { get; private set; }
     float _vis, _lastSize, _wheelAcc, _drawnDim = -1;
     bool _dirty = true, _wasOn, _theater, _drawnCurved, _drawnKb;
-    double _showUntil, _holdUntil;
+    double _showUntil, _holdUntil, _wake = double.PositiveInfinity;    // _wake: a style's animation wants its next frame then (AnimWake.cs)
     Hand? _owner;
     Matrix4x4 _world = Matrix4x4.Identity;
     readonly List<ITheaterScreen> _choices = new();
@@ -113,7 +113,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
             show = C.Bar && _target != null && now < _showUntil && _target.Overlay is { Visible: true } && _target.Playable;
         }
         _wasOn = th;
-        _vis = Math.Clamp(_vis + (show ? dt : -dt) / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, show, dt, 0.18f);                       // Look > Motion off: at once
         if (_vis <= 0 || _target == null)
         {
             Cancel();
@@ -131,7 +131,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
             _current = theater.Screen;
             _dirty = true;
         }
-        int key = (th ? 1000 + _choices.Count * 2 : 0) + (Theme.Classic ? 1 : 0);
+        int key = (th ? 1000 + _choices.Count * 8 : 0) + (int)Theme.Retro;      // another style: another width
         if (key != _layoutKey && !held) Relayout(key);
         // changed elsewhere (grabbing the big screen, the settings window): the sliders follow
         if (SizeNow != _lastSize || C.Dim != _drawnDim || C.Curved != _drawnCurved || KbOn != _drawnKb) _dirty = true;
@@ -158,13 +158,15 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         }
         Ov.SetAbsolute(_world);
         Ov.SetAlpha(e);
-        if (_dirty || _ui.Animating)
+        // a style's opening / closing (the Mac's Control Strip sliding) shows on every frame of the fade
+        if (_dirty || _ui.Animating || now >= _wake || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw();
             Ov.SetTexture(_surf.Tex);
             _retired?.Dispose();
             _retired = null;
             _dirty = _ui.Interacting || _ui.Changed;
+            _wake = AnimWake.Take();
         }
         Ov.Show();
     }
@@ -188,6 +190,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         if (Theme.Classic)
         {
             _w95 = (int)MathF.Ceiling(4 + (_theater ? n * (Btn95W + 3) : Go95W + 3) + SettingsWidth95() + Kb95W + 3 + (_theater ? Exit95W + 3 : 0) + 4);
+            SkinTheaterWidth(ref _w95);     // a style laying the bar out its own way (ScreenHooks.cs)
             _tw = _w95 * 2; _th = H95 * 2;
         }
         else
@@ -232,7 +235,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(_surf.Bitmap, 0x00000000);
         _p.Fill(new RectangleF(0, 0, _tw, _th), Theme.OverlayBg, _th / 2f);
-        _p.Stroke(new RectangleF(1, 1, _tw - 2, _th - 2), 0x40FFFFFF, 2, _th / 2f - 1);
+        _p.Stroke(new RectangleF(1, 1, _tw - 2, _th - 2), Theme.PanelLine, 2, _th / 2f - 1);
         float x = Pad, ch = _th - 2 * Pad;
         ITheaterScreen pick = null;
         bool go = false, exit = false;
@@ -310,6 +313,7 @@ public sealed class TheaterBar : IPointerTarget, IDisposable
 
     void Draw95()
     {
+        if (SkinTheater()) return;          // a style's own bar (ScreenHooks.cs)
         _canvas95 ??= new Surface(_p.Gpu, _w95, H95);
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(_w95, H95);

@@ -244,6 +244,7 @@ public sealed class SettingsWindow : Form
         Dirty = false;
         _nextRefresh = now + 0.5;
         _beforeDraw?.Invoke();
+        AnimWake.Take();             // the previews' asks (the watch, the keyboard) are their own panels', not this window's
         EnsureTarget();
         if (_classic) View.Render95(_ui, _ptr, _target, _k, 0, 0, Theme.W95Teal);
         else
@@ -255,7 +256,11 @@ public sealed class SettingsWindow : Form
             _ui.End();
         }
         _swap.Present(0, PresentFlags.None);
+        _nextRefresh = Math.Min(_nextRefresh, AnimWake.Take());       // a style's animation wants its next frame (AnimWake.cs)
         if (_ui.Interacting || _ui.Changed || _ui.Animating || _ui.Pressed || _ui.Released) Dirty = true;
+        // 95: busy in the background (the updater) - the cursor is the arrow with the hourglass, as 1995's was
+        var cur = _classic && View.Busy95 ? Cursors.AppStarting : Cursors.Default;
+        if (Cursor != cur) Cursor = cur;
     }
 
     protected override void Dispose(bool disposing)

@@ -41,10 +41,11 @@ public sealed partial class KeyboardPanel
     }
 
     void Text95(string s, RectangleF r, uint c, float size = Ui.F95, FontWeight w = FontWeight.Normal, TextAlignment al = TextAlignment.Center) =>
-        _p.Text(s, r, c, size, w, al, ParagraphAlignment.Center, Theme.ClassicFont);
+        _p.Text(s, r, c, size, w, al, ParagraphAlignment.Center, Theme.RetroFont);
 
     void Draw95()
     {
+        if (SkinKeyboard()) return;         // a style's own keyboard (ScreenHooks.cs)
         _flash.Clear();                     // no glow in 1995
         _canvas95 ??= new Surface(_p.Gpu, CW95, CH95);
         _p.BeginPixel(_canvas95.Bitmap, 0x00000000);
@@ -66,12 +67,12 @@ public sealed partial class KeyboardPanel
             else
             {
                 string shown = text;
-                while (shown.Length > 1 && _p.MeasureWidth(shown, 13, FontWeight.Normal, Theme.ClassicFont) > tr.Width - 8) shown = shown[1..];
+                while (shown.Length > 1 && _p.MeasureWidth(shown, 13, FontWeight.Normal, Theme.RetroFont) > tr.Width - 8) shown = shown[1..];
                 if (shown.Length < text.Length) shown = "..." + shown;
                 Text95(shown, tr, Blk95, 13, FontWeight.Normal, TextAlignment.Leading);
                 if (_blink == 0)
                 {
-                    float cx = MathF.Round(tr.X + _p.MeasureWidth(shown, 13, FontWeight.Normal, Theme.ClassicFont) + 1);
+                    float cx = MathF.Round(tr.X + _p.MeasureWidth(shown, 13, FontWeight.Normal, Theme.RetroFont) + 1);
                     _p.Fill(new RectangleF(cx, f.Y + 8, 1, f.Height - 16), Blk95);
                 }
             }
@@ -88,7 +89,7 @@ public sealed partial class KeyboardPanel
             int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && Caps ? 2
                          : k.Action == "chat" && _chat ? 2 : 0;
             bool latched = modState == 2 && !down;
-            var b = _p.ButtonFace95(r, modState == 1 && !down, down, latched);
+            var b = Theme.RetroSkin.KeyCap(_p, r, modState == 1 && !down, down, latched, Array.IndexOf(_hover, k) >= 0);
             float o = down || latched ? 1 : 0;
             var tr = new RectangleF(b.X + o, b.Y + o, b.Width, b.Height);
 

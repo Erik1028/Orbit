@@ -30,28 +30,47 @@ static class Theme
     public const uint Bad = 0xFFF87171;
     public static int Version;                   // bumped on every appearance change
 
-    // ---- the Windows 95 skin (Look > Style) ----
+    // ---- the retro styles (Look > Style): Windows 95, XP, 7, Classic Mac, Terminal ----
     // Like Mixtape's: it swaps the whole token layer at once - surfaces, text, accent, corners, typeface -
     // so the call sites need no branch; only the places that draw a SHAPE 1995 drew differently (a raised
     // button, a sunken field, a navy caption, a checkbox) ask Classic. The modern look is untouched.
+    // Classic is true for every retro style: they share the 95 code paths and layouts; Retro says which one, RetroSkin draws it
+    // (src/Ui/Skins). The W95* colours are the current skin's palette (exactly the 1995 ones in Windows 95).
     public static bool Classic { get; private set; }
-    public const uint ClassicLaser = 0xFF1084D0;   // "same as accent" in the 95 skin: navy would vanish in a dark world
-    public const uint W95Face = 0xFFC0C0C0, W95Light = 0xFFDFDFDF, W95Hi = 0xFFFFFFFF, W95Shadow = 0xFF808080,
-                      W95Dark = 0xFF000000, W95Navy = 0xFF000080, W95Teal = 0xFF008080, W95Window = 0xFFFFFFFF;
+    public static RetroStyle Retro { get; private set; }
+    public static RetroSkin RetroSkin { get; private set; } = Skins.Win95;    // never null: Windows 95 while Modern is on
+    public static uint ClassicLaser => RetroSkin.Laser;   // "same as accent" in the retro styles: navy would vanish in a dark world
+    public static uint W95Face => RetroSkin.Face;
+    public static uint W95Light => RetroSkin.Light;
+    public static uint W95Hi => RetroSkin.Hilight;
+    public static uint W95Shadow => RetroSkin.Shadow;
+    public static uint W95Dark => RetroSkin.DarkShadow;
+    public static uint W95Navy => RetroSkin.Highlight;
+    public static uint W95Teal => RetroSkin.Desktop;
+    public static uint W95Window => RetroSkin.Window;
+    public static string RetroFont => RetroSkin.Font;    // the typeface of every retro text
+
+    // Look > Style "cyber" (CyberHud, src/Gfx/Cyber.cs): a modern style (Classic false - the modern layouts and code paths) with
+    // its own token layer, type and cut corners; the watch's widgets have their Cyber designs (WristCyber.cs)
+    public static bool Cyber { get; private set; }
+
+    // a panel's outline: 25 % white (Cyber: the olive frame)
+    public static uint PanelLine => Cyber ? CyberHud.Frame : 0x40FFFFFF;
 
     // the modern text colours are constants (used as default arguments); under the skin they are drawn as
-    // the 1995 ones - RGB swapped, alpha kept
+    // the 1995 ones - RGB swapped, alpha kept; then the style's own colour map (Win95: none)
     public static uint Skin(uint c)
     {
-        if (!Classic) return c;
+        if (!Classic) return Cyber ? CyberHud.MapColor(c) : c;
         uint rgb = c & 0xFFFFFF, a = c & 0xFF000000;
-        return rgb switch
+        var sk = RetroSkin;
+        return sk.MapColor(rgb switch
         {
-            Text & 0xFFFFFF => a | 0x000000,
-            Dim & 0xFFFFFF => a | 0x404040,
-            Faint & 0xFFFFFF => a | 0x808080,
+            Text & 0xFFFFFF => a | (sk.WindowText & 0xFFFFFF),
+            Dim & 0xFFFFFF => a | (sk.DimText & 0xFFFFFF),
+            Faint & 0xFFFFFF => a | (sk.GrayText & 0xFFFFFF),
             _ => c,          // only the text greys: Good / Warn / Bad are also colours people pick (swatches)
-        };
+        });
     }
 
     public static readonly uint[] AccentPresets =
@@ -62,17 +81,28 @@ static class Theme
 
     public static void Apply(AppearanceConfig a)
     {
-        Classic = a.Style == "classic";
+        Motion.Apply(a);
+        Retro = Skins.Parse(a.Style);
+        Classic = Retro != RetroStyle.None;
+        Cyber = !Classic && a.Style == CyberHud.Id;
+        RetroSkin = Skins.For(Retro);
         UserFont = a.Font != null && Array.IndexOf(FontsInstalled, a.Font) >= 0 ? a.Font : null;   // not on this PC: the default
+        if (Cyber)
+        {
+            // its own palette and type: the accent, panel colour and Look > Font are Modern's (the opacity and laser apply)
+            CyberHud.Apply(a);
+            Version++;
+            return;
+        }
         if (Classic)
         {
-            // one grey window face for every piece of chrome, white wells, black text, navy selection
+            // one grey window face for every piece of chrome, white wells, black text, navy selection (in the style's palette)
             Bg = Panel = Panel2 = W95Face;
             Panel3 = W95Light;
             Border = W95Shadow;
             OverlayBg = W95Face;
             Accent = W95Navy;
-            OnAccent = 0xFFFFFFFF;
+            OnAccent = RetroSkin.HighlightText;
             Laser = a.LaserColor == 0 ? ClassicLaser : 0xFF000000 | (a.LaserColor & 0xFFFFFF);
             Version++;
             return;
@@ -157,6 +187,7 @@ static class Theme
             if (!has(IconFont)) IconFont = "Segoe MDL2 Assets";
             if (!has(ClassicFont)) ClassicFont = "Tahoma";
             FontsInstalled = Array.FindAll(FontChoices, has);
+            CyberHud.ResolveFonts(has);
         }
         catch { }
     }
@@ -169,9 +200,12 @@ static class Theme
     public static string UserFont { get; private set; }                             // the chosen one (Apply), null = default
     public static string DefaultFontName => UiFont.Replace(" Text", "");
 
-    // the typeface for UI text and big numbers in the current skin
-    public static string Font => Classic ? ClassicFont : UserFont ?? UiFont;
-    public static string Display => Classic ? ClassicFont : UserFont ?? DisplayFont;
+    // the typeface for UI text and big numbers in the current skin (Cyber: Bahnschrift's condensed widths - Look > Font is Modern's)
+    public static string Font => Classic ? RetroFont : Cyber ? CyberHud.Text : UserFont ?? UiFont;
+    public static string Display => Classic ? RetroFont : Cyber ? CyberHud.Display : UserFont ?? DisplayFont;
+
+    // the watch draws in a typeface other than Segoe UI Variable (Look > Font, or Cyber's): its digits' ink is measured, not assumed
+    public static bool OwnFont => UserFont != null || Cyber;
 
     // Segoe Fluent Icons code points
     public const string IcoKeyboard = "\uE765";
@@ -240,11 +274,48 @@ public sealed class Painter : IDisposable
     {
         Begin(target, clear, 1);
         PixelMode = true;
+        if (Theme.Classic) Theme.RetroSkin.BeginCanvas(this, target);       // the style's animations: which canvas this is
         Dc.AntialiasMode = AntialiasMode.Aliased;
+        if (Theme.Classic && Theme.RetroSkin.SmoothText)
+        {
+            // a later Windows' grey-smoothed text (the style asks for it); shapes stay aliased
+            Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;
+            Dc.TextRenderingParams = null;
+            return;
+        }
         Dc.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Aliased;
         _aliasedText ??= _g.DWrite.CreateCustomRenderingParams(1.8f, 0f, 0f, PixelGeometry.Flat, RenderingMode.Aliased);
         Dc.TextRenderingParams = _aliasedText;
     }
+
+    // ---- for the retro skins: shapes the 95 rules (square corners, no gradients in pixel mode) would flatten ----
+
+    // smoothed edges for what follows (a skin's rounded or round shapes on the pixel canvas) until Smooth(false)
+    public void Smooth(bool on) => Dc.AntialiasMode = on ? AntialiasMode.PerPrimitive : PixelMode || Theme.Classic ? AntialiasMode.Aliased : AntialiasMode.PerPrimitive;
+
+    // a rounded rectangle whatever the style (Fill / Stroke square it in the retro styles)
+    public void FillRound(RectangleF r, uint c, float radius) => Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c));
+    public void StrokeRound(RectangleF r, uint c, float width, float radius) => Dc.DrawRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c), width);
+
+    // a real gradient whatever the style (FillGradient is a flat fill in the retro styles); a -> b along angleDeg, radius > 0 rounded;
+    // its colours through the style's MapColor like every brush
+    public void GradientRaw(RectangleF r, uint a, uint b, float radius = 0, float angleDeg = 90)
+    {
+        var brush = Place(GradBrush(Theme.Skin(a), Theme.Skin(b), Theme.Skin(b), 2), r, angleDeg, 1);
+        if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
+        else Dc.FillRectangle(Raw(r), brush);
+    }
+
+    // three stops: a, b half-way, c
+    public void GradientRaw(RectangleF r, uint a, uint b, uint c, float radius = 0, float angleDeg = 90)
+    {
+        var brush = Place(GradBrush(Theme.Skin(a), Theme.Skin(b), Theme.Skin(c), 3), r, angleDeg, 1);
+        if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
+        else Dc.FillRectangle(Raw(r), brush);
+    }
+
+    // a bitmap's alpha as a mask filled with c (PixelFont's glyphs); needs aliased shapes (pixel mode)
+    public void FillMask(ID2D1Bitmap mask, RectangleF dst, RectangleF src, uint c) => Dc.FillOpacityMask(mask, Brush(c), Raw(dst), Raw(src));
 
     // the 50 % dither of 1995 (a latched toolbar button, a scroll bar's track): alternate pixels of two colours
     ID2D1BitmapBrush _checker;
@@ -264,6 +335,14 @@ public sealed class Painter : IDisposable
             _checkerColors = (a, b);
         }
         Dc.FillRectangle(Raw(r), _checker);
+    }
+
+    // r made see-through again (a style's opening animation on a canvas that was cleared to a colour)
+    public void ClearRect(RectangleF r)
+    {
+        PushClip(r);
+        Dc.Clear(ToColor(0));
+        PopClip();
     }
 
     // a little pixel pattern ('k' = a pixel in colour c) - the check mark, the caption buttons' glyphs
@@ -327,7 +406,8 @@ public sealed class Painter : IDisposable
                 foreach (var old in _formats.Values) old.Dispose();
                 _formats.Clear();
             }
-            f = _g.DWrite.CreateTextFormat(family, null, w, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, size * FontScale(family), "en-us");
+            CyberHud.Resolve(family, out var real, out var stretch);         // Cyber's Bahnschrift widths; any other family as it is
+            f = _g.DWrite.CreateTextFormat(real, null, w, Vortice.DirectWrite.FontStyle.Normal, stretch, size * FontScale(family), "en-us");
             f.TextAlignment = h;
             f.ParagraphAlignment = v;
             f.WordWrapping = wrap ? WordWrapping.Wrap : WordWrapping.NoWrap;
@@ -341,6 +421,13 @@ public sealed class Painter : IDisposable
     public void Fill(RectangleF r, uint c, float radius = 0)
     {
         if (Theme.Classic) radius = 0;        // square corners in the 95 skin
+        else if (Theme.Cyber && radius > 0)
+        {
+            // Cyber: the corners cut, not rounded
+            var (tl, br) = CyberHud.Cuts(r, radius);
+            if (br > 0) { FillCut(r, c, tl, 0, br, 0); return; }
+            radius = 0;
+        }
         if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c));
         else Dc.FillRectangle(Raw(r), Brush(c));
     }
@@ -348,8 +435,90 @@ public sealed class Painter : IDisposable
     public void Stroke(RectangleF r, uint c, float width = 1, float radius = 0)
     {
         if (Theme.Classic) radius = 0;
+        else if (Theme.Cyber && radius > 0)
+        {
+            var (tl, br) = CyberHud.Cuts(r, radius);
+            if (br > 0) { StrokeCut(r, c, width, tl, 0, br, 0); return; }
+            radius = 0;
+        }
         if (radius > 0) Dc.DrawRoundedRectangle(new RoundedRectangle(r, radius, radius), Brush(c), width);
         else Dc.DrawRectangle(Raw(r), Brush(c), width);
+    }
+
+    // ---- Cyber: rectangles with cut corners (top-left, top-right, bottom-right, bottom-left; 0 = square) ----
+    // Each outline is made once per size and cuts, at (0, 0), and drawn moved into place; past 256 they start over (a card
+    // springing to a new size makes one a frame).
+    readonly Dictionary<(float, float, float, float, float, float), ID2D1PathGeometry> _cuts = new();
+
+    ID2D1PathGeometry CutGeo(float w, float h, float tl, float tr, float br, float bl)
+    {
+        var key = (w, h, tl, tr, br, bl);
+        if (_cuts.TryGetValue(key, out var geo)) return geo;
+        if (_cuts.Count >= 256) DropCuts();
+        geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            float m = MathF.Min(w, h) / 2;
+            tl = MathF.Min(tl, m); tr = MathF.Min(tr, m); br = MathF.Min(br, m); bl = MathF.Min(bl, m);
+            sink.BeginFigure(new Vector2(tl, 0), FigureBegin.Filled);
+            sink.AddLine(new Vector2(w - tr, 0));
+            if (tr > 0) sink.AddLine(new Vector2(w, tr));
+            sink.AddLine(new Vector2(w, h - br));
+            if (br > 0) sink.AddLine(new Vector2(w - br, h));
+            sink.AddLine(new Vector2(bl, h));
+            if (bl > 0) sink.AddLine(new Vector2(0, h - bl));
+            sink.AddLine(new Vector2(0, tl));
+            sink.EndFigure(FigureEnd.Closed);
+            sink.Close();
+        }
+        _cuts[key] = geo;
+        return geo;
+    }
+
+    void DropCuts()
+    {
+        foreach (var g in _cuts.Values) g.Dispose();
+        _cuts.Clear();
+    }
+
+    public void FillCut(RectangleF r, uint c, float tl, float tr, float br, float bl)
+    {
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var geo = CutGeo(r.Width, r.Height, tl, tr, br, bl);
+        var old = Dc.Transform;
+        Dc.Transform = Matrix3x2.CreateTranslation(r.X, r.Y) * old;
+        Dc.FillGeometry(geo, Brush(c));
+        Dc.Transform = old;
+    }
+
+    public void StrokeCut(RectangleF r, uint c, float width, float tl, float tr, float br, float bl)
+    {
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var geo = CutGeo(r.Width, r.Height, tl, tr, br, bl);
+        var old = Dc.Transform;
+        Dc.Transform = Matrix3x2.CreateTranslation(r.X, r.Y) * old;
+        Dc.DrawGeometry(geo, Brush(c), width);
+        Dc.Transform = old;
+    }
+
+    // 'count' four-point figures (4 * count points) filled as one shape (Cyber's bar segments, hazard stripes)
+    public void Quads(Vector2[] pts, int count, uint c)
+    {
+        if (count <= 0) return;
+        using var geo = _g.D2DFactory.CreatePathGeometry();
+        using (var sink = geo.Open())
+        {
+            for (int q = 0; q < count; q++)
+            {
+                sink.BeginFigure(pts[4 * q], FigureBegin.Filled);
+                sink.AddLine(pts[4 * q + 1]);
+                sink.AddLine(pts[4 * q + 2]);
+                sink.AddLine(pts[4 * q + 3]);
+                sink.EndFigure(FigureEnd.Closed);
+            }
+            sink.Close();
+        }
+        Dc.FillGeometry(geo, Brush(c));
     }
 
     // ---- linear gradients (the modern watch's cards: the top light, two-tone fills, a glass sheen) ----
@@ -376,6 +545,21 @@ public sealed class Painter : IDisposable
     {
         if (Theme.Classic || PixelMode) { Fill(r, a); return; }
         if (a == b && (n == 2 || b == c)) { Fill(r, a, radius); return; }       // flat: the solid brush
+        if (Theme.Cyber && radius > 0)
+        {
+            var (tl, br) = CyberHud.Cuts(r, radius);
+            if (br > 0)
+            {
+                // the cut shape at (0, 0), its gradient laid over it there
+                var geo = CutGeo(r.Width, r.Height, tl, 0, br, 0);
+                var old = Dc.Transform;
+                Dc.Transform = Matrix3x2.CreateTranslation(r.X, r.Y) * old;
+                Dc.FillGeometry(geo, Place(GradBrush(a, b, c, n), new RectangleF(0, 0, r.Width, r.Height), angleDeg, span));
+                Dc.Transform = old;
+                return;
+            }
+            radius = 0;
+        }
         var brush = Place(GradBrush(a, b, c, n), r, angleDeg, span);
         if (radius > 0) Dc.FillRoundedRectangle(new RoundedRectangle(r, radius, radius), brush);
         else Dc.FillRectangle(Raw(r), brush);
@@ -509,59 +693,20 @@ public sealed class Painter : IDisposable
     // one device pixel - two from 1.5x up - so the 3D edges stay crisp at any scale
     public float Px => MathF.Max(1, MathF.Round(Scale)) / Scale;
 
-    public enum Edge { Raised, Window, Pressed, Sunken, Etched }
+    // Page: a property sheet's page (drawn like Window in 1995; a style may draw it as its tab control's body)
+    public enum Edge { Raised, Window, Pressed, Sunken, Etched, Page }
 
     // the two-pixel 3D edges of the era: Raised = a button, Window = a window frame,
-    // Pressed = a button held down, Sunken = a text box / list / colour well, Etched = a group box line
-    public void Bevel(RectangleF r, Edge e)
-    {
-        float p = Px;
-        var (tl1, br1, tl2, br2) = e switch
-        {
-            Edge.Raised => (Theme.W95Hi, Theme.W95Dark, Theme.W95Light, Theme.W95Shadow),
-            Edge.Window => (Theme.W95Light, Theme.W95Dark, Theme.W95Hi, Theme.W95Shadow),
-            Edge.Pressed => (Theme.W95Dark, Theme.W95Hi, Theme.W95Shadow, Theme.W95Light),
-            Edge.Sunken => (Theme.W95Shadow, Theme.W95Hi, Theme.W95Dark, Theme.W95Light),
-            _ => (Theme.W95Shadow, Theme.W95Hi, Theme.W95Hi, Theme.W95Shadow),
-        };
-        Frame(r, tl1, br1, p);
-        Frame(RectangleF.Inflate(r, -p, -p), tl2, br2, p);
-    }
-
-    void Frame(RectangleF r, uint tl, uint br, float p)
-    {
-        Fill(new RectangleF(r.X, r.Y, r.Width, p), tl);
-        Fill(new RectangleF(r.X, r.Y, p, r.Height), tl);
-        Fill(new RectangleF(r.X, r.Bottom - p, r.Width, p), br);
-        Fill(new RectangleF(r.Right - p, r.Y, p, r.Height), br);
-    }
+    // Pressed = a button held down, Sunken = a text box / list / colour well, Etched = a group box line (the style's skin draws them)
+    public void Bevel(RectangleF r, Edge e) => Theme.RetroSkin.Bevel(this, r, e);
 
     // a 95 push button: raised; held = black frame + flat grey edge; latched (a toggle that is in) =
     // dithered + pushed in; isDefault = the black frame of a dialog's default button. Returns the face.
-    public RectangleF ButtonFace95(RectangleF r, bool isDefault, bool down, bool latched)
-    {
-        var b = r;
-        if (isDefault || down)
-        {
-            Stroke(new RectangleF(r.X + 0.5f, r.Y + 0.5f, r.Width - 1, r.Height - 1), Theme.W95Dark, 1);
-            b = RectangleF.Inflate(r, -1, -1);
-        }
-        if (latched && !down) FillChecker(b);
-        else Fill(b, Theme.W95Face);
-        if (down)
-            Stroke(new RectangleF(b.X + 0.5f, b.Y + 0.5f, b.Width - 1, b.Height - 1), Theme.W95Shadow, 1);
-        else
-            Bevel(b, latched ? Edge.Pressed : Edge.Raised);
-        return b;
-    }
+    public RectangleF ButtonFace95(RectangleF r, bool isDefault, bool down, bool latched, bool hover = false) =>
+        Theme.RetroSkin.ButtonFace(this, r, isDefault, down, latched, hover);
 
     // a groove across: the line between sections of a 95 dialog
-    public void EtchedLine(float x1, float x2, float y)
-    {
-        float p = Px;
-        Fill(new RectangleF(x1, y, x2 - x1, p), Theme.W95Shadow);
-        Fill(new RectangleF(x1, y + p, x2 - x1, p), Theme.W95Hi);
-    }
+    public void EtchedLine(float x1, float x2, float y) => Theme.RetroSkin.EtchedLine(this, x1, x2, y);
 
     // an active window's navy title bar
     public void Caption(RectangleF r, string text, float size = 13)
@@ -570,14 +715,10 @@ public sealed class Painter : IDisposable
         Text(text, new RectangleF(r.X + 6, r.Y, r.Width - 12, r.Height), 0xFFFFFFFF, size, FontWeight.Bold);
     }
 
-    // greyed-out text the 95 way: etched - white, then grey on top one pixel up-left
+    // greyed-out text the 95 way: etched - white, then grey on top one pixel up-left (the style's skin draws it)
     public void DisabledText(string s, RectangleF r, float size, FontWeight w = FontWeight.Normal,
-        TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center)
-    {
-        float p = Px;
-        Text(s, new RectangleF(r.X + p, r.Y + p, r.Width, r.Height), Theme.W95Hi, size, w, h, v);
-        Text(s, r, Theme.W95Shadow, size, w, h, v);
-    }
+        TextAlignment h = TextAlignment.Leading, ParagraphAlignment v = ParagraphAlignment.Center) =>
+        Theme.RetroSkin.DisabledText(this, s, r, size, w, h, v);
 
     // ---- for the modern watch's widgets: rings, and a scale / fade around a widget while it animates ----
 
@@ -630,6 +771,13 @@ public sealed class Painter : IDisposable
     public void PopScale()
     {
         if (_transforms.Count > 0) Dc.Transform = _transforms.Pop();
+    }
+
+    // draw moved by (dx, dy) until PopScale (something sliding or rising into place)
+    public void PushOffset(float dx, float dy)
+    {
+        _transforms.Push(Dc.Transform);
+        Dc.Transform = Matrix3x2.CreateTranslation(dx, dy) * Dc.Transform;
     }
 
     int _fades;
@@ -738,6 +886,13 @@ public sealed class Painter : IDisposable
         FitSpy?.Invoke(s, r, size, w, family ?? Theme.Font, wrap, h, v, 0);
         FontCheck();
         family ??= Theme.Font;
+        // a retro style's own type (RetroSkin.MapFont / PixelFont): a bitmap font, or another family / size
+        if (PixelMode && Theme.Classic)
+        {
+            var sk = Theme.RetroSkin;
+            sk.MapFont(ref family, ref size, ref w);
+            if (sk.PixelFont(family, size, w) is { } pf) { pf.Draw(this, s, r, c, w >= FontWeight.SemiBold, h, v, wrap); return; }
+        }
         var f = Format(family, size, w, h, v, wrap);
         // the 95 skin's GDI-measured pixel text stays exactly as it was
         if (PixelMode)
@@ -987,6 +1142,12 @@ public sealed class Painter : IDisposable
         if (string.IsNullOrEmpty(s)) return 0;
         FontCheck();
         family ??= Theme.Font;
+        if (PixelMode && Theme.Classic)
+        {
+            var sk = Theme.RetroSkin;
+            sk.MapFont(ref family, ref size, ref w);
+            if (sk.PixelFont(family, size, w) is { } pf) return pf.Measure(s, w >= FontWeight.SemiBold);
+        }
         var key = (s, size, w, PixelMode ? family + "\u0001px" : family);
         if (_widths.TryGetValue(key, out float cached)) return cached;
         var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, false);
@@ -1007,6 +1168,12 @@ public sealed class Painter : IDisposable
         if (string.IsNullOrEmpty(s) || width <= 0) return 0;
         FontCheck();
         family ??= Theme.Font;
+        if (PixelMode && Theme.Classic)
+        {
+            var sk = Theme.RetroSkin;
+            sk.MapFont(ref family, ref size, ref w);
+            if (sk.PixelFont(family, size, w) is { } pf) return pf.MeasureHeight(s, width, w >= FontWeight.SemiBold);
+        }
         var key = (s, size, w, width, family);
         if (_heights.TryGetValue(key, out float cached)) return cached;
         var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, true);
@@ -1034,7 +1201,26 @@ public sealed class Painter : IDisposable
     // clips everything drawn until PopRoundedClip to a rounded rectangle (antialiased edges)
     public void PushRoundedClip(RectangleF r, float radius)
     {
-        var geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
+        ID2D1Geometry geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
+        if (Theme.Cyber && CyberHud.Cuts(r, radius) is { br: > 0 } cut)
+        {
+            // Cyber: the cut shape (its own geometry, placed: the clip layer keeps it until PopRoundedClip)
+            geo.Dispose();
+            var pg = _g.D2DFactory.CreatePathGeometry();
+            using (var sink = pg.Open())
+            {
+                float tl = MathF.Min(cut.tl, MathF.Min(r.Width, r.Height) / 2), br = MathF.Min(cut.br, MathF.Min(r.Width, r.Height) / 2);
+                sink.BeginFigure(new Vector2(r.X + tl, r.Y), FigureBegin.Filled);
+                sink.AddLine(new Vector2(r.Right, r.Y));
+                sink.AddLine(new Vector2(r.Right, r.Bottom - br));
+                sink.AddLine(new Vector2(r.Right - br, r.Bottom));
+                sink.AddLine(new Vector2(r.X, r.Bottom));
+                sink.AddLine(new Vector2(r.X, r.Y + tl));
+                sink.EndFigure(FigureEnd.Closed);
+                sink.Close();
+            }
+            geo = pg;
+        }
         Dc.PushLayer(new LayerParameters1
         {
             ContentBounds = new Vortice.RawRectF(-100000, -100000, 100000, 100000),
@@ -1074,6 +1260,7 @@ public sealed class Painter : IDisposable
         _dashes.Clear();
         DropGradients();
         DropSquircles();
+        DropCuts();
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();

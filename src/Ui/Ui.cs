@@ -127,10 +127,11 @@ public sealed partial class Ui
                 if (_hot[i].Contains(Mouse.X, Mouse.Y)) { _lastHot = i; break; }
     }
 
-    // Eases a value towards 'target' (exponential, ~1/speed seconds). The first call snaps.
+    // Eases a value towards 'target' (exponential, ~1/speed seconds). The first call snaps; so does every one in the 95 styles and
+    // with Look > Motion off.
     public float Anim(string id, float target, float speed = 16f)
     {
-        if (Theme.Classic) { _anim[id] = target; return target; }
+        if (Theme.Classic || !Motion.Any) { _anim[id] = target; return target; }
         if (!_anim.TryGetValue(id, out float v)) v = target;
         v += (target - v) * (1 - MathF.Exp(-speed * _dt));
         if (MathF.Abs(v - target) < 0.003f) v = target;
@@ -147,7 +148,7 @@ public sealed partial class Ui
     // (and redraws) for values that jitter a little, like a frame rate
     public float Spring(string id, float target, float stiffness = 170, float damping = 20, float snap = 0)
     {
-        if (Theme.Classic || !_springs.TryGetValue(id, out var s)) { _springs[id] = (target, 0); return target; }
+        if (Theme.Classic || !Motion.Any || !_springs.TryGetValue(id, out var s)) { _springs[id] = (target, 0); return target; }
         if (snap > 0 && MathF.Abs(target - s.x) < snap && MathF.Abs(s.v) < 0.05f) { _springs[id] = (target, 0); return target; }
         float t = _dt;
         while (t > 0)
@@ -165,6 +166,16 @@ public sealed partial class Ui
 
     // start a spring from a value (e.g. a widget popping in from 0)
     public void SpringFrom(string id, float from) => _springs[id] = (from, 0);
+
+    // start an eased value from 'from' (a page fading in from 0 after a tab switch)
+    public void AnimFrom(string id, float from) => _anim[id] = from;
+
+    // before a widget's own call this frame: is it held (pressed and not let go), is the pointer over r - so what is drawn under it
+    // (a card's scale, its highlight) can follow the press; no hot area is added
+    public bool HeldNow(string id) => _active == id && (Down || Pressed);
+
+    public bool OverNow(RectangleF r) => !Inert && Inside && r.Contains(Mouse.X, Mouse.Y) &&
+                                         (_drop == null || !_dropList.Contains(Mouse.X, Mouse.Y));
 
     public bool HasSpring(string id) => _springs.ContainsKey(id);
 
@@ -234,6 +245,7 @@ public sealed partial class Ui
         var rr = Shrink(r, 0.03f * p);
         P.Fill(rr, bg, 8);
         if (a < 0.99f) P.Stroke(rr, Theme.WithAlpha(Theme.Mix(Theme.Border, Theme.Accent, 0.5f * h), 1 - a), 1, 8);
+        if (Theme.Cyber && enabled && a < 0.5f) CyberHover(rr, h);      // Cyber: a cyan outline, the corner marks closing in (UiCyber.cs)
         uint fg = !enabled ? Theme.Faint : Theme.Mix(Theme.Text, Theme.OnAccent, a);
         if (icon != null && !string.IsNullOrEmpty(label))
         {
@@ -287,7 +299,9 @@ public sealed partial class Ui
         // ease-out-back feel: the knob slightly overshoots on the way
         float kx = track.X + sh / 2 + (sw - sh) * k;
         float kr = sh / 2 - 4 + 1.5f * MathF.Sin(MathF.PI * k);
-        P.Circle(kx, track.Y + sh / 2, kr, enabled ? Theme.Mix(Theme.Dim, Theme.OnAccent, k) : Theme.Dim);
+        uint kc = enabled ? Theme.Mix(Theme.Dim, Theme.OnAccent, k) : Theme.Dim;
+        if (Theme.Cyber) P.FillCut(new RectangleF(kx - kr, track.Y + sh / 2 - kr, 2 * kr, 2 * kr), kc, 0, 0, MathF.Round(kr * 0.7f), 0);   // a square knob
+        else P.Circle(kx, track.Y + sh / 2, kr, kc);
         uint fg = enabled ? Theme.Text : Theme.Faint;
         if (hint == null)
             P.Text(label, new RectangleF(r.X + 10, r.Y, r.Width - sw - 30, r.Height), fg, 15);
@@ -340,6 +354,13 @@ public sealed partial class Ui
         P.Fill(track, Theme.Panel3, 3);
         P.Fill(new RectangleF(track.X, track.Y, track.Width * t2, track.Height), enabled ? Theme.Accent : Theme.Faint, 3);
         float kx = track.X + track.Width * t2;
+        if (Theme.Cyber)
+        {
+            // a bar across the track, its corner cut
+            if (h > 0.01f && enabled) P.Fill(new RectangleF(kx - 9 - 3 * h, track.Y - 11 - 3 * h, 18 + 6 * h, 28 + 6 * h), Theme.WithAlpha(Theme.Accent, 0.18f));
+            P.FillCut(new RectangleF(kx - 5 - h / 2, track.Y - 8 - h, 10 + h, 22 + 2 * h), enabled ? Theme.Text : Theme.Faint, 0, 0, 4, 0);
+            return changed;
+        }
         if (h > 0.01f && enabled) P.Circle(kx, track.Y + 3, 8 + 7 * h, Theme.WithAlpha(Theme.Accent, 0.18f));
         P.Circle(kx, track.Y + 3, 8 + h, enabled ? Theme.Text : Theme.Faint);
         return changed;
@@ -406,8 +427,9 @@ public sealed partial class Ui
             return click;
         }
         float h = Anim(K(id, "#h"), hover ? 1 : 0, 18);
-        P.Fill(r, selected ? Theme.Panel3 : Theme.Mix(Theme.Panel2, 0xFFFFFFFF, 0.05f * h), 12);
-        P.Stroke(r, selected ? Theme.Accent : Theme.Border, selected ? 2 : 1, 12);
+        float s = Anim(K(id, "#s"), selected ? 1 : 0, 16);          // the selection eases in / out (the fill, the outline)
+        P.Fill(r, Theme.Mix(Theme.Mix(Theme.Panel2, 0xFFFFFFFF, 0.05f * h), Theme.Panel3, s), 12);
+        P.Stroke(r, Theme.Mix(Theme.Border, Theme.Accent, s), 1 + s, 12);
         return click;
     }
 
@@ -444,6 +466,7 @@ public sealed partial class Ui
 
     public void Section(RectangleF r, string title)
     {
+        if (Theme.Cyber) { CyberSection(r, title); return; }    // a yellow tag (it slides in: UiCyber.cs)
         if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
         // a group box title: bold black, an etched line running on after it
         string t = char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();

@@ -113,7 +113,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             if (now >= _dismissUntil || (!C.AlwaysVisible && target < 0.05f)) _dismissed = false;
             else target = 0;
         }
-        Alpha += (target - Alpha) * Math.Min(1, dt * 10);
+        Alpha = Motion.Any ? Alpha + (target - Alpha) * Math.Min(1, dt * 10) : target;      // Motion off: there at once
         if (Alpha < 0.02f) { Ov.Hide(); _ptr.Leave(); SwipeCancel(); DockLetGo(); _open = null; return; }      // looking away closes an opened widget
         Ov.SetAlpha(Math.Min(1, Alpha));
         if (!Ov.Visible)
@@ -148,6 +148,9 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
             // the time in VR (its card, the clock's header) moves on a whole minute after SteamVR came on: just after that too
             if (!Theme.Classic && C.Face == "custom" && d.VrSince is { } since && (HasWidget("session") || HasWidget("time")))
                 _nextDraw = Math.Min(_nextDraw, now + 60.02 - (DateTime.Now - since).TotalSeconds % 60);
+            // an animation wants its next frame by a time (AnimWake.cs): a style's (a blink, a sweep, a fade; Cyber's scheduled effects),
+            // the charging bolt's breath
+            _nextDraw = Math.Min(_nextDraw, AnimWake.Take());
         }
     }
 
@@ -166,9 +169,10 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         if (face == "time") { DrawTimeOnly(now); _p.End(); _ui.End(); return; }
 
         var all = new RectangleF(0, 0, TW, TH);
-        _p.Fill(all, Theme.OverlayBg, 30);
+        if (Theme.Cyber) CyberHud.PanelFrame(_p, all, Theme.OverlayBg);      // the olive frame
+        else _p.Fill(all, Theme.OverlayBg, 30);
         if (Theme.Classic) _p.Bevel(all, Painter.Edge.Window);            // a 95 window
-        else _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        else if (!Theme.Cyber) _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
 
         if (face == "minimal")
         {
@@ -282,7 +286,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         var card = new RectangleF(70, 130, TW - 140, 190);
         _p.Fill(card, Theme.OverlayBg, 34);
         if (Theme.Classic) _p.Bevel(card, Painter.Edge.Window);
-        else _p.Stroke(RectangleF.Inflate(card, -1, -1), 0x40FFFFFF, 2, 33);
+        else _p.Stroke(RectangleF.Inflate(card, -1, -1), Theme.PanelLine, 2, 33);
         BigTime(now, new RectangleF(card.X, card.Y + 6, card.Width, 128), 112, TextAlignment.Center);
         _p.Text(DateText(now), new RectangleF(card.X, card.Y + 132, card.Width, 40), Theme.Dim, 24, FontWeight.Normal, TextAlignment.Center);
     }

@@ -11,7 +11,7 @@ namespace Orbit;
 // left lately. A star beside each name marks someone to be told about when they come and go. A floating panel like the
 // dock: grab it, the stick scrolls the list. Data: RoomWatcher (VRChat's log; friends from VRCX when it is installed).
 // Opened from Settings; the watch's room widget opens the watch's own view of the same list instead (WristRoom.cs).
-public sealed class RoomPanel : IPointerTarget, IDisposable
+public sealed partial class RoomPanel : IPointerTarget, IDisposable
 {
     public const int TW = 800, TH = 480, W95 = TW / 2, H95 = TH / 2;
 
@@ -75,7 +75,7 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
     public void Update(VrSession vr, double now, float dt, RoomWatcher.Snapshot s)
     {
         if (Ov == null) return;
-        _vis = Math.Clamp(_vis + Math.Sign((Shown ? 1 : 0) - _vis) * dt / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, Shown, dt, 0.18f);                      // Look > Motion off: at once
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
             if (_vis <= 0) _ptr.Leave();
@@ -86,12 +86,13 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
         Ov.SetAlpha(e);
         Ov.SetWidth(Math.Clamp(C.Width, 0.2f, 1.2f) * (0.92f + 0.08f * e));
         if (s.Version != _seen) { _seen = s.Version; _s = s; _dirty = true; }
-        if (_dirty || now >= _nextDraw || _ui.Animating)
+        // a style's opening / closing shows on every frame of the fade
+        if (_dirty || now >= _nextDraw || _ui.Animating || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw(DateTime.Now);
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
-            _nextDraw = now + 15;           // "joined 3 min ago" moves on by itself
+            _nextDraw = Math.Min(now + 15, AnimWake.Take());           // "joined 3 min ago" moves on by itself; a style's animation: sooner
         }
         Ov.Show();
     }
@@ -211,8 +212,12 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         var all = new RectangleF(0, 0, TW, TH);
-        _p.Fill(all, Theme.OverlayBg, 30);
-        _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        if (Theme.Cyber) CyberHud.PanelFrame(_p, all, Theme.OverlayBg);
+        else
+        {
+            _p.Fill(all, Theme.OverlayBg, 30);
+            _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        }
         uint sub = Theme.Mix(Theme.Text, Theme.OverlayBg, 0.42f);
 
         _p.Text("Room", new RectangleF(Pad + 4, 14, 100, 38), Theme.Text, 22, FontWeight.SemiBold);
@@ -323,6 +328,7 @@ public sealed class RoomPanel : IPointerTarget, IDisposable
 
     void Draw95(DateTime now)
     {
+        if (SkinRoom(now)) return;          // a style's own panel (ScreenHooks.cs)
         _canvas95 ??= new Surface(_p.Gpu, W95, H95);
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(W95, H95);

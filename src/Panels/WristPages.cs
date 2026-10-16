@@ -165,11 +165,17 @@ public sealed partial class WristPanel
     {
         const float pitch = 18, rad = 3.5f, cy = TH - 5;
         float span = (count - 1) * pitch, x0 = TW / 2f - span / 2;
-        if (cards) _p.Fill(new RectangleF(x0 - 13, TH - 10, span + 26, 10), 0xA6000000, 5);     // no page under them: a dark pill
-        uint dim = Theme.WithAlpha(Bento.Grey, 0.75f);
-        for (int i = 0; i < count; i++) _p.Circle(x0 + i * pitch, cy, rad, dim);
-        float ax = x0 + Math.Clamp(pos, 0, count - 1) * pitch;
-        _p.Fill(new RectangleF(ax - 9, cy - rad, 18, 2 * rad), Bento.Default.Accent, rad);
+        if (Theme.Cyber) CyberDots(count, pos, cards, x0, pitch, cy);          // short bars (WristCyber.cs)
+        else
+        {
+            if (cards) _p.Fill(new RectangleF(x0 - 13, TH - 10, span + 26, 10), 0xA6000000, 5);     // no page under them: a dark pill
+            uint dim = Theme.WithAlpha(Bento.Grey, 0.75f);
+            for (int i = 0; i < count; i++) _p.Circle(x0 + i * pitch, cy, rad, dim);
+            // the pill stretches over to the next dot on the way - its front gets there first, then its back follows
+            float pc = Math.Clamp(pos, 0, count - 1), i0 = MathF.Min(MathF.Floor(pc), count - 1), f = pc - i0;
+            float a0 = x0 + (i0 + MathF.Max(0, 2 * f - 1)) * pitch, a1 = x0 + (i0 + MathF.Min(1, 2 * f)) * pitch;
+            _p.Fill(new RectangleF(a0 - 9, cy - rad, a1 - a0 + 18, 2 * rad), Bento.Default.Accent, rad);
+        }
         var hit = new RectangleF(x0 - 30, TH - 16, span + 60, 16);
         if (!_ui.Clickable("wdots", hit, out _, out _)) return;
         float mx = _ui.Mouse.X;
@@ -185,6 +191,7 @@ public sealed partial class WristPanel
     // button is on the real one
     void Taskbar95(int count, int cur)
     {
+        if (SkinTaskbar(count, cur)) return;      // a style's own taskbar (ScreenHooks.cs)
         float y = TH95 - WatchWidgets.Taskbar95 - 2;
         _p.Fill(new RectangleF(0, y, TW95, TH95 - y), Theme.W95Face);
         _p.Fill(new RectangleF(0, y, TW95, 1), Theme.W95Light);
@@ -328,14 +335,28 @@ public sealed partial class WristPanel
     int _palTheme = -1;
 
     // now playing in its cover's colours: on either grid, unless it has a look of its own
-    bool CoverCard(WatchWidgets.Kind k, WatchWidget w, bool styled) => k.Id == "media" && !styled;
+    bool CoverCard(WatchWidgets.Kind k, WatchWidget w, bool styled) => k.Id == "media" && !styled && !Theme.Cyber;
 
-    // the card: three colours of the cover, corner to corner, darker toward the bottom (white text on it reads)
-    void CoverBack(RectangleF r, PanelData d)
+    // the card: three colours of the cover, corner to corner, darker toward the bottom (white text on it reads). A new cover: its
+    // colours fade in over the old ones (and the cover over the old one: _coverFade, MediaCover)
+    readonly uint[] _palOld = new uint[3];
+    float _coverFade = 1;
+
+    void CoverBack(RectangleF r, PanelData d, int id)
     {
         MediaNow(d);
         var pal = CoverPalette();
-        _p.FillGradient(r, pal[0], pal[1], pal[2], CardRadius, 45);
+        string fk = Ui.Id("wcf", id);
+        if (_artFade) _ui.SpringFrom(fk, 0);
+        _coverFade = Math.Clamp(_ui.Spring(fk, 1, 170, 26), 0, 1);
+        if (_coverFade < 0.999f)
+        {
+            _p.FillGradient(r, _palOld[0], _palOld[1], _palOld[2], CardRadius, 45);
+            _p.PushFade(_coverFade);
+            _p.FillGradient(r, pal[0], pal[1], pal[2], CardRadius, 45);
+            _p.PopFade();
+        }
+        else _p.FillGradient(r, pal[0], pal[1], pal[2], CardRadius, 45);
         _p.FillGradient(r, 0x00000000, 0x4D000000, CardRadius, 90);
         _p.Stroke(RectangleF.Inflate(r, -0.6f, -0.6f), 0x1AFFFFFF, Bento.EdgeWidth, CardRadius - 0.6f);
         (_halo, _haloCard) = (0, RectangleF.Empty);
@@ -344,6 +365,7 @@ public sealed partial class WristPanel
     uint[] CoverPalette()
     {
         if (_palMade && ReferenceEquals(_palSrc, _artSource) && _palTheme == Theme.Version) return _pal;
+        if (_palMade) Array.Copy(_pal, _palOld, 3);          // what a new cover's colours fade in over
         _palMade = true;
         _palSrc = _artSource;
         _palTheme = Theme.Version;
@@ -450,10 +472,12 @@ public sealed partial class WristPanel
         if (w.W == 1)
         {
             // S: the cover fills the card (else its colours and a note), the play disc in the corner
-            if (_art != null)
+            bool old = _coverFade < 0.999f && _artOld != null;
+            if (_art != null || old)
             {
                 _p.PushRoundedClip(r, CardRadius);
-                _p.Image(_art, r);
+                if (old) _p.Image(_artOld, r, _art != null ? 1 : 1 - _coverFade);
+                if (_art != null) _p.Image(_art, r, _coverFade);
                 _p.FillGradient(r, 0x00000000, 0x80000000, 0, 90);
                 _p.PopRoundedClip();
             }
@@ -542,16 +566,19 @@ public sealed partial class WristPanel
         if (tok) CoverBar(new RectangleF(x, r.Bottom - (compact ? 14 : 16), iw, 4), pos / dur);
     }
 
+    // the cover on its card; a new one cross-fades over the old one (_coverFade, CoverBack)
     void CoverArt(RectangleF cover)
     {
         _p.Fill(cover, 0x26FFFFFF, 10);
-        if (_art != null)
+        bool old = _coverFade < 0.999f && _artOld != null;
+        if (_art != null || old)
         {
             _p.PushRoundedClip(cover, 10);
-            _p.Image(_art, cover);
+            if (old) _p.Image(_artOld, cover, _art != null ? 1 : 1 - _coverFade);
+            if (_art != null) _p.Image(_art, cover, _coverFade);
             _p.PopRoundedClip();
         }
-        else _p.Icon("\uE8D6", cover, CoverSub, cover.Width * 0.36f);
+        if (_art == null) _p.Icon("\uE8D6", cover, Theme.WithAlpha(CoverSub, _coverFade), cover.Width * 0.36f);
     }
 
     // the caption, the title, the artist and the timeline on the cover's card (capFull: the caption across the card)
@@ -654,7 +681,7 @@ public sealed partial class WristPanel
             _p.Fill(bar, Bento.Track, bw / 2);
             float fh = MathF.Max(bw, bar.Height * Math.Clamp(b.pct, 0, 1));
             if (b.pct > 0.005f) _p.Fill(new RectangleF(bar.X, bar.Bottom - fh, bw, fh), Bento.Level(lv, Bento.Ok), bw / 2);
-            if (b.charging) _p.Icon(Bolt, new RectangleF(cx - 8, bar.Y + 1, 16, 16), Bento.Text, 12);
+            if (b.charging) _p.Icon(Bolt, new RectangleF(cx - 8, bar.Y + 1, 16, 16), BoltInk(Bento.Text), 12);
             float ls = MathF.Max(14, FitSize(b.label, colW - 2, 15, FontWeight.SemiBold, null));
             TextAt(b.label, cx - colW / 2, r.Bottom - 12, colW, ls >= 15 ? Sub : Bento.Badge ? Bento.Text : Theme.Mix(Sub, Bento.Text, 0.35f), ls,
                 FontWeight.SemiBold, TextAlignment.Center);
@@ -686,7 +713,7 @@ public sealed partial class WristPanel
             float by = c.Y + 21, pw = _p.MeasureWidth(pct, 20, FontWeight.Bold, Theme.Display);
             TextAt(pct, c.Right - pw - 2, by, pw + 4, Bento.Level(lv, Bento.Text), 20, FontWeight.Bold, TextAlignment.Leading, Theme.Display);
             float nx = c.X;
-            if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, by - 15, 16, 17), Bento.Text, 15); nx += 15; }
+            if (b.charging) { _p.Icon(Bolt, new RectangleF(nx - 2, by - 15, 16, 17), BoltInk(Bento.Text), 15); nx += 15; }
             float room = c.Right - pw - 8 - nx;
             TextAt(Ellipsize(b.name, room, 15, FontWeight.SemiBold), nx, by, room + 2, Sub, 15, FontWeight.SemiBold);
             Meter(new RectangleF(c.X, c.Y + 29, c.Width, 6), b.pct, Bento.Level(lv, Bento.Ok), Ui.Id("wbt", id * 8 + j));
@@ -867,10 +894,13 @@ public sealed partial class WristPanel
     readonly List<(string text, string who, DateTime at)> _noteRows = new();
     string _notesCount;
 
+    bool _notesSlide;              // one came in: the rows slide down to make room for it (the next frame's cards)
+
     void NotesNow(PanelData d)
     {
         int v = d.Notes?.Version ?? -1;
         if (v == _notesVersion) return;
+        _notesSlide = _notesVersion != -2 && !_settled && d.Notes != null && d.Notes.Items.Count > _noteRows.Count;
         _notesVersion = v;
         _noteRows.Clear();
         _notesCount = null;
@@ -922,10 +952,18 @@ public sealed partial class WristPanel
         float rh = (bottom - top) / slots;
         var now = DateTime.Now;
         const float rad = 11;
-        for (int i = 0; i < Math.Min(slots, _noteRows.Count); i++)
+        // a new one slides in at the top, the others move down a row (the last one out at the bottom)
+        string sk = Ui.Id("wnt", id);
+        if (_notesSlide) _ui.SpringFrom(sk, 0);
+        float e = Math.Clamp(_ui.Spring(sk, 1, 200, 26), 0, 1), dy = (e - 1) * rh;
+        bool sliding = e < 0.999f;
+        if (sliding) _p.PushClip(RectangleF.FromLTRB(r.X, top - 2, r.Right, bottom + 2));
+        for (int i = 0; i < Math.Min(slots + (sliding ? 1 : 0), _noteRows.Count); i++)
         {
             var (text, who, at) = _noteRows[i];
-            float cy = top + rh * (i + 0.5f), by = cy + 6;
+            float cy = top + rh * (i + 0.5f) + dy, by = cy + 6;
+            bool fresh = sliding && i == 0;
+            if (fresh) _p.PushFade(e);
             _p.Circle(x + rad, cy, rad, AvatarColor(who));
             _p.Text(InitialOf(who), new RectangleF(x, cy - rad, 2 * rad, 2 * rad + 1), Bento.Dark, 14, FontWeight.Bold, TextAlignment.Center,
                 ParagraphAlignment.Center);
@@ -934,7 +972,9 @@ public sealed partial class WristPanel
             TextAt(age, r.Right - pad - aw - 2, by, aw + 4, Sub, 15, FontWeight.SemiBold);
             float tx = x + 2 * rad + 9, tw = r.Right - pad - aw - 10 - tx;
             TextAt(Ellipsize(text, tw, SmallText, FontWeight.SemiBold), tx, by, tw + 2, Bento.Text, SmallText, FontWeight.SemiBold);
+            if (fresh) _p.PopFade();
         }
+        if (sliding) _p.PopClip();
     }
 
     void Notes95(RectangleF c, PanelData d)
@@ -1022,12 +1062,13 @@ public sealed partial class WristPanel
         bool on = IsOn(kid, d);
         bool click = _ui.Clickable(key, MinHit(t), out bool hover, out bool held);
         float s = _ui.Spring(Ui.Id(key, "#s"), held ? 0.92f : 1f, 420, 18);
+        float a = _ui.Anim(Ui.Id(key, "#on"), on ? 1 : 0, 16);         // on / off: the fill eases over
         bool scaled = MathF.Abs(s - 1) > 0.001f;
         if (scaled) _p.PushScale(s, t.X + t.Width / 2, t.Y + t.Height / 2);
         const float rad = 10;
-        _p.Fill(t, on ? Bento.AccentFill : hover ? Bento.TileHover : Bento.Tile, rad);
-        uint fg = on ? Bento.OnAccent : Bento.Text;
-        var lw = on ? FontWeight.Bold : FontWeight.SemiBold;
+        _p.Fill(t, Theme.Mix(hover ? Bento.TileHover : Bento.Tile, Bento.AccentFill, a), rad);
+        uint fg = Theme.Mix(Bento.Text, Bento.OnAccent, a);
+        var lw = a > 0.5f ? FontWeight.Bold : FontWeight.SemiBold;
         string icon = kid == "desktops" && !d.DesktopsVisible ? Theme.IcoHide : k.Icon;
         string label = GroupLabel(kid, d);
         const float ic = 24;

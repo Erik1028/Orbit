@@ -26,8 +26,8 @@ public sealed partial class WristPanel
             case "flip": TimeFlip(r, w, now, d, id, h24, ampm); return true;
             case "outline": TimeOutline(r, w, now, d, h24, ampm); return true;
             case "stacked": TimeStacked(r, w, now, d, id, h24, ampm); return true;
-            case "segment": TimeSegment(r, w, now, d, h24, ampm); return true;
-            case "words": TimeWords(r, w, now, d); return true;
+            case "segment": TimeSegment(r, w, now, d, h24, ampm, id); return true;
+            case "words": TimeWords(r, w, now, d, id); return true;
             default: return false;
         }
     }
@@ -37,7 +37,7 @@ public sealed partial class WristPanel
     // what lines up with it
     (float top, float span, float mid, float h) Ink()
     {
-        if (Theme.UserFont == null) return (DigitTop, DigitSpan, DigitH / 2, DigitH);
+        if (!Theme.OwnFont) return (DigitTop, DigitSpan, DigitH / 2, DigitH);
         var (a, b) = _p.DigitInk(FontWeight.Bold, Theme.Display);
         return (a, a + b, (a - b) / 2, a);
     }
@@ -46,7 +46,7 @@ public sealed partial class WristPanel
     // chosen font made the date (the default font's layout already is: it stays exactly as it was)
     static readonly WatchWidgets.Kind TimeKind = WatchWidgets.Find("time");
     float BelowBand(RectangleF r, WatchWidget w, float y, float more = 0) =>
-        Theme.UserFont == null ? y : MathF.Max(y, r.Y + BandHeight(TimeKind, w, r) + 4 + more);
+        !Theme.OwnFont ? y : MathF.Max(y, r.Y + BandHeight(TimeKind, w, r) + 4 + more);
 
     // the clock's header on a card wider than a 1x1 (TimeOrbit's): the date, the time in VR at its right; returns where the space
     // under it starts (10 px under the date's descenders)
@@ -90,7 +90,7 @@ public sealed partial class WristPanel
         float k = _p.MeasureWidth("00", 100, FontWeight.Bold, Theme.Display) / 100;
         float fill0 = tall ? 0.6f : 0.68f;             // how much of a card's height its digits may take
         var ink = Ink();
-        float dh = Theme.UserFont == null ? DigitH : ink.span;      // the digits' height, in em
+        float dh = !Theme.OwnFont ? DigitH : ink.span;      // the digits' height, in em
         float size = MathF.Min(area.Height * fill0 / dh, (area.Width - sw) / (2 * k + 0.9f));
         size = MathF.Max(14, MathF.Floor(size * 2) / 2);
         float cw = (k + 0.4f) * size, gap = MathF.Max(4, size * 0.1f);
@@ -117,7 +117,7 @@ public sealed partial class WristPanel
         void Digits(string str) => TextAt(str, c.X, by, c.Width, Bento.Text, size, FontWeight.Bold, TextAlignment.Center, Theme.Display);
         _p.Fill(c, fill, rad);
         float t = (float)((Clock.Now - ro.Start) / FlipTime);
-        if (t >= 1 || ro.From == ro.To)
+        if (t >= 1 || ro.From == ro.To || !Motion.Full)          // the fold: Motion full only (like the rolling digits)
             Digits(s);
         else
         {
@@ -233,8 +233,23 @@ public sealed partial class WristPanel
         }
     }
 
-    // ---- Segment: seven-segment LED digits in the accent, the unlit segments faint; the seconds smaller beside them ----
-    void TimeSegment(RectangleF r, WatchWidget w, DateTime now, PanelData d, bool h24, string ampm)
+    // ---- Segment: seven-segment LED digits in the accent, the unlit segments faint; the seconds smaller beside them. A digit that
+    // changes cross-fades its segments, the way an LED's light comes and goes (0.16 s; Motion full). ----
+    const float SegFadeTime = 0.16f;
+
+    // how far 'key''s change to s has faded in (1: done), and what it was before
+    float SegFade(string key, string s, out string from)
+    {
+        if (!_rolls.TryGetValue(key, out var ro)) _rolls[key] = ro = new Roll { From = s, To = s };
+        else if (ro.To != s) { ro.From = ro.To; ro.To = s; ro.Start = Clock.Now; }
+        from = ro.From;
+        float t = (float)((Clock.Now - ro.Start) / SegFadeTime);
+        if (t >= 1 || ro.From == ro.To || ro.From.Length != s.Length || !Motion.Full) return 1;
+        _rolling = true;
+        return Math.Clamp(t, 0, 1);
+    }
+
+    void TimeSegment(RectangleF r, WatchWidget w, DateTime now, PanelData d, bool h24, string ampm, int id)
     {
         var g = ClockGeo.For(_p);
         var culture = CultureInfo.CurrentCulture;
@@ -252,7 +267,8 @@ public sealed partial class WristPanel
             _p.Fill(bar, Bento.Track, 2);
             if (now.Second > 0) _p.Fill(new RectangleF(bar.X, bar.Y, MathF.Max(4, bar.Width * now.Second / 60f), 4), Bento.Accent, 2);
             float avail = bar.Y - 8 - top, h1 = MathF.Floor(MathF.Min(avail, iw / wBig));
-            ClockArt.SegText(g, t, x, top + (avail - h1) / 2, h1, on, off);
+            float k1 = SegFade(Ui.Id("wsgt", id), t, out string t1);
+            ClockArt.SegText(g, t, t1, k1, x, top + (avail - h1) / 2, h1, on, off);
             return;
         }
         float head = BelowBand(r, w, ClockHead(r, w, d) + 3), bottom = r.Bottom - (tall ? 16 : 12), ah = bottom - head;       // clear of a header band's edge
@@ -265,9 +281,11 @@ public sealed partial class WristPanel
         if (aw > wSec * h) h = MathF.Min(h, (iw - aw) / (wBig + Sg));
         h = MathF.Floor(h);
         float y0 = MathF.Round(head + (ah - h) / 2);
-        float bw = ClockArt.SegText(g, t, x, y0, h, on, off);
+        float kt = SegFade(Ui.Id("wsgt", id), t, out string t0);
+        float bw = ClockArt.SegText(g, t, t0, kt, x, y0, h, on, off);
         float sx = x + bw + Sg * h, sh = MathF.Round(h * Sr);
-        ClockArt.SegText(g, sec, sx, y0 + h - sh, sh, on, off);
+        float ks = SegFade(Ui.Id("wsgs", id), sec, out string s0);
+        ClockArt.SegText(g, sec, s0, ks, sx, y0 + h - sh, sh, on, off);
         if (ampm == null) return;
         if (tall) TextAt(ampm, sx, y0 + ss * DigitH, aw + 2, Sub, ss, FontWeight.SemiBold);
         else CapText(ampm, sx, y0 + CapSize * DigitH, aw, Sub);
@@ -376,25 +394,42 @@ public sealed partial class WristPanel
         return (r.Width - 2 * PadX(r), r.Height - top - 30);
     }
 
-    void TimeWords(RectangleF r, WatchWidget w, DateTime now, PanelData d)
+    // a word clock's words and dots as they were and are now, and when that changed: the ones that change light up / go dark over
+    // 0.4 s (Motion: not off)
+    readonly Dictionary<int, (int from, int to, int dFrom, int dTo, double start)> _wordFades = new();
+
+    void TimeWords(RectangleF r, WatchWidget w, DateTime now, PanelData d, int id)
     {
         float top = ClockHead(r, w, d) + 4, pad = PadX(r);
         var (iw, ih) = WordBox(r, w.H);
         var fit = FitWords(iw, ih);
-        int mask = WordMask(now);
+        int mask = WordMask(now), extra = now.Minute % 5;
+        if (!_wordFades.TryGetValue(id, out var wf)) wf = (mask, mask, extra, extra, -10);
+        else if (wf.to != mask || wf.dTo != extra) wf = (wf.to, mask, wf.dTo, extra, Clock.Now);
+        _wordFades[id] = wf;
+        float k = Motion.Any ? (float)Math.Clamp((Clock.Now - wf.start) / 0.4, 0, 1) : 1;
+        if (k < 1) _rolling = true;
+        k = k * k * (3 - 2 * k);
         float s = fit.Size;
         var (b, lh) = _p.TextLine(s, FontWeight.SemiBold, Theme.Display);
         for (int i = 0; i < ClockWords.Length; i++)
         {
-            bool lit = ((mask >> i) & 1) != 0;
+            bool lit = ((mask >> i) & 1) != 0, was = ((wf.from >> i) & 1) != 0;
+            uint col = lit ? Bento.Text : Bento.Faint;
+            if (lit != was && k < 1) col = Theme.Mix(was ? Bento.Text : Bento.Faint, col, k);
             float x = r.X + pad + fit.X[i], by = top + fit.Y[i];
-            _p.TrackedText(ClockWords[i], new RectangleF(x, by - b, fit.W[i] + 6, lh), lit ? Bento.Text : Bento.Faint, s, FontWeight.SemiBold,
+            _p.TrackedText(ClockWords[i], new RectangleF(x, by - b, fit.W[i] + 6, lh), col, s, FontWeight.SemiBold,
                 s * WordTrack, TextAlignment.Leading, ParagraphAlignment.Near, Theme.Display);
         }
         // the minutes past the five: four dots, that many lit
-        int extra = now.Minute % 5;
         float dg = 13, dy = r.Bottom - 15, dx = r.X + r.Width / 2 - 1.5f * dg;
-        for (int i = 0; i < 4; i++) _p.Circle(dx + i * dg, dy, 3, i < extra ? Bento.Text : Bento.Track);
+        for (int i = 0; i < 4; i++)
+        {
+            bool lit = i < extra, was = i < wf.dFrom;
+            uint col = lit ? Bento.Text : Bento.Track;
+            if (lit != was && k < 1) col = Theme.Mix(was ? Bento.Text : Bento.Track, col, k);
+            _p.Circle(dx + i * dg, dy, 3, col);
+        }
     }
 
     // ================= the analog clock's designs =================
@@ -559,35 +594,47 @@ static class ClockArt
 
     // 'text' as an LED clock's digits from (x, y), 'h' tall and leaning a little: lit segments in 'on', the others in 'off' (0: left
     // out). Returns the width.
-    public static float SegText(ClockGeo g, string text, float x, float y, float h, uint on, uint off)
+    public static float SegText(ClockGeo g, string text, float x, float y, float h, uint on, uint off) => SegText(g, text, null, 1, x, y, h, on, off);
+
+    static readonly float[] ColonAt = { 0.31f, 0.69f };
+
+    static int SegBits(char ch) => char.IsDigit(ch) ? SegMask[ch - '0'] : 0;
+
+    // the same, changing from 'from' (as long, or null): a segment that lights up / goes dark is k of the way there
+    public static float SegText(ClockGeo g, string text, string from, float k, float x, float y, float h, uint on, uint off)
     {
         float t = MathF.Max(1.5f, SegT * h), dw = SegW * h, e = t / 2 + MathF.Max(0.7f, t * 0.16f);
         float x0 = x;
+        if (from == null || from.Length != text.Length) k = 1;
         float X(float px, float py) => px + (y + h - py) * SegSlant;
-        void Seg(float ax, float ay, float bx, float by, bool lit)
+        void Seg(float ax, float ay, float bx, float by, int m, int m0, int bit)
         {
+            bool lit = (m & bit) != 0, was = (m0 & bit) != 0;
             uint c = lit ? on : off;
+            if (lit != was && k < 1)
+                c = off == 0 ? Theme.WithAlpha(on, lit ? k : 1 - k) : lit ? Theme.Mix(off, on, k) : Theme.Mix(on, off, k);
             if (c != 0) g.Pointed(X(ax, ay), ay, X(bx, by), by, c, t);
         }
-        foreach (char ch in text)
+        for (int ci = 0; ci < text.Length; ci++)
         {
+            char ch = text[ci];
             if (char.IsDigit(ch) || ch == ' ')
             {
-                int m = ch == ' ' ? 0 : SegMask[ch - '0'];
+                int m = SegBits(ch), m0 = k < 1 ? SegBits(from[ci]) : m;
                 float xl = x + t / 2, xr = x + dw - t / 2, yt = y + t / 2, ym = y + h / 2, yb = y + h - t / 2;
-                Seg(xl + e, yt, xr - e, yt, (m & 1) != 0);
-                Seg(xr, yt + e, xr, ym - e, (m & 2) != 0);
-                Seg(xr, ym + e, xr, yb - e, (m & 4) != 0);
-                Seg(xl + e, yb, xr - e, yb, (m & 8) != 0);
-                Seg(xl, ym + e, xl, yb - e, (m & 16) != 0);
-                Seg(xl, yt + e, xl, ym - e, (m & 32) != 0);
-                Seg(xl + e, ym, xr - e, ym, (m & 64) != 0);
+                Seg(xl + e, yt, xr - e, yt, m, m0, 1);
+                Seg(xr, yt + e, xr, ym - e, m, m0, 2);
+                Seg(xr, ym + e, xr, yb - e, m, m0, 4);
+                Seg(xl + e, yb, xr - e, yb, m, m0, 8);
+                Seg(xl, ym + e, xl, yb - e, m, m0, 16);
+                Seg(xl, yt + e, xl, ym - e, m, m0, 32);
+                Seg(xl + e, ym, xr - e, ym, m, m0, 64);
                 x += dw + SegSp * h;
             }
             else
             {
                 float cx = x + t * 0.7f, d = t * 0.22f;
-                foreach (float f in new[] { 0.31f, 0.69f })
+                foreach (float f in ColonAt)
                 {
                     float cy = y + h * f;
                     g.Pointed(X(cx - d, cy), cy, X(cx + d, cy), cy, on, t);

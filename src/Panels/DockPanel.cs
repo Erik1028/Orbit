@@ -60,7 +60,7 @@ public sealed class HexpadFaces : IDisposable
 // beside each slider pushes the knob. The laser presses keys and buttons (press and release, so Hexpad's hold and
 // double tap work); what could end the VR session (lock, sleep, empty the bin) asks first. Grab it once onto the
 // real dock on your desk; it stays there.
-public sealed class DockPanel : IPointerTarget, IDisposable
+public sealed partial class DockPanel : IPointerTarget, IDisposable
 {
     public const int TW = 800, TH = 480, W95 = TW / 2, H95 = TH / 2;
 
@@ -154,7 +154,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
     {
         if (Ov == null) return;
         float target = Shown ? 1 : 0;
-        _vis = Math.Clamp(_vis + Math.Sign(target - _vis) * dt / 0.18f, 0, 1);
+        _vis = Motion.Step(_vis, Shown, dt, 0.18f);                      // Look > Motion off: at once
         if (_vis <= 0 || C.Place.M == null || !Placement.Apply(C.Place, vr, Ov))
         {
             if (_vis <= 0) { _in.ReleasePress(); _ptr.Leave(); _in.Hover = null; }
@@ -168,12 +168,13 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _in.Timers(now);
         if (_in.TakeDirty()) _dirty = true;
         bool flashing = now - _s.EchoAt < 0.4;
-        if (_dirty || flashing || now >= _nextDraw || _ui.Animating)
+        // a style's opening / closing shows on every frame of the fade
+        if (_dirty || flashing || now >= _nextDraw || _ui.Animating || (_vis < 1 && Theme.RetroSkin.AnimatesFade))
         {
             Draw(now);
             Ov.SetTexture(Surf.Tex);
             _dirty = _ui.Interacting || _ui.Changed;
-            _nextDraw = now + 1;
+            _nextDraw = Math.Min(now + 1, AnimWake.Take());              // sooner when a style's animation asks (AnimWake.cs)
         }
         Ov.Show();
     }
@@ -294,8 +295,12 @@ public sealed class DockPanel : IPointerTarget, IDisposable
         _ui.Begin(_ptr, 1);
         _p.Begin(Surf.Bitmap, 0x00000000);
         var all = new RectangleF(0, 0, TW, TH);
-        _p.Fill(all, Theme.OverlayBg, 30);
-        _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        if (Theme.Cyber) CyberHud.PanelFrame(_p, all, Theme.OverlayBg);
+        else
+        {
+            _p.Fill(all, Theme.OverlayBg, 30);
+            _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 29);
+        }
         uint sub = Theme.Mix(Theme.Text, Theme.OverlayBg, 0.42f);
 
         // header: name, where on the dock, the idle chip; bring here / close on the right
@@ -520,6 +525,7 @@ public sealed class DockPanel : IPointerTarget, IDisposable
 
     void Draw95(double now)
     {
+        if (SkinDock(now)) return;          // a style's own panel (ScreenHooks.cs)
         _canvas95 ??= new Surface(_p.Gpu, W95, H95);
         _ui.Begin(_ptr, 2);
         _ui.Canvas95 = new SizeF(W95, H95);
