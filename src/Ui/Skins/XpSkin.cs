@@ -52,7 +52,9 @@ public sealed partial class XpSkin : Win95Skin
     public const uint Orange1 = 0xFFE68B2C, Orange2 = 0xFFFFC83C;         // the hot / selected tab's top edge
 
     // what is behind a window's rounded top corners on the canvas being drawn: 0 = nothing (the corner pixels are cleared
-    // to transparent), else that colour (a window over the watch's desktop). Each screen's hook sets it (Xp/*.Xp.cs).
+    // to transparent), else that colour (a window over the watch's desktop). Each screen's hook sets it before its first window
+    // (Xp/*.Xp.cs); a caption uses it up: a window drawn after it on the same canvas (a message box, What's New over the sheet)
+    // sits on a window, its corners on the dialog face.
     public static uint CornerBack;
     // the same for the custom face's widget windows (their own desktop, or nothing on the cards background)
     public static uint WidgetBack = DesktopBlue;
@@ -328,6 +330,7 @@ public sealed partial class XpSkin : Win95Skin
     {
         float x0 = r.X - 3, x1 = r.Right + 3, y = r.Y - 3;
         CaptionBar(p, x0, x1, y, 21, active, true, CornerBack);
+        CornerBack = Face;
         float tx = r.X + 3;
         if (icon is { } ic) { W95Icons.Draw(p, ic, r.X + 2, r.Y + 1); tx = r.X + 22; }
         Title(p, title, new RectangleF(tx, r.Y, r.Right - tx, r.Height), active, r.Right - tx - 40);
@@ -372,8 +375,10 @@ public sealed partial class XpSkin : Win95Skin
         }
         int rows = (int)WidgetBar + 1;
         CaptionBar(p, r.X, r.Right, r.Y, rows, true, true, WidgetBack);
-        var cap = new RectangleF(r.X + 4, r.Y + 1, r.Width - 8, WidgetBar);
-        string t = Fit(p, title, cap.Width - 2, Ui.F95, true);
+        var cap = new RectangleF(r.X + 3, r.Y + 1, r.Width - 6, WidgetBar);
+        // a narrow window drops a short name's full stop before it cuts the name ("Reproj." -> "Reproj")
+        if (title.EndsWith('.') && TextWidth(p, title, true, Ui.F95) > cap.Width - 1) title = title[..^1];
+        string t = Fit(p, title, cap.Width - 1, Ui.F95, true);
         p.Text(t, new RectangleF(cap.X + 1, cap.Y + 1, cap.Width, cap.Height), 0xFF0A1883, Ui.F95, FontWeight.Bold, TextAlignment.Leading,
             ParagraphAlignment.Center, Font);
         p.Text(t, cap, CaptionText, Ui.F95, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Font);
@@ -446,7 +451,7 @@ public sealed partial class XpSkin : Win95Skin
             string text = string.IsNullOrEmpty(label) ? null : Ui.Amp(label).text;
             float tw = text == null ? 0 : TextWidth(p, text, false, Ui.F95);
             // a tall button stacks its picture over its label (XP's big toolbar buttons), a low one puts it beside
-            if (text != null && b.Height >= n + 14 && tw <= b.Width - 4)
+            if (text != null && b.Height >= n + 14 && tw <= b.Width - 2)
             {
                 float y = MathF.Floor(b.Y + (b.Height - n - 13) / 2);
                 DrawIcon(p, ic, MathF.Floor(b.X + (b.Width - n) / 2), y, enabled);

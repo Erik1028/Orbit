@@ -57,7 +57,13 @@ public sealed partial class WristPanel
         }
         if (perf)
         {
-            if (graph) { Graph95(d.Vr, new RectangleF(6, y, TW95 - 12, 28)); y += 32; }
+            if (graph)
+            {
+                var gr = new RectangleF(6, y, TW95 - 12, 28);
+                PlotXp(d.Vr, RectangleF.Inflate(gr, -1, -1), true);
+                WellXp(gr);
+                y += 32;
+            }
             else StatusBarXp(d, new RectangleF(3, y, TW95 - 6, 18));
         }
     }
@@ -230,15 +236,16 @@ public sealed partial class WristPanel
             W95Icons.Id.Keyboard, d.DesktopsVisible ? W95Icons.Id.Computer : W95Icons.Id.ComputerOff, W95Icons.Id.Center,
             W95Icons.Id.Layouts, W95Icons.Id.Moon, W95Icons.Id.Gear,
         };
+        // six across the window, 2 px apart: wide enough for "Keyboard" under its picture
         const int n = 6;
-        float bw = MathF.Floor((TW95 - 12 - (n - 1) * 3) / (float)n);
-        float x0 = MathF.Floor((TW95 - (n * bw + (n - 1) * 3)) / 2);
+        float bw = MathF.Floor((TW95 - 8 - (n - 1) * 2) / (float)n);
+        float x0 = MathF.Floor((TW95 - (n * bw + (n - 1) * 2)) / 2);
         for (int i = 0; i < n; i++)
         {
-            var r = new RectangleF(x0 + i * (bw + 3), y, bw, 32);
+            var r = new RectangleF(x0 + i * (bw + 2), y, bw, 32);
             bool on = (i == 0 && d.KeyboardVisible) || (i == 1 && d.DesktopsVisible) || (i == 4 && d.NightMode);
             string label = i switch { 0 => "Keyboard", 1 => "Monitors", 2 => "Recenter", 3 => d.LayoutName, 4 => "Night", _ => "Settings" };
-            if (_ui.Button95(Ui.Id("wt", i), r, Ui.Esc95(Fit(label, bw - 6)), true, false, on, icons[i])) OnAction?.Invoke(ids[i]);
+            if (_ui.Button95(Ui.Id("wt", i), r, Ui.Esc95(Fit(label, bw - 4)), true, false, on, icons[i])) OnAction?.Invoke(ids[i]);
         }
     }
 
@@ -275,11 +282,12 @@ public sealed partial class WristPanel
     {
         "time" or "date" or "calendar" or "session" or "fps" or "reproj" or "gpu" or "vram" or "cpu" or "ram" or "perf" or "graph" => true,
         "timer" or "battery" or "volume" or "stopwatch" => w == 1,
+        "media" => w >= 3,
         _ => false,
     };
 
-    // the bar's title: the 95 window's name, a short one on a narrow window
-    static string XpTitle(WatchWidgets.Kind k, int w) => w >= 2 ? k.Title95 : k.Id switch
+    // the bar's title: the 95 window's name, a short one on a narrow window (XP's own names where its window was another one)
+    static string XpTitle(WatchWidgets.Kind k, int w) => k.Id == "media" ? "Now Playing" : w >= 2 ? k.Title95 : k.Id switch
     {
         "fps" => "FPS", "reproj" => "Reproj.", "gpu" => "GPU", "vram" => "VRAM", "cpu" => "CPU", "ram" => "RAM", "session" => "In VR",
         "time" => "Time", "date" => "Date", "calendar" => "Date", "timer" => "Timer", "stopwatch" => "Watch", "battery" => "Power",
@@ -480,11 +488,26 @@ public sealed partial class WristPanel
     // the numbers on the window's bar (right of its title) when they fit
     void GraphXp(VrStats v, RectangleF c, RectangleF r, string title)
     {
+        PlotXp(v, c, false);
+        if (title == null) return;
+        string label = v.AppFps < 0 ? "" : $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms";
+        float tw = _ui.Width95(title, true), lw = _ui.Width95(label);
+        if (label.Length > 0 && 4 + tw + 10 + lw <= r.Width - 8)
+            _p.Text(label, new RectangleF(r.Right - 5 - lw, r.Y + 1, lw + 2, XpSkin.WidgetBar), 0xFFD8E6FF, Ui.F95, FontWeight.Normal,
+                TextAlignment.Leading, ParagraphAlignment.Center, Theme.Font);
+    }
+
+    // Task Manager's history graph: black, the dark green grid scrolling with the frames, the frame times as a bright green line
+    // (a dropped frame's step red), the frame budget dashed yellow; label: the numbers in green at its top left, as Task Manager
+    // writes nothing over its graphs but the watch has no room beside them
+    const uint TaskGrid = 0xFF008040, TaskLine = 0xFF00FF00;
+
+    void PlotXp(VrStats v, RectangleF c, bool label)
+    {
         _p.Fill(c, 0xFF000000);
         var g = RectangleF.Inflate(c, -1, -1);
-        const uint grid = 0xFF008040, line = 0xFF00FF00;
-        for (float gx = g.Right - 1 - (v.FrameCount / 2 % 12); gx >= g.X; gx -= 12) _p.Fill(new RectangleF(gx, g.Y, 1, g.Height), grid);
-        for (float gy = g.Bottom - 1; gy >= g.Y; gy -= 10) _p.Fill(new RectangleF(g.X, gy, g.Width, 1), grid);
+        for (float gx = g.Right - 1 - (v.FrameCount / 2 % 12); gx >= g.X; gx -= 12) _p.Fill(new RectangleF(gx, g.Y, 1, g.Height), TaskGrid);
+        for (float gy = g.Bottom - 1; gy >= g.Y; gy -= 10) _p.Fill(new RectangleF(g.X, gy, g.Width, 1), TaskGrid);
         float budget = 1000f / Math.Max(1, v.DisplayHz), top = budget * 2;
         int n = v.FrameCount;
         float step = g.Width / VrStats.FrameHistory;
@@ -497,16 +520,44 @@ public sealed partial class WristPanel
             float ms = v.FrameMs[idx];
             float x = MathF.Floor(g.Right - (n - i) * step);
             float y = MathF.Round(g.Bottom - 1 - (g.Height - 2) * Math.Clamp(ms / top, 0.02f, 1));
-            if (px >= 0 && x != px) _p.Line(px + 0.5f, py + 0.5f, x + 0.5f, y + 0.5f, v.FrameFlag[idx] == 2 ? 0xFFFF3030 : line, 1);
-            else if (px < 0) _p.Fill(new RectangleF(x, y, 1, 1), line);
+            if (px >= 0 && x != px) _p.Line(px + 0.5f, py + 0.5f, x + 0.5f, y + 0.5f, v.FrameFlag[idx] == 2 ? 0xFFFF3030 : TaskLine, 1);
+            else if (px < 0) _p.Fill(new RectangleF(x, y, 1, 1), TaskLine);
             px = x; py = y;
         }
-        if (title == null) return;
-        string label = v.AppFps < 0 ? "" : $"{v.AppFps:0} fps · {v.GpuMs:0.0} ms";
-        float tw = _ui.Width95(title, true), lw = _ui.Width95(label);
-        if (label.Length > 0 && 4 + tw + 10 + lw <= r.Width - 8)
-            _p.Text(label, new RectangleF(r.Right - 5 - lw, r.Y + 1, lw + 2, XpSkin.WidgetBar), 0xFFD8E6FF, Ui.F95, FontWeight.Normal,
-                TextAlignment.Leading, ParagraphAlignment.Center, Theme.Font);
+        if (!label) return;
+        string s = v.AppFps < 0 ? "waiting for frames" : $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms GPU  {Math.Max(0, v.ReprojPct):0}% reproj.";
+        if (v.AppFps >= 0 && _ui.Width95(s) > g.Width - 12) s = $"{v.AppFps:0} fps  {v.GpuMs:0.0} ms  {Math.Max(0, v.ReprojPct):0}%";
+        s = Fit(s, g.Width - 12);
+        _p.Fill(new RectangleF(g.X + 2, g.Y + 1, MathF.Min(_ui.Width95(s) + 4, g.Width - 4), 12), 0xFF000000);
+        _ui.Text95(s, new RectangleF(g.X + 4, g.Y + 1, g.Width - 8, 12), TaskLine);
+    }
+
+    // a graph in its sunken well (Task Manager's: the 1 px grey-blue edge of a themed control)
+    void WellXp(RectangleF r)
+    {
+        _p.Fill(new RectangleF(r.X + 1, r.Y, r.Width - 2, 1), 0xFF7F9DB9);
+        _p.Fill(new RectangleF(r.X + 1, r.Bottom - 1, r.Width - 2, 1), 0xFF7F9DB9);
+        _p.Fill(new RectangleF(r.X, r.Y + 1, 1, r.Height - 2), 0xFF7F9DB9);
+        _p.Fill(new RectangleF(r.Right - 1, r.Y + 1, 1, r.Height - 2), 0xFF7F9DB9);
+    }
+
+    // Task Manager's usage meter: a black box, two columns of green segments (lit up to the reading), the reading under them
+    void MeterXp(RectangleF r, float frac, string text)
+    {
+        _p.Fill(r, 0xFF000000);
+        WellXp(r);
+        var inner = new RectangleF(r.X + 6, r.Y + 5, r.Width - 12, r.Height - 5 - 17);
+        int rows = (int)((inner.Height + 1) / 3);
+        int lit = frac < 0 ? 0 : (int)MathF.Round(Math.Clamp(frac, 0, 1) * rows);
+        float cw = MathF.Floor((inner.Width - 1) / 2);
+        for (int i = 0; i < rows; i++)
+        {
+            float y = inner.Bottom - 2 - i * 3;
+            uint col = i < lit ? TaskLine : TaskGrid;
+            _p.Fill(new RectangleF(inner.X, y, cw, 2), col);
+            _p.Fill(new RectangleF(inner.X + cw + 1, y, cw, 2), col);
+        }
+        _ui.Text95(Fit(text, r.Width - 4), new RectangleF(r.X, r.Bottom - 16, r.Width, 13), TaskLine, false, TextAlignment.Center);
     }
 
     // a button widget: an XP button, its picture over its name when it is big enough
@@ -564,30 +615,5 @@ public sealed partial class WristPanel
         else _p.Fill(new RectangleF(inner.X, inner.Y, inner.Width, 1), 0xFF8EBBFF);              // raised: the light on top
         _p.Text(name, new RectangleF(b.X + 6, b.Y, b.Width - 8, b.Height), 0xFFFFFFFF, Ui.F95, on ? FontWeight.Bold : FontWeight.Normal,
             TextAlignment.Leading, ParagraphAlignment.Center, Theme.Font);
-    }
-
-    // ================= the opened windows =================
-
-    partial void DetailXp(PanelData d, WatchWidgets.Kind k, string kind, RectangleF win, ref bool done)
-    {
-        if (kind != "clock") return;
-        // Date and Time Properties: the month on the left, the round clock and the time on the right
-        done = true;
-        _p.Fill(win, Theme.W95Face);
-        _p.Bevel(win, Painter.Edge.Window);
-        _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), "Date and Time Properties", W95Icons.Id.Clock);
-        if (_ui.CaptionClose95("wd95x", win.Right - 5 - 16, win.Y + 5, true, 6)) { CloseDetail(); return; }
-        if (_ui.Button95("wd95ok", new RectangleF(win.Right - 8 - 75, win.Bottom - 8 - 23, 75, 23), "OK", true, true)) { CloseDetail(); return; }
-        var c = new RectangleF(win.X + 8, win.Y + 27, win.Width - 16, win.Height - 27 - 36);
-        var now = DateTime.Now;
-        var left = new RectangleF(c.X, c.Y, 160, c.Height);
-        _ui.Group95(left, "Date");
-        Month95(new RectangleF(left.X + 8, left.Y + 18, left.Width - 16, left.Height - 26), now, now);
-        var right = new RectangleF(left.Right + 8, c.Y, c.Right - left.Right - 8, c.Height);
-        _ui.Group95(right, "Time");
-        float rad = MathF.Floor(MathF.Min(right.Width - 20, right.Height - 56) / 2);
-        DialXp(now, MathF.Floor(right.X + right.Width / 2) + 0.5f, MathF.Floor(right.Y + 18 + rad) + 0.5f, rad);
-        string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
-        _ui.Edit95(new RectangleF(right.X + 10, right.Bottom - 30, right.Width - 20, 21), time);
     }
 }
