@@ -491,14 +491,14 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         else { SwipeEnd(px); _ptr.Release(); if (_dockIn?.Busy == true) _dockIn.Up(); }
         _dirty = true;
     }
-    // the stick scrolls the opened room's list (nothing else on the watch scrolls); the 95 list moves 3 rows a notch (a wheel's),
-    // so it gets whole notches, a third as many
+    // the stick scrolls the opened room's and notifications' lists (nothing else on the watch scrolls); the 95 list moves 3 rows a
+    // notch (a wheel's), so it gets whole notches, a third as many
     float _wheel95;
     public void PointerScroll(Hand h, float n, Vector2 px)
     {
         if (DockLive) { DockIn.Scroll(px, n); if (DockIn.TakeDirty()) _dirty = true; return; }      // the stick over a knob turns it
         if (MixerScroll(px, n)) return;            // the stick over a mixer's slider moves it, in the opened mixer off them it scrolls
-        if (!DetailIs("room") || _closing) return;
+        if (!(DetailIs("room") || DetailIs("notifications")) || _closing) return;
         if (Theme.Classic)
         {
             _wheel95 += n / 3;

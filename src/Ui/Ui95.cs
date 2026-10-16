@@ -174,6 +174,10 @@ public sealed partial class Ui
 
     readonly Dictionary<string, int> _scroll95 = new();
 
+    // a list's first row shown (the watch's opened notifications start from the top; --snapshot reads it)
+    public int ListTop95(string id) => _scroll95.TryGetValue(id, out int top) ? top : 0;
+    public void ListScrollTo95(string id, int top) => _scroll95[id] = Math.Max(0, top);
+
     // returns the item clicked this frame (or -1); draw(index, row rect, selected) paints a row
     public int List95(string id, RectangleF r, int count, int selected, Action<int, RectangleF, bool> draw, float rowH = 16)
     {

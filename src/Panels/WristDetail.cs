@@ -35,6 +35,7 @@ public sealed partial class WristPanel
         "room" => "room",
         "dock" => "dock",
         "mixer" => "mixer",
+        "notifications" => "notifications",
         _ => null,
     };
 
@@ -47,6 +48,7 @@ public sealed partial class WristPanel
         _openStart = Clock.Now;
         _calOffset = 0;
         _roomScroll = 0;
+        NotesFromTop();
         DockLetGo();
         _ui.SpringFrom(OpenKey, 0);
         _dirty = true;
@@ -73,6 +75,7 @@ public sealed partial class WristPanel
         _closing = false;
         _openStart = -10;
         _roomScroll = 0;
+        NotesFromTop();
         _ui.SpringFrom(OpenKey, 1);
         return true;
     }
@@ -140,7 +143,9 @@ public sealed partial class WristPanel
         if (grow && (_closing || MathF.Abs(e - 1) > 0.02f)) _ui.Inert = true;
         var E = target;
         if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
-            CyberDetailTag(E, Upper(k.Name));           // Cyber: a yellow tag (it types in: WristCyberFx.cs)
+            // Cyber: a yellow tag (it types in: WristCyberFx.cs) - the clock's CLOCK (its time card has a TIME tag of its own), the
+            // notifications' INCOMING
+            CyberDetailTag(E, Upper(kind switch { "clock" => "Clock", "notifications" => "Incoming", _ => k.Name }));
         else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
@@ -163,6 +168,7 @@ public sealed partial class WristPanel
             case "mines": MinesDetail(E); break;
             case "room": RoomDetail(E, d); break;
             case "dock": DockDetail(E, d); break;
+            case "notifications": NotesDetail(E, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -175,9 +181,10 @@ public sealed partial class WristPanel
     // a bar with a knob: drag along it (or tap) to set 0..1; its empty part the cards' track
     void Slider(string id, RectangleF bar, float value, uint col, bool enabled, Action<float> set)
     {
-        _ui.Clickable(id, RectangleF.Inflate(bar, 8, 20), out _, out bool held);
+        _ui.Clickable(id, RectangleF.Inflate(bar, 8, 20), out bool hover, out bool held);
         if (held && enabled) set(Math.Clamp((_ui.Mouse.X - bar.X) / bar.Width, 0, 1));
         float v = Math.Clamp(value, 0, 1), h = bar.Height;
+        if (Theme.Cyber) { CySlider(bar, v, col, enabled, hover || held); return; }      // segments and a mark (WristCyberDetail.cs)
         _p.Fill(bar, Bento.Track, h / 2);
         if (!enabled) return;
         float x = bar.X + bar.Width * v;
@@ -188,6 +195,7 @@ public sealed partial class WristPanel
 
     void MediaDetail(RectangleF c, PanelData d)
     {
+        if (Theme.Cyber) { CyberMediaDetail(c, d); return; }      // the HUD's own (WristCyberDetail.cs)
         var (has, title, artist, playing) = MediaNow(d);
         Volume.Sample(Clock.Now);
         float s = MathF.Min(c.Height, c.Width * 0.44f);
@@ -266,6 +274,7 @@ public sealed partial class WristPanel
 
     void ClockDetail(RectangleF c, PanelData d, DateTime now)
     {
+        if (Theme.Cyber) { CyberClockDetail(c, d, now); return; }      // the HUD's own (WristCyberDetail.cs)
         AnalogOrbit(new RectangleF(c.X - 8, c.Y - 8, c.Height + 16, c.Height + 16), now, Bento.Accent);
         float x = c.X + c.Height + 30, w = c.Right - x;
         bool h24 = _cfg.Data.Appearance.Clock24h;
@@ -424,6 +433,7 @@ public sealed partial class WristPanel
     // the four frame numbers as gauges in their role colours (amber / red when they need attention), the frames under them
     void PerfDetail(RectangleF c, PanelData d)
     {
+        if (Theme.Cyber) { CyberPerfDetail(c, d); return; }       // the HUD's own (WristCyberDetail.cs)
         float gw = c.Width / 4;
         for (int j = 0; j < 4; j++)
         {
@@ -458,6 +468,7 @@ public sealed partial class WristPanel
     // the CPU (purple) and the memory (blue): a gauge each with its facts beside it, the last minute of CPU load under them
     void SystemDetail(RectangleF c, PanelData d)
     {
+        if (Theme.Cyber) { CyberSystemDetail(c, d); return; }     // the HUD's own (WristCyberDetail.cs)
         var (cf, cv, _, _, cl) = Reading("cpu", d);
         var (rf, rv, ru, _, rl) = Reading("ram", d);
         // the opened widget's own colour only for its own reading: the other keeps its role colour (two gauges in one
@@ -583,6 +594,7 @@ public sealed partial class WristPanel
             case "system": System95Detail(c); break;
             case "volume": Volume95Detail(c); break;
             case "mixer": Mixer95Detail(c); break;
+            case "notifications": Notes95Detail(c, d); break;
         }
     }
 

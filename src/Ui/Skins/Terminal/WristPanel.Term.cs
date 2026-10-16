@@ -854,7 +854,7 @@ public sealed partial class WristPanel
     partial void DetailTerm(PanelData d, WatchWidgets.Kind k, string kind, RectangleF win, ref bool done)
     {
         if (kind == "mines") { done = true; TMinesDetail(win); return; }
-        if (kind is not ("media" or "perf" or "system" or "clock")) return;      // the rest: the shared windows, in this skin
+        if (kind is not ("media" or "perf" or "system" or "clock" or "notifications")) return;      // the rest: the shared windows, in this skin
         done = true;
         _p.Fill(win, T.BG);
         _p.Bevel(win, Painter.Edge.Window);
@@ -882,7 +882,93 @@ public sealed partial class WristPanel
                 string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
                 TCapsC(time, right, right.Bottom - 16, T.INK);
                 break;
+            case "notifications": TNotesDetail(c, d); break;
         }
+    }
+
+    // The notifications as a log, newest first - "[12:04] VRCX     Friend online - Sam is in ...", what does not fit going on on the
+    // line under it (two lines at most, then cut), the newest bright; the stick scrolls it an entry a notch, a bar at the right says
+    // where; how many and Clear beside OK
+    readonly List<(string a, string b)> _tNoteLines = new();
+    NotificationHistory _tNoteLinesOf;
+    int _tNoteLinesVer = -1;
+    float _tNoteLinesW = -1;
+
+    void TNotesDetail(RectangleF c, PanelData d)
+    {
+        var rows = NotesOpen(d);
+        int n = rows.Count;
+        _notesEmptyDrawn = n == 0;
+        _notesFirst = n > 0 ? rows[0].Title : null;
+        TCaps("> tail notify.log", c.X, c.Y + 2, T.MID);
+        const float Line = 11, Gap = 3;
+        float y0 = c.Y + 17, avail = c.Bottom - y0;
+        if (n == 0)
+        {
+            TCaps("NO MESSAGES", c.X, y0, T.DIM);
+            TCaps("> _", c.X, y0 + Line + Gap, T.INK);
+        }
+        // the app's column as wide as the widest one (eight letters at most); the text after it, the bar's room kept at the right
+        float sw = 6;
+        foreach (var e in rows) sw = MathF.Max(sw, T.W(TFit(e.Chip ?? "-", 48)));
+        float sx = c.X + T.W("[00:00] "), tx = sx + sw + 12, tw = c.Right - 8 - tx;
+        if (!ReferenceEquals(_tNoteLinesOf, d.Notes) || _tNoteLinesVer != (d.Notes?.Version ?? -1) || _tNoteLinesW != tw)
+        {
+            // each entry's lines, made again when the list changed
+            (_tNoteLinesOf, _tNoteLinesVer, _tNoteLinesW) = (d.Notes, d.Notes?.Version ?? -1, tw);
+            _tNoteLines.Clear();
+            foreach (var e in rows) _tNoteLines.Add(TWrap(e.Title.Length > 0 && e.Text.Length > 0 ? e.Title + " - " + e.Text : e.Title + e.Text, tw));
+        }
+        float Adv(int i) => (_tNoteLines[i].b.Length > 0 ? 2 : 1) * Line + Gap;
+        // how far the stick goes: the last entries filling the log
+        int maxTop = 0;
+        float used = 0;
+        for (int i = n - 1; i >= 0; i--)
+        {
+            used += Adv(i);
+            if (used - Gap - (Line - 7) > avail) { maxTop = i + 1; break; }
+        }
+        if (_ui.Wheel != 0 && maxTop > 0 && _ui.OverNow(c)) { _notesTop -= Math.Sign(_ui.Wheel); _dirty = true; }
+        _notesTop = Math.Clamp(_notesTop, 0, maxTop);
+        float y = y0;
+        int shown = 0;
+        for (int i = _notesTop; i < n; i++)
+        {
+            var e = rows[i];
+            var (a, b2) = _tNoteLines[i];
+            if (y + (b2.Length > 0 ? Line : 0) + 7 > c.Bottom) break;
+            bool newest = i == 0;
+            TCaps("[" + e.At.ToString("HH:mm", CultureInfo.InvariantCulture) + "]", c.X, y, T.DIM);
+            TCaps(TFit(e.Chip ?? "-", sw), sx, y, newest ? T.HOT : T.INK);
+            TCaps(a, tx, y, newest ? T.HOT : T.INK);
+            if (b2.Length > 0) TCaps(b2, tx, y + Line, T.MID);
+            y += Adv(i);
+            shown++;
+        }
+        if (maxTop > 0)
+        {
+            float h = avail + 2, th = MathF.Max(8, MathF.Round(h * shown / n)), ty = MathF.Round(y0 - 2 + (h - th) * _notesTop / maxTop);
+            _p.Fill(new RectangleF(c.Right - 3, y0 - 2, 2, h), T.FAINT);
+            _p.Fill(new RectangleF(c.Right - 4, ty, 4, th), T.INK);
+        }
+        var clr = new RectangleF(c.Right - 75 - 6 - 75, c.Bottom + 5, 75, 23);
+        if (n > 0) TCaps(TFit(T.Up(NotesCount(n)), clr.X - c.X - 6), c.X, c.Bottom + 13, T.DIM);
+        if (_ui.Button95("wn95clr", clr, "&Clear", n > 0)) NotesClear(d);
+    }
+
+    // s over two lines of w: as many words as fit on the first, the rest cut on the second
+    static (string, string) TWrap(string s, float w)
+    {
+        s = Lang.T(s);
+        if (T.W(s) <= w) return (s, "");
+        int cut = -1;
+        for (int i = s.IndexOf(' '); i > 0; i = s.IndexOf(' ', i + 1))
+        {
+            if (T.W(s[..i]) > w) break;
+            cut = i;
+        }
+        if (cut < 0) return (TFit(s, w), "");
+        return (s[..cut], TFit(s[(cut + 1)..].TrimStart(), w));
     }
 
     void TMediaDetail(RectangleF c, PanelData d)

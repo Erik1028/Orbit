@@ -14,8 +14,9 @@ namespace Orbit;
 // its bottom), the HUD dial (yellow quarters, a red second hand and a red arc of the minute so far), the date with its day in big
 // yellow, the batteries as rows of segments, now playing with its yellow play square, the frames as grey bars with red spikes under
 // a dashed yellow budget, the room, the microphone, the inbox, the buttons as cyan-outlined tiles with corner marks.
-// Everything else (calendar, timer, stopwatch, volume, time in VR, Hexpad, Minesweeper, the opened views) is the modern design drawn
-// through the Cyber forms of the shared parts (WristCustom: Caption / CaptionRow / Meter / Press / CardBack). The widgets' own looks
+// Everything else (calendar, timer, stopwatch, volume, time in VR, Hexpad, Minesweeper, the opened views but the clock's and the
+// notifications' - WristCyberDetail.cs, WristNotes.cs) is the modern design drawn through the Cyber forms of the shared parts
+// (WristCustom: Caption / CaptionRow / Meter / Press / CardBack). The widgets' own looks
 // (Style / Color of 1.11) do not apply in Cyber: one look, the concept's; a clock's other designs (Flip, Segment, Station...) still
 // pick as before and draw in its colours - the size's default design is the Cyber one.
 public sealed partial class WristPanel

@@ -121,6 +121,7 @@ static partial class Tools
         wrist.Mic.Present = true;
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "pages") return PagesRun(wrist, data, cfg, painter, gpu, dir, null, null, null);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "mixer") return MixerOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "notes") return NotesOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -581,6 +582,7 @@ static partial class Tools
             DockViewTools.Run(wrist, data, cfg, painter, gpu, dir, tag);      // the dock opened, on made-up data (not the Hexpad panel)
             if (tag == "") MixerViewTools.MasterChecks();                     // the Windows volume in VR, on a made-up device
             MixerViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the volume mixer, on made-up apps
+            NotesViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the notifications opened, on made-up ones
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -604,7 +606,7 @@ static partial class Tools
         {
             var miss = new List<string>();
             int n = 0;
-            foreach (var kind in new[] { "time", "date", "calendar", "session", "analog" })
+            foreach (var kind in new[] { "time", "date", "calendar", "session", "analog", "notifications" })
                 foreach (var (w, h) in WatchWidgets.Find(kind).Union)
                 {
                     n++;
@@ -622,7 +624,7 @@ static partial class Tools
                     wrist.CloseForTest();
                     wrist.PointerLeave(Hand.Left);
                 }
-            Log.Info($"opened widget{tag}: a tap on every time, date, calendar, time-in-VR and analog clock size opened it {n - miss.Count} of {n} (want {n} of {n})" +
+            Log.Info($"opened widget{tag}: a tap on every time, date, calendar, time-in-VR, analog clock and notifications size opened it {n - miss.Count} of {n} (want {n} of {n})" +
                      (miss.Count > 0 ? ", not: " + string.Join(", ", miss) : ""));
             wcfg.Face = face0;
             wcfg.Widgets = null;
@@ -1034,6 +1036,7 @@ static partial class Tools
             wrist.Stats.Sample(Clock.Now);
             SaveCustom(tag);
             SaveOpened(tag);
+            CyberDetailTools.Run(wrist, data, cfg, gpu, dir);       // its own opened views (the clock, the notifications' scan)
             if (Environment.GetEnvironmentVariable("ORBIT_SNAP_CHECKS") != "0")
             {
                 LayoutCheck("cyber");
@@ -1832,18 +1835,22 @@ static partial class Tools
         wcfg.Grid = null;
         wcfg.Pages = null;
         wcfg.Page = 0;
-        // the opened views: a 2x2 (or the smallest) widget of each, opened, without clip / dimming
+        // the opened views: a 2x2 (or the smallest) widget of each, opened, without clip / dimming; the notifications with a long
+        // made-up list, then with none (its empty state)
         wrist.LayoutTest = true;
-        foreach (var kind in WatchWidgets.Kinds)
+        var notes0 = data.Notes;
+        var opened = WatchWidgets.Kinds.Where(kd => !kd.Button && (onlyKind == null || kd.Id == onlyKind)).Select(kd => (kind: kd, name: kd.Id)).ToList();
+        if (opened.Any(o => o.name == "notifications")) opened.Add((WatchWidgets.Find("notifications"), "notifications_none"));
+        foreach (var (kind, name) in opened)
         {
-            if (kind.Button || (onlyKind != null && kind.Id != onlyKind)) continue;
+            if (kind.Id == "notifications") data.Notes = name == kind.Id ? NotesViewTools.Fake(NotesViewTools.Long) : new NotificationHistory();
             var (w, h) = kind.Sizes[kind.Default];
             wcfg.Widgets = new List<WatchWidget> { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h } };
             wrist.Settle();
             if (!wrist.OpenForTest(kind.Id)) continue;
             wrist.Draw(data);
             wrist.Draw(data);
-            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}_open_{kind.Id}.png"));
+            wrist.Surf.SavePng(gpu, Path.Combine(dir, "qa", $"{style}_open_{name}.png"));
             var px = Read();
             var t = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, classic);       // the opened window covers the grid
             if (classic) t = new System.Drawing.RectangleF(t.X * 2, t.Y * 2, t.Width * 2, t.Height * 2);
@@ -1854,10 +1861,11 @@ static partial class Tools
             if (o > 0 || cl > 0)
             {
                 problems++;
-                Log.Warn($"layout {style}: opened {kind.Id}: {(o > 0 ? $"{o} px outside the card, first at {ow}" : "")}{(o > 0 && cl > 0 ? "; " : "")}{(cl > 0 ? $"{cl} px within 14 px of its edge, first at {cw}" : "")}");
+                Log.Warn($"layout {style}: opened {name}: {(o > 0 ? $"{o} px outside the card, first at {ow}" : "")}{(o > 0 && cl > 0 ? "; " : "")}{(cl > 0 ? $"{cl} px within 14 px of its edge, first at {cw}" : "")}");
             }
             wrist.CloseForTest();
         }
+        data.Notes = notes0;
         wrist.LayoutTest = false;
         if (onlyKind != null)
         {
