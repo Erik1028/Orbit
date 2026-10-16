@@ -703,7 +703,7 @@ static partial class Tools
         Log.Info($"editor: gpu size {gpuW?.W}x{gpuW?.H} (want 2x1); layout now {Dump()}");
         // no room: every cell is taken, so adding must say so and change nothing
         int before = wcfg.Widgets.Count;
-        ClickM(222 + 58, SettingsView.PaletteY + 14);     // palette: Time
+        ClickM(222 + 58, SettingsView.PaletteY + 14);     // the palette's first widget (any: the grid is full)
         Log.Info($"editor: add with a full grid kept {wcfg.Widgets.Count == before} ({wcfg.Widgets.Count} widgets)");
         ptr.Leave();
         FrameM();

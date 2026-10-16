@@ -537,7 +537,7 @@ static partial class Tools
         ClickV(Cell64(5, 0));
         ClickM(724 + 2 * (244 / 3f + 8) + 40, 138 + 17);  // Remove
         bool micGone = !vrl.Contains(mic);
-        int pi = Array.IndexOf(WatchWidgets.Palette, WatchWidgets.Find("mic"));
+        int pi = Array.IndexOf(WatchWidgets.PaletteAbc(), WatchWidgets.Find("mic"));
         ClickM(222 + pi % 6 * 81 + 38, SettingsView.PaletteY + pi / 6 * SettingsView.PalettePitch + 13);
         var mic2 = vrl.FirstOrDefault(w => w.Type == "mic");
         Log.Info($"editor pages: on the VRChat page the room Smaller -> {roomSize} (want 2x1), its style {roomStyle} (want solid); the microphone " +

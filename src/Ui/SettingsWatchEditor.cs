@@ -352,9 +352,10 @@ public sealed partial class SettingsView
         {
             if (_wmsg != null) ui.Label(new RectangleF(222, PaletteY - 20, 486, 18), _wmsg, Theme.Warn, 13);
             else ui.Label(new RectangleF(222, PaletteY - 20, 486, 18), _wcell.x >= 0 ? "Add a widget to the marked cell" : "Add a widget");
-            for (int i = 0; i < WatchWidgets.Palette.Length; i++)
+            var pal = WatchWidgets.PaletteAbc();
+            for (int i = 0; i < pal.Length; i++)
             {
-                var k = WatchWidgets.Palette[i];
+                var k = pal[i];
                 var r = new RectangleF(222 + i % 6 * 81, PaletteY + i / 6 * PalettePitch, 77, PalettePitch - 3);
                 // the icon only when it fits with the name and a margin on both sides
                 string icon = 11 + 8 + p.MeasureWidth(k.Name, 11, FontWeight.SemiBold) <= r.Width - 20 ? k.Icon : null;
@@ -655,15 +656,16 @@ public sealed partial class SettingsView
         if (ui.Combo95("we95.grid", new RectangleF(84, 406, 144, RowH), new[] { "6 x 4", "4 x 3" }, ref gi) && gi != gi0) ChangeGrid(ui, gi == 1 ? "4x3" : "6x4");
 
         ui.Group95(new RectangleF(376, 56, 358, 218), "Widgets");
-        int hit = ui.List95("we95.pal", new RectangleF(388, 76, 214, 188), WatchWidgets.Palette.Length, _wpal, (i, r, on) =>
+        var pal = WatchWidgets.PaletteAbc();
+        int hit = ui.List95("we95.pal", new RectangleF(388, 76, 214, 188), pal.Length, _wpal, (i, r, on) =>
         {
-            var k = WatchWidgets.Palette[i];
+            var k = pal[i];
             W95Icons.Draw(p, k.Icon95, r.X + 1, r.Y);
             ui.Text95(k.Name, new RectangleF(r.X + 20, r.Y, r.Width - 22, r.Height), on ? 0xFFFFFFFF : 0xFF000000);
         });
         if (hit >= 0) _wpal = hit;
         if (ui.Button95("we95.add", new RectangleF(610, 76, 112, 23), _wcell.x >= 0 ? "&Add here" : "&Add", true, true))
-            AddWidget(ui, list, WatchWidgets.Palette[Math.Clamp(_wpal, 0, WatchWidgets.Palette.Length - 1)], true);
+            AddWidget(ui, list, pal[Math.Clamp(_wpal, 0, pal.Length - 1)], true);
         if (_wmsg != null) ui.Text95(_wmsg, new RectangleF(610, 106, 112, 60), 0xFF800000, wrap: true);
 
         ui.Group95(new RectangleF(376, 280, 358, 102), "Selected widget");

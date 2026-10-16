@@ -81,6 +81,9 @@ public static class WatchWidgets
     public static bool DockAvailable;
     static readonly Kind[] _noDock = Array.FindAll(Kinds, k => k.Id != "dock");
     public static Kind[] Palette => DockAvailable ? Kinds : _noDock;
+    // the editor's list (the Modern / Cyber buttons, the 95 family's list box) in ABC order of the names shown (Erik, 10-16)
+    public static Kind[] PaletteAbc(Func<Kind, string> shown = null) =>
+        Palette.OrderBy(k => shown?.Invoke(k) ?? k.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
 
     public static Kind Find(string id) => Array.Find(Kinds, k => k.Id == id);
 
