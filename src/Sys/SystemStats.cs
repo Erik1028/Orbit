@@ -217,7 +217,7 @@ public sealed class SystemVolume : IDisposable
     // is the default device another one than the one held (or none held yet)?
     bool DefaultChanged()
     {
-        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        _en ??= (IMMDeviceEnumerator)CoreAudio.NewEnumerator();      // untyped: the one object every class gets (CoreAudio)
         if (_en.GetDefaultAudioEndpoint(eRender, eConsole, out var d) != 0 || d == null) { Release(); _devId = null; return false; }
         string id = d.GetId(out string s) == 0 ? s : null;
         Marshal.ReleaseComObject(d);
@@ -227,7 +227,7 @@ public sealed class SystemVolume : IDisposable
     void Acquire()
     {
         Release();
-        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        _en ??= (IMMDeviceEnumerator)CoreAudio.NewEnumerator();      // untyped: the one object every class gets (CoreAudio)
         if (_en.GetDefaultAudioEndpoint(eRender, eConsole, out _dev) != 0 || _dev == null) return;
         _devId = _dev.GetId(out string id) == 0 ? id : null;
         var iid = typeof(IAudioEndpointVolume).GUID;
@@ -386,7 +386,7 @@ public sealed class SystemMic : IDisposable
 
     bool DefaultChanged()
     {
-        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        _en ??= (IMMDeviceEnumerator)CoreAudio.NewEnumerator();      // untyped: the one object every class gets (CoreAudio)
         if (_en.GetDefaultAudioEndpoint(eCapture, eConsole, out var d) != 0 || d == null) { Release(); _devId = null; return false; }
         string id = d.GetId(out string s) == 0 ? s : null;
         Marshal.ReleaseComObject(d);
@@ -396,7 +396,7 @@ public sealed class SystemMic : IDisposable
     void Acquire()
     {
         Release();
-        _en ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+        _en ??= (IMMDeviceEnumerator)CoreAudio.NewEnumerator();      // untyped: the one object every class gets (CoreAudio)
         if (_en.GetDefaultAudioEndpoint(eCapture, eConsole, out _dev) != 0 || _dev == null) return;
         _devId = _dev.GetId(out string id) == 0 ? id : null;
         // "as", not a cast: some virtual devices (Virtual Desktop's) hand back an object that refuses one of these - the widget

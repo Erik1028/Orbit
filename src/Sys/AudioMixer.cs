@@ -523,6 +523,12 @@ static class CoreAudio
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
     internal class MMDeviceEnumeratorCom { }
 
+    // Windows hands every caller in the process the same enumerator object: "new MMDeviceEnumeratorCom()" in one class gives back
+    // the object already wrapped as ANOTHER class's coclass type (SystemVolume's, SystemMic's) and throws "Specified cast is not
+    // valid" (VR 10-16: the mixer never started on Virtual Desktop; 1.12.3's microphone). Untyped, then cast to the interface.
+    static readonly Type EnumeratorType = Type.GetTypeFromCLSID(typeof(MMDeviceEnumeratorCom).GUID, true);
+    internal static object NewEnumerator() => Activator.CreateInstance(EnumeratorType);
+
     [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     internal interface IMMDeviceEnumerator
     {
@@ -660,7 +666,7 @@ sealed class CoreAudioDevice : IMixerDevice
     {
         try
         {
-            _en ??= (CoreAudio.IMMDeviceEnumerator)new CoreAudio.MMDeviceEnumeratorCom();
+            _en ??= (CoreAudio.IMMDeviceEnumerator)CoreAudio.NewEnumerator();
             string id = null;
             if (_en.GetDefaultAudioEndpoint(eRender, eConsole, out var d) == 0 && d != null)
             {
