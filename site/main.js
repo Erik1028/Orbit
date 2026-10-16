@@ -1,5 +1,6 @@
 // Release info next to the download button, and the changelog built from docs/CHANGELOG.md
-// (the Pages workflow copies it next to the pages). Everything here is optional: without it the page still works.
+// (the Pages workflow copies it next to the pages). Everything here is optional: without it the page still works, and the
+// version line keeps the release written into the HTML (a failed or rate-limited API request leaves it in place).
 (function () {
   var HU = (document.documentElement.lang || '').slice(0, 2) === 'hu';
   var base = document.querySelector('meta[name="site-root"]');
