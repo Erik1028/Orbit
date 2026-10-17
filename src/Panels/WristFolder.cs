@@ -75,7 +75,6 @@ public sealed partial class WristPanel
     // the folder opened (DrawDetail's spring: 0 = its tile, 1 = open); on its way it takes no taps
     void FolderView(PanelData d, WatchWidgets.Kind k, float e)
     {
-        if (!LayoutTest) _p.Fill(new RectangleF(0, 0, TW, TH), Theme.WithAlpha(0xFF000000, 0.62f * Math.Clamp(e, 0, 1)), Bento.PageRadius);
         bool inert = _ui.Inert;
         if (_closing || MathF.Abs(e - 1) > 0.02f) _ui.Inert = true;
         FolderSheet(d, _open, e);
@@ -90,6 +89,7 @@ public sealed partial class WristPanel
         var r = Lerp(WatchWidgets.Rect(f, false, page), new RectangleF(0, 0, TW, TH), e);
         float ec = Math.Clamp(e, 0, 1), rad = CardRadius + (Bento.PageRadius - CardRadius) * ec;
         bool cyber = Theme.Cyber;
+        if (!LayoutTest) _p.Fill(new RectangleF(0, 0, TW, TH), Theme.WithAlpha(0xFF000000, 0.62f * ec), Bento.PageRadius);     // the page dims under it
         if (cyber) CyberHud.PanelFrame(_p, r, Theme.OverlayBg, 6 + 12 * ec);
         else
         {
