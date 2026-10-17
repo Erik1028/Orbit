@@ -2471,14 +2471,14 @@ static partial class Tools
         }
         // every kind at every size alone, in each look (no page: whatever sticks out shows), the colours taking turns
         uint[] turns = { navy, teal, amber, Col("Pink"), Col("White"), Col("Purple") };
-        int turn = 0, wxTurn = 0;      // (the weather takes its turns apart: the kinds before it keep the colours they were checked in)
+        int turn = 0, wxTurn = 0, lxTurn = 0;      // (the weather, the light and the RGB take their turns apart: the kinds before them keep the colours they were checked in)
         foreach (var look in looks)
             foreach (var kind in WatchWidgets.Kinds)
                 foreach (var (w, h) in kind.SizesFor(false))
                 {
                     if (kind.Id == "analog" && w == 1) continue;     // below, in every colour (the others keep the colours they had)
                     wcfg.Widgets = new List<WatchWidget>
-                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id == "weather" ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id == "weather" ? turns[wxTurn++ % turns.Length] : kind.Id is "light" or "rgb" ? turns[lxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} {w}x{h}", null);
                 }
         // the 1x1 analog clock (its face is its card, ticks to its edge): each look in each colour and without one
@@ -2495,7 +2495,7 @@ static partial class Tools
                 foreach (var (w, h) in WatchWidgets.Sizes43(kind))
                 {
                     wcfg.Widgets = new List<WatchWidget>
-                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id == "weather" ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id == "weather" ? turns[wxTurn++ % turns.Length] : kind.Id is "light" or "rgb" ? turns[lxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} 4x3 {w}x{h}", null);
                 }
         wcfg.Grid = null;

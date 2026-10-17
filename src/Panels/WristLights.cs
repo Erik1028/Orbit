@@ -213,7 +213,7 @@ public sealed partial class WristPanel
         var t = Lamp(d);
         var lamp = d.Lamp;
         float pad = PadX(r), x = r.X + pad, iw = r.Width - 2 * pad, right = r.Right - pad;
-        uint ink = GlowInk(t.Glow);
+        uint ink = Styled(w) ? Bento.Text : GlowInk(t.Glow);         // a look of its own: its text colour (the glow would not read on it)
         if (w.W == 1)
         {
             // a switch: the whole card (it opens nothing - a bigger one does)
@@ -228,7 +228,7 @@ public sealed partial class WristPanel
         CaptionRow(r, t.Note, CapLight);
         if (w.H >= 2 && !t.Ready) { LxNone(r, t.Icon, t.Msg, t.Hint); return; }
         // the power button, the brightness beside it
-        float bs = _big ? 54 : 42, top = r.Y + (_big ? 38 : 30);
+        float bs = _big ? 54 : 36, top = r.Y + 38;           // (under a header look's band)
         var disc = new RectangleF(x, top, bs, bs);
         if (Press(Ui.Id("wlp", id), disc, PowerGlyph, null, t.On, t.Ready || t.CanWake, _big ? 22 : 18, true, accentFill: false, fill: t.Glow))
         { lamp?.Toggle(); _dirty = true; }
@@ -288,7 +288,7 @@ public sealed partial class WristPanel
         CaptionRow(r, t.Ready ? t.Name : null, CapRgb);
         if (w.H >= 2 && !t.Ready) { LxNone(r, "", t.Msg, t.Hint); return; }
         // the four quick effects
-        float cs = _big ? 50 : 40, top = r.Y + (_big ? 38 : 30), gap = (iw - 4 * cs) / 3;
+        float cs = _big ? 50 : 36, top = r.Y + 38, gap = (iw - 4 * cs) / 3;     // (under a header look's band)
         for (int i = 0; i < 4; i++)
         {
             var b = new RectangleF(x + i * (cs + gap), top, cs, cs);

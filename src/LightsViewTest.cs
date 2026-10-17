@@ -337,6 +337,7 @@ static partial class Tools
         }
         cfg.Data.Appearance = new AppearanceConfig { Clock24h = true };
         Theme.Apply(cfg.Data.Appearance);
+        StylesRun(wrist, data, painter, cfg, gpu, dir);           // every kind in every look (the light's and the RGB's among them)
         System.Globalization.CultureInfo.CurrentCulture = culture;
         Log.Info("snapshot (lights only) written to " + dir);
         return 0;
