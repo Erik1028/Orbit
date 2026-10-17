@@ -691,10 +691,11 @@ static class ClockArt
         uint mid = Theme.Mix(L.Fill0, L.Fill1, 0.5f);
         if (id == "squircle")
         {
+            // the chip as the others (a rounded card), the clock inside its height (it was sized by the chip's width: it stuck out)
             bool apple = L.Style == 0;
-            p.FillSquircle(r, apple ? 0xFF262626 : L.Fill0, apple ? 0xFF101010 : L.Fill1, apple ? 90 : L.Angle, apple ? 1 : L.Span);
+            p.FillGradient(r, apple ? 0xFF262626 : L.Fill0, apple ? 0xFF101010 : L.Fill1, 6f, apple ? 90 : L.Angle, apple ? 1 : L.Span);
             uint ink = apple ? 0xFFF8F8F8 : L.Text;
-            float s = r.Width / 2;
+            float s = MathF.Min(r.Width, r.Height) / 2 - 1;
             for (int i = 0; i < 12; i++) Hand(p, cx, cy, i / 12f, s * 0.68f, s * 0.86f, ink, 1.2f);
             Hand(p, cx, cy, 10.15f / 12, 0, s * 0.42f, ink, 2.4f);
             Hand(p, cx, cy, 9 / 60f, 0, s * 0.72f, ink, 1.8f);

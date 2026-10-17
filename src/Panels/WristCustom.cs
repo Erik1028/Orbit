@@ -1454,43 +1454,48 @@ public sealed partial class WristPanel
     const uint AppleOrange = 0xFFFF8C32;                            // the second hand (the picture's orange: redder than #FF9500)
     static readonly string[] Numerals = { "12", "3", "6", "9" };
 
-    // The face is the card (CardBack draws it): in the default look the picture's - its near black, a light rim strongest along the
-    // top - and with a look of its own that look's card, squircle-shaped. The ticks are printed on it, drawn with the card: they sit
-    // closer to its edge than anything else a card holds (the layout checks see them as the card).
+    // The face is the card (CardBack draws it), the same rounded square as every card (Erik 10-17: the squircle stood out): in the
+    // default look the picture's - its near black, a light rim strongest along the top - and with a look of its own that look's card.
+    // The ticks are printed on it, drawn with the card, ending on its shape drawn in a little: they sit closer to its edge than
+    // anything else a card holds (the layout checks see them as the card).
     void AnalogFace(RectangleF r, WatchWidgets.Kind k, WatchWidget w, in Bento.Look L, uint f0, uint f1, bool cards)
     {
         bool apple = Bento.StyleIndex(w.Style) == 0;
         if (apple)
         {
             float fa = cards ? 0.96f : 1;
-            _p.FillSquircle(r, Theme.WithAlpha(AppleTop, fa), Theme.WithAlpha(AppleBottom, fa), 90, 1, FaceN);
-            _p.StrokeSquircle(RectangleF.Inflate(r, -0.6f, -0.6f), 0x66FFFFFF, 0x17FFFFFF, 0x0AFFFFFF, 1.2f, 80, 0.5f, FaceN);
+            _p.FillGradient(r, Theme.WithAlpha(AppleTop, fa), Theme.WithAlpha(AppleBottom, fa), CardRadius, 90, 1);
+            var rim = RectangleF.Inflate(r, -0.6f, -0.6f);
+            _p.Stroke(rim, 0x14FFFFFF, 1.2f, CardRadius - 0.6f);
+            _p.PushClip(new RectangleF(r.X - 1, r.Y - 1, r.Width + 2, r.Height * 0.4f));       // stronger along the top
+            _p.Stroke(rim, 0x40FFFFFF, 1.2f, CardRadius - 0.6f);
+            _p.PopClip();
         }
         else
         {
-            _p.FillSquircle(r, f0, f1, L.Angle, L.Span, FaceN);
-            if (L.Sheen != 0) _p.FillSquircle(r, L.Sheen, L.Sheen & 0x00FFFFFF, 90, 0.5f, FaceN);
+            _p.FillGradient(r, f0, f1, CardRadius, L.Angle, L.Span);
+            if (L.Sheen != 0) _p.FillGradient(r, L.Sheen, L.Sheen & 0x00FFFFFF, CardRadius, 90, 0.5f);
             if (L.Band != 0)
             {
                 _p.PushClip(new RectangleF(r.X - 1, r.Y - 1, r.Width + 2, BandHeight(k, w, r) + 1));
-                _p.FillSquircle(r, L.Band, L.Band, 90, 1, FaceN);
+                _p.Fill(r, L.Band, CardRadius);
                 _p.PopClip();
             }
             if (L.Border != 0 && L.BorderW > 0)
             {
-                float i = L.BorderW / 2;
-                _p.StrokeSquircle(RectangleF.Inflate(r, -i, -i), L.Border, L.BorderW, FaceN);
+                float i = L.BorderW * 0.48f;
+                _p.Stroke(RectangleF.Inflate(r, -i, -i), L.Border, L.BorderW, CardRadius - i);
             }
         }
         float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2, s = MathF.Min(r.Width, r.Height) / 2;
-        float ia = r.Width / 2 - TickInset * s, ib = r.Height / 2 - TickInset * s;
+        float ia = r.Width / 2 - TickInset * s, ib = r.Height / 2 - TickInset * s, ic = MathF.Max(0, CardRadius - TickInset * s);
         float hw = MathF.Max(1.9f, s * 0.04f), mw = MathF.Max(1, s * 0.02f);
         uint hc = apple ? AppleInk : L.Text, mc = apple ? AppleTick : L.Sub;
         for (int i = 0; i < 60; i++)
         {
             float t = i / 60f * MathF.Tau, dx = MathF.Sin(t), dy = -MathF.Cos(t);
-            // where this ray meets the ticks' squircle
-            float ro = 1 / MathF.Pow(MathF.Pow(MathF.Abs(dx) / ia, TickN) + MathF.Pow(MathF.Abs(dy) / ib, TickN), 1 / TickN);
+            // where this ray meets the card's shape drawn in by the inset
+            float ro = RayToRoundRect(dx, dy, ia, ib, ic);
             bool hour = i % 5 == 0;
             float ri = hour ? s * 0.71f : ro - s * 0.14f;
             _p.Line(cx + dx * ri, cy + dy * ri, cx + dx * ro, cy + dy * ro, hour ? hc : mc, hour ? hw : mw);
@@ -1501,6 +1506,20 @@ public sealed partial class WristPanel
     // colour round them so they read over the ticks and numerals - and the seconds: a thin orange hand from a short tail past the
     // pivot, its orange ring with a dark pin on the white pivot. It ticks once a second (WristPanel.Update draws just after each).
     // A colour of its own replaces the orange; on a look's card the ink is the look's text (the orange too where it would not read).
+    // from the middle along (dx, dy): how far to a rounded rectangle of half sizes a x b and corner radius rc
+    static float RayToRoundRect(float dx, float dy, float a, float b, float rc)
+    {
+        float ux = MathF.Abs(dx), uy = MathF.Abs(dy);
+        float d = MathF.Min(ux > 1e-6f ? a / ux : float.MaxValue, uy > 1e-6f ? b / uy : float.MaxValue);
+        float ca = a - rc, cb = b - rc;
+        if (rc > 0 && ux * d > ca && uy * d > cb)
+        {
+            float uc = ux * ca + uy * cb;                                 // the corner's arc: |d u - c| = rc, the far root
+            d = uc + MathF.Sqrt(MathF.Max(0, uc * uc - (ca * ca + cb * cb) + rc * rc));
+        }
+        return d;
+    }
+
     void AnalogS(RectangleF r, WatchWidget w, DateTime now)
     {
         bool apple = Bento.StyleIndex(w.Style) == 0;
