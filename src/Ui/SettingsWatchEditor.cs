@@ -419,11 +419,12 @@ public sealed partial class SettingsView
             if (sel != null && list.Contains(sel))
             {
                 // a clock: its designs first, then its look - both as one row of chips, so it all fits above Done
-                bool clock = WatchWidgets.VariantsOf(sel.Type) != null;
+                bool clock = WatchWidgets.VariantsOf(sel.Type) != null, lamp = sel.Type == "light";
                 float fy = FolderActions(ui, list, sel, rx, rw);      // a folder: Open folder, Rename... (SettingsView.Folder.cs)
                 if (clock) ClockDesigns(ui, sel, rx, 180, rw);
-                if (Theme.Cyber) CyberWidgetInfo(ui, sel, rx, (clock ? 268 : 200) + fy, rw);     // its Modern look does not apply (SettingsCyber.cs)
-                else WidgetLook(ui, list, sel, rx, (clock ? 250 : 182) + fy, rw, clock);
+                if (lamp) BulbRow(ui, rx, 180, rw);                 // the bulb Lumos is asked about (SettingsView.Lights.cs)
+                if (Theme.Cyber) CyberWidgetInfo(ui, sel, rx, (clock || lamp ? 268 : 200) + fy, rw);     // its Modern look does not apply (SettingsCyber.cs)
+                else WidgetLook(ui, list, sel, rx, (clock || lamp ? 250 : 182) + fy, rw, clock || lamp);
             }
         }
         if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) { EditingWatch = false; _wadd = false; LeaveFolder(); }
@@ -790,6 +791,7 @@ public sealed partial class SettingsView
                         }
                     }
                 }
+                if (sel.Type == "light") Bulb95Row(ui, 388, 348);       // the bulb Lumos is asked about (SettingsView.Lights.cs)
             }
             if (ui.Button95("we95.rm", new RectangleF(647, 321, 75, 23), "Re&move")) RemoveSelected(ui, list);
             FolderSelected95(ui, list, sel);    // a folder: Open folder, Rename...; keep its widgets? (SettingsView.Folder.cs)

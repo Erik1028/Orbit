@@ -543,6 +543,8 @@ public sealed partial class WristPanel
             case "weather": Weather95Detail(c, d); break;
             case "friends": Friends95Detail(c, d); break;
             case "recap": Recap95Detail(c, d); break;
+            case "light": Light95Detail(c, d); break;
+            case "rgb": Rgb95Detail(c, d); break;
         }
     }
 

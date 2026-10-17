@@ -86,6 +86,10 @@ public static class WatchWidgets
         new("friends", "Friends online", "Friends", "\uE8FA", W95Icons.Id.People, new[] { (1, 1), (2, 1), (2, 2) }, 1),
         // the last VR session's recap: how long, photos, worlds, people, the longest stay (Sys/SessionRecap.cs, WristRecap.cs)
         new("recap", "Session recap", "Summary", "\uE81C", W95Icons.Id.Hourglass, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        // the room light through Lumos and the PC's RGB through Prisma (Sys/RoomLights.cs, WristLights.cs): a tap switches it; bigger, its
+        // brightness and quick choices; opened, all of it
+        new("light", "Light", "Light", "\uEA80", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        new("rgb", "RGB lighting", "RGB Lighting", "\uE790", W95Icons.Id.Palette, new[] { (1, 1), (2, 1), (2, 2) }, 1),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -404,6 +408,7 @@ public static class WatchWidgets
         ["weather"] = new[] { M, S, L, Wd },
         ["folder"] = new[] { S, M, L },
         ["friends"] = new[] { M, S, L }, ["recap"] = new[] { M, S, L },
+        ["light"] = new[] { M, S, L }, ["rgb"] = new[] { M, S, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 

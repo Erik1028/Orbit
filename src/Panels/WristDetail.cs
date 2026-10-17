@@ -41,6 +41,8 @@ public sealed partial class WristPanel
         "folder" => "folder",
         "friends" => "friends",
         "recap" => "recap",
+        "light" => "light",
+        "rgb" => "rgb",
         _ => null,
     };
 
@@ -185,6 +187,8 @@ public sealed partial class WristPanel
             case "weather": WeatherDetail(E, d); break;
             case "friends": FriendsDetail(E, d); break;
             case "recap": RecapDetail(E, d); break;
+            case "light": LightDetail(c, d); break;
+            case "rgb": RgbDetail(c, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -617,6 +621,8 @@ public sealed partial class WristPanel
             case "weather": Weather95Detail(c, d); break;
             case "friends": Friends95Detail(c, d); break;
             case "recap": Recap95Detail(c, d); break;
+            case "light": Light95Detail(c, d); break;
+            case "rgb": Rgb95Detail(c, d); break;
         }
     }
 

@@ -112,6 +112,7 @@ static partial class Tools
         data.Weather = WeatherViewTools.Report();       // a made-up forecast for a made-up town: never the network (WeatherViewTest.cs)
         data.Friends = SocialViewTools.Friends();       // made-up friends online and a made-up evening's recap: never VRCX's (SocialViewTest.cs)
         data.Recap = SocialViewTools.Recap();
+        LightsViewTools.Fake(data);                     // a made-up light and RGB: never Lumos, Prisma or a device (LightsViewTest.cs)
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
@@ -130,6 +131,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "weather") return WeatherOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "folder") return FolderOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "social") return SocialOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "lights") return LightsOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -593,6 +595,8 @@ static partial class Tools
             FolderViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the folder: opened, its widgets live, one's view and back
             if (tag == "") SocialViewTools.DataChecks(wrist, data, cfg, dir);     // a made-up VRCX database read, the order, the recap's numbers and when
             SocialViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the friends and the recap, widgets and opened, on made-up data
+            if (tag == "") LightsViewTools.DataChecks(wrist, data, dir);     // the Lumos / Prisma links on a made-up Lumos and a pipe of the tool's own
+            LightsViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the light and RGB widgets and opened, on made-up states
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -2479,15 +2483,15 @@ static partial class Tools
         }
         // every kind at every size alone, in each look (no page: whatever sticks out shows), the colours taking turns
         uint[] turns = { navy, teal, amber, Col("Pink"), Col("White"), Col("Purple") };
-        int turn = 0, wxTurn = 0;      // (the weather - and the kinds after it - take their turns apart: the kinds before keep the colours they were checked in)
         static bool Apart(string id) => id is "weather" or "friends" or "recap";
+        int turn = 0, wxTurn = 0, lxTurn = 0;      // (the weather, the light and the RGB take their turns apart: the kinds before them keep the colours they were checked in)
         foreach (var look in looks)
             foreach (var kind in WatchWidgets.Kinds)
                 foreach (var (w, h) in kind.SizesFor(false))
                 {
                     if (kind.Id == "analog" && w == 1) continue;     // below, in every colour (the others keep the colours they had)
                     wcfg.Widgets = new List<WatchWidget>
-                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = Apart(kind.Id) ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id is "light" or "rgb" ? turns[lxTurn++ % turns.Length] : Apart(kind.Id) ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} {w}x{h}", null);
                 }
         // the 1x1 analog clock (its face is its card, ticks to its edge): each look in each colour and without one
@@ -2504,7 +2508,7 @@ static partial class Tools
                 foreach (var (w, h) in WatchWidgets.Sizes43(kind))
                 {
                     wcfg.Widgets = new List<WatchWidget>
-                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = Apart(kind.Id) ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id is "light" or "rgb" ? turns[lxTurn++ % turns.Length] : Apart(kind.Id) ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} 4x3 {w}x{h}", null);
                 }
         wcfg.Grid = null;

@@ -380,6 +380,7 @@ public sealed partial class WristPanel
         "fps" => "FPS", "reproj" => "REPR", "gpu" => "GPU", "vram" => "VRAM", "cpu" => "CPU", "ram" => "RAM", "room" => "ROOM",
         "dock" => "HEXPAD", "minesweeper" => "MINES", "mic" => "MIC", "notifications" => "NOTIFY", "buttons" => "BUTTONS",
         "photo" => "PHOTO", "weather" => "WTHR", "friends" => "WHO", "recap" => "LAST",
+        "light" => "LIGHT", "rgb" => "RGB",
         _ => T.Up(id),
     };
 
@@ -463,6 +464,8 @@ public sealed partial class WristPanel
             case "weather": TWeather(c, d, w); break;            // wttr.in's (WristWeather.Term.cs)
             case "friends": TFriends(r, c, w, d); break;         // who (WristSocial.Term.cs)
             case "recap": TRecap(c, w, d); break;                // the session's log (WristSocial.Term.cs)
+            case "light": TLight(r, c, w, d, id); break;         // (WristLights.Term.cs)
+            case "rgb": TRgb(r, c, w, d, id); break;
             case "perf":
                 if (c.Width >= 280) TStatus(d, c.X + 3, MathF.Floor(c.Y + (c.Height - 7) / 2), c.Width - 6, false);
                 else TPerfTwo(d, c);

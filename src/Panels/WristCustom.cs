@@ -603,6 +603,7 @@ public sealed partial class WristPanel
             else if (PhotoCard(k, d)) PhotoBack(r, w, d);         // the photo is the card (WristPhoto.cs)
             else if (!k.Button && Theme.Cyber) CyberCard(r, k, w, cards, danger);
             else if (k.Id == "weather" && !styled && !danger) WeatherBack(r, d, cards);     // the sky of the weather in its card (WristWeather.cs)
+            else if (k.Id is "light" or "rgb" && !styled && !danger) LampBack(r, k, d, cards);     // the light's colour in its card (WristLights.cs)
             else if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
             if (!Backgrounds)
             {
@@ -656,6 +657,8 @@ public sealed partial class WristPanel
             case "folder": FolderOrbit(r, w, d, id); break;          // its widgets' icons; Cyber's too (WristFolder.cs)
             case "friends": FriendsOrbit(r, w, d, id); break;         // VRCX's friends online (WristFriends.cs)
             case "recap": RecapOrbit(r, w, d, id); break;             // the last session (WristRecap.cs)
+            case "light": LightOrbit(r, w, d, id); break;
+            case "rgb": RgbOrbit(r, w, d, id); break;
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -1321,7 +1324,12 @@ public sealed partial class WristPanel
         float size = FitSize(s, iw, 15, FontWeight.SemiBold, null), least = Theme.OwnFont ? 15 : 14;
         for (int i = 1; i < forms.Length && size < least; i++) { s = forms[i]; size = FitSize(s, iw, 15, FontWeight.SemiBold, null); }
         size = MathF.Max(14, size);
-        TextAt(Ellipsize(s, iw, size, FontWeight.SemiBold), x, by, iw + 2, size < 15 ? Theme.Mix(Sub, Bento.Text, 0.3f) : Sub, size, FontWeight.SemiBold);
+        // the grey still reads (4.5:1) on every card colour: a step toward the text colour where it would not (a two-tone purple: 4.2)
+        uint c = size < 15 ? Theme.Mix(Sub, Bento.Text, 0.3f) : Sub, b0 = Bento.Cur.Fill0 | 0xFF000000, b1 = Bento.Cur.Fill1 | 0xFF000000;
+        float Worst(uint ink) => MathF.Min(Bento.Contrast(ink, b0), Bento.Contrast(ink, b1));     // the card's two colours: either may be under it
+        for (float t = 0.3f; t <= 1.01f && Worst(c) < 4.5f; t += 0.175f) c = Theme.Mix(Sub, Bento.Text, t);
+        if (Worst(c) < 4.5f) c = Worst(0xFF000000) >= Worst(0xFFFFFFFF) ? 0xFF000000 : 0xFFFFFFFF;
+        TextAt(Ellipsize(s, iw, size, FontWeight.SemiBold), x, by, iw + 2, c, size, FontWeight.SemiBold);
     }
 
     void CalendarOrbit(RectangleF r, WatchWidget w, DateTime now)
@@ -2359,6 +2367,8 @@ public sealed partial class WristPanel
                 case "weather": Weather95(c, d, w); break;
                 case "friends": Friends95(c, w, d); break;
                 case "recap": Recap95(c, w, d); break;
+                case "light": Light95(r, c, w, d, id); break;          // (WristLights95.cs)
+                case "rgb": Rgb95(r, c, w, d, id); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);
