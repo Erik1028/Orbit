@@ -123,17 +123,22 @@ public sealed class SettingsPanel : IPointerTarget, IDisposable
         }
         _ui.Begin(ptr, Scale);
         _p.Begin(Surf.Bitmap, 0x00000000, Scale);
-        var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
-        if (Theme.Cyber) _view.Draw(_ui);          // Cyber: the view draws its own cut frame (SettingsCyber.cs)
-        else
-        {
-            _p.PushRoundedClip(all, 22);
-            _view.Draw(_ui);
-            _p.PopRoundedClip();
-            _p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), Theme.PanelLine, 2, 21);
-        }
+        DrawBody(_p, _ui, _view);
         _p.End();
         _ui.End();
+    }
+
+    // the modern panel's picture, between Begin (cleared see-through) and End - also --snapshot's settings_panel.png and the perf tool's
+    public static void DrawBody(Painter p, Ui ui, SettingsView view)
+    {
+        var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
+        if (Theme.Cyber) view.Draw(ui);          // Cyber: the view draws its own cut frame (SettingsCyber.cs)
+        else
+        {
+            view.Draw(ui);
+            p.CutCorners(all, 22);           // its rounded corners (no clip layer: Painter.CutCorners)
+            p.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), Theme.PanelLine, 2, 21);
+        }
     }
 
     // Draws every tab once off-screen (fonts, layers, previews), so the first time the panel opens
