@@ -93,6 +93,33 @@ public static class WatchWidgets
     public static Kind[] PaletteAbc(Func<Kind, string> shown = null) =>
         Palette.OrderBy(k => shown?.Invoke(k) ?? Lang.T(k.Name), StringComparer.CurrentCultureIgnoreCase).ToArray();
 
+    // The editor's categories (Erik 10-17: the list grew too long). Kinds still to come are named here already; a kind nobody
+    // placed lands in More.
+    public static readonly string[] Categories = { "Time", "System", "Media", "VRChat", "Controls", "More" };
+    public static int CategoryOf(string id) => id switch
+    {
+        "time" or "date" or "calendar" or "analog" or "timer" or "stopwatch" or "session" => 0,
+        "perf" or "graph" or "fps" or "reproj" or "gpu" or "vram" or "cpu" or "ram" or "battery" or "temps" => 1,
+        "media" or "volume" or "mixer" or "mic" => 2,
+        "room" or "notifications" or "status" or "friends" or "recap" or "photo" or "memory" => 3,
+        "keyboard" or "desktops" or "recenter" or "layout" or "night" or "settings" or "theater" or "buttons" or "dock" or "light" or "rgb" => 4,
+        _ => 5,
+    };
+
+    // a category's kinds (cat < 0: all), or with a search the ones whose name (as shown, or in English) or id holds it - ABC
+    public static Kind[] PaletteFor(int cat, string search)
+    {
+        var all = PaletteAbc();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var cmp = System.Globalization.CultureInfo.CurrentCulture.CompareInfo;
+            const System.Globalization.CompareOptions o = System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace;
+            string q = search.Trim();
+            return Array.FindAll(all, k => cmp.IndexOf(Lang.T(k.Name), q, o) >= 0 || cmp.IndexOf(k.Name, q, o) >= 0 || cmp.IndexOf(k.Id, q, o) >= 0);
+        }
+        return cat < 0 ? all : Array.FindAll(all, k => CategoryOf(k.Id) == cat);
+    }
+
     // (a loop, not Array.Find: the watch asks for every widget in every frame, and a lambda holding the id was made each time)
     public static Kind Find(string id)
     {

@@ -291,6 +291,12 @@ public sealed class SettingsWindow : Form
         _ptr.Move(e.X, e.Y); _ptr.Release(); Capture = false; Dirty = true;
     }
     protected override void OnMouseWheel(MouseEventArgs e) { _ptr.Wheel += e.Delta / 120f; Dirty = true; }
+    // typing in the window: the watch editor's palette search (SettingsView.TypeKey)
+    protected override void OnKeyPress(KeyPressEventArgs e)
+    {
+        if (View.TypeKey(e.KeyChar)) { e.Handled = true; Dirty = true; }
+        else base.OnKeyPress(e);
+    }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {

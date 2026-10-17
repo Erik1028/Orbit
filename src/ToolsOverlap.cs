@@ -64,6 +64,21 @@ static partial class Tools
             ui.ResetAnimations();
             Modern();
             surf.SavePng(gpu, System.IO.Path.Combine(dir, $"settings_window_{name}.png"));
+            // the watch editor in the desktop window: the palette's categories and a search typed in ("vo": Volume, Volume mixer)
+            var ask0 = view.AskFile;
+            view.AskFile = (_, _, _) => { };
+            view.Tab = SettingsView.TabWrist;
+            string face0 = cfg.Data.Wrist.Face;
+            cfg.Data.Wrist.Face = "custom";                     // the editor is the custom face's
+            view.EditingWatch = true;
+            foreach (char ch in "vo") view.TypeKey(ch);
+            ui.ResetAnimations();
+            Modern();
+            surf.SavePng(gpu, System.IO.Path.Combine(dir, $"settings_window_search_{name}.png"));
+            view.TypeKey((char)27);
+            view.EditingWatch = false;
+            cfg.Data.Wrist.Face = face0;
+            view.AskFile = ask0;
         }
         view.OnClose95 = close0; view.OnMinimize = min0;
         System.Globalization.CultureInfo.CurrentCulture = culture;
