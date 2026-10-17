@@ -598,6 +598,7 @@ public sealed partial class WristPanel
             else if (PhotoCard(k, d)) PhotoBack(r, w, d);         // the photo is the card (WristPhoto.cs)
             else if (!k.Button && Theme.Cyber) CyberCard(r, k, w, cards, danger);
             else if (k.Id == "weather" && !styled && !danger) WeatherBack(r, d, cards);     // the sky of the weather in its card (WristWeather.cs)
+            else if (k.Id is "light" or "rgb" && !styled && !danger) LampBack(r, k, d, cards);     // the light's colour in its card (WristLights.cs)
             else if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
             if (!Backgrounds)
             {
@@ -648,6 +649,8 @@ public sealed partial class WristPanel
             case "mixer": MixerOrbit(r, w, id); break;
             case "photo": PhotoOrbit(r, w, d, id); break;
             case "weather": WeatherOrbit(r, w, d, id); break;
+            case "light": LightOrbit(r, w, d, id); break;
+            case "rgb": RgbOrbit(r, w, d, id); break;
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2319,6 +2322,8 @@ public sealed partial class WristPanel
                 case "mixer": Mixer95(r, c, w, id); break;
                 case "photo": Photo95(r, c, w, d, id); break;
                 case "weather": Weather95(c, d, w); break;
+                case "light": Light95(r, c, w, d, id); break;          // (WristLights95.cs)
+                case "rgb": Rgb95(r, c, w, d, id); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);

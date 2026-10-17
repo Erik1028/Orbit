@@ -25,6 +25,8 @@ public sealed class PanelData
     public NotificationHistory Notes;    // the last notifications shown (the notifications widget)
     public PhotoWatcher.Snapshot Photos; // VRChat's newest photos (the latest photo widget; null = not followed)
     public WeatherReport Weather;        // the weather widget's report (Sys/Weather.cs; null = none asked for)
+    public LumosLink Lamp;               // the room light through Lumos (Sys/RoomLights.cs; null = none)
+    public PrismaLink Rgb;               // the PC's RGB through Prisma
     public (double pos, double dur)? FakeTimeline;     // --snapshot: where in the track (null: the media session's)
     public uint[] FakeArt;               // --snapshot: a cover with FakeMedia (MediaInfo.ArtSize square, premultiplied)
     public bool StatusLine;              // the chatbox status line is on
@@ -135,6 +137,7 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
         }
         if (MixerChanged()) _dirty = true;           // the mixer's apps: a level moved, an app came or went (WristMixer.cs)
         if (PhotoChanged(d)) _dirty = true;          // a new photo, its metadata, a thumbnail made (WristPhoto.cs)
+        if (LightsChanged(d)) _dirty = true;         // the light / the RGB answered or were switched (WristLights.cs)
         // motion is drawn at the headset's rate (it was 45 fps; laid-out text is kept now, a frame is ~1.5 ms)
         if (_dirty || now >= _nextDraw || Animating)
         {

@@ -38,6 +38,8 @@ public sealed partial class WristPanel
         "notifications" => "notifications",
         "photo" => "photo",
         "weather" => "weather",
+        "light" => "light",
+        "rgb" => "rgb",
         _ => null,
     };
 
@@ -175,6 +177,8 @@ public sealed partial class WristPanel
             case "notifications": NotesDetail(E, d); break;
             case "photo": PhotoDetail(E, d); break;
             case "weather": WeatherDetail(E, d); break;
+            case "light": LightDetail(c, d); break;
+            case "rgb": RgbDetail(c, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -603,6 +607,8 @@ public sealed partial class WristPanel
             case "mixer": Mixer95Detail(c); break;
             case "notifications": Notes95Detail(c, d); break;
             case "weather": Weather95Detail(c, d); break;
+            case "light": Light95Detail(c, d); break;
+            case "rgb": Rgb95Detail(c, d); break;
         }
     }
 

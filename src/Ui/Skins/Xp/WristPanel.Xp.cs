@@ -328,6 +328,8 @@ public sealed partial class WristPanel
             case "buttons": Group95(c, w, d, id); break;
             case "mixer": Mixer95(r, c, w, id); break;
             case "weather": Weather95(c, d, w); break;
+            case "light": Light95(r, c, w, d, id); break;
+            case "rgb": Rgb95(r, c, w, d, id); break;
             case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
             case "session":
                 string sv = SessionText(d);

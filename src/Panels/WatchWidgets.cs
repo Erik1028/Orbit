@@ -79,6 +79,10 @@ public static class WatchWidgets
         new("mixer", "Volume mixer", "Volume Mixer", WristPanel.MixKindIcon, W95Icons.Id.Note, new[] { (2, 1), (2, 2), (3, 2) }, 1),
         // the weather now and the next hours / days from Open-Meteo (Sys/Weather.cs, WristWeather.cs); a tap opens the forecast
         new("weather", "Weather", "Weather", "\uE706", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2), (4, 1) }, 1),
+        // the room light through Lumos and the PC's RGB through Prisma (Sys/RoomLights.cs, WristLights.cs): a tap switches it; bigger, its
+        // brightness and quick choices; opened, all of it
+        new("light", "Light", "Light", "\uEA80", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        new("rgb", "RGB lighting", "RGB Lighting", "\uE790", W95Icons.Id.Palette, new[] { (1, 1), (2, 1), (2, 2) }, 1),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -361,6 +365,7 @@ public static class WatchWidgets
         ["mic"] = new[] { S, M }, ["notifications"] = new[] { M, L }, ["buttons"] = new[] { M, L },
         ["mixer"] = new[] { L, M },
         ["weather"] = new[] { M, S, L, Wd },
+        ["light"] = new[] { M, S, L }, ["rgb"] = new[] { M, S, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 

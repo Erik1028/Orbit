@@ -305,6 +305,8 @@ public sealed partial class WristPanel
             case "buttons": CyberGroup(r, w, d, id); return true;
             case "photo": CyberPhoto(r, w, d, id); return true;
             case "weather": CyberWeather(r, w, d, id); return true;
+            case "light": CyberLight(r, w, d, id); return true;
+            case "rgb": CyberRgb(r, w, d, id); return true;
         }
         return false;
     }

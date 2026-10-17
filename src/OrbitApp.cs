@@ -31,6 +31,8 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
     readonly AudioMixer _mixer = new();              // the output device's apps; the Windows volume in VR (Sys/AudioMixer.cs)
     readonly NotificationHistory _notes = new();     // the watch's notifications widget
     readonly WeatherService _weather = new();        // the weather widget's report (Sys/Weather.cs)
+    readonly LumosLink _lumos = new();               // the room light through Lumos (Sys/RoomLights.cs)
+    readonly PrismaLink _prisma = new();             // the PC's RGB through Prisma
     readonly HexpadLink _hexpad = new();
     readonly RoomWatcher _room = new();
     RoomWatcher.Snapshot _roomSnap = new();
@@ -553,6 +555,13 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _weather.SetLocation(C.Weather?.Location);
         _weather.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "weather");
         _data.Weather = _weather.Report;
+        // the light and the RGB: their apps asked while their widget is on one of the pages (the bulb read again when the watch shows)
+        _lumos.SetBulb(C.Lights?.Bulb);
+        _lumos.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "light");
+        _lumos.Watched = _wrist?.Alpha > 0.02f;
+        _prisma.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "rgb");
+        _data.Lamp = _lumos;
+        _data.Rgb = _prisma;
         _data.StatusLine = C.Chatbox.StatusLine;
         _data.Theater = _theater.On;
         _data.VrConnected = _vr.Connected;
@@ -1904,6 +1913,8 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _room.Dispose();
         _photos.Dispose();
         _weather.Dispose();
+        _lumos.Dispose();
+        _prisma.Dispose();
         _pacer.Dispose();
         _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();

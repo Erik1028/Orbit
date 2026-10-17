@@ -175,6 +175,14 @@ public sealed class WeatherConfig
     public string Units { get; set; }                 // null = °C and km/h | f = °F and mph
 }
 
+// The room light widget (Sys/RoomLights.cs): which bulb Lumos is asked about - its address, nothing of the account (Lumos holds that).
+// Null in Config = none set, written only once set.
+public sealed class LightsConfig
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Bulb { get; set; }                  // the Tapo bulb's IP address as Lumos knows it (null: "Set the bulb")
+}
+
 public sealed class GeneralConfig
 {
     public string LaserHand { get; set; } = "both";
@@ -296,6 +304,8 @@ public sealed class Config
     public List<GameRule> GameRules { get; set; }      // Layouts > Per game (null = none)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WeatherConfig Weather { get; set; }         // the weather widget's place and units (null = the defaults)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LightsConfig Lights { get; set; }           // the light widget's bulb (null = none set)
 
     public static List<LayoutProfile> DefaultLayouts() => new()
     {
