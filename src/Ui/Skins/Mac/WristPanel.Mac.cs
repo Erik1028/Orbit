@@ -538,6 +538,7 @@ public sealed partial class WristPanel
             case "volume": Volume95Detail(c); break;
             case "mixer": Mixer95Detail(c); break;
             case "notifications": Notes95Detail(c, d); break;
+            case "weather": Weather95Detail(c, d); break;
         }
     }
 

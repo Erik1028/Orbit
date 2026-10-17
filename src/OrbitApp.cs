@@ -30,6 +30,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
     readonly MediaInfo _media = new();
     readonly AudioMixer _mixer = new();              // the output device's apps; the Windows volume in VR (Sys/AudioMixer.cs)
     readonly NotificationHistory _notes = new();     // the watch's notifications widget
+    readonly WeatherService _weather = new();        // the weather widget's report (Sys/Weather.cs)
     readonly HexpadLink _hexpad = new();
     readonly RoomWatcher _room = new();
     RoomWatcher.Snapshot _roomSnap = new();
@@ -546,6 +547,10 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         WatchWidgets.DockAvailable = C.Dock.Enabled && _hexpad.Present;     // the editor offers the dock widget (also on the desktop)
         _room.Active = _vr.Connected && C.Room.Enabled;
         _data.Room = C.Room.Enabled ? _roomSnap : null;
+        // the weather: the place from the settings (else Hexpad's), fetched while a weather widget is on one of the pages
+        _weather.SetLocation(C.Weather?.Location);
+        _weather.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "weather");
+        _data.Weather = _weather.Report;
         _data.StatusLine = C.Chatbox.StatusLine;
         _data.Theater = _theater.On;
         _data.VrConnected = _vr.Connected;
@@ -1895,6 +1900,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         foreach (var w in _windowPanels) w.Dispose();
         _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose(); _whatsNewPanel?.Dispose();
         _room.Dispose();
+        _weather.Dispose();
         _pacer.Dispose();
         _hexpad.Dispose();
         _dashSurf?.Dispose(); _thumbSurf?.Dispose();

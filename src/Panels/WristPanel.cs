@@ -23,6 +23,7 @@ public sealed class PanelData
     public HexpadFaces DockFaces;
     public RoomWatcher.Snapshot Room;    // who is in the VRChat instance (null = not followed)
     public NotificationHistory Notes;    // the last notifications shown (the notifications widget)
+    public WeatherReport Weather;        // the weather widget's report (Sys/Weather.cs; null = none asked for)
     public (double pos, double dur)? FakeTimeline;     // --snapshot: where in the track (null: the media session's)
     public uint[] FakeArt;               // --snapshot: a cover with FakeMedia (MediaInfo.ArtSize square, premultiplied)
     public bool StatusLine;              // the chatbox status line is on

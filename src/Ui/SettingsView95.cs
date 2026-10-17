@@ -407,6 +407,7 @@ public sealed partial class SettingsView
     void Wrist95(Ui ui)
     {
         if (EditingWatch && C.Wrist.Face == "custom") { Wrist95Editor(ui); return; }
+        bool inert95 = Dialog95Begin(ui, _wx95);          // the Weather dialog over the page (SettingsView.Weather.cs)
         var p = ui.P;
         var w = C.Wrist;
         bool custom = w.Face == "custom";
@@ -465,6 +466,7 @@ public sealed partial class SettingsView
             p.ImageNearest(c95.Bitmap, new RectangleF(desk.X + (desk.Width - c95.W) / 2, desk.Y + (desk.Height - c95.H) / 2, c95.W, c95.H));
         Hint(ui, 388, 342, 334, "Turn your wrist towards you to see it; point at it with the other hand to use its buttons. " +
                                 "Hold the grip on it to move it.", 60);
+        Weather95(ui, inert95);
     }
 
     // ---------------- Keyboard ----------------

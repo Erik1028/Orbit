@@ -698,6 +698,7 @@ public sealed partial class SettingsView
             ChooseFace(faces[fi]);
         b = C.Appearance.Clock24h;
         if (ui.Toggle("w.24h", new RectangleF(rx, prev.Bottom + 82, cw, 44), "24-hour clock", ref b, null, w.Enabled)) C.Appearance.Clock24h = b;
+        WeatherRows(ui, rx + 10, prev.Bottom + 180, cw - 20);       // the weather widget's place and units (SettingsView.Weather.cs)
         if (custom)
         {
             if (_h.Wrist.Animating) ui.Animating = true;      // keep the springy preview moving
