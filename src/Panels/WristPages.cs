@@ -56,6 +56,7 @@ public sealed partial class WristPanel
     {
         int n = 0;
         for (int i = 0; i < WatchPages.Count(C); i++) n += WatchPages.Widgets(C, i)?.Count ?? 0;
+        n += FolderKidTotal();                      // the widgets in folders (WristFolder.cs)
         return n;
     }
 

@@ -74,6 +74,10 @@ public sealed class WatchWidget
     public List<string> Items { get; set; }             // a button group's buttons (button kinds' ids, 2-6)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string Variant { get; set; }                 // a clock's design (WatchWidgets.Variants); null = its size's default
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Name { get; set; }                    // a folder's name (null = "Folder")
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WatchWidget> Children { get; set; }     // a folder's widgets, each where it is on the folder's own grid (GridSpec.Folder)
 }
 
 public sealed class DesktopConfig

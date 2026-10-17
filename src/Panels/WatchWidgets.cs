@@ -79,6 +79,9 @@ public static class WatchWidgets
         new("mixer", "Volume mixer", "Volume Mixer", WristPanel.MixKindIcon, W95Icons.Id.Note, new[] { (2, 1), (2, 2), (3, 2) }, 1),
         // the weather now and the next hours / days from Open-Meteo (Sys/Weather.cs, WristWeather.cs); a tap opens the forecast
         new("weather", "Weather", "Weather", "\uE706", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2), (4, 1) }, 1),
+        // a folder (Erik 10-17: "ennyi dologhoz kell egy mappa widget is"): widgets of any kind in it, on its own grid (GridSpec.Folder);
+        // closed, its widgets' icons; a tap opens it over the page and they live there (WristFolder.cs, WatchFolders)
+        new("folder", "Folder", "Folder", WatchFolders.Icon, W95Icons.Id.Folder, new[] { (1, 1), (2, 1), (2, 2) }, 0),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -142,6 +145,7 @@ public static class WatchWidgets
     public static RectangleF CellRect(int x, int y, int w, int h, bool classic, GridSpec grid = null)
     {
         grid ??= GridSpec.G64;
+        if (grid.Top > 0) return CellRect(x, y + grid.Top, w, h, classic, GridSpec.G64);      // a folder's grid: the page's cells under its title row
         var (m, g, W, H, mb) = Metrics(classic, grid);
         int cols = grid.Cols, rows = grid.Rows;
         float cw = (W - 2 * m - (cols - 1) * g) / cols, ch = (H - m - mb - (rows - 1) * g) / rows;
@@ -156,6 +160,11 @@ public static class WatchWidgets
     public static (int x, int y) CellAt(float px, float py, bool classic, GridSpec grid = null)
     {
         grid ??= GridSpec.G64;
+        if (grid.Top > 0)
+        {
+            var (fx, fy) = CellAt(px, py, classic, GridSpec.G64);       // a folder's grid: the page's rows under its title row
+            return (fx, Math.Clamp(fy - grid.Top, 0, grid.Rows - 1));
+        }
         var (m, g, W, H, mb) = Metrics(classic, grid);
         int cols = grid.Cols, rows = grid.Rows;
         float cw = (W - 2 * m - (cols - 1) * g) / cols, ch = (H - m - mb - (rows - 1) * g) / rows;
@@ -320,6 +329,7 @@ public static class WatchWidgets
                 w.W = s.W;
                 w.H = s.H;
             }
+            if (w.Type == "folder" && w.Children != null) w.Children = WatchFolders.CleanChildren(w.Children);     // its own grid's rules
             if (Free(ok, null, w.X, w.Y, w.W, w.H, grid)) ok.Add(w);
         }
         return ok;
@@ -388,6 +398,7 @@ public static class WatchWidgets
         ["mic"] = new[] { S, M }, ["notifications"] = new[] { M, L }, ["buttons"] = new[] { M, L },
         ["mixer"] = new[] { L, M },
         ["weather"] = new[] { M, S, L, Wd },
+        ["folder"] = new[] { S, M, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 
@@ -489,11 +500,16 @@ public sealed class GridSpec
     public readonly int Cols, Rows;
     public readonly string Id;
     public readonly bool Paged;
+    public readonly int Top;                    // rows of the 6 x 4 page above its cells (a folder's title row); 0 = a page's own grid
 
-    GridSpec(int cols, int rows, string id, bool paged) { Cols = cols; Rows = rows; Id = id; Paged = paged; }
+    GridSpec(int cols, int rows, string id, bool paged, int top = 0) { Cols = cols; Rows = rows; Id = id; Paged = paged; Top = top; }
 
     public static readonly GridSpec G64 = new(6, 4, "6x4", false), G43 = new(4, 3, "4x3", false),
         G64Paged = new(6, 4, "6x4", true), G43Paged = new(4, 3, "4x3", true);
+
+    // A folder's widgets (WatchFolders): the 6 x 4 page's own cells under its first row - the folder's name and its X take that row
+    // when it is open - so every kind draws there exactly as it does on a page (its sizes, its designs, the layout check's rules).
+    public static readonly GridSpec Folder = new(6, 3, "folder", false, 1);
 
     public static GridSpec Of(string id, bool paged = false) =>
         id == "4x3" ? (paged ? G43Paged : G43) : (paged ? G64Paged : G64);
@@ -535,6 +551,7 @@ public static class WatchPages
             var l = Widgets(c, i);
             if (l == null) continue;
             foreach (var w in l) if (w?.Type == type) return true;
+            foreach (var w in l) if (w?.Children != null && WatchFolders.Has(w.Children, type)) return true;      // in a folder
         }
         return false;
     }

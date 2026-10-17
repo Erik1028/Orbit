@@ -126,6 +126,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "notes") return NotesOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "photo") return PhotoOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "weather") return WeatherOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "folder") return FolderOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -586,6 +587,7 @@ static partial class Tools
             PhotoViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the latest photo opened, on made-up photos
             if (tag == "") WeatherViewTools.DataChecks(wrist, data, cfg, dir);     // the weather's data: parser, cache, stale, no place, Hexpad's
             WeatherViewTools.Run(wrist, data, cfg, gpu, dir, tag);            // the weather widget and opened, on a made-up forecast
+            FolderViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the folder: opened, its widgets live, one's view and back
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -782,6 +784,8 @@ static partial class Tools
         CyberShots();
         PhotoViewTools.PreviewSheet(dir);       // the latest photo in every style, side by side (photo_preview.png)
         WeatherViewTools.Sheets(dir, painter, gpu);        // weather_preview.png: every style's weather side by side
+        FolderViewTools.Sheet(dir);                        // folder_preview.png: every style's folder closed and open
+        FolderViewTools.EditorChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // into a folder and out of it in the editor
         WeatherViewTools.SettingsChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // its place and units in the settings
         ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)
@@ -1861,10 +1865,12 @@ static partial class Tools
             var px = Read();
             var t = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, classic);       // the opened window covers the grid
             if (classic) t = new System.Drawing.RectangleF(t.X * 2, t.Y * 2, t.Width * 2, t.Height * 2);
+            bool sheet = kind.Id == "folder";       // a folder opens over the whole watch, its widgets 10 px in as on a page (WristFolder.cs)
+            if (sheet) t = new System.Drawing.RectangleF(0, 0, WristPanel.TW, WristPanel.TH);
             var own = WatchWidgets.CellRect(0, 0, w, h, classic);
             own = new System.Drawing.RectangleF(own.X * k, own.Y * k, own.Width * k, own.Height * k);
             var (o, ow) = Outside(px, t, classic ? 0 : 1.5f, own);
-            var (cl, cw) = classic ? (0, null) : TooClose(px, t, 3, 14);
+            var (cl, cw) = classic ? (0, null) : TooClose(px, t, 3, sheet ? 8 : 14);
             if (o > 0 || cl > 0)
             {
                 problems++;
