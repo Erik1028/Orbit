@@ -328,6 +328,7 @@ public sealed partial class WristPanel
         switch (k.Id)
         {
             case "media": MediaTileAero(r, d, w, id); return;
+            case "photo": PhotoTileAero(r, w, d, id); return;          // the Slide Show gadget (WristPhoto.Aero.cs)
             case "analog":
                 AeroSkin.Tile(_p, r, 0xFF68ABEC, 0xFF3C7FCC);
                 float rad = MathF.Floor(MathF.Min(r.Width, r.Height) / 2) - 6;
@@ -683,6 +684,7 @@ public sealed partial class WristPanel
         if (kind == "room") Room95Detail(win, d);           // their 95 windows, in 7's skin
         else if (kind == "dock") DockDetailAero(win, d);
         else if (kind == "mines") MinesDetailAero(win);
+        else if (kind == "photo") PhotoDetailAero(win, d);       // Windows Photo Viewer (WristPhoto.Aero.cs)
         else WindowAero(d, k, kind, win);
         if (fx)
         {

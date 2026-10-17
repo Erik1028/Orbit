@@ -68,6 +68,7 @@ static partial class Tools
         wdata.Vr.FrameHead = 0; wdata.Vr.FrameCount = VrStats.FrameHistory;
         wdata.Room = RoomViewTools.Room(12, 2);
         wdata.Notes = NotesViewTools.Fake();
+        wdata.Photos = PhotoFake.Snap();                // made-up photos (PhotoViewTest.cs)
         wdata.FakeArt = FakeCover();                    // as in VR: a cover, Hexpad's keys
         using var wfaces = new HexpadFaces();
         wdata.Dock = DockViewTools.Fake();

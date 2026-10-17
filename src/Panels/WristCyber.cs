@@ -303,6 +303,7 @@ public sealed partial class WristPanel
             case "mic": CyberMic(r, w, id); return true;
             case "notifications": CyberInbox(r, d); return true;
             case "buttons": CyberGroup(r, w, d, id); return true;
+            case "photo": CyberPhoto(r, w, d, id); return true;
         }
         return false;
     }

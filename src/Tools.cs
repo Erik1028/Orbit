@@ -108,6 +108,7 @@ static partial class Tools
         data.Vr.Batteries.Add(("R", 0.18f, true));
         data.Vr.Batteries.Add(("Trk×6", 0.44f, false));
         data.FakeMedia = (true, "Midnight City", "M83", true);
+        data.Photos = PhotoFake.Snap();                 // made-up photos (PhotoViewTest.cs): a tool never reads a real one
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
@@ -122,6 +123,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "pages") return PagesRun(wrist, data, cfg, painter, gpu, dir, null, null, null);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "mixer") return MixerOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "notes") return NotesOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "photo") return PhotoOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -578,6 +580,8 @@ static partial class Tools
             if (tag == "") MixerViewTools.MasterChecks();                     // the Windows volume in VR, on a made-up device
             MixerViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the volume mixer, on made-up apps
             NotesViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the notifications opened, on made-up ones
+            if (tag == "") PhotoViewTools.WatcherChecks(wrist, data, cfg, gpu, dir);     // the photo watcher on a folder of made-up photos
+            PhotoViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the latest photo opened, on made-up photos
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -772,6 +776,7 @@ static partial class Tools
         // the retro styles: every screen once more in each, Windows 95 first (its pictures keep their *_95 names); then Cyber
         foreach (var sk in Skins.All) RetroShots(sk);
         CyberShots();
+        PhotoViewTools.PreviewSheet(dir);       // the latest photo in every style, side by side (photo_preview.png)
         ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)
         FontsRun(wrist, kb, view, ui, surf, ptr, painter, gpu, cfg, data, host, dir, Gallery);
@@ -1529,6 +1534,7 @@ static partial class Tools
         data.Vr.Batteries.Add(("R", 0.18f, true));
         data.Vr.Batteries.Add(("Trk×6", 0.44f, false));
         data.FakeMedia = (true, "Midnight City", "M83", true);
+        data.Photos = PhotoFake.Snap();                 // made-up photos (PhotoViewTest.cs): a tool never reads a real one
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
