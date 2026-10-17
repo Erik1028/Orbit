@@ -37,6 +37,7 @@ public sealed partial class WristPanel
         "mixer" => "mixer",
         "notifications" => "notifications",
         "photo" => "photo",
+        "weather" => "weather",
         _ => null,
     };
 
@@ -149,7 +150,7 @@ public sealed partial class WristPanel
             // Cyber: a yellow tag (it types in: WristCyberFx.cs) - the clock's CLOCK (its time card has a TIME tag of its own), the
             // notifications' INCOMING
             CyberDetailTag(E, Upper(kind switch { "clock" => "Clock", "notifications" => "Incoming", "photo" => "Capture", _ => k.Name }));
-        else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
+        else if (kind is not ("mines" or "room" or "dock" or "weather"))     // Minesweeper's board takes the left: its name is over its own column; the room: its world; the weather: its place
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
         if (Press("wclose", new RectangleF(E.Right - 22 - 46, E.Y + 14, 46, 46), "\uE711", null, false, !_closing, 18, true))
@@ -173,6 +174,7 @@ public sealed partial class WristPanel
             case "dock": DockDetail(E, d); break;
             case "notifications": NotesDetail(E, d); break;
             case "photo": PhotoDetail(E, d); break;
+            case "weather": WeatherDetail(E, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -600,6 +602,7 @@ public sealed partial class WristPanel
             case "volume": Volume95Detail(c); break;
             case "mixer": Mixer95Detail(c); break;
             case "notifications": Notes95Detail(c, d); break;
+            case "weather": Weather95Detail(c, d); break;
         }
     }
 

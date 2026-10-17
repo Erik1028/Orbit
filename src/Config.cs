@@ -166,6 +166,15 @@ public sealed class ChatboxConfig
     public bool ShowVrTime { get; set; }
 }
 
+// The weather widget (Sys/Weather.cs): where, and in what units. Null in Config = the defaults (Hexpad's place, °C), written only once set.
+public sealed class WeatherConfig
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Location { get; set; }              // a city or "lat,lon"; null = the place set in Hexpad (none there: "Set a location")
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Units { get; set; }                 // null = °C and km/h | f = °F and mph
+}
+
 public sealed class GeneralConfig
 {
     public string LaserHand { get; set; } = "both";
@@ -285,6 +294,8 @@ public sealed class Config
     public string ActiveLayout { get; set; } = "Desk";
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<GameRule> GameRules { get; set; }      // Layouts > Per game (null = none)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WeatherConfig Weather { get; set; }         // the weather widget's place and units (null = the defaults)
 
     public static List<LayoutProfile> DefaultLayouts() => new()
     {

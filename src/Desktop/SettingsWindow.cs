@@ -29,6 +29,7 @@ public sealed class SettingsWindow : Form
         View.OnClose95 = Hide;
         View.OnMinimize = () => WindowState = FormWindowState.Minimized;      // the Cyber header's own button (no Windows frame there)
         View.AskFile = (save, name, then) => BeginInvoke(new Action(() => AskFileDialog(save, name, then)));     // the watch editor's Share
+        View.AskText = (title, prompt, text, then) => BeginInvoke(new Action(() => AskTextDialog(title, prompt, text, then)));     // the weather's place
         Text = "OrbitOverlay";
         Icon = icon;
         FormBorderStyle = FormBorderStyle.None;      // every style draws its own frame (ApplyStyle)
@@ -136,6 +137,36 @@ public sealed class SettingsWindow : Form
         catch (Exception e) { Log.Warn("file dialog: " + e.Message); }
         finally { Native.KillTimer(Handle, ModalTimer); }
         try { then(path); } catch (Exception e) { Log.Warn("file dialog: " + e.Message); }
+        Dirty = true;
+    }
+
+    // A text the settings ask for (the weather's place: the settings have no text box of their own) - a small Windows dialog, a moment
+    // later from the message loop like the file dialogs, the modal timer keeping VR's frames coming. then(null): cancelled.
+    void AskTextDialog(string title, string prompt, string text, Action<string> then)
+    {
+        string result = null;
+        Native.SetTimer(Handle, ModalTimer, 10, IntPtr.Zero);
+        try
+        {
+            using var font = new Font("Segoe UI", 9f);
+            using var f = new Form
+            {
+                Text = Lang.T(title), FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false,
+                StartPosition = FormStartPosition.CenterParent, AutoScaleMode = AutoScaleMode.Dpi, AutoScaleDimensions = new SizeF(96, 96),
+                ClientSize = new Size(420, 132), Font = font,
+            };
+            var label = new Label { Text = Lang.T(prompt), Left = 12, Top = 10, Width = 396, Height = 36 };
+            var box = new TextBox { Text = text ?? "", Left = 12, Top = 52, Width = 396 };
+            var ok = new Button { Text = Lang.T("OK"), DialogResult = DialogResult.OK, Left = 252, Top = 92, Width = 75, Height = 26 };
+            var cancel = new Button { Text = Lang.T("Cancel"), DialogResult = DialogResult.Cancel, Left = 333, Top = 92, Width = 75, Height = 26 };
+            f.Controls.AddRange(new Control[] { label, box, ok, cancel });
+            f.AcceptButton = ok;
+            f.CancelButton = cancel;
+            if (f.ShowDialog(this) == DialogResult.OK) result = box.Text;
+        }
+        catch (Exception e) { Log.Warn("text dialog: " + e.Message); }
+        finally { Native.KillTimer(Handle, ModalTimer); }
+        try { then(result); } catch (Exception e) { Log.Warn("text dialog: " + e.Message); }
         Dirty = true;
     }
 
