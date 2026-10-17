@@ -110,6 +110,8 @@ static partial class Tools
         data.FakeMedia = (true, "Midnight City", "M83", true);
         data.Photos = PhotoFake.Snap();                 // made-up photos (PhotoViewTest.cs): a tool never reads a real one
         data.Weather = WeatherViewTools.Report();       // a made-up forecast for a made-up town: never the network (WeatherViewTest.cs)
+        data.Memories = OnThisDayTempsTools.Memories(); // made-up photos of this day in earlier years, made-up temperatures (OnThisDayTempsTest.cs)
+        data.Temps = OnThisDayTempsTools.Temps();
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
@@ -126,6 +128,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "notes") return NotesOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "photo") return PhotoOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "weather") return WeatherOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "onthisday") return OnThisDayTempsTools.Only(wrist, data, cfg, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -586,6 +589,8 @@ static partial class Tools
             PhotoViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the latest photo opened, on made-up photos
             if (tag == "") WeatherViewTools.DataChecks(wrist, data, cfg, dir);     // the weather's data: parser, cache, stale, no place, Hexpad's
             WeatherViewTools.Run(wrist, data, cfg, gpu, dir, tag);            // the weather widget and opened, on a made-up forecast
+            if (tag == "") OnThisDayTempsTools.DataChecks(dir);               // on this day's picking, the temperatures' parsing, the hot alert
+            OnThisDayTempsTools.Run(wrist, data, cfg, gpu, dir, tag);         // both widgets and opened, on made-up photos and readings
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -782,6 +787,7 @@ static partial class Tools
         CyberShots();
         PhotoViewTools.PreviewSheet(dir);       // the latest photo in every style, side by side (photo_preview.png)
         WeatherViewTools.Sheets(dir, painter, gpu);        // weather_preview.png: every style's weather side by side
+        OnThisDayTempsTools.PreviewSheet(dir);             // onthisday_temps_preview.png: both widgets in every style
         WeatherViewTools.SettingsChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // its place and units in the settings
         ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)

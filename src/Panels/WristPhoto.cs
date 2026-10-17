@@ -777,7 +777,7 @@ public sealed partial class WristPanel
             var box = new RectangleF(c.X + 1, c.Y + 1, MathF.Min(MathF.Floor((c.Height - 2) * 4 / 3), MathF.Floor(c.Width * 0.45f)), c.Height - 2);
             PicBox95(box, p, bmp);
             float tx = box.Right + 5, tw = c.Right - 2 - tx, ty = MathF.Floor(c.Y + (c.Height - 28) / 2);
-            string ago = _ui.Width95(words.Ago, true) <= tw ? words.Ago : Age(p.Taken, DateTime.Now);      // "3 min ago", narrow "3 m"
+            string ago = _ui.Width95(words.Ago, true) <= tw ? words.Ago : p.Years > 0 ? words.AgoShort : Age(p.Taken, DateTime.Now);      // "3 min ago", narrow "3 m"
             _ui.Text95(PhotoCut(ago, tw, Ui.F95, FontWeight.Bold, null, 1), new RectangleF(tx, ty, tw, 13), Blk95, true);
             _ui.Text95(PhotoCut(p.World ?? words.When, tw, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(tx, ty + 14, tw, 13), Gry95);
             return;

@@ -22,7 +22,7 @@ public sealed partial class WristPanel
     {
         public TempReport R;
         public int Lang = -1;
-        public string Cpu, Gpu, Hot, Fan, Extra, CpuDeg, GpuDeg, CpuLine, GpuLine, PeakCpu, PeakGpu, Status, TCpu, TGpu, THot, TFan, Head95Cpu, Head95Gpu;
+        public string Cpu, Gpu, Hot, Fan, Extra, CpuDeg, GpuDeg, CpuLine, GpuLine, PeakCpu, PeakGpu, Status, TCpu, TGpu, THot, TFan, TBig, Head95Cpu, Head95Gpu;
     }
     readonly TempText _tt = new();
 
@@ -55,6 +55,7 @@ public sealed partial class WristPanel
         t.Head95Gpu = Head("GPU", r?.GpuName, t.GpuDeg, gpu, r?.GpuWhy);
         t.Status = Lang.F("Hotspot: {0}   Fan: {1}   Peak: CPU {2}, GPU {3}", t.Hot, t.Fan, Deg(pc), Deg(pg));
         // `sensors`: k10temp's Tctl, amdgpu's edge / junction / fan1
+        t.TBig = float.IsNaN(gpu) ? "N/A" : t.Gpu + "°C";
         t.TCpu = float.IsNaN(cpu) ? "Tctl:      N/A" : string.Format(CultureInfo.InvariantCulture, "Tctl:   {0,6:+0.0;-0.0}°C", cpu);
         t.TGpu = float.IsNaN(gpu) ? "edge:      N/A" : string.Format(CultureInfo.InvariantCulture, "edge:   {0,6:+0.0;-0.0}°C", gpu);
         t.THot = float.IsNaN(hot) ? "junction: N/A" : string.Format(CultureInfo.InvariantCulture, "junction:{0,6:+0.0;-0.0}°C", hot);
@@ -204,7 +205,7 @@ public sealed partial class WristPanel
         if (w.W == 1 && w.H == 1 || c.Width < 70)
         {
             float vy = MathF.Floor(c.Y + (c.Height - 28) / 2);
-            _ui.Text95(Fit(t.GpuDeg, c.Width - 2, 13, true), new RectangleF(c.X, vy, c.Width, 15), Warm(gpu), true, TextAlignment.Center, size: 13);
+            _ui.Text95(PhotoCut(t.GpuDeg, c.Width - 2, 13, FontWeight.Bold, null, 1), new RectangleF(c.X, vy, c.Width, 15), Warm(gpu), true, TextAlignment.Center, size: 13);
             _ui.Text95("GPU", new RectangleF(c.X, vy + 15, c.Width, 13), grey, false, TextAlignment.Center);
             return;
         }
@@ -212,19 +213,19 @@ public sealed partial class WristPanel
         {
             // one row: the CPU and the GPU side by side
             float hw = MathF.Floor(c.Width / 2), vy = MathF.Floor(c.Y + (c.Height - 28) / 2);
-            _ui.Text95(Fit(t.CpuDeg, hw - 2, 13, true), new RectangleF(c.X, vy, hw, 15), Warm(cpu), true, TextAlignment.Center, size: 13);
+            _ui.Text95(PhotoCut(t.CpuDeg, hw - 2, 13, FontWeight.Bold, null, 1), new RectangleF(c.X, vy, hw, 15), Warm(cpu), true, TextAlignment.Center, size: 13);
             _ui.Text95("CPU", new RectangleF(c.X, vy + 15, hw, 13), grey, false, TextAlignment.Center);
-            _ui.Text95(Fit(t.GpuDeg, hw - 2, 13, true), new RectangleF(c.X + hw, vy, c.Width - hw, 15), Warm(gpu), true, TextAlignment.Center, size: 13);
+            _ui.Text95(PhotoCut(t.GpuDeg, hw - 2, 13, FontWeight.Bold, null, 1), new RectangleF(c.X + hw, vy, c.Width - hw, 15), Warm(gpu), true, TextAlignment.Center, size: 13);
             _ui.Text95("GPU", new RectangleF(c.X + hw, vy + 15, c.Width - hw, 13), grey, false, TextAlignment.Center);
             return;
         }
         // System Monitor's bar charts: a line each, its bar under it; the hotspot and fan; the GPU's last 10 minutes
         float y = c.Y + 2;
-        _ui.Text95(Fit(t.CpuLine, c.Width - 8), new RectangleF(c.X + 4, y, c.Width - 8, 13), Warm(cpu));
+        _ui.Text95(PhotoCut(t.CpuLine, c.Width - 8, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(c.X + 4, y, c.Width - 8, 13), Warm(cpu));
         _ui.Progress95(new RectangleF(c.X + 4, y + 15, c.Width - 8, 10), MathF.Max(0, TempFrac(cpu)), Navy95c);
-        _ui.Text95(Fit(t.GpuLine, c.Width - 8), new RectangleF(c.X + 4, y + 29, c.Width - 8, 13), Warm(gpu));
+        _ui.Text95(PhotoCut(t.GpuLine, c.Width - 8, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(c.X + 4, y + 29, c.Width - 8, 13), Warm(gpu));
         _ui.Progress95(new RectangleF(c.X + 4, y + 44, c.Width - 8, 10), MathF.Max(0, TempFrac(gpu)), Navy95c);
-        _ui.Text95(Fit(t.Extra, c.Width - 8), new RectangleF(c.X + 4, y + 58, c.Width - 8, 13), grey);
+        _ui.Text95(PhotoCut(t.Extra, c.Width - 8, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(c.X + 4, y + 58, c.Width - 8, 13), grey);
         var ch = new RectangleF(c.X + 4, y + 74, c.Width - 8, c.Bottom - 2 - (y + 74));
         if (ch.Height >= 12) Chart95(ch, r, false, "");
     }
@@ -241,7 +242,7 @@ public sealed partial class WristPanel
             for (float x = b.X; x < b.Right; x += 4) _p.Fill(new RectangleF(x, gy, 1, 1), Gry95);
         }
         TempLine(b, r, cpu, cpu ? 0xFF800000 : 0xFF000080, 1);
-        if (label.Length > 0) _ui.Text95(Fit(label, b.Width - 4), new RectangleF(b.X + 2, b.Y, b.Width - 4, 13), Blk95);
+        if (label.Length > 0) _ui.Text95(PhotoCut(label, b.Width - 4, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(b.X + 2, b.Y, b.Width - 4, 13), Blk95);
     }
 
     // Opened, in the window the style draws around it (title, X, OK): System Monitor - a line chart each for the CPU and the GPU, their
@@ -251,7 +252,7 @@ public sealed partial class WristPanel
         var t = TempTexts(d);
         var r = d.Temps;
         float sw = c.Right - 75 - 8 - c.X;
-        _ui.Text95(Fit(t.Status, sw), new RectangleF(c.X, c.Bottom + 10, sw, 13), Blk95);
+        _ui.Text95(PhotoCut(t.Status, sw, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(c.X, c.Bottom + 10, sw, 13), Blk95);
         float ph = MathF.Floor((c.Height - 4) / 2);
         Chart95(new RectangleF(c.X, c.Y, c.Width, ph), r, true, t.Head95Cpu);
         Chart95(new RectangleF(c.X, c.Y + ph + 4, c.Width, ph), r, false, t.Head95Gpu);
@@ -265,20 +266,20 @@ public sealed partial class WristPanel
         var r = d.Temps;
         float gpu = r?.Gpu ?? float.NaN, cpu = r?.Cpu ?? float.NaN;
         uint Ink(float v) => TempLevel(v, false) == StatLevel.Ok ? T.INK : T.HOT;
-        if (w.W == 1 && w.H == 1 || c.Width < 70) { TValue(c, float.IsNaN(gpu) ? "N/A" : t.Gpu + "°C", "edge", Ink(gpu)); return; }
+        if (w.W == 1 && w.H == 1 || c.Width < 70) { TValue(c, t.TBig, "edge", Ink(gpu)); return; }
         float x = c.X + 2, y = c.Y + 2, cw = c.Width - 4;
         if (c.Height < 56)
         {
-            TCaps(TFit(t.TCpu, cw), x, MathF.Floor(c.Y + (c.Height - 18) / 2), Ink(cpu));
-            TCaps(TFit(t.TGpu, cw), x, MathF.Floor(c.Y + (c.Height - 18) / 2) + 11, Ink(gpu));
+            TCaps(PhotoCut(t.TCpu, cw, Ui.F95, FontWeight.Normal, null, 2), x, MathF.Floor(c.Y + (c.Height - 18) / 2), Ink(cpu));
+            TCaps(PhotoCut(t.TGpu, cw, Ui.F95, FontWeight.Normal, null, 2), x, MathF.Floor(c.Y + (c.Height - 18) / 2) + 11, Ink(gpu));
             return;
         }
         // k10temp, then amdgpu: as `sensors` prints them
         TCaps("k10temp-pci", x, y, T.DIM);
-        TCaps(TFit(t.TCpu, cw), x, y + 11, Ink(cpu));
+        TCaps(PhotoCut(t.TCpu, cw, Ui.F95, FontWeight.Normal, null, 2), x, y + 11, Ink(cpu));
         TCaps("amdgpu-pci", x, y + 27, T.DIM);
-        TCaps(TFit(t.TGpu, cw), x, y + 38, Ink(gpu));
-        if (y + 49 + 7 <= c.Bottom) TCaps(TFit(t.THot, cw), x, y + 49, TempLevel(r?.Hot ?? float.NaN, true) == StatLevel.Ok ? T.INK : T.HOT);
-        if (y + 60 + 7 <= c.Bottom) TCaps(TFit(t.TFan, cw), x, y + 60, T.MID);
+        TCaps(PhotoCut(t.TGpu, cw, Ui.F95, FontWeight.Normal, null, 2), x, y + 38, Ink(gpu));
+        if (y + 49 + 7 <= c.Bottom) TCaps(PhotoCut(t.THot, cw, Ui.F95, FontWeight.Normal, null, 2), x, y + 49, TempLevel(r?.Hot ?? float.NaN, true) == StatLevel.Ok ? T.INK : T.HOT);
+        if (y + 60 + 7 <= c.Bottom) TCaps(PhotoCut(t.TFan, cw, Ui.F95, FontWeight.Normal, null, 2), x, y + 60, T.MID);
     }
 }
