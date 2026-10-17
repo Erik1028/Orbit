@@ -37,6 +37,7 @@ public sealed partial class WristPanel
     {
         if (list == null) return false;
         foreach (var w in list) if (w?.Type == type) return true;      // a hand-edited list can hold a null
+        foreach (var w in list) if (w?.Children != null && WatchFolders.Has(w.Children, type)) return true;     // in a folder there (WristFolder.cs)
         return false;
     }
 
@@ -512,6 +513,7 @@ public sealed partial class WristPanel
             // or it would pop in again
             var live = new HashSet<WatchWidget>();
             for (int i = 0; i < count; i++) if (WatchPages.Widgets(C, i) is { } l) live.UnionWith(l);
+            FolderKidsInto(live);                           // the widgets in folders (WristFolder.cs)
             foreach (var gone in new List<WatchWidget>(_wid.Keys)) if (!live.Contains(gone)) _wid.Remove(gone);
         }
         // the page in view: between two while it slides (a swipe follows the laser, then springs to its page); both drawn then
@@ -519,6 +521,7 @@ public sealed partial class WristPanel
         bool sliding = pos != cur;
         _slideOther = !sliding ? -1 : pos < cur ? (int)MathF.Floor(pos) : (int)MathF.Ceiling(pos);
         _ui.Inert = _open != null || sliding || _swiping;      // behind an opened widget (or while it slides) the watch is only a picture
+        if (EditFolderOn(list)) _ui.Inert = true;             // the editor's folder over it (WristFolder.cs)
         if (sliding && !cards) _p.PushRoundedClip(new RectangleF(1, 1, TW - 2, TH - 2), Bento.PageRadius - 1);
         int p0 = (int)MathF.Floor(pos);
         for (int pi = p0; pi <= p0 + 1; pi++)
@@ -533,6 +536,7 @@ public sealed partial class WristPanel
         _big = false;
         if (count > 1) PageDots(count, pos, cards);
         _grid = WatchPages.Grid(C, cur);
+        FolderEditView(d, list);                            // the folder the editor works in, open over the page (WristFolder.cs)
         DrawDetail(d, list);
         _layoutSeen = true;
         _seenPage = cur;
@@ -595,6 +599,7 @@ public sealed partial class WristPanel
             // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card; the
             // 4 x 3 now playing is its cover's colours
             if (CoverCard(k, w, styled)) CoverBack(r, d, id);
+            else if (k.Id == "folder" && !styled && !Theme.Cyber) FolderBack(r, cards);        // frosted (WristFolder.cs)
             else if (PhotoCard(k, d)) PhotoBack(r, w, d);         // the photo is the card (WristPhoto.cs)
             else if (!k.Button && Theme.Cyber) CyberCard(r, k, w, cards, danger);
             else if (k.Id == "weather" && !styled && !danger) WeatherBack(r, d, cards);     // the sky of the weather in its card (WristWeather.cs)
@@ -648,6 +653,7 @@ public sealed partial class WristPanel
             case "mixer": MixerOrbit(r, w, id); break;
             case "photo": PhotoOrbit(r, w, d, id); break;
             case "weather": WeatherOrbit(r, w, d, id); break;
+            case "folder": FolderOrbit(r, w, d, id); break;          // its widgets' icons; Cyber's too (WristFolder.cs)
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2295,7 +2301,17 @@ public sealed partial class WristPanel
         SampleSources();
         if (C.Background != "cards") Theme.RetroSkin.FillDesktop(_p, new RectangleF(0, 0, TW95, TH95));     // the desktop
         var now = DateTime.Now;
-        _ui.Inert = _open != null;
+        _ui.Inert = _open != null || EditFolderOn(list);
+        Widgets95(list, grid, d, now);
+        _ui.Inert = false;
+        if (count > 1) Taskbar95(count, cur);
+        FolderEditView95(d, list);                          // the folder the editor works in, open over the page (WristFolder95.cs)
+        DrawDetail95(d, list);
+    }
+
+    // a page's widgets in the 95 family - a folder's too, in its window (WristFolder95.cs)
+    void Widgets95(List<WatchWidget> list, GridSpec grid, PanelData d, DateTime now)
+    {
         for (int i = 0; i < list.Count; i++)
         {
             var w = list[i];
@@ -2304,6 +2320,7 @@ public sealed partial class WristPanel
             int id = Wid(w);
             var r = WatchWidgets.Rect(w, true, grid);
             CardTap(id, w, k, r);
+            if (k.Id == "folder") { Folder95Widget(w, k, r, d, id); continue; }     // each style's folder (WristFolder95.cs)
             if (SkinWidget(w, k, r, d, id)) continue;        // a style's own widget (ScreenHooks.cs)
             if (k.Button) { Button95Widget(id, w, k, r, d); continue; }
             // a little 95 window: with a caption when it is tall enough, a plain raised panel when not (the style's skin)
@@ -2358,9 +2375,6 @@ public sealed partial class WristPanel
                     break;
             }
         }
-        _ui.Inert = false;
-        if (count > 1) Taskbar95(count, cur);
-        DrawDetail95(d, list);
     }
 
     void Value95(RectangleF c, string value, string caption, uint color)

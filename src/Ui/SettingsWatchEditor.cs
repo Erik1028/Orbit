@@ -33,7 +33,7 @@ public sealed partial class SettingsView
 
     // the page being edited: the one the watch shows
     int EditPage => _h.Wrist.PageNow;
-    GridSpec EditGridSpec => WatchPages.Grid(C.Wrist, EditPage);
+    GridSpec EditGridSpec => _wfolder != null ? GridSpec.Folder : WatchPages.Grid(C.Wrist, EditPage);     // in a folder: its own grid
 
     List<WatchWidget> WatchLayout()
     {
@@ -137,10 +137,12 @@ public sealed partial class SettingsView
             int ww = Math.Max(1, (int)MathF.Round(w.W * (float)to.Cols / from.Cols)), hh = Math.Max(1, (int)MathF.Round(w.H * (float)to.Rows / from.Rows));
             var s = WatchWidgets.SnapSize(k, ww, hh, false, to);
             var n = new WatchWidget { Type = w.Type, X = px, Y = py, W = s.W, H = s.H, Style = w.Style, Color = w.Color, Color2 = w.Color2, Items = w.Items };
+            (n.Name, n.Children) = (w.Name, w.Children);          // a folder keeps its name and its widgets (they are on its own grid)
             if (WatchWidgets.Free(res, null, px, py, s.W, s.H, to)) { res.Add(n); continue; }
             var a = WatchWidgets.Add(res, k, Math.Min(px, to.Cols - 1), Math.Min(py, to.Rows - 1), false, to);
             if (a == null) { dropped++; continue; }
             (a.Style, a.Color, a.Color2, a.Items) = (w.Style, w.Color, w.Color2, w.Items);
+            (a.Name, a.Children) = (w.Name, w.Children);
         }
         return res;
     }
@@ -164,6 +166,7 @@ public sealed partial class SettingsView
     // classic: the 95 editor (only the sizes the 95 face has; the modern one offers the Bento S and L too)
     void AddWidget(Ui ui, List<WatchWidget> list, WatchWidgets.Kind k, bool classic)
     {
+        if (_wfolder != null && k.Id == "folder") { _wmsg = "A folder cannot go into a folder."; return; }
         var n = WatchWidgets.Add(list, k, _wcell.x, _wcell.y, classic, EditGridSpec);
         if (n == null) { _wmsg = "No room left: remove or shrink a widget first."; return; }
         _wselW = n;
@@ -181,6 +184,7 @@ public sealed partial class SettingsView
     {
         var sel = SelWidget(list);
         if (sel == null) return;
+        if (FolderRemoveAsk(sel)) return;                 // a folder with widgets: keep them? (SettingsView.Folder.cs)
         list.Remove(sel);
         _wcell = (sel.X, sel.Y);
         _wselW = null;
@@ -303,6 +307,7 @@ public sealed partial class SettingsView
             }
             if (!ui.Down)       // let go (also when it happened outside the preview)
             {
+                if (!_wresize && changed && FolderDrop(ui, list, cx, cy)) changed = false;     // dropped onto a folder: into it
                 if (changed && ok)
                 {
                     _wdrag.X = nx; _wdrag.Y = ny; _wdrag.W = nw; _wdrag.H = nh;
@@ -338,7 +343,7 @@ public sealed partial class SettingsView
     {
         var p = ui.P;
         var w = C.Wrist;
-        var list = WatchLayout();
+        var list = EditList();                  // the page's, or the folder's the editor works in (SettingsView.Folder.cs)
         PageStrip(ui, StripX, 76, StripW, 32);
         var prev = EditorPrev;
         if (Theme.Cyber) CyberPreviewFrame(p, RectangleF.Inflate(prev, 10, 10));
@@ -415,12 +420,13 @@ public sealed partial class SettingsView
             {
                 // a clock: its designs first, then its look - both as one row of chips, so it all fits above Done
                 bool clock = WatchWidgets.VariantsOf(sel.Type) != null;
+                float fy = FolderActions(ui, list, sel, rx, rw);      // a folder: Open folder, Rename... (SettingsView.Folder.cs)
                 if (clock) ClockDesigns(ui, sel, rx, 180, rw);
-                if (Theme.Cyber) CyberWidgetInfo(ui, sel, rx, clock ? 268 : 200, rw);     // its Modern look does not apply (SettingsCyber.cs)
-                else WidgetLook(ui, list, sel, rx, clock ? 250 : 182, rw, clock);
+                if (Theme.Cyber) CyberWidgetInfo(ui, sel, rx, (clock ? 268 : 200) + fy, rw);     // its Modern look does not apply (SettingsCyber.cs)
+                else WidgetLook(ui, list, sel, rx, (clock ? 250 : 182) + fy, rw, clock);
             }
         }
-        if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) { EditingWatch = false; _wadd = false; }
+        if (ui.Button("we.done", new RectangleF(rx, 574, rw, 44), "Done", Theme.IcoCheck, true, true, 15)) { EditingWatch = false; _wadd = false; LeaveFolder(); }
     }
 
     // the presets "start over" offers: the faces of before pages (6 x 4), then the page presets (on the page's own grid)
@@ -490,6 +496,7 @@ public sealed partial class SettingsView
 
     void PageStrip(Ui ui, float x, float y, float w, float h)
     {
+        if (FolderStrip(ui, x, y, w, h)) return;            // in a folder: Back, its name, Move out (SettingsView.Folder.cs)
         var p = ui.P;
         var wc = C.Wrist;
         int n = WatchPages.Count(wc), cur = EditPage;
@@ -687,7 +694,7 @@ public sealed partial class SettingsView
         bool inert95 = Dialog95Begin(ui, _wshare);     // the Share dialog over the page (SettingsView95.Extras.cs)
         var p = ui.P;
         var w = C.Wrist;
-        var list = WatchLayout();
+        var list = EditList();                  // the page's, or the folder's (SettingsView.Folder.cs)
         ui.Group95(new RectangleF(16, 56, 350, 262), "Watch layout");
         var desk = new RectangleF(23, 74, 336, 236);
         p.Fill(desk, Theme.W95Face);
@@ -700,15 +707,16 @@ public sealed partial class SettingsView
         int n = WatchPages.Count(w), ep = EditPage;
         var pageNames = new string[n];
         for (int i = 0; i < n; i++) pageNames[i] = $"{i + 1}  {WatchPages.Label(w, i)}";
-        Lbl(ui, 16, 327, "Pa&ge:");
+        if (_wfolder == null) Lbl(ui, 16, 327, "Pa&ge:");
         bool before = ui.Changed;
         int pi = ep;
-        if (ui.Combo95("we95.page", new RectangleF(54, 327, 128, RowH), pageNames, ref pi) && pi != ep) ShowPage(pi);
+        if (_wfolder == null && ui.Combo95("we95.page", new RectangleF(54, 327, 128, RowH), pageNames, ref pi) && pi != ep) ShowPage(pi);
         ui.Changed = before;                    // looking at another page is not a change
         var presets = StartPresets();
         string from = presets[Math.Clamp(_wpreset, 0, presets.Length - 1)];
-        if (ui.Button95("we95.newpage", new RectangleF(188, 326, 88, 23), "&New page", n < 8)) AddPage(ui, from, "6x4");
-        if (ui.Button95("we95.rmpage", new RectangleF(280, 326, 86, 23), RemoveArmed ? "Sure?" : "Remove page", n > 1)) RemovePage(ui);
+        if (_wfolder == null && ui.Button95("we95.newpage", new RectangleF(188, 326, 88, 23), "&New page", n < 8)) AddPage(ui, from, "6x4");
+        if (_wfolder == null && ui.Button95("we95.rmpage", new RectangleF(280, 326, 86, 23), RemoveArmed ? "Sure?" : "Remove page", n > 1)) RemovePage(ui);
+        FolderRow95(ui);                        // in a folder: Back, Rename..., Move out (SettingsView.Folder.cs)
 
         ui.Group95(new RectangleF(16, 362, 350, 68), "Start over");
         Lbl(ui, 28, 382, "&From:");
@@ -784,11 +792,12 @@ public sealed partial class SettingsView
                 }
             }
             if (ui.Button95("we95.rm", new RectangleF(647, 321, 75, 23), "Re&move")) RemoveSelected(ui, list);
+            FolderSelected95(ui, list, sel);    // a folder: Open folder, Rename...; keep its widgets? (SettingsView.Folder.cs)
         }
         int bg = w.Background == "cards" ? 1 : 0;
         if (ComboRow(ui, "we95.bg", 376, 392, 468, 130, "&Background:", new[] { "Desktop", "Windows only" }, ref bg))
             w.Background = bg == 1 ? "cards" : "panel";
-        if (ui.Button95("we95.done", new RectangleF(659, 405, 75, 23), "&Done", true, true)) EditingWatch = false;
+        if (ui.Button95("we95.done", new RectangleF(659, 405, 75, 23), "&Done", true, true)) { EditingWatch = false; LeaveFolder(); }
         Share95(ui, inert95);
     }
 }

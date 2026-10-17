@@ -91,6 +91,7 @@ public static class FaceShare
     {
         Type = x.Type, X = x.X, Y = x.Y, W = x.W, H = x.H, Style = x.Style, Color = x.Color, Color2 = x.Color2,
         Items = x.Items == null ? null : new List<string>(x.Items), Variant = x.Variant,
+        Name = x.Name, Children = x.Children?.Where(c => c != null).Select(Copy).ToList(),       // a folder's name and its widgets
     };
 
     // A page from text (a file's, the clipboard's - the JSON may sit inside a Discord message or a code block). Null + why, else
@@ -144,6 +145,17 @@ public static class FaceShare
                 w.Items = ok.Count >= 2 ? ok : null;
             }
         }
+        // a folder: its name cleaned, its widgets each checked like the page's (a kind this version does not know left out) and put
+        // through the folder's own rules; anything else keeps neither
+        if (w.Type == "folder")
+        {
+            w.Name = WatchFolders.CleanName(w.Name);
+            var kids = new List<WatchWidget>();
+            foreach (var c in w.Children ?? new List<WatchWidget>())
+                if (c != null && !string.IsNullOrEmpty(c.Type) && c.Type.Length <= 32 && c.Type != "folder" && WatchWidgets.Find(c.Type) != null) kids.Add(CleanLook(c));
+            w.Children = kids.Count > 0 ? WatchFolders.CleanChildren(kids) : null;
+        }
+        else (w.Name, w.Children) = (null, null);
         return w;
     }
 

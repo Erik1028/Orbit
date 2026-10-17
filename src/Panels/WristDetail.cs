@@ -38,6 +38,7 @@ public sealed partial class WristPanel
         "notifications" => "notifications",
         "photo" => "photo",
         "weather" => "weather",
+        "folder" => "folder",
         _ => null,
     };
 
@@ -45,6 +46,7 @@ public sealed partial class WristPanel
 
     void OpenDetail(WatchWidget w)
     {
+        _folder = FolderUnder(w);           // a widget of the open folder: the folder stays under its view (WristFolder.cs)
         _open = w;
         _closing = false;
         _openStart = Clock.Now;
@@ -106,11 +108,13 @@ public sealed partial class WristPanel
     void DrawDetail(PanelData d, List<WatchWidget> list)
     {
         if (_open == null) return;
+        list = FolderBehind(d, list);       // opened from a folder: the folder open under it, its widgets the list (WristFolder.cs)
         var k = list.Contains(_open) ? WatchWidgets.Find(_open.Type) : null;
         string kind = k == null ? null : DetailOf(k.Id);
         if (kind == null) { _open = null; return; }
         float e = _ui.Spring(OpenKey, _closing ? 0 : 1, 240, 24);
-        if (_closing && e < 0.03f) { _open = null; _closing = false; return; }
+        if (_closing && e < 0.03f) { _open = FolderBack(); _closing = false; return; }
+        if (kind == "folder") { FolderView(d, k, e); return; }          // the folder open: its widgets live (WristFolder.cs)
         float ec = Math.Clamp(e, 0, 1);
         var all = new RectangleF(0, 0, TW, TH);
         if (!LayoutTest) _p.Fill(all, Theme.WithAlpha(0xFF000000, 0.62f * ec), Bento.PageRadius);
@@ -554,9 +558,11 @@ public sealed partial class WristPanel
     void DrawDetail95(PanelData d, List<WatchWidget> list)
     {
         if (_open == null) return;
+        list = FolderBehind95(d, list);     // opened from a folder: the folder's window under it, its widgets the list (WristFolder95.cs)
         var k = list.Contains(_open) ? WatchWidgets.Find(_open.Type) : null;
         string kind = k == null ? null : DetailOf(k.Id);
         if (kind == null) { _open = null; return; }
+        if (kind == "folder") { FolderWindow95(d, k); return; }         // each style's folder window (WristFolder95.cs)
         var win = WatchWidgets.CellRect(0, 0, WatchWidgets.Cols, WatchWidgets.Rows, true);
         double zs = Motion.Any ? Theme.RetroSkin.ZoomSeconds : 0;       // the style's zoom (95: 0.22 s); Motion off: none, the window at once
         double t = zs > 0 ? (Clock.Now - _openStart) / zs : 1;
@@ -564,7 +570,7 @@ public sealed partial class WristPanel
         if (_closing)
         {
             // the zoom outline back into its widget, then it is gone
-            if (t >= 1) { _open = null; _closing = false; return; }
+            if (t >= 1) { _open = FolderBack(); _closing = false; return; }
             _ui.Animating = true;
             if (!live) { Zoom95(win, WatchWidgets.Rect(_open, true, _grid), (float)t); return; }
         }
