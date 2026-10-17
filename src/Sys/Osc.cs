@@ -14,22 +14,52 @@ namespace Orbit;
 public sealed class OscSender : IDisposable
 {
     readonly UdpClient _udp = new();
-    readonly Dictionary<string, object> _last = new();
+    readonly Dictionary<string, Value> _last = new();
     IPEndPoint _ep;
     double _nextFull;
+    bool _full;
+
+    // what went out last for a parameter: its type and value, kept without boxing (the app sends 10 times a second)
+    readonly record struct Value(char Type, int I, float F);
 
     public void Send(double now, int port, IEnumerable<(string name, object value)> values, bool force = false)
     {
-        if (_ep == null || _ep.Port != port) { _ep = new IPEndPoint(IPAddress.Loopback, port); _last.Clear(); }
-        bool full = force || now >= _nextFull;
-        if (full) _nextFull = now + 5;
+        Begin(now, port, force);
         foreach (var (name, value) in values)
-        {
-            if (!full && _last.TryGetValue(name, out var old) && Equals(old, value)) continue;
-            _last[name] = value;
-            var msg = Encode("/avatar/parameters/" + name, value);
-            try { _udp.Send(msg, msg.Length, _ep); } catch (Exception e) { Log.Warn("osc: " + e.Message); }
-        }
+            switch (value)
+            {
+                case bool b: Param(name, b); break;
+                case int i: Param(name, i); break;
+                case float f: Param(name, f); break;
+                default: throw new ArgumentException("unsupported OSC type " + value?.GetType());
+            }
+    }
+
+    // A round of avatar parameters: Begin, then Param for each - sent when it changed since it last went out, all of them every 5 s
+    // (force: all of them now)
+    public void Begin(double now, int port, bool force = false)
+    {
+        if (_ep == null || _ep.Port != port) { _ep = new IPEndPoint(IPAddress.Loopback, port); _last.Clear(); }
+        _full = force || now >= _nextFull;
+        if (_full) _nextFull = now + 5;
+    }
+
+    public void Param(string name, bool v) { if (Changed(name, new Value('T', v ? 1 : 0, 0))) Send(name, v); }
+    public void Param(string name, int v) { if (Changed(name, new Value('i', v, 0))) Send(name, v); }
+    public void Param(string name, float v) { if (Changed(name, new Value('f', 0, v))) Send(name, v); }
+
+    // (a float compares as float.Equals did on the boxed one: a NaN equals a NaN)
+    bool Changed(string name, Value v)
+    {
+        if (!_full && _last.TryGetValue(name, out var old) && old.Type == v.Type && old.I == v.I && old.F.Equals(v.F)) return false;
+        _last[name] = v;
+        return true;
+    }
+
+    void Send(string name, object value)
+    {
+        var msg = Encode("/avatar/parameters/" + name, value);
+        try { _udp.Send(msg, msg.Length, _ep); } catch (Exception e) { Log.Warn("osc: " + e.Message); }
     }
 
     public static byte[] Encode(string address, object value) => Encode(address, new[] { value });

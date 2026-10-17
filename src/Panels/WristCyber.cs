@@ -316,7 +316,7 @@ public sealed partial class WristPanel
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture), sec = now.ToString("ss", culture);
+        string t = Clk(now, h24 ? "HH:mm" : "h:mm", culture), sec = Clk(now, "ss", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         Words(now);
         var y = CyTimeRect(r);
@@ -498,11 +498,10 @@ public sealed partial class WristPanel
         {
             float ns = MathF.Max(14, MathF.Round(rad * 0.14f));
             float nb = CyberHud.CapH(_p, ns) / 2;
-            string[] nums = { "00", "15", "30", "45" };
             for (int i = 0; i < 4; i++)
             {
                 float a = i / 4f * MathF.Tau, nx = cx + rad * 0.6f * MathF.Sin(a), ny = cy - rad * 0.6f * MathF.Cos(a);
-                CyMono(nums[i], nx - 30, ny + nb, 60, CyNumeral, ns, FontWeight.SemiBold, TextAlignment.Center);
+                CyMono(CyQuarters[i], nx - 30, ny + nb, 60, CyNumeral, ns, FontWeight.SemiBold, TextAlignment.Center);
             }
         }
         var (ht, mt, st) = ClockArt.Turns(now);
@@ -512,11 +511,10 @@ public sealed partial class WristPanel
         {
             float a = ht * MathF.Tau, dx = MathF.Sin(a), dy = -MathF.Cos(a), nx = -dy, ny = dx;
             float f = -rad * 0.08f, to = rad * 0.52f, w0 = MathF.Max(5, rad * 0.085f), w1 = MathF.Max(2, rad * 0.03f);
-            _p.Polygon(new[]
-            {
-                new Vector2(cx + dx * f + nx * w0 / 2, cy + dy * f + ny * w0 / 2), new Vector2(cx + dx * to + nx * w1 / 2, cy + dy * to + ny * w1 / 2),
-                new Vector2(cx + dx * to - nx * w1 / 2, cy + dy * to - ny * w1 / 2), new Vector2(cx + dx * f - nx * w0 / 2, cy + dy * f - ny * w0 / 2),
-            }, CyY);
+            var hp = _cyHand;          // (the same points in a kept array: no array a frame)
+            hp[0] = new Vector2(cx + dx * f + nx * w0 / 2, cy + dy * f + ny * w0 / 2); hp[1] = new Vector2(cx + dx * to + nx * w1 / 2, cy + dy * to + ny * w1 / 2);
+            hp[2] = new Vector2(cx + dx * to - nx * w1 / 2, cy + dy * to - ny * w1 / 2); hp[3] = new Vector2(cx + dx * f - nx * w0 / 2, cy + dy * f - ny * w0 / 2);
+            _p.Polygon(hp, CyY);
         }
         {
             float a = mt * MathF.Tau, dx = MathF.Sin(a), dy = -MathF.Cos(a);
@@ -526,17 +524,20 @@ public sealed partial class WristPanel
             float a = st * MathF.Tau, dx = MathF.Sin(a), dy = -MathF.Cos(a), nx = -dy, ny = dx;
             float tip = rad * 0.88f, head = MathF.Max(5, rad * 0.1f), hw = MathF.Max(2.5f, rad * 0.035f);
             _p.Line(cx - dx * rad * 0.16f, cy - dy * rad * 0.16f, cx + dx * (tip - head * 0.6f), cy + dy * (tip - head * 0.6f), CyR, MathF.Max(1.2f, rad * 0.013f));
-            _p.Polygon(new[]
-            {
-                new Vector2(cx + dx * tip, cy + dy * tip), new Vector2(cx + dx * (tip - head) + nx * hw, cy + dy * (tip - head) + ny * hw),
-                new Vector2(cx + dx * (tip - head) - nx * hw, cy + dy * (tip - head) - ny * hw),
-            }, CyR);
+            var tp = _cyTip;
+            tp[0] = new Vector2(cx + dx * tip, cy + dy * tip); tp[1] = new Vector2(cx + dx * (tip - head) + nx * hw, cy + dy * (tip - head) + ny * hw);
+            tp[2] = new Vector2(cx + dx * (tip - head) - nx * hw, cy + dy * (tip - head) - ny * hw);
+            _p.Polygon(tp, CyR);
         }
         float dm = MathF.Max(4, rad * 0.065f);
-        var dia = new[] { new Vector2(cx, cy - dm), new Vector2(cx + dm, cy), new Vector2(cx, cy + dm), new Vector2(cx - dm, cy), new Vector2(cx, cy - dm) };
+        var dia = _cyDia;
+        dia[0] = new Vector2(cx, cy - dm); dia[1] = new Vector2(cx + dm, cy); dia[2] = new Vector2(cx, cy + dm); dia[3] = new Vector2(cx - dm, cy); dia[4] = new Vector2(cx, cy - dm);
         _p.Polygon(dia, 4, CyDial);
         _p.Polyline(dia, 5, CyR, MathF.Max(1.5f, rad * 0.02f));
     }
+
+    static readonly string[] CyQuarters = { "00", "15", "30", "45" };
+    readonly Vector2[] _cyHand = new Vector2[4], _cyTip = new Vector2[3], _cyDia = new Vector2[5];      // the dial's shapes, filled each frame
 
     // ---- the date: the day big in yellow, the month and the weekday beside it ----
     void CyberDate(RectangleF r, WatchWidget w, DateTime now)
@@ -1195,7 +1196,8 @@ public sealed partial class WristPanel
         {
             // the layout: its name big, where it is among the layouts in cyan under it ("‹ 1/3 ›")
             var ls = _cfg.Data.Layouts;
-            int li = ls.FindIndex(l => l.Name == d.LayoutName);
+            int li = -1;
+            for (int i = 0; i < ls.Count; i++) if (ls[i].Name == d.LayoutName) { li = i; break; }    // (a lambda holding d was made for every tile)
             string at = li < 0 ? null : $"‹ {li + 1}/{ls.Count} ›";
             float ns = MathF.Max(17, FitSize(label, t.Width - 16, 30, FontWeight.Bold, Theme.Display));
             float cy0 = t.Y + t.Height * 0.52f;

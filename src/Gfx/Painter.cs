@@ -258,6 +258,7 @@ public sealed class Painter : IDisposable
     public int FormatCount => _formats.Count;
     public int WidthCount => _widths.Count;
     public int LayoutCount => _layouts.Count;
+    public int LayoutsMade { get; private set; }        // text laid out so far (the perf tool: none a frame at rest is the goal)
     readonly Stack<int> _clips = new();
     public float Scale { get; private set; } = 1;
 
@@ -423,9 +424,11 @@ public sealed class Painter : IDisposable
 
     static Color4 ToColor(uint c) => new(((c >> 16) & 0xFF) / 255f, ((c >> 8) & 0xFF) / 255f, (c & 0xFF) / 255f, ((c >> 24) & 0xFF) / 255f);
 
-    ID2D1SolidColorBrush Brush(uint c)
+    ID2D1SolidColorBrush Brush(uint c) => RawBrush(Theme.Skin(c));
+
+    // the brush in exactly this colour (no style's colour map)
+    ID2D1SolidColorBrush RawBrush(uint c)
     {
-        c = Theme.Skin(c);
         if (_brush == null) { _brush = Dc.CreateSolidColorBrush(ToColor(c)); _brushColor = c; }
         else if (c != _brushColor) { _brush.Color = ToColor(c); _brushColor = c; }
         return _brush;
@@ -1032,7 +1035,24 @@ public sealed class Painter : IDisposable
         // the 95 skin's GDI-measured pixel text stays exactly as it was
         if (PixelMode)
         {
-            Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip, Vortice.DCommon.MeasuringMode.GdiClassic);
+            // laid out once and kept, as DrawText lays it out on every call (GDI-measured, its box as DrawText reads the rectangle,
+            // the transform it is drawn with): the same pixels without the layout work each frame
+            float pw = (r.X + r.Width) - r.X, ph = (r.Y + r.Height) - r.Y;
+            if (pw < 0 || ph < 0 || !PixelLayouts)
+            {
+                Dc.DrawText(s, f, new Rect(r.X, r.Y, r.Width, r.Height), Brush(c), DrawTextOptions.Clip, Vortice.DCommon.MeasuringMode.GdiClassic);
+                return;
+            }
+            var t = Dc.Transform;
+            var gk = (s, f, pw, ph, t);
+            if (!_gdiLayouts.TryGetValue(gk, out var gl))
+            {
+                if (_gdiLayouts.Count >= 1000) DropGdiLayouts();
+                gl = _g.DWrite.CreateGdiCompatibleTextLayout(s, (uint)s.Length, f, pw, ph, 1f, t, false);
+                LayoutsMade++;
+                _gdiLayouts[gk] = gl;
+            }
+            Dc.DrawTextLayout(new Vector2(r.X, r.Y), gl, Brush(c), DrawTextOptions.Clip);
             return;
         }
         float lw = MathF.Max(0, r.Width), lh = MathF.Max(0, r.Height);
@@ -1042,6 +1062,7 @@ public sealed class Painter : IDisposable
             // a ticking clock or a springing card makes new ones all the time: start over rather than grow forever
             if (_layouts.Count >= 1000) DropLayouts();
             var lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            LayoutsMade++;
             if (Tabular(family, s)) Figures(lay, s, family, size, w);
             _layouts[key] = tl = (lay, Fits(lay));
         }
@@ -1066,6 +1087,18 @@ public sealed class Painter : IDisposable
         _layouts.Clear();
         foreach (var l in _tracked.Values) l.lay.Dispose();
         _tracked.Clear();
+        DropGdiLayouts();
+    }
+
+    // the retro styles' pixel text (PixelMode), laid out the GDI way: by text, format, box and transform. Off: DrawText as before (the
+    // perf tool's check that both give the same pixels)
+    public bool PixelLayouts { get; set; } = true;
+    readonly Dictionary<(string, IDWriteTextFormat, float, float, Matrix3x2), IDWriteTextLayout> _gdiLayouts = new();
+
+    void DropGdiLayouts()
+    {
+        foreach (var l in _gdiLayouts.Values) l.Dispose();
+        _gdiLayouts.Clear();
     }
 
     // ---- letter-spaced text (the modern watch's UPPERCASE captions) ----
@@ -1091,6 +1124,7 @@ public sealed class Painter : IDisposable
         {
             if (_tracked.Count >= 300) { foreach (var l in _tracked.Values) l.lay.Dispose(); _tracked.Clear(); }
             var lay = _g.DWrite.CreateTextLayout(s, f, lw, lh);
+            LayoutsMade++;
             using (var l1 = lay.QueryInterface<IDWriteTextLayout1>())
                 l1.SetCharacterSpacing(0, tracking, 0, new TextRange(0, (uint)(s.Length - 1)));
             if (Tabular(family, s)) Figures(lay, s, family, size, w, tracking);
@@ -1301,7 +1335,7 @@ public sealed class Painter : IDisposable
             sk.MapFont(ref family, ref size, ref w);
             if (sk.PixelFont(family, size, w) is { } pf) return pf.Measure(s, w >= FontWeight.SemiBold);
         }
-        var key = (s, size, w, PixelMode ? family + "\u0001px" : family);
+        var key = (s, size, w, PixelMode ? PxFamily(family) : family);
         if (_widths.TryGetValue(key, out float cached)) return cached;
         var f = Format(family, size, w, TextAlignment.Leading, ParagraphAlignment.Near, false);
         using var layout = PixelMode
@@ -1312,6 +1346,15 @@ public sealed class Painter : IDisposable
         if (_widths.Count > 2000) _widths.Clear();     // chat text etc. would grow it forever
         _widths[key] = width;
         return width;
+    }
+
+    // pixel mode's widths are GDI-measured, kept apart under the family's name with a mark - that name made once per family (it was
+    // a new string in every measuring call, many a frame in the retro styles)
+    readonly Dictionary<string, string> _pxFamily = new();
+    string PxFamily(string family)
+    {
+        if (!_pxFamily.TryGetValue(family, out var k)) _pxFamily[family] = k = family + "\u0001px";
+        return k;
     }
 
     // the height of wrapped text in a column of this width (laid out once, kept)
@@ -1352,13 +1395,38 @@ public sealed class Painter : IDisposable
 
     readonly Stack<ID2D1Geometry> _layers = new();
 
+    // The clips' shapes, kept: the watch clips its dock keys and covers in every frame, at the same places while it rests (a geometry
+    // made and thrown away each time before). Past 64 they start over - only between clips, never under one still pushed.
+    readonly Dictionary<(RectangleF r, float radius, float tl, float br), ID2D1Geometry> _clipGeos = new();
+
     // clips everything drawn until PopRoundedClip to a rounded rectangle (antialiased edges)
     public void PushRoundedClip(RectangleF r, float radius)
     {
-        ID2D1Geometry geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
-        if (Theme.Cyber && CyberHud.Cuts(r, radius) is { br: > 0 } cut)
+        var cut = Theme.Cyber ? CyberHud.Cuts(r, radius) : (tl: -1f, br: -1f);
+        if (cut.br <= 0) cut = (-1, -1);
+        var key = (r, radius, cut.tl, cut.br);
+        if (!_clipGeos.TryGetValue(key, out var geo))
         {
-            // Cyber: the cut shape (its own geometry, placed: the clip layer keeps it until PopRoundedClip)
+            if (_clipGeos.Count >= 64 && _layers.Count == 0) DropClipGeos();
+            _clipGeos[key] = geo = ClipGeo(r, radius, cut);
+        }
+        Dc.PushLayer(new LayerParameters1
+        {
+            ContentBounds = new Vortice.RawRectF(-100000, -100000, 100000, 100000),
+            GeometricMask = geo,
+            MaskAntialiasMode = AntialiasMode.PerPrimitive,
+            MaskTransform = Matrix3x2.Identity,
+            Opacity = 1,
+        }, null);
+        _layers.Push(geo);
+    }
+
+    ID2D1Geometry ClipGeo(RectangleF r, float radius, (float tl, float br) cut)
+    {
+        ID2D1Geometry geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
+        if (cut.br > 0)
+        {
+            // Cyber: the cut shape (its own geometry, placed)
             geo.Dispose();
             var pg = _g.D2DFactory.CreatePathGeometry();
             using (var sink = pg.Open())
@@ -1375,22 +1443,76 @@ public sealed class Painter : IDisposable
             }
             geo = pg;
         }
-        Dc.PushLayer(new LayerParameters1
-        {
-            ContentBounds = new Vortice.RawRectF(-100000, -100000, 100000, 100000),
-            GeometricMask = geo,
-            MaskAntialiasMode = AntialiasMode.PerPrimitive,
-            MaskTransform = Matrix3x2.Identity,
-            Opacity = 1,
-        }, null);
-        _layers.Push(geo);
+        return geo;
+    }
+
+    void DropClipGeos()
+    {
+        foreach (var g in _clipGeos.Values) g.Dispose();
+        _clipGeos.Clear();
     }
 
     public void PopRoundedClip()
     {
         if (_layers.Count == 0) return;
         Dc.PopLayer();
-        _layers.Pop().Dispose();
+        _layers.Pop();          // (the shape stays kept: _clipGeos)
+    }
+
+    // ---- rounded corners without a clip layer ----
+    // After drawing: what lies outside r's rounded corners made see-through, as PushRoundedClip would have clipped it (the VR
+    // settings panel). A clip layer the size of the panel, its mask made anew every frame, cost a fifth of the page itself. Here the
+    // layer is drawn once, white, into a little picture of the four corners (each at its own place on the pixel grid), and every frame
+    // multiplies the corners by it (DestinationIn): the pixels on the curve get the share of the picture the layer gave them (to the
+    // rounding of one 8-bit step). At the frame's own scale, nothing moved or pushed.
+    Surface _corners;
+    (RectangleF r, float radius, float scale) _cornersFor;
+
+    public void CutCorners(RectangleF r, float radius)
+    {
+        var t = Dc.Transform;
+        float s = Scale;
+        int c = (int)MathF.Ceiling(radius * s) + 2;           // a corner's square, in pixels
+        int x0 = (int)MathF.Floor(r.X * s), y0 = (int)MathF.Floor(r.Y * s);
+        int x1 = (int)MathF.Ceiling(r.Right * s) - c, y1 = (int)MathF.Ceiling(r.Bottom * s) - c;
+        Span<(int x, int y)> at = stackalloc (int, int)[] { (x0, y0), (x1, y0), (x0, y1), (x1, y1) };
+        if (_corners == null || _cornersFor != (r, radius, s))
+        {
+            _corners?.Dispose();
+            _corners = new Surface(_g, 2 * c, 2 * c);
+            _cornersFor = (r, radius, s);
+            Dc.Target = _corners.Bitmap;
+            Dc.Clear(ToColor(0));
+            using var geo = _g.D2DFactory.CreateRoundedRectangleGeometry(new RoundedRectangle(r, radius, radius));
+            for (int i = 0; i < 4; i++)
+            {
+                Dc.Transform = Matrix3x2.Identity;
+                Dc.PushAxisAlignedClip(new Vortice.RawRectF(i % 2 * c, i / 2 * c, i % 2 * c + c, i / 2 * c + c), AntialiasMode.Aliased);    // its own square
+                Dc.Transform = Matrix3x2.CreateScale(s) * Matrix3x2.CreateTranslation(i % 2 * c - at[i].x, i / 2 * c - at[i].y);
+                Dc.PushLayer(new LayerParameters1
+                {
+                    ContentBounds = new Vortice.RawRectF(-100000, -100000, 100000, 100000),
+                    GeometricMask = geo,
+                    MaskAntialiasMode = AntialiasMode.PerPrimitive,
+                    MaskTransform = Matrix3x2.Identity,
+                    Opacity = 1,
+                }, null);
+                Dc.FillRectangle(Raw(r), RawBrush(0xFFFFFFFF));
+                Dc.PopLayer();
+                Dc.PopAxisAlignedClip();
+            }
+            Dc.Target = _target;
+        }
+        // (DestinationIn works on everything outside the picture too: each corner's square clipped to)
+        Dc.Transform = Matrix3x2.Identity;
+        for (int i = 0; i < 4; i++)
+        {
+            Dc.PushAxisAlignedClip(new Vortice.RawRectF(at[i].x, at[i].y, at[i].x + c, at[i].y + c), AntialiasMode.Aliased);
+            Dc.DrawImage(_corners.Bitmap, new Vector2(at[i].x, at[i].y), new Vortice.RawRectF(i % 2 * c, i / 2 * c, i % 2 * c + c, i / 2 * c + c),
+                InterpolationMode.NearestNeighbor, CompositeMode.DestinationIn);
+            Dc.PopAxisAlignedClip();
+        }
+        Dc.Transform = t;
     }
 
     public void PushClip(RectangleF r)
@@ -1416,6 +1538,9 @@ public sealed class Painter : IDisposable
         DropSquircles();
         DropCuts();
         DropShapes();
+        _corners?.Dispose();
+        _corners = null;
+        DropClipGeos();
         DropLayouts();
         foreach (var f in _formats.Values) f.Dispose();
         _formats.Clear();

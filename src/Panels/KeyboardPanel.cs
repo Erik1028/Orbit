@@ -387,9 +387,11 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
         _p.Fill(new RectangleF(0, 0, TW, TH), Theme.OverlayBg, 26);
         if (Theme.Classic) _p.Bevel(new RectangleF(0, 0, TW, TH), Painter.Edge.Window);
         else _p.Stroke(new RectangleF(1, 1, TW - 2, TH - 2), 0x40FFFFFF, 2, 25);
-        bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
+        bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0, caps = Caps;      // Caps asks Windows: once a frame, not per key
         // press glow fades out after the key is let go
-        foreach (var key in new System.Collections.Generic.List<Key>(_flash.Keys))
+        _flashKeys.Clear();
+        _flashKeys.AddRange(_flash.Keys);
+        foreach (var key in _flashKeys)
         {
             if (Array.IndexOf(_down, key) >= 0) continue;
             float f = Motion.Any ? _flash[key] - _lastDt / 0.25f : 0;       // Look > Motion off: gone at once
@@ -428,15 +430,14 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
             _p.Text($"{text.Length}/{ChatMax}", new RectangleF(f.Right - 110, f.Y, 96, f.Height), Theme.Dim, 18,
                 FontWeight.Normal, TextAlignment.Trailing);
         }
-        var drawList = new List<Key>(_keys);
-        drawList.AddRange(_chat ? _barChat : _barNormal);
-        foreach (var k0 in drawList)
+        var bar = _chat ? _barChat : _barNormal;        // the keys, then the top bar (no list made for them every frame)
+        for (int ki = 0; ki < _keys.Count + bar.Count; ki++)
         {
-            var k = k0;
+            var k = ki < _keys.Count ? _keys[ki] : bar[ki - _keys.Count];
             bool hover = Array.IndexOf(_hover, k) >= 0;
             bool down = Array.IndexOf(_down, k) >= 0;
             _flash.TryGetValue(k, out float glow);
-            int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && Caps ? 2
+            int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && caps ? 2
                          : k.Action == "chat" && _chat ? 2 : 0;
             RectangleF kr;
             uint fg;
@@ -474,7 +475,7 @@ public sealed partial class KeyboardPanel : IPointerTarget, IDisposable
             else
             {
                 string main = altgr && k.AltGr != null ? k.AltGr : shift ? k.Shifted ?? k.Normal : k.Normal;
-                if (main != null && main.Length == 1 && char.IsLetter(main[0]) && Caps && !altgr)
+                if (main != null && main.Length == 1 && char.IsLetter(main[0]) && caps && !altgr)
                     main = shift ? main.ToLowerInvariant() : main.ToUpperInvariant();
                 _p.Text(main, k.R, fg, 38, FontWeight.Normal, TextAlignment.Center);
                 // small hints: shifted symbol (for non-letters) top-left, AltGr symbol bottom-right

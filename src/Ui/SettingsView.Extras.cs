@@ -46,20 +46,33 @@ public sealed partial class SettingsView
         ui.Section(new RectangleF(rx, y, 360, 20), "Alerts");
         bool b = a.Battery;
         if (ui.Toggle("g.abat", new RectangleF(rx - 10, y + 22, 232, 46), "Low battery", ref b, "controllers and trackers"))
-            SetAlerts(x => x.Battery = b);
+            SetAlert(0, b ? 1 : 0);
         int bi = Nearest(BatteryPcts, a.BatteryPct);
         if (ui.Segmented("g.abatp", new RectangleF(rx + 226, y + 28, 140, 34), BatteryPctNames, ref bi, a.Battery))
-            SetAlerts(x => x.BatteryPct = BatteryPcts[bi]);
+            SetAlert(1, BatteryPcts[bi]);
         b = a.Fps;
         if (ui.Toggle("g.afps", new RectangleF(rx - 10, y + 70, 232, 46), "Low frame rate", ref b, "of the headset's rate, 10 s"))
-            SetAlerts(x => x.Fps = b);
+            SetAlert(2, b ? 1 : 0);
         int fi = Nearest(FpsPcts, a.FpsPct);
         if (ui.Segmented("g.afpsp", new RectangleF(rx + 226, y + 76, 140, 34), FpsPctNames, ref fi, a.Fps))
-            SetAlerts(x => x.FpsPct = FpsPcts[fi]);
+            SetAlert(3, FpsPcts[fi]);
         ui.Label(new RectangleF(rx, y + 120, 366, 36),
             "A card and a buzz in that controller. A battery once (again after charging); the frame rate at most every 2 minutes.",
             Theme.Dim, 12, FontWeight.Normal, true);
     }
+
+    // one alert setting changed: 0 battery on, 1 its %, 2 frame rate on, 3 its % (a method of its own: the lambdas holding the values
+    // made their holder on every frame DrawAlerts drew, clicked or not)
+    void SetAlert(int what, int v) => SetAlerts(x =>
+    {
+        switch (what)
+        {
+            case 0: x.Battery = v != 0; break;
+            case 1: x.BatteryPct = v; break;
+            case 2: x.Fps = v != 0; break;
+            default: x.FpsPct = v; break;
+        }
+    });
 
     // ================= VRChat > Controllers: B / Y twice =================
 
@@ -85,20 +98,21 @@ public sealed partial class SettingsView
     }
 
     // the controllers in a few lines (General had them before the alerts came)
+    static readonly string[] ControlsLines =
+    {
+        "Trigger: click  ·  B / Y: right click  ·  stick: scroll",
+        "Grip: grab & move  ·  stick ↕ distance, ↔ bend",
+        "2nd hand's grip: resize  ·  B/Y + grip: leave row",
+        "Both grips twice: hide / show monitors + keyboard",
+        "B / Y twice on a panel: the keyboard (or the watch)",
+    };
+
     void DrawControlsHelp(Ui ui, float x, float y)
     {
         var p = ui.P;
         ui.Section(new RectangleF(x, y, 360, 20), "Controls");
-        string[] lines =
-        {
-            "Trigger: click  ·  B / Y: right click  ·  stick: scroll",
-            "Grip: grab & move  ·  stick ↕ distance, ↔ bend",
-            "2nd hand's grip: resize  ·  B/Y + grip: leave row",
-            "Both grips twice: hide / show monitors + keyboard",
-            "B / Y twice on a panel: the keyboard (or the watch)",
-        };
         y += 24;
-        foreach (var l in lines) { p.Text(l, new RectangleF(x, y, 366, 24), Theme.Dim, 13); y += 24; }
+        foreach (var l in ControlsLines) { p.Text(l, new RectangleF(x, y, 366, 24), Theme.Dim, 13); y += 24; }
     }
 
     // ================= Layouts > Per game =================

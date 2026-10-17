@@ -149,7 +149,7 @@ public sealed partial class SettingsView
         p.Logo(logo);
         CyberHud.Brackets(p, RectangleF.Inflate(logo, 4, 4), CyberHud.Cyan, 8, 0, 2);
         p.Text("ORBITOVERLAY", new RectangleF(62, 8, 200, 32), CyberHud.White, 26, FontWeight.Bold, TextAlignment.Leading, ParagraphAlignment.Center, Theme.Display);
-        if (_cyVersionLang != Lang.Code || _cyVersion == null) { _cyVersionLang = Lang.Code; _cyVersion = Lang.Upper("Settings") + " // V" + Updater.Current.ToString(3); }
+        if (_cyVersionLang != Lang.Code || _cyVersion == null) { _cyVersionLang = Lang.Code; _cyVersion = Lang.Upper("Settings") + " // V" + Updater.CurrentText; }
         CyberHud.MonoAt(p, _cyVersion, 63, 53, 190, CyberHud.Grey, 10.5f);
         bool on = _h.VrConnected;
         float x = 232;
@@ -269,7 +269,7 @@ public sealed partial class SettingsView
             CyberHud.MonoAt(p, v, x + 58, y, CyNav.Right - x - 66, c, 10.5f, FontWeight.SemiBold);
             y += 17;
         }
-        Row("BUILD", _cyBuild ??= Updater.Current.ToString(3), CyberHud.White);
+        Row("BUILD", _cyBuild ??= Updater.CurrentText, CyberHud.White);
         bool on = _h.VrConnected;
         Row("LINK", on ? "ONLINE" : "OFFLINE", on ? CyberHud.Cyan : CyberHud.Red);
         Row("IN VR", CyberVrTime(), CyberHud.White);

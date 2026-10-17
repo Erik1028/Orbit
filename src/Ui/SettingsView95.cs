@@ -145,8 +145,14 @@ public sealed partial class SettingsView
 
     string Fit95(Ui ui, string s, float w)
     {
+        // a text cut once is kept (the hints, the About rows: a few strings per letter of a long one, every frame); another look or
+        // language measures again
+        int ver = Theme.Version * 1000 + Lang.Version;
+        if (ver != _fit95For || _fit95.Count > 128) { _fit95.Clear(); _fit95For = ver; }
+        if (s != null && _fit95.TryGetValue((s, w), out var done)) return done;
+        string key = s;
         s = Lang.T(s);                     // cut in the language picked
-        if (string.IsNullOrEmpty(s) || ui.Width95(s) <= w) return s;
+        if (string.IsNullOrEmpty(s) || ui.Width95(s) <= w) return key == null ? s : _fit95[(key, w)] = s;
         int lo = 0, hi = s.Length - 1;
         while (lo < hi)
         {
@@ -154,8 +160,11 @@ public sealed partial class SettingsView
             if (ui.Width95(s[..mid] + "...") <= w) lo = mid; else hi = mid - 1;
         }
         if (lo > 0 && char.IsHighSurrogate(s[lo - 1])) lo--;
-        return s[..lo].TrimEnd() + "...";
+        return _fit95[(key, w)] = s[..lo].TrimEnd() + "...";
     }
+
+    readonly Dictionary<(string, float), string> _fit95 = new();
+    int _fit95For = -1;
 
     static string Radius(float width, float curve) => curve < 0.005f ? "flat" : Lang.F("radius {0:0.00} m", width / (2 * MathF.PI * curve));
 
@@ -406,11 +415,11 @@ public sealed partial class SettingsView
         ui.Check95("w95.en", 28, 76, "&Show the watch", ref b);
         w.Enabled = b;
         int hi = w.Hand == "right" ? 1 : 0;
-        if (ComboRow(ui, "w95.hand", 28, 98, 108, 100, "&Hand:", new[] { "Left", "Right" }, ref hi, w.Enabled))
+        if (ComboRow(ui, "w95.hand", 28, 98, 108, 100, "&Hand:", HandNames, ref hi, w.Enabled))
         { w.Hand = hi == 1 ? "right" : "left"; w.Offset = null; }
-        string[] faces = { "full", "analog", "minimal", "time", "custom" };
+        var faces = FaceIds;
         int fi = Math.Max(0, Array.IndexOf(faces, w.Face ?? "full"));
-        if (ComboRow(ui, "w95.face", 28, 126, 108, 100, "&Face:", new[] { "Full", "Analog", "Minimal", "Time only", "Custom" }, ref fi, w.Enabled))
+        if (ComboRow(ui, "w95.face", 28, 126, 108, 100, "&Face:", FaceNames95, ref fi, w.Enabled))
             ChooseFace(faces[fi]);
         if (custom && ui.Button95("w95.edit", new RectangleF(214, 125, 140, 23), "&Edit layout...", w.Enabled)) EditingWatch = true;
         b = w.AlwaysVisible;
@@ -440,7 +449,7 @@ public sealed partial class SettingsView
         ui.Check95("w95.perf", 28, 342, "Frame &timing && GPU", ref b, w.Enabled && !custom);
         w.ShowPerformance = b;
         int pg = w.PerfGraph ? 1 : 0;
-        if (ComboRow(ui, "w95.graph", 47, 362, 128, 100, "Sh&own as:", new[] { "Numbers", "Graph" }, ref pg, w.Enabled && w.ShowPerformance && !custom))
+        if (ComboRow(ui, "w95.graph", 47, 362, 128, 100, "Sh&own as:", PerfNames, ref pg, w.Enabled && w.ShowPerformance && !custom))
             w.PerfGraph = pg == 1;
         b = C.Appearance.Clock24h;
         ui.Check95("w95.24h", 28, 396, "24-hour &clock", ref b, w.Enabled);
@@ -484,7 +493,7 @@ public sealed partial class SettingsView
         ui.Check95("k95.snd", 388, 76, "&Key sounds", ref b);
         k.Sounds = b;
         int si = k.SoundStyle == "muted" ? 1 : 0;
-        if (ComboRow(ui, "k95.style", 388, 98, 468, 100, "S&ound:", new[] { "Click", Lang.C("keyboard", "Muted") }, ref si, k.Sounds))
+        if (ComboRow(ui, "k95.style", 388, 98, 468, 100, "S&ound:", SoundNames(), ref si, k.Sounds))
         {
             k.SoundStyle = si == 1 ? "muted" : "click";
             _h.Keyboard.PlayClick(false);
@@ -645,10 +654,10 @@ public sealed partial class SettingsView
         var g = C.General;
         ui.Group95(new RectangleF(16, 56, 350, 122), "Laser");
         int li = g.LaserHand == "left" ? 1 : g.LaserHand == "right" ? 2 : 0;
-        if (ComboRow(ui, "g95.laser", 28, 76, 108, 120, "Laser &on:", new[] { "Both hands", "Left hand", "Right hand" }, ref li))
+        if (ComboRow(ui, "g95.laser", 28, 76, 108, 120, "Laser &on:", LaserHands95, ref li))
             g.LaserHand = li == 1 ? "left" : li == 2 ? "right" : "both";
         int sm = Math.Clamp(g.LaserSmoothing, 0, 3);
-        if (ComboRow(ui, "g95.smooth", 28, 104, 108, 120, "S&moothing:", new[] { "Off", "Low", "Medium", "High" }, ref sm))
+        if (ComboRow(ui, "g95.smooth", 28, 104, 108, 120, "S&moothing:", SmoothingNames95, ref sm))
             g.LaserSmoothing = sm;
         bool b = g.Haptics;
         ui.Check95("g95.hap", 28, 134, "&Haptic ticks", ref b);
@@ -672,7 +681,7 @@ public sealed partial class SettingsView
         g.PauseWhenOff = b;
         b = g.Osc;
         ui.Check95("g95.osc", 28, 304, "VRChat avatar parameters (OS&C)", ref b);
-        Hint(ui, 47, 321, 300, Lang.F("XSOverlay-style, for DXOverlay - 127.0.0.1:{0}", g.OscPort));
+        Hint(ui, 47, 321, 300, _oscHint95.F("XSOverlay-style, for DXOverlay - 127.0.0.1:{0}", g.OscPort));
         g.Osc = b;
         float bx = 28;
         if (g.RunAsAdmin && !_h.IsElevated)
@@ -688,7 +697,7 @@ public sealed partial class SettingsView
         ui.Group95(new RectangleF(376, 56, 358, 178), "About OrbitOverlay");
         W95Icons.Draw(ui.P, W95Icons.Id.Orbit, 388, 74, 2);
         ui.Text95("OrbitOverlay", new RectangleF(430, 74, 200, 15), K95, true);
-        ui.Text95(Lang.F("Version {0}", Updater.Current.ToString(3)), new RectangleF(430, 90, 200, 15));
+        ui.Text95(_version95.F("Version {0}", Updater.CurrentText), new RectangleF(430, 90, 200, 15));
         float ry = 116;
         void Row(string key, string val)
         {
@@ -699,7 +708,7 @@ public sealed partial class SettingsView
         Row("SteamVR:", _h.VrStatus);
         Row("Input:", _h.InputStatus);
         Row("Graphics:", _h.GpuName);
-        Row("Monitors:", string.Join(", ", _h.MonitorList.Select(m => m.Name)));
+        Row("Monitors:", MonitorNames());
         var (us, umsg, uprog, ulatest) = _h.Updates.Snapshot();
         bool avail = us == Updater.State.Available;
         string ulabel = us switch
@@ -733,7 +742,7 @@ public sealed partial class SettingsView
         g.NotificationSound = b;
         if (ui.Button95("g95.ntest", new RectangleF(647, 298, 75, 23), "&Test", g.Notifications && _h.VrConnected)) _h.TestNotification();
         float na = g.NotificationAngle;
-        TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, Lang.F("{0:0}° below eyes", Math.Round(na)), g.Notifications);
+        TrackRow(ui, "g95.nang", 388, 330, 468, 150, 90, "H&eight:", ref na, 5, 35, _nang95.F("{0:0}° below eyes", Math.Round(na)), g.Notifications);
         g.NotificationAngle = MathF.Round(na);
         Alerts95(ui);                 // low battery / frame rate (SettingsView95.Extras.cs)
 

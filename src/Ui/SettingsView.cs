@@ -92,7 +92,7 @@ public sealed partial class SettingsView
     bool _whatsNewManual;
     float _wnScroll;
     IReadOnlyList<WhatsNew.Entry> WhatsNewShown => _whatsNewManual ? WhatsNew.Latest(4) : _h.WhatsNewList;
-    string WhatsNewSubShown => _whatsNewManual ? Lang.F("OrbitOverlay {0} and the versions before it", Updater.Current.ToString(3)) : WhatsNewSub(_h.WhatsNewSub);
+    string WhatsNewSubShown => _whatsNewManual ? Lang.F("OrbitOverlay {0} and the versions before it", Updater.CurrentText) : WhatsNewSub(_h.WhatsNewSub);
 
     // "Updated to 1.13.1 from 1.8.2" (OrbitApp says it in English) in the language picked
     static string WhatsNewSub(string s)
@@ -664,7 +664,7 @@ public sealed partial class SettingsView
         if (ui.Toggle("w.en", new RectangleF(lx, 84, cw, 50), "Wrist watch", ref b)) w.Enabled = b;
         ui.Label(new RectangleF(lx + 10, 138, cw, 22), "Hand");
         int hi = w.Hand == "right" ? 1 : 0;
-        if (ui.Segmented("w.hand", new RectangleF(lx + 10, 160, cw - 20, 36), new[] { "Left", "Right" }, ref hi, w.Enabled))
+        if (ui.Segmented("w.hand", new RectangleF(lx + 10, 160, cw - 20, 36), HandNames, ref hi, w.Enabled))
         {
             w.Hand = hi == 1 ? "right" : "left";
             w.Offset = null;
@@ -691,10 +691,10 @@ public sealed partial class SettingsView
             C.General.VolumeToApps = b ? null : "off";
 
         var prev = WristPreview(p, 92);
-        string[] faces = { "full", "analog", "minimal", "time", "custom" };
+        var faces = FaceIds;
         ui.Label(new RectangleF(rx + 10, prev.Bottom + 16, cw, 22), "Watch face");
         int fi = Math.Max(0, Array.IndexOf(faces, w.Face ?? "full"));
-        if (ui.Segmented("w.face", new RectangleF(rx + 10, prev.Bottom + 38, cw - 20, 36), new[] { "Full", "Analog", "Minimal", "Time", "Custom" }, ref fi, w.Enabled))
+        if (ui.Segmented("w.face", new RectangleF(rx + 10, prev.Bottom + 38, cw - 20, 36), FaceNames, ref fi, w.Enabled))
             ChooseFace(faces[fi]);
         b = C.Appearance.Clock24h;
         if (ui.Toggle("w.24h", new RectangleF(rx, prev.Bottom + 82, cw, 44), "24-hour clock", ref b, null, w.Enabled)) C.Appearance.Clock24h = b;
@@ -708,7 +708,7 @@ public sealed partial class SettingsView
         }
         ui.Label(new RectangleF(rx + 10, prev.Bottom + 132, 120, 36), "Performance");
         int pg = w.PerfGraph ? 1 : 0;
-        if (ui.Segmented("w.graph", new RectangleF(rx + 130, prev.Bottom + 132, cw - 140, 36), new[] { "Numbers", "Graph" }, ref pg, w.Enabled && w.ShowPerformance))
+        if (ui.Segmented("w.graph", new RectangleF(rx + 130, prev.Bottom + 132, cw - 140, 36), PerfNames, ref pg, w.Enabled && w.ShowPerformance))
             w.PerfGraph = pg == 1;
     }
 
@@ -742,7 +742,7 @@ public sealed partial class SettingsView
         b = k.Sounds;
         if (ui.Toggle("k.snd", new RectangleF(lx, 210, cw, 50), "Key sounds", ref b)) k.Sounds = b;
         int si = k.SoundStyle == "muted" ? 1 : 0;
-        if (ui.Segmented("k.style", new RectangleF(rx + 10, 216, 190, 38), new[] { "Click", Lang.C("keyboard", "Muted") }, ref si, k.Sounds))
+        if (ui.Segmented("k.style", new RectangleF(rx + 10, 216, 190, 38), SoundNames(), ref si, k.Sounds))
         {
             k.SoundStyle = si == 1 ? "muted" : "click";
             _h.Keyboard.PlayClick(false);
@@ -1081,6 +1081,42 @@ public sealed partial class SettingsView
     // General > Language: English (null in the config, nothing written) or another one; every panel is drawn again in it
     static readonly string[] LanguageNames = Lang.Names();
 
+    // the choices' words, made once (an array a frame each before; the painter translates them where they are drawn)
+    static readonly string[] LaserHands = { "Both hands", "Left", "Right" }, SmoothingNames = { "Off", "Low", "Med", "High" },
+        HandNames = { "Left", "Right" }, FaceNames = { "Full", "Analog", "Minimal", "Time", "Custom" }, PerfNames = { "Numbers", "Graph" };
+    string[] _soundNames;
+    int _soundLang = -1;
+    // "Muted" has two meanings: the keyboard's line of the table is picked here (Lang.C), again when the language changes
+    string[] SoundNames()
+    {
+        if (_soundLang != Lang.Version) { _soundLang = Lang.Version; _soundNames = new[] { "Click", Lang.C("keyboard", "Muted") }; }
+        return _soundNames;
+    }
+
+    static readonly string[] FaceIds = { "full", "analog", "minimal", "time", "custom" },
+        FaceNames95 = { "Full", "Analog", "Minimal", "Time only", "Custom" }, LaserHands95 = { "Both hands", "Left hand", "Right hand" },
+        SmoothingNames95 = { "Off", "Low", "Medium", "High" };
+
+    Lang.Memo<int> _oscHint, _oscHint95;
+    Lang.Memo<string> _version95;
+    Lang.Memo<double> _nang95;
+    string _monitorNames;
+    IReadOnlyList<MonitorInfo> _monitorNamesOf;
+    int _monitorNamesCount = -1;
+
+    // "P24FBA-RAGL, 24G4, ..." again only when the list of monitors is another one
+    string MonitorNames()
+    {
+        var l = _h.MonitorList;
+        if (!ReferenceEquals(l, _monitorNamesOf) || l.Count != _monitorNamesCount)
+        {
+            _monitorNamesOf = l;
+            _monitorNamesCount = l.Count;
+            _monitorNames = string.Join(", ", l.Select(m => m.Name));
+        }
+        return _monitorNames;
+    }
+
     void SetLanguage(Ui ui, int i)
     {
         string code = Lang.Languages[Math.Clamp(i, 0, Lang.Languages.Length - 1)].Code;
@@ -1098,11 +1134,11 @@ public sealed partial class SettingsView
         float lx = 222, cw = 376;
         ui.Label(new RectangleF(lx + 10, 84, cw, 22), "Laser on");
         int li = g.LaserHand == "left" ? 1 : g.LaserHand == "right" ? 2 : 0;
-        if (ui.Segmented("g.laser", new RectangleF(lx + 10, 108, cw - 20, 38), new[] { "Both hands", "Left", "Right" }, ref li))
+        if (ui.Segmented("g.laser", new RectangleF(lx + 10, 108, cw - 20, 38), LaserHands, ref li))
             g.LaserHand = li == 1 ? "left" : li == 2 ? "right" : "both";
         ui.Label(new RectangleF(lx + 10, 152, 120, 38), "Smoothing");
         int sm = Math.Clamp(g.LaserSmoothing, 0, 3);
-        if (ui.Segmented("g.smooth", new RectangleF(lx + 110, 152, cw - 120, 38), new[] { "Off", "Low", "Med", "High" }, ref sm))
+        if (ui.Segmented("g.smooth", new RectangleF(lx + 110, 152, cw - 120, 38), SmoothingNames, ref sm))
             g.LaserSmoothing = sm;
         bool b = g.Haptics;
         if (ui.Toggle("g.hap", new RectangleF(lx, 196, cw, 44), "Haptic ticks", ref b)) g.Haptics = b;
@@ -1110,7 +1146,7 @@ public sealed partial class SettingsView
         if (ui.Toggle("g.quick", new RectangleF(lx, 242, cw, 54), "Double-tap both grips", ref b, "hides / shows the monitors and the keyboard")) g.QuickToggle = b;
         b = g.Osc;
         if (ui.Toggle("g.osc", new RectangleF(lx, 298, cw, 54), "VRChat avatar parameters (OSC)", ref b,
-                Lang.F("XSOverlay-style, for DXOverlay · 127.0.0.1:{0}", g.OscPort))) g.Osc = b;
+                _oscHint.F("XSOverlay-style, for DXOverlay · 127.0.0.1:{0}", g.OscPort))) g.Osc = b;
         b = g.AutoStart;
         if (ui.Toggle("g.auto", new RectangleF(lx, 354, cw, 54), "Start with SteamVR", ref b,
                 b ? (_h.VrConnected ? _h.AutoStartStatus : "applied the next time SteamVR runs") : "start OrbitOverlay yourself"))
@@ -1149,15 +1185,15 @@ public sealed partial class SettingsView
         Row("SteamVR", _h.VrStatus);
         Row("Input", _h.InputStatus);
         Row("GPU", _h.GpuName);
-        Row("Monitors", string.Join(", ", _h.MonitorList.Select(m => m.Name)));
+        Row("Monitors", MonitorNames());
         Row("Config", "%LOCALAPPDATA%\\Orbit");
         // version + updates: one button that checks, then offers the update
         var (us, umsg, uprog, ulatest) = _h.Updates.Snapshot();
-        if (Theme.Cyber) CyberRow(p, "Version", Updater.Current.ToString(3), rx, y);
+        if (Theme.Cyber) CyberRow(p, "Version", Updater.CurrentText, rx, y);
         else
         {
             p.Text("Version", new RectangleF(rx, y, 100, 26), Theme.Dim, 13);
-            p.Text(Updater.Current.ToString(3), new RectangleF(rx + 100, y, 70, 26), Theme.Text, 13);
+            p.Text(Updater.CurrentText, new RectangleF(rx + 100, y, 70, 26), Theme.Text, 13);
         }
         bool avail = us == Updater.State.Available;
         string ulabel = us switch

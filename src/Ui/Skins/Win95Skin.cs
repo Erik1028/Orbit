@@ -85,8 +85,9 @@ public class Win95Skin : RetroSkin
         if (key < 0) return;
         float full = TextWidth(p, t, bold, Ui.F95);
         float x = al == TextAlignment.Center ? r.X + MathF.Floor((r.Width - full) / 2) : al == TextAlignment.Trailing ? r.Right - full : r.X;
-        x = MathF.Round(x + TextWidth(p, t[..key], bold, Ui.F95));
-        float uw = Math.Max(1, MathF.Round(TextWidth(p, t.Substring(key, 1), bold, Ui.F95)) - 1);
+        var (pre, ch) = Ui.AmpParts(t, key);
+        x = MathF.Round(x + TextWidth(p, pre, bold, Ui.F95));
+        float uw = Math.Max(1, MathF.Round(TextWidth(p, ch, bold, Ui.F95)) - 1);
         float y = MathF.Floor(r.Y + (r.Height - 13) / 2) + 11;
         if (!enabled) p.Fill(new RectangleF(x + 1, y + 1, uw, 1), Hilight);
         p.Fill(new RectangleF(x, y, uw, 1), enabled ? TextColor(c) : Shadow);

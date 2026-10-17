@@ -52,7 +52,7 @@ public sealed partial class KeyboardPanel
         var all = new RectangleF(0, 0, CW95, CH95);
         _p.Fill(all, Theme.W95Face);
         _p.Bevel(all, Painter.Edge.Window);
-        bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
+        bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0, caps = Caps;      // Caps asks Windows: once a frame
 
         if (_chat)
         {
@@ -80,13 +80,13 @@ public sealed partial class KeyboardPanel
                 TextAlignment.Trailing);
         }
 
-        var drawList = new List<Key>(_keys);
-        drawList.AddRange(_chat ? _barChat : _barNormal);
-        foreach (var k in drawList)
+        var bar = _chat ? _barChat : _barNormal;        // the keys, then the top bar
+        for (int ki = 0; ki < _keys.Count + bar.Count; ki++)
         {
+            var k = ki < _keys.Count ? _keys[ki] : bar[ki - _keys.Count];
             var r = Half(k.R);
             bool down = Array.IndexOf(_down, k) >= 0 || Array.IndexOf(_held95, k) >= 0;
-            int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && Caps ? 2
+            int modState = k.Kind == Kind.Modifier ? _mods[k.Mod] : k.Kind == Kind.Caps && caps ? 2
                          : k.Action == "chat" && _chat ? 2 : 0;
             bool latched = modState == 2 && !down;
             var b = Theme.RetroSkin.KeyCap(_p, r, modState == 1 && !down, down, latched, Array.IndexOf(_hover, k) >= 0);
@@ -102,7 +102,7 @@ public sealed partial class KeyboardPanel
             else
             {
                 string main = altgr && k.AltGr != null ? k.AltGr : shift ? k.Shifted ?? k.Normal : k.Normal;
-                if (main != null && main.Length == 1 && char.IsLetter(main[0]) && Caps && !altgr)
+                if (main != null && main.Length == 1 && char.IsLetter(main[0]) && caps && !altgr)
                     main = shift ? main.ToLowerInvariant() : main.ToUpperInvariant();
                 Text95(main, tr, Blk95, 16);
                 // shifted symbol (for non-letters) top left, AltGr symbol bottom right

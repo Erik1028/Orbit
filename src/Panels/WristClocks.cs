@@ -77,7 +77,7 @@ public sealed partial class WristPanel
     void TimeFlip(RectangleF r, WatchWidget w, DateTime now, PanelData d, int id, bool h24, string ampm)
     {
         var culture = CultureInfo.CurrentCulture;
-        string hh = now.ToString(h24 ? "HH" : "%h", culture), mm = now.ToString("mm", culture);
+        string hh = Clk(now, h24 ? "HH" : "%h", culture), mm = Clk(now, "mm", culture);
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2;
         float pad = PadX(r);
         float top = small ? ClockCaption(r, ampm) : BelowBand(r, w, ClockHead(r, w, d) + (tall ? 2 : 0));
@@ -152,13 +152,13 @@ public sealed partial class WristPanel
     {
         var g = ClockGeo.For(_p);
         var culture = CultureInfo.CurrentCulture;
-        string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture);
+        string t = Clk(now, h24 ? "HH:mm" : "h:mm", culture);
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2;
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         float top = small ? ClockCaption(r, ampm) : BelowBand(r, w, ClockHead(r, w, d) + 3, 3);      // geometry (its stroke too): clear of a header band's edge
         float bottom = r.Bottom - (tall ? 16 : 12);
         float w100 = g.OutlineWidth(h24 ? "00:00" : "12:00", 100, OutlineWeight, OutlineFont);      // the widest time decides
-        string sec = small ? null : now.ToString("ss", culture);
+        string sec = small ? null : Clk(now, "ss", culture);
         float ss = 0, sideW = 0;
         if (sec != null)
         {
@@ -181,7 +181,7 @@ public sealed partial class WristPanel
     void TimeStacked(RectangleF r, WatchWidget w, DateTime now, PanelData d, int id, bool h24, string ampm)
     {
         var culture = CultureInfo.CurrentCulture;
-        string hh = now.ToString(h24 ? "HH" : "%h", culture), mm = now.ToString("mm", culture);
+        string hh = Clk(now, h24 ? "HH" : "%h", culture), mm = Clk(now, "mm", culture);
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2, stack = r.Width <= r.Height * 1.6f;
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
         float top = small ? r.Y + 12 : ClockHead(r, w, d);
@@ -195,7 +195,7 @@ public sealed partial class WristPanel
         float bottom = r.Bottom - (tall ? 16 : 12), ah = bottom - top;
         uint hc = Bento.Text, mc = Bento.Cur.AccentText;
         float k = _p.MeasureWidth("00", 100, FontWeight.Bold, Theme.Display) / 100;
-        string sec = small ? null : now.ToString("ss", culture);
+        string sec = small ? null : Clk(now, "ss", culture);
         float ss = small ? CapSize : tall ? MathF.Max(SmallText, MathF.Round(ah * 0.11f)) : SmallText;
         float aw = ampm == null ? 0 : small ? _p.MeasureTracked(ampm, CapSize, FontWeight.SemiBold, CapTrack) : _p.MeasureWidth(ampm, ss, FontWeight.SemiBold);
         float sideW = MathF.Max(sec == null ? 0 : _p.MeasureWidth("00", ss, FontWeight.SemiBold), aw);
@@ -253,7 +253,7 @@ public sealed partial class WristPanel
     {
         var g = ClockGeo.For(_p);
         var culture = CultureInfo.CurrentCulture;
-        string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture);
+        string t = Clk(now, h24 ? "HH:mm" : "h:mm", culture);
         if (t.Length == 4) t = " " + t;                   // a one-digit hour: its first digit unlit
         bool small = w.W == 1 && w.H == 1, tall = w.H >= 2;
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
@@ -272,7 +272,7 @@ public sealed partial class WristPanel
             return;
         }
         float head = BelowBand(r, w, ClockHead(r, w, d) + 3), bottom = r.Bottom - (tall ? 16 : 12), ah = bottom - head;       // clear of a header band's edge
-        string sec = now.ToString("ss", culture);
+        string sec = Clk(now, "ss", culture);
         const float Sr = 0.45f, Sg = 0.22f;               // the seconds' height, and the gap before them, of the digits' height
         float wSec = ClockArt.SegWidth("00", 1) * Sr;
         float ss = tall ? MathF.Max(SmallText, MathF.Round(ah * 0.1f)) : CapSize;

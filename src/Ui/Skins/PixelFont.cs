@@ -104,11 +104,20 @@ public sealed class PixelFont
         return b;
     }
 
+    // one line, in a list kept for it (a list was made for every text drawn)
+    readonly List<string> _one = new(1);
+    List<string> One(string line)
+    {
+        _one.Clear();
+        _one.Add(line);
+        return _one;
+    }
+
     // s in r like Painter.Text lays it out (whole pixels; cut to r)
     public void Draw(Painter p, string s, RectangleF r, uint c, bool bold, TextAlignment h, ParagraphAlignment v, bool wrap)
     {
         if (string.IsNullOrEmpty(s)) return;
-        var lines = wrap ? Wrap(s, r.Width, bold) : new List<string> { s.Replace("\n", " ") };
+        var lines = wrap ? Wrap(s, r.Width, bold) : One(s.Replace("\n", " "));
         float total = lines.Count * Height;
         float y = v switch
         {

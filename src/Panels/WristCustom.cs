@@ -672,7 +672,7 @@ public sealed partial class WristPanel
     static uint Tint95(StatLevel l, uint normal) => l switch { StatLevel.Bad => Theme.Bad, StatLevel.Warn => Theme.Warn, _ => normal };
 
     // A reading, each of its numbers read once: its fill (0..1 or -1 = no data), the value, its unit, a short caption (the widget's
-    // name is shown beside it) and how it is
+    // name is shown beside it) and how it is. Its texts are made again only when its numbers change (Lang.Memo).
     (float frac, string value, string unit, string caption, StatLevel level) Reading(string id, PanelData d)
     {
         var v = d.Vr;
@@ -681,26 +681,30 @@ public sealed partial class WristPanel
         {
             case "fps":
                 float fps = v.AppFps;
-                return (fps < 0 ? -1 : fps / Math.Max(1, hz), fps < 0 ? "–" : $"{fps:0}", "fps", Lang.F("of {0:0} Hz", hz), FpsLevel(fps, hz));
+                return (fps < 0 ? -1 : fps / Math.Max(1, hz), fps < 0 ? "–" : _rdFps.Of(fps, static f => $"{f:0}"), "fps", _rdHz.F("of {0:0} Hz", hz),
+                    FpsLevel(fps, hz));
             case "reproj":
                 float rp = v.ReprojPct;
-                return (rp < 0 ? -1 : MathF.Min(1, rp / 50), rp < 0 ? "–" : $"{rp:0}%", "reproj.", Lang.T("of frames"), ReprojLevel(rp));
+                return (rp < 0 ? -1 : MathF.Min(1, rp / 50), rp < 0 ? "–" : _rdRp.Of(rp, static f => $"{f:0}%"), "reproj.", Lang.T("of frames"), ReprojLevel(rp));
             case "gpu":
                 float ms = v.GpuMs;
-                return (ms < 0 ? -1 : MathF.Min(1, ms / budget), ms < 0 ? "–" : $"{ms:0.0}", "ms", Lang.F("of {0:0.0} ms", budget), GpuLevel(ms, budget));
+                return (ms < 0 ? -1 : MathF.Min(1, ms / budget), ms < 0 ? "–" : _rdMs.Of(ms, static f => $"{f:0.0}"), "ms", _rdBudget.F("of {0:0.0} ms", budget),
+                    GpuLevel(ms, budget));
             case "vram":
                 float vram = d.VramUsed, vt = d.VramTotalGB;
-                return (vram < 0 || vt <= 0 ? -1 : vram / vt, vram < 0 ? "–" : $"{vram:0.0}", "GB", vt > 0 ? Lang.F("of {0:0} GB", vt) : Lang.T("in use"),
-                    VramLevel(vram, vt));
+                return (vram < 0 || vt <= 0 ? -1 : vram / vt, vram < 0 ? "–" : _rdVram.Of(vram, static f => $"{f:0.0}"), "GB",
+                    vt > 0 ? _rdVt.F("of {0:0} GB", vt) : Lang.T("in use"), VramLevel(vram, vt));
             case "cpu":
                 float c = Stats.Cpu;
-                return (c, c < 0 ? "–" : $"{c * 100:0}%", "CPU", Lang.T("total load"), CpuLevel(c));
+                return (c, c < 0 ? "–" : _rdCpu.Of(c, static f => $"{f * 100:0}%"), "CPU", Lang.T("total load"), CpuLevel(c));
             default:
                 float used = Stats.RamUsedGB, total = Stats.RamTotalGB;
-                return (used < 0 || total <= 0 ? -1 : used / total, used < 0 ? "–" : $"{used:0.0}", "GB", total > 0 ? Lang.F("of {0:0} GB", total) : Lang.T("in use"),
-                    RamLevel(used, total));
+                return (used < 0 || total <= 0 ? -1 : used / total, used < 0 ? "–" : _rdRam.Of(used, static f => $"{f:0.0}"), "GB",
+                    total > 0 ? _rdRamT.F("of {0:0} GB", total) : Lang.T("in use"), RamLevel(used, total));
         }
     }
+
+    Lang.Memo<float> _rdFps, _rdHz, _rdRp, _rdMs, _rdBudget, _rdVram, _rdVt, _rdCpu, _rdRam, _rdRamT;
 
     // the 95 face's form of a reading: its colour Orbit's amber / red when it matters
     (float frac, string value, string unit, string caption, uint tint) StatInfo(string id, PanelData d)
@@ -1160,7 +1164,7 @@ public sealed partial class WristPanel
         if (TimeVariant(r, w, now, d, id)) return;          // a design of its own (WristClocks)
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture);
+        string t = Clk(now, h24 ? "HH:mm" : "h:mm", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         float pad = PadX(r), iw = r.Width - 2 * pad;
         Words(now);
@@ -1178,7 +1182,7 @@ public sealed partial class WristPanel
             return;
         }
         float lt = r.Height >= 300 ? 6 : 4;
-        string sec = ":" + now.ToString("ss", culture);
+        string sec = Clk(now, "ss", culture, ":");
         float sw = _p.MeasureWidth(":00", SmallText, FontWeight.SemiBold) + 2;
         var line = new RectangleF(r.X + pad, r.Bottom - 18 - lt / 2, iw - sw - 10, lt);
         _p.Fill(line, Bento.Track, lt / 2);
@@ -1212,7 +1216,7 @@ public sealed partial class WristPanel
     void TimeM(RectangleF r, string t, string ampm, bool h24, DateTime now, float top, float bottom, int id)
     {
         float pad = PadX(r), iw = r.Width - 2 * pad, x = r.X + pad;
-        string sec = now.ToString("ss", CultureInfo.CurrentCulture);
+        string sec = Clk(now, "ss", CultureInfo.CurrentCulture);
         float aw = ampm == null ? 0 : _p.MeasureTracked(ampm, CapSize, FontWeight.SemiBold, CapTrack);
         float sw = MathF.Max(_p.MeasureWidth("00", SmallText, FontWeight.SemiBold), aw) + 6;
         float size = MathF.Max(24, FitSize(h24 ? "00:00" : "12:00", iw - sw, _big ? 64 : 44, FontWeight.Bold, Theme.Display));
@@ -1678,17 +1682,40 @@ public sealed partial class WristPanel
         return _sinceNote;
     }
 
-    // which batteries fit: all of them, or the emptiest ones (kept in their usual order)
-    static List<int> PickBatteries(List<(string label, float pct, bool charging)> bats, int n)
+    // The clock's texts (the time, the seconds, a day's name), made once a second for each format and culture they are asked in: a
+    // frame drawn again within the second makes none (a ToString each, every frame, before). prefix: put in front (":42").
+    readonly Dictionary<(string fmt, string prefix), (long sec, CultureInfo c, string s)> _clk = new();
+
+    string Clk(DateTime now, string fmt, CultureInfo c, string prefix = null)
     {
-        var order = new List<int>();
+        long sec = now.Ticks / TimeSpan.TicksPerSecond;
+        if (_clk.TryGetValue((fmt, prefix), out var e) && e.sec == sec && ReferenceEquals(e.c, c)) return e.s;
+        string s = prefix == null ? now.ToString(fmt, c) : prefix + now.ToString(fmt, c);
+        if (_clk.Count > 64) _clk.Clear();
+        _clk[(fmt, prefix)] = (sec, c, s);
+        return s;
+    }
+
+    // which batteries fit: all of them, or the emptiest ones (kept in their usual order). The list is the same one every call (no
+    // garbage a frame): read it before the next call.
+    List<int> PickBatteries(List<(string label, float pct, bool charging)> bats, int n)
+    {
+        var order = _pickOrder;
+        order.Clear();
         for (int i = 0; i < bats.Count; i++) order.Add(i);
         if (bats.Count <= n) return order;
-        order.Sort((a, b) => bats[a].pct.CompareTo(bats[b].pct));
-        var keep = order.GetRange(0, n);
-        keep.Sort();
-        return keep;
+        _pickBats = bats;
+        order.Sort(_byCharge ??= (a, b) => _pickBats[a].pct.CompareTo(_pickBats[b].pct));
+        _pickBats = null;
+        _pickKeep.Clear();
+        for (int i = 0; i < n; i++) _pickKeep.Add(order[i]);
+        _pickKeep.Sort();
+        return _pickKeep;
     }
+
+    readonly List<int> _pickOrder = new(), _pickKeep = new();
+    List<(string label, float pct, bool charging)> _pickBats;
+    Comparison<int> _byCharge;           // emptiest first: made once (a lambda holding the list was made every call)
 
     // the modern watch's battery rule, on the percentage as it is shown (so "20%" never shows in two colours): Ok above 30 %,
     // Warn 16-30 %, Bad at 15 % or less. Charging adds a bolt, never another colour.
@@ -2321,7 +2348,7 @@ public sealed partial class WristPanel
     void Time95(RectangleF c, DateTime now, bool tall)
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        string time = now.ToString(h24 ? "H:mm:ss" : "h:mm:ss", CultureInfo.CurrentCulture);
+        string time = Clk(now, h24 ? "H:mm:ss" : "h:mm:ss", CultureInfo.CurrentCulture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         bool withDate = tall && c.Height >= 44;
         float avail = c.Width - 8 - (ampm != null ? _ui.Width95(ampm) + 4 : 0);
@@ -2342,20 +2369,28 @@ public sealed partial class WristPanel
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        Value95(c, now.ToString(h24 ? "H:mm" : "h:mm", culture), h24 ? now.ToString("ddd d", culture) : now.Hour < 12 ? "AM" : "PM", Blk95);
+        Value95(c, Clk(now, h24 ? "H:mm" : "h:mm", culture), h24 ? Clk(now, "ddd d", culture) : now.Hour < 12 ? "AM" : "PM", Blk95);
     }
 
-    // the long date when it fits, else without the year, then the short date
+    // the long date when it fits, else without the year, then the short date (found once a day for each width, look and language)
+    (DateTime day, float w, CultureInfo c, int ver, string s) _fitDate;
+
     string FitDate95(DateTime now, float maxW)
     {
         var culture = CultureInfo.CurrentCulture;
+        int ver = Theme.Version * 1000 + Lang.Version;
+        if (_fitDate.s != null && _fitDate.day == now.Date && _fitDate.w == maxW && ReferenceEquals(_fitDate.c, culture) && _fitDate.ver == ver)
+            return _fitDate.s;
         var f = culture.DateTimeFormat;
+        string fit = null;
         foreach (string pattern in new[] { f.LongDatePattern, "dddd, " + f.MonthDayPattern, f.MonthDayPattern })
         {
             string s = now.ToString(pattern, culture);
-            if (_ui.Width95(s) <= maxW) return s;
+            if (_ui.Width95(s) <= maxW) { fit = s; break; }
         }
-        return Fit(now.ToString(f.ShortDatePattern, culture), maxW);
+        fit ??= Fit(now.ToString(f.ShortDatePattern, culture), maxW);
+        _fitDate = (now.Date, maxW, culture, ver, fit);
+        return fit;
     }
 
     // Date/Time Properties' calendar: a white month grid, today in navy
@@ -2370,17 +2405,17 @@ public sealed partial class WristPanel
             _p.Bevel(page, Painter.Edge.Sunken);
             var head = new RectangleF(page.X + 2, page.Y + 2, page.Width - 4, 15);
             _p.Fill(head, 0xFF800000);
-            _ui.Text95(Fit(now.ToString("MMMM", culture), head.Width - 4, Ui.F95, true), head, Wht95, true, TextAlignment.Center);
+            _ui.Text95(Fit(Clk(now, "MMMM", culture), head.Width - 4, Ui.F95, true), head, Wht95, true, TextAlignment.Center);
             _ui.Text95(now.Day.ToString(), new RectangleF(page.X, head.Bottom + 1, page.Width, page.Bottom - head.Bottom - 19), Blk95, true,
                 TextAlignment.Center, size: MathF.Floor(MathF.Min(36, (page.Bottom - head.Bottom - 19) * 0.8f)));
-            _ui.Text95(Fit(now.ToString("dddd", culture), page.Width - 4), new RectangleF(page.X, page.Bottom - 19, page.Width, 13), Blk95, false,
+            _ui.Text95(Fit(Clk(now, "dddd", culture), page.Width - 4), new RectangleF(page.X, page.Bottom - 19, page.Width, 13), Blk95, false,
                 TextAlignment.Center);
             return;
         }
         if (w.H < 2)
         {
-            string wd = now.ToString(w.W >= 2 ? "dddd" : "ddd", culture);
-            string dd = w.W >= 2 ? now.ToString(culture.DateTimeFormat.MonthDayPattern, culture) : now.Day.ToString();
+            string wd = Clk(now, w.W >= 2 ? "dddd" : "ddd", culture);
+            string dd = w.W >= 2 ? Clk(now, culture.DateTimeFormat.MonthDayPattern, culture) : now.Day.ToString();
             float vy = MathF.Floor(c.Y + (c.Height - 31) / 2);
             _ui.Text95(Fit(wd, c.Width - 4), new RectangleF(c.X, vy, c.Width, 13), Blk95, false, TextAlignment.Center);
             _ui.Text95(Fit(dd, c.Width - 4, 16, true), new RectangleF(c.X, vy + 13, c.Width, 18), Blk95, true, TextAlignment.Center, size: 16);
@@ -2544,8 +2579,8 @@ public sealed partial class WristPanel
         _p.Bevel(lcd, Painter.Edge.Sunken);
         string line = has ? (string.IsNullOrEmpty(artist) ? title : $"{title} - {artist}") : "Nothing playing";
         _ui.Text95(Fit(line, lcd.Width - 8), new RectangleF(lcd.X + 4, lcd.Y + 2, lcd.Width - 6, 14), has ? 0xFF00FF00 : 0xFF00A000);
-        string[] ids = { "media.prev", "media.play", "media.next" };
-        string[][] glyphs = { PrevGlyph, playing ? PauseGlyph : PlayGlyph, NextGlyph };
+        var ids = MediaIds;
+        var glyphs = MediaGlyphs(playing);
         float by = lcd.Bottom + 3;
         if (by + 18 > c.Bottom + 1) return;
         int nb = lcd.Width >= 86 ? 3 : 1;

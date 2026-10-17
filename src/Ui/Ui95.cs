@@ -50,6 +50,16 @@ public sealed partial class Ui
         return _amp[s] = (sb.ToString(), key);
     }
 
+    // a label's text before its access key and the key's letter (the skins measure them to underline it), made once per text
+    static readonly Dictionary<string, (string pre, string ch)> _ampParts = new();
+
+    public static (string pre, string ch) AmpParts(string t, int key)
+    {
+        if (_ampParts.TryGetValue(t, out var v) && v.pre.Length == key) return v;
+        if (_ampParts.Count > 500) _ampParts.Clear();
+        return _ampParts[t] = (t[..key], t.Substring(key, 1));
+    }
+
     // data (a window title, a song) can hold a real '&': escape it before it goes into a label
     public static string Esc95(string s) => s?.Replace("&", "&&");
 

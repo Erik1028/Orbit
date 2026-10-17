@@ -56,7 +56,12 @@ public static class Lang
         return null;
     }
 
-    public static int Index(string code) => Math.Max(0, Array.FindIndex(Languages, x => x.Code == Normalize(code)));
+    public static int Index(string code)
+    {
+        code = Normalize(code);
+        for (int i = 0; i < Languages.Length; i++) if (Languages[i].Code == code) return i;      // (no lambda: asked every frame)
+        return 0;
+    }
 
     public static string[] Names()
     {
@@ -150,6 +155,36 @@ public static class Lang
     public static string F(string format, object a, object b) => string.Format(T(format), a, b);
     public static string F(string format, object a, object b, object c) => string.Format(T(format), a, b, c);
     public static string F(string format, params object[] a) => string.Format(T(format), a);
+
+    // A text made of one part (F), kept until the part, the language or the culture changes: a frame drawn again with the same value
+    // makes no new string (a format and a boxed number a frame were much of the settings' and the watch's garbage). A field of the
+    // class that draws it (not readonly: it remembers); a call site of its own each.
+    public struct Memo<T> where T : IEquatable<T>
+    {
+        string _s;
+        object _how;                 // the format, or the function that made it
+        T _v;
+        int _lang;
+        CultureInfo _culture;
+
+        bool Same(object how, T v) =>
+            _s != null && ReferenceEquals(how, _how) && _lang == Version && ReferenceEquals(CultureInfo.CurrentCulture, _culture) && _v.Equals(v);
+
+        void Keep(object how, T v, string s) => (_s, _how, _v, _lang, _culture) = (s, how, v, Version, CultureInfo.CurrentCulture);
+
+        public string F(string format, T v)
+        {
+            if (!Same(format, v)) Keep(format, v, Lang.F(format, v));
+            return _s;
+        }
+
+        // made by 'make' (a static lambda: the same one every call, its text depending on v, the language and the culture alone)
+        public string Of(T v, Func<T, string> make)
+        {
+            if (!Same(make, v)) Keep(make, v, make(v));
+            return _s;
+        }
+    }
 
     // the table has a line for this text (a language's own form of something English has none for: "date|long", "short|Volume")
     public static bool Has(string key) => _t != null && key != null && _t.ContainsKey(key);

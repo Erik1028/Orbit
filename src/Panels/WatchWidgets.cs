@@ -85,7 +85,12 @@ public static class WatchWidgets
     public static Kind[] PaletteAbc(Func<Kind, string> shown = null) =>
         Palette.OrderBy(k => shown?.Invoke(k) ?? Lang.T(k.Name), StringComparer.CurrentCultureIgnoreCase).ToArray();
 
-    public static Kind Find(string id) => Array.Find(Kinds, k => k.Id == id);
+    // (a loop, not Array.Find: the watch asks for every widget in every frame, and a lambda holding the id was made each time)
+    public static Kind Find(string id)
+    {
+        foreach (var k in Kinds) if (k.Id == id) return k;
+        return null;
+    }
 
     // ---- geometry: modern = the 640 x 440 texture, 95 = the 320 x 220 canvas ----
     // The same gap between every two widgets and between a widget and the edge (modern 10 px: with the

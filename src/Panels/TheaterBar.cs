@@ -225,7 +225,21 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
         int same = 0, nth = 0;
         for (int j = 0; j < _choices.Count; j++)
             if (_choices[j].TheaterLabel == name) { same++; if (j <= i) nth++; }
-        return same > 1 ? $"{name} {nth}" : name;
+        if (same <= 1) return name;
+        if (!_numbered.TryGetValue((name, nth), out var l)) _numbered[(name, nth)] = l = $"{name} {nth}";
+        return l;
+    }
+
+    // the labels made to fit, kept: cutting a long window title made two strings (and a measured width) per letter, every frame
+    readonly Dictionary<(string, int), string> _numbered = new();
+    readonly Dictionary<(string s, float w, float size, FontWeight wt, bool px), string> _fitted = new();
+    int _fittedFor = -1;
+
+    bool Fitted((string, float, float, FontWeight, bool) key, out string s)
+    {
+        int ver = Theme.Version * 1000 + Lang.Version;          // another look, font or language: measured again
+        if (ver != _fittedFor || _fitted.Count > 64) { _fitted.Clear(); _numbered.Clear(); _fittedFor = ver; }
+        return _fitted.TryGetValue(key, out s);
     }
 
     void Draw()
@@ -257,7 +271,7 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
                 string id = Ui.Id("thb", i);
                 if (_ui.Clickable(id, r, out bool hover, out bool held) && !on) pick = s;
                 // the lit one moves over with a short fade; hover lightens, a press dips
-                float a = _ui.Anim(id + "#a", on ? 1 : 0, 14), hv = _ui.Anim(id + "#h", hover ? 1 : 0, 18), pr = _ui.Anim(id + "#p", held ? 1 : 0, 30);
+                float a = _ui.Anim(Ui.Id(id, "#a"), on ? 1 : 0, 14), hv = _ui.Anim(Ui.Id(id, "#h"), hover ? 1 : 0, 18), pr = _ui.Anim(Ui.Id(id, "#p"), held ? 1 : 0, 30);
                 uint bg = Theme.Mix(Theme.Mix(Theme.Panel3, Theme.Accent, a), 0xFFFFFFFF, 0.12f * hv * (1 - a));
                 bg = Theme.Mix(bg, 0xFF000000, 0.2f * pr);
                 uint fg = Theme.Mix(Theme.Text, Theme.OnAccent, a);
@@ -393,21 +407,25 @@ public sealed partial class TheaterBar : IPointerTarget, IDisposable
 
     string Ellipsize(string s, float maxW, float size, FontWeight wt)
     {
+        if (s != null && Fitted((s, maxW, size, wt, false), out var done)) return done;
+        string key = s;
         s = Lang.T(s);                     // cut in the language picked
-        if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, wt) <= maxW) return s;
+        if (string.IsNullOrEmpty(s) || _p.MeasureWidth(s, size, wt) <= maxW) return key == null ? s : _fitted[(key, maxW, size, wt, false)] = s;
         int n = s.Length;
         while (n > 1 && _p.MeasureWidth(s[..n] + "…", size, wt) > maxW) n--;
         if (n > 1 && char.IsHighSurrogate(s[n - 1])) n--;
-        return s[..n].TrimEnd() + "…";
+        return _fitted[(key, maxW, size, wt, false)] = s[..n].TrimEnd() + "…";
     }
 
     string Fit95(string s, float w)
     {
+        if (s != null && Fitted((s, w, 0, FontWeight.Normal, true), out var done)) return done;
+        string key = s;
         s = Lang.T(s);                     // cut in the language picked
-        if (string.IsNullOrEmpty(s) || _ui.Width95(s) <= w) return s;
+        if (string.IsNullOrEmpty(s) || _ui.Width95(s) <= w) return key == null ? s : _fitted[(key, w, 0, FontWeight.Normal, true)] = s;
         int n = s.Length;
         while (n > 1 && _ui.Width95(s[..n] + "...") > w) n--;
-        return s[..n].TrimEnd() + "...";
+        return _fitted[(key, w, 0, FontWeight.Normal, true)] = s[..n].TrimEnd() + "...";
     }
 
     // ---------------- input: one hand at a time; the stick moves the slider under the laser ----------------

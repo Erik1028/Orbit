@@ -282,7 +282,7 @@ public sealed partial class WristPanel
         bool timing = _timer is TimerState.Running or TimerState.Paused;
         float blockH = d.VrSince != null ? (timing ? 296 : 230) : timing ? 230 : 152;
         float top = c.Y + MathF.Max(0, (c.Height - blockH) / 2);
-        string t = now.ToString(h24 ? "HH:mm:ss" : "h:mm:ss", culture);
+        string t = Clk(now, h24 ? "HH:mm:ss" : "h:mm:ss", culture);
         float size = FitSize(t, w - (h24 ? 0 : 50), 66, FontWeight.SemiBold, Theme.Display);
         RollText("wdct", t, new RectangleF(x, top, w, 84), Bento.Text, size, FontWeight.SemiBold, Theme.Display, TextAlignment.Leading);
         if (!h24)
@@ -665,7 +665,7 @@ public sealed partial class WristPanel
         _ui.Group95(right, "Time");
         float rad = MathF.Floor(MathF.Min(right.Width - 20, right.Height - 56) / 2);
         Dial95(now, MathF.Floor(right.X + right.Width / 2), MathF.Floor(right.Y + 18 + rad), rad);
-        string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
+        string time = Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
         _ui.Edit95(new RectangleF(right.X + 10, right.Bottom - 30, right.Width - 20, 21), time);
     }
 

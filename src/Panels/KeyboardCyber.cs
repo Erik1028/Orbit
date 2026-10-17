@@ -79,9 +79,9 @@ public sealed partial class KeyboardPanel
         bool closing = Ov != null && !(C.Visible && C.Place.M != null);
         bool shift = _mods["shift"] > 0, altgr = _mods["altgr"] > 0;
         _cyCaps = Caps;
-        _cyFlashKeys.Clear();
-        _cyFlashKeys.AddRange(_flash.Keys);
-        foreach (var key in _cyFlashKeys)
+        _flashKeys.Clear();
+        _flashKeys.AddRange(_flash.Keys);
+        foreach (var key in _flashKeys)
         {
             if (Array.IndexOf(_down, key) >= 0) continue;
             float f = Motion.Any ? _flash[key] - _lastDt / 0.25f : 0;
@@ -123,7 +123,7 @@ public sealed partial class KeyboardPanel
     Surface _cyBase;
     int _cyBaseSig;
     bool _cyBaseOk, _cyCaps;
-    readonly List<Key> _cyFlashKeys = new();
+    readonly List<Key> _flashKeys = new();          // the glowing keys, copied before their glow fades (every style's frame)
     readonly Key[] _cyHoverKey = new Key[3];
     readonly double[] _cyHoverAt = new double[3];
 

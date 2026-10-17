@@ -191,7 +191,7 @@ public sealed partial class WristPanel
         (_cyEdgeR, _cyEdgeC, _cyEdgeTL, _cyEdgeBR) = edge;
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string t = now.ToString(h24 ? "HH:mm" : "h:mm", culture), sec = now.ToString("ss", culture);
+        string t = Clk(now, h24 ? "HH:mm" : "h:mm", culture), sec = Clk(now, "ss", culture);
         var y = CyTimeRect(r);
         float x = r.X + 12, right = y.Right - 10, top = r.Y + 10, floor = y.Bottom - CyHazard(r) - 1 - 7, cap = CyCap;
         float ss = r.Height >= 100 ? 22 : 18, sideW = CyMonoW("00", ss, FontWeight.Bold) + 8;

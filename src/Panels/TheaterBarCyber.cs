@@ -37,7 +37,7 @@ public sealed partial class TheaterBar
                 bool on = s == _current;
                 string id = Ui.Id("thb", i);
                 if (_ui.Clickable(id, r, out bool hover, out bool held) && !on) pick = s;
-                float a = _ui.Anim(id + "#a", on ? 1 : 0, 14), hv = _ui.Anim(id + "#h", hover ? 1 : 0, 18), pr = _ui.Anim(id + "#p", held ? 1 : 0, 30);
+                float a = _ui.Anim(Ui.Id(id, "#a"), on ? 1 : 0, 14), hv = _ui.Anim(Ui.Id(id, "#h"), hover ? 1 : 0, 18), pr = _ui.Anim(Ui.Id(id, "#p"), held ? 1 : 0, 30);
                 r = RectangleF.Inflate(r, -ChipW * 0.02f * pr, -ch * 0.04f * pr);
                 Plate(r, a, hv, CyberHud.Cyan, CyberHud.CyanDim);
                 uint fg = Theme.Mix(CyberHud.White, CyberHud.Ink, a), ic = Theme.Mix(CyberHud.Cyan, CyberHud.Ink, a);

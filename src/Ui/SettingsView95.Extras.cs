@@ -51,16 +51,16 @@ public sealed partial class SettingsView
         float cx = MathF.Ceiling(388 + 19 + MathF.Max(ui.LabelWidth95(lb), ui.LabelWidth95(lf)) + 8);
         bool b = a.Battery;
         ui.Check95("g95.abat", 388, 383, lb, ref b);
-        if (b != a.Battery) SetAlerts(x => x.Battery = b);
+        if (b != a.Battery) SetAlert(0, b ? 1 : 0);
         int bi = Nearest(BatteryPcts, a.BatteryPct), bi0 = bi;
         if (ui.Combo95("g95.abatp", new RectangleF(cx, 381, 58, RowH), BatteryPct95, ref bi, a.Battery) && bi != bi0)
-            SetAlerts(x => x.BatteryPct = BatteryPcts[bi]);
+            SetAlert(1, BatteryPcts[bi]);
         b = a.Fps;
         ui.Check95("g95.afps", 388, 406, lf, ref b);
-        if (b != a.Fps) SetAlerts(x => x.Fps = b);
+        if (b != a.Fps) SetAlert(2, b ? 1 : 0);
         int fi = Nearest(FpsPcts, a.FpsPct), fi0 = fi;
         if (ui.Combo95("g95.afpsp", new RectangleF(cx, 404, 58, RowH), FpsPct95, ref fi, a.Fps) && fi != fi0)
-            SetAlerts(x => x.FpsPct = FpsPcts[fi]);
+            SetAlert(3, FpsPcts[fi]);
         ui.Text95(Fit95(ui, "of the rate, 10 s", 722 - (cx + 64)), new RectangleF(cx + 64, 408, 722 - (cx + 64), 13), K95, false, TextAlignment.Leading, a.Fps);
     }
 

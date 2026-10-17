@@ -351,7 +351,7 @@ public sealed partial class Ui
         {
             // a trackbar: label and value above, a sunken groove, a raised thumb
             ClassicText(label, new RectangleF(r.X + 10, r.Y, r.Width / 2, r.Height - 22), enabled, 15);
-            P.Text(fmt(value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), enabled ? Theme.Dim : Theme.Faint, 14,
+            P.Text(ValueText(id, fmt, value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), enabled ? Theme.Dim : Theme.Faint, 14,
                 FontWeight.Normal, TextAlignment.Trailing);
             var groove = new RectangleF(track.X, track.Y - 1, track.Width, 8);
             P.Fill(groove, Theme.W95Window);
@@ -365,7 +365,7 @@ public sealed partial class Ui
         float h = Anim(K(id, "#h"), held ? 2 : hover && enabled ? 1 : 0, 18);
         uint fg = enabled ? Theme.Text : Theme.Faint;
         P.Text(label, new RectangleF(r.X + 10, r.Y, r.Width / 2, r.Height - 22), fg, 15);
-        P.Text(fmt(value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), enabled ? Theme.Dim : Theme.Faint, 14, FontWeight.Normal, TextAlignment.Trailing);
+        P.Text(ValueText(id, fmt, value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), enabled ? Theme.Dim : Theme.Faint, 14, FontWeight.Normal, TextAlignment.Trailing);
         float t2 = Math.Clamp((value - min) / (max - min), 0, 1);
         P.Fill(track, Theme.Panel3, 3);
         P.Fill(new RectangleF(track.X, track.Y, track.Width * t2, track.Height), enabled ? Theme.Accent : Theme.Faint, 3);
@@ -380,6 +380,19 @@ public sealed partial class Ui
         if (h > 0.01f && enabled) P.Circle(kx, track.Y + 3, 8 + 7 * h, Theme.WithAlpha(Theme.Accent, 0.18f));
         P.Circle(kx, track.Y + 3, 8 + h, enabled ? Theme.Text : Theme.Faint);
         return changed;
+    }
+
+    // A slider's value as text, made again only when the value, the language or the culture changes - or the formatter: one that holds
+    // a variable of its caller is a new delegate every frame, so it is always asked (the settings' sliders made a string a frame each)
+    readonly Dictionary<string, (Func<float, string> fmt, float v, int lang, System.Globalization.CultureInfo c, string s)> _valueText = new();
+
+    string ValueText(string id, Func<float, string> fmt, float v)
+    {
+        var c = System.Globalization.CultureInfo.CurrentCulture;
+        if (_valueText.TryGetValue(id, out var e) && ReferenceEquals(e.fmt, fmt) && e.v == v && e.lang == Lang.Version && ReferenceEquals(e.c, c)) return e.s;
+        string s = fmt(v);
+        _valueText[id] = (fmt, v, Lang.Version, c, s);
+        return s;
     }
 
     static readonly string[] Seg = { "/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9" };
@@ -494,15 +507,23 @@ public sealed partial class Ui
     public void Section(RectangleF r, string title)
     {
         if (HitSpy != null && !Inert)       // the title itself (not the whole row): a control over it is a crossing too
-            HitSpy("section:" + title, new RectangleF(r.X, r.Y, P.MeasureWidth(title.ToUpperInvariant(), 12, FontWeight.SemiBold) + (Theme.Cyber ? 24 : 4), r.Height));
+            HitSpy("section:" + title, new RectangleF(r.X, r.Y, P.MeasureWidth(Caps(title), 12, FontWeight.SemiBold) + (Theme.Cyber ? 24 : 4), r.Height));
         if (Theme.Cyber) { CyberSection(r, title); return; }    // a yellow tag (it slides in: UiCyber.cs)
-        if (!Theme.Classic) { P.Text(title.ToUpperInvariant(), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
+        if (!Theme.Classic) { P.Text(Caps(title), r, Theme.Dim, 12, FontWeight.SemiBold); return; }
         // a group box title: bold black, an etched line running on after it
         title = Lang.T(title);
         string t = char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();
         P.Text(t, r, Theme.W95Dark, 13, FontWeight.Bold);
         float tw = P.MeasureWidth(t, 13, FontWeight.Bold);
         if (r.X + tw + 8 < r.Right) P.EtchedLine(r.X + tw + 8, r.Right, r.Y + r.Height / 2);
+    }
+
+    // a section's title in capitals, made once per title (a ToUpperInvariant every frame before)
+    static readonly Dictionary<string, string> _caps = new();
+    static string Caps(string t)
+    {
+        if (!_caps.TryGetValue(t, out var u)) _caps[t] = u = t.ToUpperInvariant();
+        return u;
     }
 
     // ---- 95 skin helpers ----
