@@ -115,6 +115,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
 
         _wrist = new WristPanel(_gpu, _painter, _cfg) { OnAction = WristAction };
         _wrist.UseRealAudio(_mixer);                         // the watch's volume and mixer on the real output device (the tools' are made up)
+        _wrist.OnOpenPhoto = PhotoGallery.Open;              // the latest photo's Open in VR Gallery, on a tap (Sys/PhotoWatcher.cs)
         _kb = new KeyboardPanel(_gpu, _painter, _cfg);
         _settingsPanel = new SettingsPanel(_gpu, _painter, _cfg, this, PreparePreviews);
         _dockFaces = new HexpadFaces();
@@ -547,6 +548,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         WatchWidgets.DockAvailable = C.Dock.Enabled && _hexpad.Present;     // the editor offers the dock widget (also on the desktop)
         _room.Active = _vr.Connected && C.Room.Enabled;
         _data.Room = C.Room.Enabled ? _roomSnap : null;
+        UpdatePhotos(now);                  // VRChat's photos for the latest photo widget (OrbitApp.Photos.cs)
         // the weather: the place from the settings (else Hexpad's), fetched while a weather widget is on one of the pages
         _weather.SetLocation(C.Weather?.Location);
         _weather.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "weather");
@@ -1888,7 +1890,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
     // previews in the settings screen are separate draws; they must not nest inside its BeginDraw
     void PreparePreviews(SettingsView v)
     {
-        if (v.ShowsWristPreview) _wrist.Draw(_data);
+        if (v.ShowsWristPreview) { _photoPreview = Clock.Now; _wrist.Draw(_data); }
         if (v.ShowsKeyboardPreview) _kb.Draw();
     }
 
@@ -1900,6 +1902,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         foreach (var w in _windowPanels) w.Dispose();
         _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose(); _whatsNewPanel?.Dispose();
         _room.Dispose();
+        _photos.Dispose();
         _weather.Dispose();
         _pacer.Dispose();
         _hexpad.Dispose();

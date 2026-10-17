@@ -378,7 +378,8 @@ public sealed partial class WristPanel
         "time" => "TIME", "date" => "DATE", "calendar" => "CAL", "analog" => "CLOCK", "timer" => "TIMER", "stopwatch" => "CHRONO",
         "session" => "IN VR", "battery" => "BATT", "media" => "PLAYBACK", "volume" => "VOL", "perf" => "PERF", "graph" => "FRAME TIME",
         "fps" => "FPS", "reproj" => "REPR", "gpu" => "GPU", "vram" => "VRAM", "cpu" => "CPU", "ram" => "RAM", "room" => "ROOM",
-        "dock" => "HEXPAD", "minesweeper" => "MINES", "mic" => "MIC", "notifications" => "NOTIFY", "buttons" => "BUTTONS", "weather" => "WTHR",
+        "dock" => "HEXPAD", "minesweeper" => "MINES", "mic" => "MIC", "notifications" => "NOTIFY", "buttons" => "BUTTONS",
+        "photo" => "PHOTO", "weather" => "WTHR",
         _ => T.Up(id),
     };
 
@@ -458,6 +459,7 @@ public sealed partial class WristPanel
             case "notifications": TNotes(c, d); break;
             case "buttons": TGroup(c, w, d, id); break;
             case "mixer": Mixer95(r, c, w, id); break;
+            case "photo": TPhotoWidget(r, c, w, d, id); break;     // the photo in coloured characters (WristPhoto.Term.cs)
             case "weather": TWeather(c, d, w); break;            // wttr.in's (WristWeather.Term.cs)
             case "perf":
                 if (c.Width >= 280) TStatus(d, c.X + 3, MathF.Floor(c.Y + (c.Height - 7) / 2), c.Width - 6, false);

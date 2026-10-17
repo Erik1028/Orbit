@@ -298,6 +298,7 @@ public sealed partial class WristPanel
     {
         done = true;
         if (k.Button) { ButtonWidgetXp(id, w, k, r, d); return; }
+        if (k.Id == "photo") { PhotoWidgetXp(r, w, d, id); return; }      // My Pictures' thumbnail (WristPhoto.Xp.cs)
         string title = w.H >= 2 || TitleOneRow(k.Id, w.W) ? XpTitle(k, w.W) : null;
         var c = Theme.RetroSkin.WidgetFrame(_p, r, title);
         var now = DateTime.Now;
