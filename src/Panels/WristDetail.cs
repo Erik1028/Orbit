@@ -38,6 +38,8 @@ public sealed partial class WristPanel
         "notifications" => "notifications",
         "photo" => "photo",
         "weather" => "weather",
+        "memory" => "memory",
+        "temps" => "temps",
         _ => null,
     };
 
@@ -175,6 +177,8 @@ public sealed partial class WristPanel
             case "notifications": NotesDetail(E, d); break;
             case "photo": PhotoDetail(E, d); break;
             case "weather": WeatherDetail(E, d); break;
+            case "memory": PhotoDetail(E, d); break;
+            case "temps": TempsDetail(c, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -578,7 +582,7 @@ public sealed partial class WristPanel
         if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it
         if (kind == "room") { Room95Detail(win, d); return; }     // the Room window: a details list and a status bar
         if (kind == "dock") { Dock95Detail(win, d); return; }     // the Hexpad window
-        if (kind == "photo") { Photo95Detail(win, d, k); return; }     // a picture viewer of its style (WristPhoto.cs)
+        if (kind is "photo" or "memory") { Photo95Detail(win, d, k); return; }     // a picture viewer of its style (WristPhoto.cs)
         _p.Fill(win, Theme.W95Face);
         _p.Bevel(win, Painter.Edge.Window);
         _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), k.Title95);
@@ -603,6 +607,7 @@ public sealed partial class WristPanel
             case "mixer": Mixer95Detail(c); break;
             case "notifications": Notes95Detail(c, d); break;
             case "weather": Weather95Detail(c, d); break;
+            case "temps": Temps95Detail(c, d); break;
         }
     }
 

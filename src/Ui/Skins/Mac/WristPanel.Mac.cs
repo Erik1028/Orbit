@@ -370,6 +370,7 @@ public sealed partial class WristPanel
                 MacDockWait(r, m.WidgetFrame(_p, r, w.H >= 2 ? k.Title95 : null), d, w, id);
                 break;
             case "photo": PhotoWidgetMac(r, w, d, id); break;           // a Scrapbook window (WristPhoto.Mac.cs)
+            case "memory": PhotoWidgetMac(r, w, d, id); break;
             case "session":
             {
                 var c = m.WidgetFrame(_p, r, w.H >= 2 ? k.Title95 : null);
@@ -515,7 +516,7 @@ public sealed partial class WristPanel
         if (kind == "mines") { MinesMacDetail(win); return; }
         if (kind == "room") { RoomMacDetail(win, d); return; }
         if (kind == "dock") { DockMacDetail(win, d); return; }
-        if (kind == "photo") { PhotoMacDetail(win, d); return; }
+        if (kind is "photo" or "memory") { PhotoMacDetail(win, d); return; }
         var m = Mac;
         m.MacWindow(_p, win, MacSkin.MacTitle(k.Title95));
         _mCloseBtn = new RectangleF(MacSkin.CloseX(win), MacSkin.BoxY(win), 16, 14);
@@ -541,6 +542,7 @@ public sealed partial class WristPanel
             case "mixer": Mixer95Detail(c); break;
             case "notifications": Notes95Detail(c, d); break;
             case "weather": Weather95Detail(c, d); break;
+            case "temps": Temps95Detail(c, d); break;
         }
     }
 

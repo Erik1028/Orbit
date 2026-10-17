@@ -79,6 +79,11 @@ public static class WatchWidgets
         new("mixer", "Volume mixer", "Volume Mixer", WristPanel.MixKindIcon, W95Icons.Id.Note, new[] { (2, 1), (2, 2), (3, 2) }, 1),
         // the weather now and the next hours / days from Open-Meteo (Sys/Weather.cs, WristWeather.cs); a tap opens the forecast
         new("weather", "Weather", "Weather", "\uE706", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2), (4, 1) }, 1),
+        // a VRChat photo of this day a year ago (or two, or more; the nearest day within 3 when that one has none), filling its card; a tap
+        // opens it big, the stick steps through that day's photos and the other years (Sys/PhotoMemories.cs, WristMemory.cs)
+        new("memory", "On this day", "On This Day", WristPanel.MemoryKindIcon, W95Icons.Id.Palette, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        // the PC's temperatures: the GPU, the CPU, the GPU's hotspot and fan; a tap opens the last 10 minutes (Sys/Temps.cs, WristTemps.cs)
+        new("temps", "Temperatures", "System Monitor", WristPanel.TempsKindIcon, W95Icons.Id.Computer, new[] { (1, 1), (2, 1), (2, 2) }, 1),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -388,6 +393,7 @@ public static class WatchWidgets
         ["mic"] = new[] { S, M }, ["notifications"] = new[] { M, L }, ["buttons"] = new[] { M, L },
         ["mixer"] = new[] { L, M },
         ["weather"] = new[] { M, S, L, Wd },
+        ["memory"] = new[] { M, S, L }, ["temps"] = new[] { M, S, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 

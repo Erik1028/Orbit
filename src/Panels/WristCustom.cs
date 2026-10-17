@@ -648,6 +648,8 @@ public sealed partial class WristPanel
             case "mixer": MixerOrbit(r, w, id); break;
             case "photo": PhotoOrbit(r, w, d, id); break;
             case "weather": WeatherOrbit(r, w, d, id); break;
+            case "memory": PhotoOrbit(r, w, d, id); break;          // On this day: the latest photo's card on its own photos (WristMemory.cs)
+            case "temps": TempsOrbit(r, w, d, id); break;           // (WristTemps.cs; Cyber through the same helpers)
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2338,6 +2340,8 @@ public sealed partial class WristPanel
                 case "mixer": Mixer95(r, c, w, id); break;
                 case "photo": Photo95(r, c, w, d, id); break;
                 case "weather": Weather95(c, d, w); break;
+                case "memory": Photo95(r, c, w, d, id); break;
+                case "temps": Temps95(c, d, w); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);

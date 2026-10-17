@@ -25,8 +25,9 @@ public sealed partial class WristPanel
 
     void PhotoWidgetXp(RectangleF r, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
-        var c = Theme.RetroSkin.WidgetFrame(_p, r, w.H >= 2 ? "My Pictures" : null);
+        var c = Theme.RetroSkin.WidgetFrame(_p, r, w.H >= 2 ? _set.TitleXp : null);
         _p.Fill(c, 0xFFFFFFFF);
         var p = Newest;
         var bmp = PhotoBitmap(p);

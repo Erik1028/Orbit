@@ -15,8 +15,8 @@ public sealed partial class SettingsView
 {
     // ================= General > Alerts =================
 
-    static readonly int[] BatteryPcts = { 10, 15, 25 }, FpsPcts = { 70, 80, 90 };
-    static readonly string[] BatteryPctNames = { "10%", "15%", "25%" }, FpsPctNames = { "70%", "80%", "90%" };
+    static readonly int[] BatteryPcts = { 10, 15, 25 }, FpsPcts = { 70, 80, 90 }, HotCs = { 80, 85, 90 };
+    static readonly string[] BatteryPctNames = { "10%", "15%", "25%" }, FpsPctNames = { "70%", "80%", "90%" }, HotCNames = { "80°", "85°", "90°" };
     static readonly AlertsConfig AlertDefaults = new();         // never changed: C.General.Alerts null reads as this
 
     AlertsConfig AlertsNow => C.General.Alerts ?? AlertDefaults;
@@ -26,7 +26,7 @@ public sealed partial class SettingsView
     {
         var cur = C.General.Alerts;
         var a = cur == null ? new AlertsConfig()
-            : new AlertsConfig { Battery = cur.Battery, BatteryPct = cur.BatteryPct, Fps = cur.Fps, FpsPct = cur.FpsPct };
+            : new AlertsConfig { Battery = cur.Battery, BatteryPct = cur.BatteryPct, Fps = cur.Fps, FpsPct = cur.FpsPct, Hot = cur.Hot, HotC = cur.HotC };
         change(a);
         C.General.Alerts = a.IsDefault ? null : a;
         _h.Cfg.MarkDirty();
@@ -40,10 +40,13 @@ public sealed partial class SettingsView
         return best;
     }
 
+    // (1.15: the GPU / CPU hot row took the place of the two lines under the rows; what an alert is went up beside the title)
     void DrawAlerts(Ui ui, float rx, float y)
     {
         var a = AlertsNow;
         ui.Section(new RectangleF(rx, y, 360, 20), "Alerts");
+        ui.P.Text("a card and a buzz", new RectangleF(rx + 150, y, 216, 20), Theme.Cyber ? CyberHud.Grey : Theme.Dim, 12, Theme.Cyber ? FontWeight.SemiBold : FontWeight.Normal,
+            TextAlignment.Trailing, ParagraphAlignment.Center, Theme.Cyber ? CyberHud.Mono : null);
         bool b = a.Battery;
         if (ui.Toggle("g.abat", new RectangleF(rx - 10, y + 22, 232, 46), "Low battery", ref b, "controllers and trackers"))
             SetAlert(0, b ? 1 : 0);
@@ -56,12 +59,15 @@ public sealed partial class SettingsView
         int fi = Nearest(FpsPcts, a.FpsPct);
         if (ui.Segmented("g.afpsp", new RectangleF(rx + 226, y + 76, 140, 34), FpsPctNames, ref fi, a.Fps))
             SetAlert(3, FpsPcts[fi]);
-        ui.Label(new RectangleF(rx, y + 120, 366, 36),
-            "A card and a buzz in that controller. A battery once (again after charging); the frame rate at most every 2 minutes.",
-            Theme.Dim, 12, FontWeight.Normal, true);
+        b = a.Hot;
+        if (ui.Toggle("g.ahot", new RectangleF(rx - 10, y + 118, 232, 46), "GPU / CPU hot", ref b, "at or over it for 30 s"))
+            SetAlert(4, b ? 1 : 0);
+        int hi = Nearest(HotCs, a.HotLimit);
+        if (ui.Segmented("g.ahotc", new RectangleF(rx + 226, y + 124, 140, 34), HotCNames, ref hi, a.Hot))
+            SetAlert(5, HotCs[hi]);
     }
 
-    // one alert setting changed: 0 battery on, 1 its %, 2 frame rate on, 3 its % (a method of its own: the lambdas holding the values
+    // one alert setting changed: 0 battery on, 1 its %, 2 frame rate on, 3 its %, 4 GPU / CPU hot on, 5 its °C (a method of its own: the lambdas holding the values
     // made their holder on every frame DrawAlerts drew, clicked or not)
     void SetAlert(int what, int v) => SetAlerts(x =>
     {
@@ -70,7 +76,9 @@ public sealed partial class SettingsView
             case 0: x.Battery = v != 0; break;
             case 1: x.BatteryPct = v; break;
             case 2: x.Fps = v != 0; break;
-            default: x.FpsPct = v; break;
+            case 3: x.FpsPct = v; break;
+            case 4: x.Hot = v != 0; break;
+            default: x.HotC = v == AlertsConfig.HotDefault ? null : v; break;
         }
     });
 

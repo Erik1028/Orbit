@@ -26,7 +26,8 @@ namespace Orbit;
 // night past midnight is one day), at most 20, newest first - the newest's thumbnail made at once, the others' when the opened view
 // steps to them (Want), at most 6 kept. Nothing runs while Active is false (no widget on any page): no watcher, no thread work, no
 // thumbnails held.
-public sealed class PhotoWatcher : IDisposable
+// (On this day's photos - Sys/PhotoMemories.cs - are the same Photo / Snapshot, with the reading and the thumbnails shared from here.)
+public sealed class PhotoWatcher : IPhotoSource, IDisposable
 {
     public const int MaxPhotos = 20, MaxThumbs = 6, ThumbW = 640, ThumbH = 400;
 
@@ -43,6 +44,8 @@ public sealed class PhotoWatcher : IDisposable
         public int TW, TH;
         public bool Fresh;                       // taken while watching (not one found at the start): the widget pops
         public DateTime Seen;                    // when it came in
+        public int Years;                        // On this day's: how many years ago (0: the latest photo's)
+        public bool OtherDay;                    // On this day's: of the nearest day that had photos, not of this very date
         public Photo Copy() => (Photo)MemberwiseClone();
     }
 
@@ -53,7 +56,7 @@ public sealed class PhotoWatcher : IDisposable
         public bool FolderFound;
         public string Folder = "";
         public List<Photo> Recent = new();       // newest first
-        public PhotoWatcher Source;              // where to ask for a thumbnail (null: made-up photos, every one has its own)
+        public IPhotoSource Source;              // where to ask for a thumbnail (null: made-up photos, every one has its own)
     }
 
     readonly object _lock = new();
@@ -284,7 +287,7 @@ public sealed class PhotoWatcher : IDisposable
         Use(first.Path);
     }
 
-    static Photo Named(string path, DateTime taken)
+    internal static Photo Named(string path, DateTime taken)
     {
         var p = new Photo { Path = path, Name = System.IO.Path.GetFileName(path), Taken = taken, Seen = DateTime.Now };
         var m = SizeInName.Match(p.Name);
@@ -493,7 +496,7 @@ public sealed class PhotoWatcher : IDisposable
 
     // the file's bytes when it is a whole PNG (its signature first, IEND last, its size and time the same after reading); null: not
     // (yet). Opened with every share allowed and closed at once: VRCX writing its metadata into it is never kept out.
-    static byte[] ReadWhole(string path, out (long, DateTime) stamp)
+    internal static byte[] ReadWhole(string path, out (long, DateTime) stamp)
     {
         stamp = default;
         try
@@ -624,7 +627,10 @@ public sealed class PhotoWatcher : IDisposable
 
     // ---- the thumbnail: the PNG decoded once, drawn into at most 640 x 400 (high-quality bicubic), the full picture let go ----
 
-    public static (uint[] px, int w, int h, int fullW, int fullH) Decode(byte[] bytes)
+    public static (uint[] px, int w, int h, int fullW, int fullH) Decode(byte[] bytes) => Decode(bytes, ThumbW, ThumbH);
+
+    // ... into at most maxW x maxH (On this day keeps smaller ones)
+    public static (uint[] px, int w, int h, int fullW, int fullH) Decode(byte[] bytes, int maxW, int maxH)
     {
         try
         {
@@ -632,7 +638,7 @@ public sealed class PhotoWatcher : IDisposable
             using var img = Image.FromStream(ms, false, false);
             int W = img.Width, H = img.Height;
             if (W <= 0 || H <= 0) return default;
-            float s = MathF.Min(1, MathF.Min((float)ThumbW / W, (float)ThumbH / H));
+            float s = MathF.Min(1, MathF.Min((float)maxW / W, (float)maxH / H));
             int w = Math.Max(1, (int)MathF.Round(W * s)), h = Math.Max(1, (int)MathF.Round(H * s));
             using var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(bmp))
@@ -668,6 +674,12 @@ public sealed class PhotoWatcher : IDisposable
         StopWatching();
         _wake.Dispose();
     }
+}
+
+// what a photo snapshot asks for a thumbnail the opened view steps to (the latest photo's watcher, On this day's finder)
+public interface IPhotoSource
+{
+    void Want(string path);
 }
 
 // "Open in VR Gallery" (the photo's opened view, only on a tap): VR Gallery (github.com/Erik1028/VRGallery) has no way to be handed a

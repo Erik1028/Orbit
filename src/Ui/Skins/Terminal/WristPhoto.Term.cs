@@ -115,6 +115,7 @@ public sealed partial class WristPanel
 
     void TPhotoWidget(RectangleF r, RectangleF c, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
         var p = Newest;
         if (p?.Thumb == null)

@@ -18,6 +18,7 @@ public sealed partial class WristPanel
 
     void PhotoTileAero(RectangleF r, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
         var p = Newest;
         var bmp = PhotoBitmap(p);
@@ -61,6 +62,7 @@ public sealed partial class WristPanel
 
     void PhotoDetailAero(RectangleF win, PanelData d)
     {
+        using var set = UseSet(_open?.Type);
         PhotoFrame(d);
         var p = PhotoShown();
         var words = Words(_phwOpen, p, DateTime.Now);

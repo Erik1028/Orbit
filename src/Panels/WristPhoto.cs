@@ -20,14 +20,13 @@ namespace Orbit;
 // Terminal's photo in coloured characters (src/Ui/Skins/<style>/WristPhoto.<style>.cs).
 // The thumbnails become bitmaps once (a few kept); the words are made when the photo, the minute or the language changes: a frame at
 // rest makes nothing.
+// On this day (WristMemory.cs) is drawn by these same views on its own set of photos: each set has its own snapshot, opened photo,
+// words and bitmaps (PhotoSet), and a view picks the set of the widget it draws first (UseSet).
 public sealed partial class WristPanel
 {
     public const string PhotoKindIcon = "\uE722";          // Segoe's camera: the widget in the editor's palette
     const string GalleryGlyph = "\uE8A7";                  // open in a new window
     const string PhPrev = "\uE76B", PhNext = "\uE76C";              // the arrows: the one before, the one after
-    static readonly string[] CapPhoto = { "Latest photo", "Photo" }, CapCapture = { "Capture", "Cap" };
-    const string NoPhotos = "No photos yet";
-    const string PhotosHint = "Photos you take in VRChat show up here.";
     const string OpenGallery = "Open in VR Gallery";
     const float PopLen = 0.6f;                             // s: the new photo's scale and flash
 
@@ -35,22 +34,71 @@ public sealed partial class WristPanel
     public Action<string> OnOpenPhoto;
     public string LastOpenedPhoto { get; private set; }
 
-    PhotoWatcher.Snapshot _ph;                  // the photos of this frame
-    long _phStamp = -1;
-    string _phNewest;                           // the newest seen: another one pops the widget
-    double _phPopAt = -10;
-    int _phIndex;                               // the opened view's photo (0: the newest)
-    string _phPath;                             // ... by its file: a photo coming in does not move the view off it
-    float _phAcc;
-    double _phScrollAt = -10;
-    readonly (uint[] px, ID2D1Bitmap bmp)[] _phBmps = new (uint[], ID2D1Bitmap)[4];
-    int _phBmpNext;
+    // A set of photos the views draw: its snapshot, the opened view's place in it, its words and bitmaps, its texts
+    sealed class PhotoSet
+    {
+        public bool Memory;                         // On this day's (else the latest photo's)
+        public PhotoWatcher.Snapshot Snap;          // the photos of this frame
+        public long Stamp = -1;
+        public string NewestPath;                   // the newest seen: another one pops the widget
+        public double PopAt = -10;
+        public int Index;                           // the opened view's photo (0: the newest)
+        public string Path;                         // ... by its file: a photo coming in does not move the view off it
+        public float Acc;
+        public double ScrollAt = -10;
+        public readonly (uint[] px, ID2D1Bitmap bmp)[] Bmps = new (uint[], ID2D1Bitmap)[4];
+        public int BmpNext;
+        public readonly PhotoWords New = new(), Open = new();
+        public string WidgetShown, OpenShown;       // --snapshot's hooks
+        public bool EmptyShown;
+        public string[] Cap, CapHud;                // the card's caption (modern / Cyber), when it has no photo
+        public string None, Hint, Tag, TitleXp, TitleMac;
+    }
+
+    readonly PhotoSet _latest = new()
+    {
+        Cap = new[] { "Latest photo", "Photo" }, CapHud = new[] { "Capture", "Cap" }, None = "No photos yet", Hint = "Photos you take in VRChat show up here.",
+        Tag = "Capture", TitleXp = "My Pictures", TitleMac = "Scrapbook",
+    };
+    PhotoSet _setNow;
+    PhotoSet _set => _setNow ?? _latest;
+
+    // the set a widget of that type draws (a struct: nothing allocated); disposed, the one before is back
+    readonly struct SetScope : IDisposable
+    {
+        readonly WristPanel _w;
+        readonly PhotoSet _was;
+        public SetScope(WristPanel w, PhotoSet s) { _w = w; _was = w._setNow; w._setNow = s; }
+        public void Dispose() => _w._setNow = _was;
+    }
+
+    SetScope UseSet(bool memory) => new(this, memory ? _memory : _latest);
+    SetScope UseSet(string type) => UseSet(type == "memory");
+
+    // the set's state under the names the views had before there were two sets
+    PhotoWatcher.Snapshot _ph { get => _set.Snap; set => _set.Snap = value; }
+    long _phStamp { get => _set.Stamp; set => _set.Stamp = value; }
+    string _phNewest { get => _set.NewestPath; set => _set.NewestPath = value; }
+    double _phPopAt { get => _set.PopAt; set => _set.PopAt = value; }
+    int _phIndex { get => _set.Index; set => _set.Index = value; }
+    string _phPath { get => _set.Path; set => _set.Path = value; }
+    float _phAcc { get => _set.Acc; set => _set.Acc = value; }
+    double _phScrollAt { get => _set.ScrollAt; set => _set.ScrollAt = value; }
+    (uint[] px, ID2D1Bitmap bmp)[] _phBmps => _set.Bmps;
+    int _phBmpNext { get => _set.BmpNext; set => _set.BmpNext = value; }
+    string[] CapPhoto => _set.Cap;
+    string[] CapCapture => _set.CapHud;
+    string NoPhotos => _set.None;
+    string PhotosHint => _set.Hint;
 
     PhotoWatcher.Photo Newest => _ph is { Recent.Count: > 0 } s ? s.Recent[0] : null;
     int PhotoCount => _ph?.Recent.Count ?? 0;
 
-    // the snapshot changed (Update draws again)
-    bool PhotoChanged(PanelData d) => C.Face == "custom" && !ReferenceEquals(d.Photos, _ph) && (HasWidget("photo") || DetailIs("photo"));
+    // the snapshot changed (Update draws again) - the latest photo's or On this day's
+    bool PhotoChanged(PanelData d) => C.Face == "custom" && ((!ReferenceEquals(d.Photos, _latest.Snap) && (HasWidget("photo") || DetailIs("photo"))) ||
+        (!ReferenceEquals(d.Memories, _memory.Snap) && (HasWidget("memory") || DetailIs("memory"))));
+
+    PhotoWatcher.Snapshot SetData(PanelData d) => _set.Memory ? d.Memories : d.Photos;
 
     // once a frame, before the first photo is drawn: the snapshot taken, a new photo popped, the opened view kept on its photo
     void PhotoFrame(PanelData d)
@@ -58,7 +106,8 @@ public sealed partial class WristPanel
         long s = _ui.BeginStamp;
         if (s == _phStamp) return;
         _phStamp = s;
-        if (!ReferenceEquals(d.Photos, _ph)) PhotoTake(d.Photos);
+        var snap = SetData(d);
+        if (!ReferenceEquals(snap, _ph)) PhotoTake(snap);
         if (Clock.Now - _phPopAt < PopLen) _ui.Animating = true;
     }
 
@@ -79,12 +128,18 @@ public sealed partial class WristPanel
         _phPath = s.Recent[_phIndex].Path;
     }
 
-    // a widget opened: on the newest (OpenDetail)
+    // a widget opened: on the newest (OpenDetail) - in both sets
     void PhotoFromNewest()
     {
-        _phIndex = 0;
-        _phPath = Newest?.Path;
-        _phAcc = 0;
+        FromNewest(_latest);
+        FromNewest(_memory);
+    }
+
+    static void FromNewest(PhotoSet s)
+    {
+        s.Index = 0;
+        s.Path = s.Snap is { Recent.Count: > 0 } x ? x.Recent[0].Path : null;
+        s.Acc = 0;
     }
 
     // a new photo: the widget pops (the modern cards spring from a little smaller, past their size and back) and flashes
@@ -124,7 +179,8 @@ public sealed partial class WristPanel
 
     void PhotoDispose()
     {
-        for (int i = 0; i < _phBmps.Length; i++) { _phBmps[i].bmp?.Dispose(); _phBmps[i] = default; }
+        foreach (var b in new[] { _latest.Bmps, _memory.Bmps })
+            for (int i = 0; i < b.Length; i++) { b[i].bmp?.Dispose(); b[i] = default; }
         TArtDispose();
     }
 
@@ -157,7 +213,7 @@ public sealed partial class WristPanel
         public string Time, Day, When, Stamp, Title, Count, CountHud;      // "14:20", "Today", "14:20 · Today", "2026-10-17 14:20:05", the file's name
         public string Caption, CaptionOf;           // a window's title made of the name (its pattern)
         public int AgoKey = int.MinValue, CountKey = -1;
-        public string Ago;
+        public string Ago, AgoShort;                // (AgoShort: On this day's "1 yr ago", where "1 year ago" does not fit)
     }
 
     readonly PhotoWords _phwNew = new(), _phwOpen = new();
@@ -172,8 +228,10 @@ public sealed partial class WristPanel
             var culture = CultureInfo.CurrentCulture;
             w.Time = ShortClock(p.Taken);
             int days = (int)(now.Date - p.Taken.Date).TotalDays;
-            w.Day = days == 0 ? Lang.T("Today") : days == 1 ? Lang.T("Yesterday") : Capital(p.Taken.ToString(culture.DateTimeFormat.MonthDayPattern, culture));
+            w.Day = p.Years > 0 ? MemoryDate(p.Taken, culture)            // On this day: the date with its year (WristMemory.cs)
+                : days == 0 ? Lang.T("Today") : days == 1 ? Lang.T("Yesterday") : Capital(p.Taken.ToString(culture.DateTimeFormat.MonthDayPattern, culture));
             w.When = w.Time + " · " + w.Day;
+            if (p.Years > 0) (w.Ago, w.AgoShort) = (MemoryAgo(p, culture, false), MemoryAgo(p, culture, true));      // "1 year ago · Oct 16"
             w.Stamp = p.Taken.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
             w.Title = p.Name;
         }
@@ -181,7 +239,7 @@ public sealed partial class WristPanel
         var span = now - p.Taken;
         int key = span.TotalMinutes < 1 ? -1 : span.TotalMinutes < 60 ? (int)span.TotalMinutes : span.TotalHours < 24 ? 1000 + (int)span.TotalHours
             : 100000 + (int)(now.Date - p.Taken.Date).TotalDays;
-        if (key != w.AgoKey)
+        if (key != w.AgoKey && p.Years == 0)
         {
             w.AgoKey = key;
             w.Ago = key < 0 ? Lang.T("Just now") : key < 1000 ? Lang.F("{0} min ago", key) : key < 100000 ? Lang.F("{0} h ago", key - 1000)
@@ -291,7 +349,8 @@ public sealed partial class WristPanel
     // the stick in the opened view: a step a notch or so from rest, then one every three (~4 a second at full tilt); up the newer
     bool PhotoScroll(float n)
     {
-        if (!DetailIs("photo") || _closing) return false;
+        if (!(DetailIs("photo") || DetailIs("memory")) || _closing) return false;
+        using var set = UseSet(DetailIs("memory"));
         double now = Clock.Now;
         if (now - _phScrollAt > 0.35) _phAcc = 2 * MathF.Sign(n);
         _phScrollAt = now;
@@ -339,10 +398,11 @@ public sealed partial class WristPanel
         OnOpenPhoto?.Invoke(p.Path);
     }
 
-    // --snapshot's hooks: the photo the widget shows (its file), the opened view's photo, the empty state drawn
-    public string PhotoWidgetShown { get; private set; }
-    public string PhotoOpenShown { get; private set; }
-    public bool PhotoEmptyShown { get; private set; }
+    // --snapshot's hooks: the photo the widget shows (its file), the opened view's photo, the empty state drawn (the latest photo's;
+    // On this day's: Memory*, WristMemory.cs)
+    public string PhotoWidgetShown { get => _set.WidgetShown; private set => _set.WidgetShown = value; }
+    public string PhotoOpenShown { get => _set.OpenShown; private set => _set.OpenShown = value; }
+    public bool PhotoEmptyShown { get => _set.EmptyShown; private set => _set.EmptyShown = value; }
     public int PhotoOpenIndex => _phIndex;
     public bool PhotoPopping => Clock.Now - _phPopAt < PopLen;
 
@@ -351,13 +411,15 @@ public sealed partial class WristPanel
     // the photo is the card: drawn as its background (the layout check's card too), the dark fade the words sit on
     bool PhotoCard(WatchWidgets.Kind k, PanelData d)
     {
-        if (k.Id != "photo" || Theme.Cyber) return false;
+        if (k.Id is not ("photo" or "memory") || Theme.Cyber) return false;
+        using var set = UseSet(k.Id);
         PhotoFrame(d);
         return PhotoBitmap(Newest) != null;
     }
 
     void PhotoBack(RectangleF r, WatchWidget w, PanelData d)
     {
+        using var set = UseSet(w.Type);
         var p = Newest;
         var bmp = PhotoBitmap(p);
         _p.PushRoundedClip(r, CardRadius);
@@ -370,6 +432,7 @@ public sealed partial class WristPanel
 
     void PhotoOrbit(RectangleF r, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
         var p = Newest;
         float pad = PadX(r), x = r.X + pad, iw = r.Width - 2 * pad;
@@ -389,6 +452,7 @@ public sealed partial class WristPanel
             TextAt(words.Ago, x, by, iw + 2, 0xD9FFFFFF, SmallText, FontWeight.SemiBold);
             if (p.World != null) TextAt(PhotoCut(p.World, iw, 20), x, by - 24, iw + 2, 0xFFFFFFFF, 20, FontWeight.SemiBold);
         }
+        else if (p.Years > 0) MemoryBadge(r, Words(_phwNew, p, Now));        // On this day's 1x1: how many years ago (WristMemory.cs)
         PhotoFlash(r, CardRadius);
     }
 
@@ -434,6 +498,7 @@ public sealed partial class WristPanel
     // left of the X; the photo as big as it fits, the words over its foot, an arrow at each side
     void PhotoDetail(RectangleF E, PanelData d)
     {
+        using var set = UseSet(_open?.Type);
         PhotoFrame(d);
         if (Theme.Cyber) { CyberPhotoDetail(E, d); return; }
         var p = PhotoShown();
@@ -534,6 +599,7 @@ public sealed partial class WristPanel
     // in the condensed capitals
     void CyberPhoto(RectangleF r, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
         var p = Newest;
         var bmp = PhotoBitmap(p);
@@ -561,6 +627,7 @@ public sealed partial class WristPanel
                     TextAlignment.Leading, Theme.Display);
             CyberCaption(r.X + PadX(r), r, r.Width - 2 * PadX(r), CapCapture);
         }
+        else if (p.Years > 0) CyMemoryBadge(f, Words(_phwNew, p, Now));      // On this day's 1x1 (WristMemory.cs)
         float k = PhotoPopK();
         PhotoCorners(f, k > 0 ? Theme.Mix(CyY, CyC, k) : CyY, s1 ? 9 : 12);
         if (k > 0) _p.Fill(f, Theme.WithAlpha(0xFFFFFFFF, 0.5f * k * k));
@@ -576,7 +643,7 @@ public sealed partial class WristPanel
         var now = Now;
         var words = Words(_phwOpen, p, now);
         PhotoOpenShown = p?.Path;
-        float tagW = CyberHud.TagWidth(_p, Upper("Capture"), 18);
+        float tagW = CyberHud.TagWidth(_p, Upper(_set.Tag), 18);
         var gal = PhotoGalleryRect(E);
         if (p != null)
         {
@@ -683,6 +750,7 @@ public sealed partial class WristPanel
     // ago and the world; taller the picture over them
     void Photo95(RectangleF r, RectangleF c, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
         var p = Newest;
         var bmp = PhotoBitmap(p);
@@ -738,6 +806,7 @@ public sealed partial class WristPanel
 
     void Photo95Detail(RectangleF win, PanelData d, WatchWidgets.Kind k)
     {
+        using var set = UseSet(k.Id);
         PhotoFrame(d);
         if (Theme.Retro == RetroStyle.XP) { PhotoDetailXp(win, d); return; }        // Windows Picture and Fax Viewer (Skins/Xp)
         if (Theme.Retro == RetroStyle.Terminal) { TPhotoDetail(win, d); return; }   // in characters (Skins/Terminal)

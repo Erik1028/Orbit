@@ -97,6 +97,7 @@ public sealed partial class OrbitApp
             AlertBuzz(WatchHand);
             Log.Info($"alert: frame rate {v.AppFps:0} fps under {limit:0} ({a.FpsPct} % of {v.DisplayHz:0} Hz) for {Alerts.LowFor:0} s");
         }
+        UpdateHotAlert(now, awake, a);       // the GPU / CPU hot (OrbitApp.Temps.cs)
     }
 
     Hand WatchHand => C.Wrist.Hand == "right" ? Hand.Right : Hand.Left;

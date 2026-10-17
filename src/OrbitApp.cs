@@ -549,6 +549,8 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _room.Active = _vr.Connected && C.Room.Enabled;
         _data.Room = C.Room.Enabled ? _roomSnap : null;
         UpdatePhotos(now);                  // VRChat's photos for the latest photo widget (OrbitApp.Photos.cs)
+        UpdateMemories(now);                // this day's photos of earlier years, On this day (OrbitApp.Memories.cs)
+        UpdateTemps(now);                   // the temperatures widget / the hot alert's sensors (OrbitApp.Temps.cs)
         // the weather: the place from the settings (else Hexpad's), fetched while a weather widget is on one of the pages
         _weather.SetLocation(C.Weather?.Location);
         _weather.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "weather");
@@ -1903,6 +1905,8 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose(); _whatsNewPanel?.Dispose();
         _room.Dispose();
         _photos.Dispose();
+        _memories.Dispose();
+        _temps.Dispose();
         _weather.Dispose();
         _pacer.Dispose();
         _hexpad.Dispose();

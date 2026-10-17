@@ -304,6 +304,7 @@ public sealed partial class WristPanel
             case "notifications": CyberInbox(r, d); return true;
             case "buttons": CyberGroup(r, w, d, id); return true;
             case "photo": CyberPhoto(r, w, d, id); return true;
+            case "memory": CyberPhoto(r, w, d, id); return true;
             case "weather": CyberWeather(r, w, d, id); return true;
         }
         return false;

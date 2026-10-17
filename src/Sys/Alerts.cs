@@ -10,6 +10,9 @@ namespace Orbit;
 // - the game's frame rate stays under FpsPct % of the headset's rate (80 %) for 10 s: then nothing for 2 minutes, and the next 10 s
 //   are counted only after those (still low then: another card). Only while the headset is worn, a game runs and it is not loading
 //   (the compositor's loading / not-responding frames break the 10 s).
+// - the GPU or the CPU stays at or over HotC (85 °C) for 30 s (off by default): once, armed again only after both have been 5 °C under
+//   it (a card each time it creeps over the line would be noise). Only with the headset on and a reading of the last few seconds
+//   (Sys/Temps.cs samples every 2 s); a reading of "–" breaks the 30 s.
 // The logic is here without SteamVR (the --snapshot checks drive it with made-up readings); OrbitApp feeds it VrStats once a frame.
 public sealed class Alerts
 {
@@ -64,6 +67,32 @@ public sealed class Alerts
 
     public bool FpsQuiet(double now) => now - _lastAlert < Quiet;
 
+    // ---- the GPU / CPU hot ----
+    public const double HotFor = 30;                    // s at or over the threshold
+    public const float HotEase = 5;                     // °C under it (both) before it can come again
+    double _hotSince = -1;
+    bool _hotFired;
+
+    // every frame: valid = a reading of the last few seconds with the headset on; gpu / cpu in °C (NaN: not read). 1 (the GPU) or 2 (the
+    // CPU) once: the moment to show the card; 0 else
+    public int Hot(double now, bool valid, float gpu, float cpu, float threshold)
+    {
+        if (!valid) { _hotSince = -1; return 0; }
+        if (_hotFired)
+        {
+            if (!(gpu >= threshold - HotEase) && !(cpu >= threshold - HotEase)) _hotFired = false;      // cooled down: armed again
+            _hotSince = -1;
+            return 0;
+        }
+        bool g = gpu >= threshold, c = cpu >= threshold;
+        if (!g && !c) { _hotSince = -1; return 0; }
+        if (_hotSince < 0) _hotSince = now;
+        if (now - _hotSince < HotFor) return 0;
+        _hotFired = true;
+        _hotSince = -1;
+        return g ? 1 : 2;
+    }
+
     // SteamVR went away: the devices start over (their indices mean nothing on the next connect); the quiet time stays
     public void Reset()
     {
@@ -71,6 +100,7 @@ public sealed class Alerts
         Array.Clear(_lowReads);
         Array.Fill(_seenAt, -1);
         _lowSince = -1;
+        _hotSince = -1;
     }
 
     // ---- what the card says ----
@@ -99,9 +129,17 @@ public sealed class Alerts
         Timeout = 6, Volume = 0.8f, Icon = Theme.Classic ? null : FpsIcon(),
     };
 
+    public static Notification HotCard(bool gpu, float c, int threshold) => new()
+    {
+        Source = "Temperatures",
+        Title = Lang.F(gpu ? "GPU hot: {0:0} °C" : "CPU hot: {0:0} °C", Math.Round(c)),
+        Content = Lang.F("At or over {0} °C for {1:0} s.", threshold, HotFor),
+        Timeout = 6, Volume = 0.8f, Icon = Theme.Classic ? null : HotIcon(),
+    };
+
     // ---- the cards' icons (NotificationListener.IconSize square, premultiplied BGRA), drawn once ----
 
-    static uint[] _battery, _fps;
+    static uint[] _battery, _fps, _hot;
     const uint Red = 0xFFFF5A5A, Grey = 0xFF8A90A6, Dark = 0xFF1D2132;
 
     static uint[] Canvas()
@@ -157,5 +195,19 @@ public sealed class Alerts
             Fill(px, 18 + i * 10.5f, 70 - h[i], 18 + i * 10.5f + 7, 70, i == h.Length - 1 ? Red : Grey, 2);
         Fill(px, 16, 73, 80, 75, Grey);
         return _fps = px;
+    }
+
+    // a thermometer, its red column up to the top
+    public static uint[] HotIcon()
+    {
+        if (_hot != null) return _hot;
+        var px = Canvas();
+        Fill(px, 40, 16, 56, 66, Grey, 8);
+        Fill(px, 34, 56, 62, 84, Grey, 14);
+        Fill(px, 44, 20, 52, 66, Dark, 4);
+        Fill(px, 45, 24, 51, 70, Red, 3);
+        Fill(px, 38, 60, 58, 80, Red, 10);
+        for (int i = 0; i < 3; i++) Fill(px, 58, 26 + i * 10, 66, 28 + i * 10, Grey);
+        return _hot = px;
     }
 }
