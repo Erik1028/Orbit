@@ -419,6 +419,7 @@ public sealed class PrismaLink : IDisposable
     public void Freeze(RgbState s)
     {
         _frozen = true;
+        if (!s.Off) _lastOn = s.Effect;
         Publish(s.Copy());
     }
 

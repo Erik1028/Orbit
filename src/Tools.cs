@@ -110,6 +110,7 @@ static partial class Tools
         data.FakeMedia = (true, "Midnight City", "M83", true);
         data.Photos = PhotoFake.Snap();                 // made-up photos (PhotoViewTest.cs): a tool never reads a real one
         data.Weather = WeatherViewTools.Report();       // a made-up forecast for a made-up town: never the network (WeatherViewTest.cs)
+        LightsViewTools.Fake(data);                     // a made-up light and RGB: never Lumos, Prisma or a device (LightsViewTest.cs)
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
@@ -126,6 +127,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "notes") return NotesOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "photo") return PhotoOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "weather") return WeatherOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "lights") return LightsOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -586,6 +588,8 @@ static partial class Tools
             PhotoViewTools.Run(wrist, data, cfg, gpu, dir, tag);              // the latest photo opened, on made-up photos
             if (tag == "") WeatherViewTools.DataChecks(wrist, data, cfg, dir);     // the weather's data: parser, cache, stale, no place, Hexpad's
             WeatherViewTools.Run(wrist, data, cfg, gpu, dir, tag);            // the weather widget and opened, on a made-up forecast
+            if (tag == "") LightsViewTools.DataChecks(wrist, data, dir);     // the Lumos / Prisma links on a made-up Lumos and a pipe of the tool's own
+            LightsViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the light and RGB widgets and opened, on made-up states
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();

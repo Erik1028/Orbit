@@ -94,7 +94,7 @@ public sealed partial class WristPanel
         {
             LinkStatus.Ready => ("", "", "", BulbGlyph),
             LinkStatus.NoApp => ("Lumos isn't running", "No Lumos", "Start Lumos on this PC", ""),
-            LinkStatus.NoDevice => ("Set the bulb", "No bulb", "Settings > Wrist > Light", ""),
+            LinkStatus.NoDevice => ("Set the bulb", "No bulb", "Edit layout > Light", ""),
             LinkStatus.Error => ("Bulb not reachable", "No answer", s.Message, ""),
             _ => ("Connecting", "Connecting", "Lumos", BulbGlyph),
         };
