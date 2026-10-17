@@ -36,6 +36,7 @@ public sealed partial class WristPanel
         "dock" => "dock",
         "mixer" => "mixer",
         "notifications" => "notifications",
+        "photo" => "photo",
         _ => null,
     };
 
@@ -49,6 +50,7 @@ public sealed partial class WristPanel
         _calOffset = 0;
         _roomScroll = 0;
         NotesFromTop();
+        PhotoFromNewest();
         DockLetGo();
         _ui.SpringFrom(OpenKey, 0);
         _dirty = true;
@@ -76,6 +78,7 @@ public sealed partial class WristPanel
         _openStart = -10;
         _roomScroll = 0;
         NotesFromTop();
+        PhotoFromNewest();
         _ui.SpringFrom(OpenKey, 1);
         return true;
     }
@@ -145,7 +148,7 @@ public sealed partial class WristPanel
         if (kind is not ("mines" or "room" or "dock") && Theme.Cyber)
             // Cyber: a yellow tag (it types in: WristCyberFx.cs) - the clock's CLOCK (its time card has a TIME tag of its own), the
             // notifications' INCOMING
-            CyberDetailTag(E, Upper(kind switch { "clock" => "Clock", "notifications" => "Incoming", _ => k.Name }));
+            CyberDetailTag(E, Upper(kind switch { "clock" => "Clock", "notifications" => "Incoming", "photo" => "Capture", _ => k.Name }));
         else if (kind is not ("mines" or "room" or "dock"))          // Minesweeper's board takes the left: its name is over its own column; the room: its world
             _p.Text(Ellipsize(k.Name, E.Width - 120, 24, FontWeight.SemiBold), new RectangleF(E.X + 24, E.Y + 16, E.Width - 120, 40), Bento.Text, 24,
                 FontWeight.SemiBold);
@@ -169,6 +172,7 @@ public sealed partial class WristPanel
             case "room": RoomDetail(E, d); break;
             case "dock": DockDetail(E, d); break;
             case "notifications": NotesDetail(E, d); break;
+            case "photo": PhotoDetail(E, d); break;
         }
         _ui.Inert = inert;
         if (zoom) _p.PopScale();
@@ -572,6 +576,7 @@ public sealed partial class WristPanel
         if (kind == "mines") { Mines95Detail(win); return; }      // the Minesweeper window: winmine's own inside, its chrome beside it
         if (kind == "room") { Room95Detail(win, d); return; }     // the Room window: a details list and a status bar
         if (kind == "dock") { Dock95Detail(win, d); return; }     // the Hexpad window
+        if (kind == "photo") { Photo95Detail(win, d, k); return; }     // a picture viewer of its style (WristPhoto.cs)
         _p.Fill(win, Theme.W95Face);
         _p.Bevel(win, Painter.Edge.Window);
         _ui.Caption95(new RectangleF(win.X + 3, win.Y + 3, win.Width - 6, 18), k.Title95);

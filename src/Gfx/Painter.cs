@@ -1393,6 +1393,11 @@ public sealed class Painter : IDisposable
     public void Image(ID2D1Bitmap bmp, RectangleF dst, float opacity = 1) =>
         Dc.DrawBitmap(bmp, Raw(dst), opacity, Vortice.Direct2D1.BitmapInterpolationMode.Linear, null);
 
+    // a part of a bitmap (src, in its pixels) scaled into dst well: a high-quality cubic, which first scales a big picture down
+    // (a photo at a third of its size, on the watch: no shimmer, no jagged edges)
+    public void ImagePart(ID2D1Bitmap bmp, RectangleF dst, RectangleF src, float opacity = 1) =>
+        Dc.DrawBitmap(bmp, Raw(dst), opacity, InterpolationMode.HighQualityCubic, Raw(src), null);
+
     readonly Stack<ID2D1Geometry> _layers = new();
 
     // The clips' shapes, kept: the watch clips its dock keys and covers in every frame, at the same places while it rests (a geometry

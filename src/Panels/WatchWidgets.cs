@@ -72,6 +72,8 @@ public static class WatchWidgets
         // 1.12, the watch pages: the Windows microphone (a tap mutes it), the last notifications, a group of buttons in one card
         new("mic", "Microphone", "Microphone", "\uE720", W95Icons.Id.Note, new[] { (1, 1), (2, 1) }, 0),
         new("notifications", "Notifications", "Notifications", "\uEA8F", W95Icons.Id.Chat, new[] { (2, 1), (3, 1), (2, 2) }, 0),
+        // the newest VRChat photo (Erik 10-17): it pops up when you take one; a tap grows it into a viewer of that day's (WristPhoto.cs)
+        new("photo", "Latest photo", "Imaging", WristPanel.PhotoKindIcon, W95Icons.Id.Palette, new[] { (1, 1), (2, 1), (2, 2) }, 1),
         new("buttons", "Button group", "Buttons", "\uECA5", W95Icons.Id.Layouts, new[] { (2, 1), (3, 1), (2, 2), (6, 1) }, 0),
         // 1.14: the apps playing on the output device, each with its own volume (WristMixer.cs)
         new("mixer", "Volume mixer", "Volume Mixer", WristPanel.MixKindIcon, W95Icons.Id.Note, new[] { (2, 1), (2, 2), (3, 2) }, 1),
@@ -353,6 +355,7 @@ public static class WatchWidgets
         ["fps"] = new[] { S, M }, ["reproj"] = new[] { S, M }, ["gpu"] = new[] { S, M }, ["vram"] = new[] { S, M },
         ["cpu"] = new[] { S, M }, ["ram"] = new[] { S, M },
         ["room"] = new[] { M, S }, ["dock"] = new[] { M, L },
+        ["photo"] = new[] { M, S, L },
         ["mic"] = new[] { S, M }, ["notifications"] = new[] { M, L }, ["buttons"] = new[] { M, L },
         ["mixer"] = new[] { L, M },
     };

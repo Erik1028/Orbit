@@ -1,0 +1,152 @@
+using System;
+using System.Drawing;
+using Vortice.Direct2D1;
+using Vortice.DirectWrite;
+
+namespace Orbit;
+
+// The latest photo in Windows 7 (WristPhoto.cs has the rest). The widget: the Slide Show gadget - the photo in its thin black frame
+// with a soft shadow, and (two cells and up) the gadget's dark glass strip along its foot with how long ago and the world. Opened:
+// Windows Photo Viewer - the glass window, the dark blue command bar (File, Print, E-mail, Burn, and its Open menu: Open in VR
+// Gallery), the photo whole on the viewer's light ground, when and where under it, and the dark blue control bar with the round
+// Previous / Next buttons and which one it is between them.
+public sealed partial class WristPanel
+{
+    const uint ViewerBar1 = 0xFF2C4F7E, ViewerBar2 = 0xFF0F2848, ViewerGround = 0xFFF4F7FC;
+    static readonly string[] ViewerMenu = { "File", "Print", "E-mail", "Burn" };
+    static readonly string[] DropAero = { "kkkkk", ".kkk.", "..k.." };
+
+    void PhotoTileAero(RectangleF r, WatchWidget w, PanelData d, int id)
+    {
+        PhotoFrame(d);
+        var p = Newest;
+        var bmp = PhotoBitmap(p);
+        if (bmp == null)
+        {
+            PhotoWidgetShown = null;
+            PhotoEmptyShown = p == null && _ph is { Ready: true };
+            AeroSkin.Tile(_p, r);
+            W95Icons.Draw(_p, W95Icons.Id.Palette, MathF.Floor(r.X + (r.Width - 16) / 2), MathF.Floor(r.Y + (r.Height - 16) / 2) - (PhotoEmptyShown && r.Height >= 40 && r.Width >= 70 ? 6 : 0));
+            if (PhotoEmptyShown && r.Height >= 40 && r.Width >= 70)
+                Ae.GlowLight(_p, PhotoCut("No pictures", r.Width - 6, 11, FontWeight.Normal, Ae.Font), new RectangleF(r.X + 3, r.Y + r.Height / 2 + 6, r.Width - 6, 16), 11);
+            return;
+        }
+        PhotoWidgetShown = p.Path;
+        PhotoEmptyShown = false;
+        // the gadget: its shadow, the black frame (rounded), the photo a pixel inside it
+        _p.Smooth(true);
+        _p.FillRound(new RectangleF(r.X + 1, r.Y + 2, r.Width - 1, r.Height - 2), Theme.WithAlpha(0xFF000000, 0.25f), 4);
+        _p.FillRound(new RectangleF(r.X, r.Y, r.Width - 1, r.Height - 2), 0xFF101418, 4);
+        _p.Smooth(false);
+        var f = new RectangleF(r.X + 2, r.Y + 2, r.Width - 5, r.Height - 6);
+        _p.ImagePart(bmp, f, PhotoCover(p.TW, p.TH, f));
+        _p.Fill(new RectangleF(f.X, f.Y, f.Width, 1), Theme.WithAlpha(0xFFFFFFFF, 0.35f));
+        PhotoFlash95(f);
+        if (w.W == 1 && w.H == 1) return;
+        // the gadget's strip: dark glass along the foot, the words in white
+        var words = Words(_phwNew, p, DateTime.Now);
+        var strip = new RectangleF(f.X, f.Bottom - 16, f.Width, 16);
+        _p.GradientRaw(strip, Theme.WithAlpha(0xFF000000, 0.45f), Theme.WithAlpha(0xFF000000, 0.75f));
+        _p.Fill(new RectangleF(strip.X, strip.Y, strip.Width, 1), Theme.WithAlpha(0xFFFFFFFF, 0.25f));
+        float aw = MathF.Min(WAero(words.Ago, 11), strip.Width - 8);
+        _p.Text(PhotoCut(words.Ago, strip.Width - 8, 11, FontWeight.Normal, Ae.Font), new RectangleF(strip.X + 4, strip.Y, aw + 4, strip.Height), 0xFFFFFFFF, 11,
+            FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+        float room = strip.Width - aw - 16;
+        if (p.World != null && room > 24)
+            _p.Text(PhotoCut(p.World, room, 11, FontWeight.Normal, Ae.Font), new RectangleF(strip.Right - 4 - room, strip.Y, room, strip.Height), 0xFFD6E4F5, 11,
+                FontWeight.Normal, TextAlignment.Trailing, ParagraphAlignment.Center, Ae.Font);
+    }
+
+    // ---- Windows Photo Viewer ----
+
+    void PhotoDetailAero(RectangleF win, PanelData d)
+    {
+        PhotoFrame(d);
+        var p = PhotoShown();
+        var words = Words(_phwOpen, p, DateTime.Now);
+        PhotoOpenShown = p?.Path;
+        PhotoEmptyShown = p == null;
+        var cl = AeroSkin.Window7(_p, win, 24, ViewerGround);
+        string title = p == null ? "Windows Photo Viewer" : PhotoCut(PhotoCaption(words, "{0} - Windows Photo Viewer"), win.Width - 70, 12, FontWeight.Normal, Ae.Font);
+        Ae.GlowText(_p, title, new RectangleF(win.X + 9, win.Y + 3, win.Width - 70, 18), 0xFF000000, 12);
+        var rc = new RectangleF(win.Right - 6 - 43, win.Y + 1, 43, 18);
+        bool x = _ui.Clickable("wd95x", RectangleF.Inflate(rc, 4, 4), out bool xh, out bool xd);
+        AeroSkin.CaptionBox(_p, rc, CaptionKind.Close, true, xd, xh);
+        if (x) { CloseDetail(); return; }
+        // the command bar: the viewer's menus (its words only), then its Open menu - Open in VR Gallery
+        var cmd = new RectangleF(cl.X, cl.Y, cl.Width, 20);
+        _p.GradientRaw(cmd, ViewerBar1, ViewerBar2);
+        float mx = cmd.X + 8;
+        foreach (var m in ViewerMenu)
+        {
+            float mw = WAero(m, 11);
+            _p.Text(m, new RectangleF(mx, cmd.Y, mw + 4, cmd.Height), 0xFFE8F0FB, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+            mx += mw + 14;
+        }
+        float gw = MathF.Min(WAero(OpenGallery, 11) + 22, cmd.Right - 4 - mx);
+        var gal = new RectangleF(mx - 4, cmd.Y + 1, gw, cmd.Height - 2);
+        bool go = _ui.Clickable("wphgal", gal, out bool gh, out bool gd) && p != null;
+        if ((gh || gd) && p != null)
+        {
+            _p.Smooth(true);
+            _p.FillRound(gal, Theme.WithAlpha(0xFFFFFFFF, gd ? 0.12f : 0.22f), 3);
+            _p.StrokeRound(new RectangleF(gal.X + 0.5f, gal.Y + 0.5f, gal.Width - 1, gal.Height - 1), Theme.WithAlpha(0xFFFFFFFF, 0.5f), 1, 3);
+            _p.Smooth(false);
+        }
+        uint gc = p != null ? 0xFFFFFFFF : 0xFF7C8EA8;
+        _p.Text(PhotoCut(OpenGallery, gw - 18, 11, FontWeight.Normal, Ae.Font), new RectangleF(gal.X + 4, gal.Y, gw - 16, gal.Height), gc, 11, FontWeight.Normal,
+            TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+        _p.Pixels(DropAero, gal.Right - 9, MathF.Floor(gal.Y + gal.Height / 2) - 1, gc);
+        if (go) PhotoOpen(p);
+        // the control bar: Previous, which one, Next
+        var bar = new RectangleF(cl.X, cl.Bottom - 30, cl.Width, 30);
+        _p.GradientRaw(bar, ViewerBar1, ViewerBar2);
+        _p.Fill(new RectangleF(bar.X, bar.Y, bar.Width, 1), 0xFF6F8DB5);
+        int n = PhotoCount;
+        float cx = MathF.Floor(bar.X + bar.Width / 2), cy = MathF.Floor(bar.Y + bar.Height / 2);
+        if (OrbAero("wph95p", cx - 42, cy, PrevAero, _phIndex < n - 1)) PhotoStep(1);
+        if (OrbAero("wph95n", cx + 42, cy, NextAero, _phIndex > 0)) PhotoStep(-1);
+        if (p != null)
+            _p.Text(words.Count, new RectangleF(cx - 28, bar.Y, 56, bar.Height), 0xFFE8F0FB, 11, FontWeight.Normal, TextAlignment.Center, ParagraphAlignment.Center, Ae.Font);
+        // the photo whole on the viewer's ground; when and where under it
+        var view = new RectangleF(cl.X + 8, cmd.Bottom + 6, cl.Width - 16, bar.Y - 18 - (cmd.Bottom + 6));
+        if (p == null)
+        {
+            _p.Text(PhotoCut(NoPhotos, view.Width, 12, FontWeight.Normal, Ae.Font), view, SubAero, 12, FontWeight.Normal, TextAlignment.Center,
+                ParagraphAlignment.Center, Ae.Font);
+            return;
+        }
+        var (aw, ah) = PhotoAspect(p);
+        var pic = PhotoFit(aw, ah, view, true);
+        _p.Fill(new RectangleF(pic.X + 1, pic.Y + 2, pic.Width, pic.Height), Theme.WithAlpha(0xFF000000, 0.2f));
+        var bmp = PhotoBitmap(p);
+        if (bmp != null) _p.ImagePart(bmp, pic, new RectangleF(0, 0, p.TW, p.TH));
+        else _p.Fill(pic, 0xFFDCE6F2);
+        PhotoFlash95(pic);
+        float iy = bar.Y - 15, iw = view.Width;
+        float ww = MathF.Min(WAero(words.When, 11), 110);
+        _p.Text(PhotoCut(words.When, 110, 11, FontWeight.Normal, Ae.Font), new RectangleF(view.Right - ww - 2, iy, ww + 4, 14), SubAero, 11, FontWeight.Normal,
+            TextAlignment.Trailing, ParagraphAlignment.Center, Ae.Font);
+        float lw = iw - ww - 14;
+        string where = p.World;
+        string people = PhotoPeople(p, lw - (where != null ? WAero(where, 11) + 12 : 0), 11, FontWeight.Normal, 0);
+        if (where != null)
+        {
+            string wc = PhotoCut(where, lw, 11, FontWeight.Normal, Ae.Font);
+            float wl = WAero(wc, 11);
+            _p.Text(wc, new RectangleF(view.X, iy, wl + 4, 14), InkAero, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+            if (people != null && lw - wl - 12 > 30)
+                _p.Text(people, new RectangleF(view.X + wl + 12, iy, lw - wl - 12, 14), SubAero, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+        }
+        else if (people != null)
+            _p.Text(people, new RectangleF(view.X, iy, lw, 14), SubAero, 11, FontWeight.Normal, TextAlignment.Leading, ParagraphAlignment.Center, Ae.Font);
+    }
+
+    // a round silver button of the viewer's control bar (Media Player's orb, small)
+    bool OrbAero(string id, float cx, float cy, string[] glyph, bool enabled)
+    {
+        bool click = _ui.Clickable(id, new RectangleF(cx - 13, cy - 13, 26, 26), out bool hover, out bool held) && enabled;
+        AeroSkin.Orb(_p, cx, cy, 10, false, hover && enabled, held && enabled, glyph, enabled);
+        return click;
+    }
+}

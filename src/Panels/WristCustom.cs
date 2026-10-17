@@ -595,6 +595,7 @@ public sealed partial class WristPanel
             // a card with a faint hairline (without it the cards merge into one dark slab in the headset); a button is its card; the
             // 4 x 3 now playing is its cover's colours
             if (CoverCard(k, w, styled)) CoverBack(r, d, id);
+            else if (PhotoCard(k, d)) PhotoBack(r, w, d);         // the photo is the card (WristPhoto.cs)
             else if (!k.Button && Theme.Cyber) CyberCard(r, k, w, cards, danger);
             else if (!k.Button) CardBack(r, k, w, Bento.Cur, cards, danger);
             if (!Backgrounds)
@@ -644,6 +645,7 @@ public sealed partial class WristPanel
             case "notifications": NotesOrbit(r, w, d, id); break;
             case "buttons": GroupOrbit(r, w, d, id); break;
             case "mixer": MixerOrbit(r, w, id); break;
+            case "photo": PhotoOrbit(r, w, d, id); break;
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2313,6 +2315,7 @@ public sealed partial class WristPanel
                 case "notifications": Notes95(c, d); break;
                 case "buttons": Group95(c, w, d, id); break;
                 case "mixer": Mixer95(r, c, w, id); break;
+                case "photo": Photo95(r, c, w, d, id); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);
