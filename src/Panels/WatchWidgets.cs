@@ -82,6 +82,10 @@ public static class WatchWidgets
         // a folder (Erik 10-17: "ennyi dologhoz kell egy mappa widget is"): widgets of any kind in it, on its own grid (GridSpec.Folder);
         // closed, its widgets' icons; a tap opens it over the page and they live there (WristFolder.cs, WatchFolders)
         new("folder", "Folder", "Folder", WatchFolders.Icon, W95Icons.Id.Folder, new[] { (1, 1), (2, 1), (2, 2) }, 0),
+        // VRChat friends online and where, from VRCX's database (Sys/Friends.cs, WristFriends.cs); a tap opens the whole list
+        new("friends", "Friends online", "Friends", "\uE8FA", W95Icons.Id.People, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        // the last VR session's recap: how long, photos, worlds, people, the longest stay (Sys/SessionRecap.cs, WristRecap.cs)
+        new("recap", "Session recap", "Summary", "\uE81C", W95Icons.Id.Hourglass, new[] { (1, 1), (2, 1), (2, 2) }, 1),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -399,6 +403,7 @@ public static class WatchWidgets
         ["mixer"] = new[] { L, M },
         ["weather"] = new[] { M, S, L, Wd },
         ["folder"] = new[] { S, M, L },
+        ["friends"] = new[] { M, S, L }, ["recap"] = new[] { M, S, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 

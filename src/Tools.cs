@@ -110,6 +110,8 @@ static partial class Tools
         data.FakeMedia = (true, "Midnight City", "M83", true);
         data.Photos = PhotoFake.Snap();                 // made-up photos (PhotoViewTest.cs): a tool never reads a real one
         data.Weather = WeatherViewTools.Report();       // a made-up forecast for a made-up town: never the network (WeatherViewTest.cs)
+        data.Friends = SocialViewTools.Friends();       // made-up friends online and a made-up evening's recap: never VRCX's (SocialViewTest.cs)
+        data.Recap = SocialViewTools.Recap();
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
@@ -127,6 +129,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "photo") return PhotoOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "weather") return WeatherOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "folder") return FolderOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "social") return SocialOnly(wrist, data, cfg, painter, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -588,6 +591,8 @@ static partial class Tools
             if (tag == "") WeatherViewTools.DataChecks(wrist, data, cfg, dir);     // the weather's data: parser, cache, stale, no place, Hexpad's
             WeatherViewTools.Run(wrist, data, cfg, gpu, dir, tag);            // the weather widget and opened, on a made-up forecast
             FolderViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the folder: opened, its widgets live, one's view and back
+            if (tag == "") SocialViewTools.DataChecks(wrist, data, cfg, dir);     // a made-up VRCX database read, the order, the recap's numbers and when
+            SocialViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the friends and the recap, widgets and opened, on made-up data
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -786,6 +791,7 @@ static partial class Tools
         WeatherViewTools.Sheets(dir, painter, gpu);        // weather_preview.png: every style's weather side by side
         FolderViewTools.Sheet(dir);                        // folder_preview.png: every style's folder closed and open
         FolderViewTools.EditorChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // into a folder and out of it in the editor
+        SocialViewTools.Sheets(dir);                       // social_preview.png: every style's friends and recap side by side
         WeatherViewTools.SettingsChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // its place and units in the settings
         ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)
@@ -2473,14 +2479,15 @@ static partial class Tools
         }
         // every kind at every size alone, in each look (no page: whatever sticks out shows), the colours taking turns
         uint[] turns = { navy, teal, amber, Col("Pink"), Col("White"), Col("Purple") };
-        int turn = 0, wxTurn = 0;      // (the weather takes its turns apart: the kinds before it keep the colours they were checked in)
+        int turn = 0, wxTurn = 0;      // (the weather - and the kinds after it - take their turns apart: the kinds before keep the colours they were checked in)
+        static bool Apart(string id) => id is "weather" or "friends" or "recap";
         foreach (var look in looks)
             foreach (var kind in WatchWidgets.Kinds)
                 foreach (var (w, h) in kind.SizesFor(false))
                 {
                     if (kind.Id == "analog" && w == 1) continue;     // below, in every colour (the others keep the colours they had)
                     wcfg.Widgets = new List<WatchWidget>
-                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id == "weather" ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = Apart(kind.Id) ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} {w}x{h}", null);
                 }
         // the 1x1 analog clock (its face is its card, ticks to its edge): each look in each colour and without one
@@ -2497,7 +2504,7 @@ static partial class Tools
                 foreach (var (w, h) in WatchWidgets.Sizes43(kind))
                 {
                     wcfg.Widgets = new List<WatchWidget>
-                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = kind.Id == "weather" ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
+                        { new() { Type = kind.Id, X = 0, Y = 0, W = w, H = h, Style = look == "default" ? null : look, Color = Apart(kind.Id) ? turns[wxTurn++ % turns.Length] : turns[turn++ % turns.Length] } };
                     Check(look, $"{look} {kind.Id} 4x3 {w}x{h}", null);
                 }
         wcfg.Grid = null;

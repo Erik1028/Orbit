@@ -654,6 +654,8 @@ public sealed partial class WristPanel
             case "photo": PhotoOrbit(r, w, d, id); break;
             case "weather": WeatherOrbit(r, w, d, id); break;
             case "folder": FolderOrbit(r, w, d, id); break;          // its widgets' icons; Cyber's too (WristFolder.cs)
+            case "friends": FriendsOrbit(r, w, d, id); break;         // VRCX's friends online (WristFriends.cs)
+            case "recap": RecapOrbit(r, w, d, id); break;             // the last session (WristRecap.cs)
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2355,6 +2357,8 @@ public sealed partial class WristPanel
                 case "mixer": Mixer95(r, c, w, id); break;
                 case "photo": Photo95(r, c, w, d, id); break;
                 case "weather": Weather95(c, d, w); break;
+                case "friends": Friends95(c, w, d); break;
+                case "recap": Recap95(c, w, d); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);

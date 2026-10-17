@@ -391,6 +391,8 @@ public sealed partial class WristPanel
                 case "notifications": NotesAero(c, d); break;
                 case "buttons": Group95(c, w, d, id); break;
                 case "mixer": Mixer95(r, c, w, id); break;
+                case "friends": Friends95(c, w, d); break;           // the shared bodies, white on the glass
+                case "recap": Recap95(c, w, d); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);
@@ -750,6 +752,8 @@ public sealed partial class WristPanel
             case "volume": Volume95Detail(c); break;
             case "mixer": Mixer95Detail(c); break;
             case "notifications": Notes95Detail(c, d); break;
+            case "friends": Friends95Detail(c, d); break;
+            case "recap": Recap95Detail(c, d); break;
         }
     }
 

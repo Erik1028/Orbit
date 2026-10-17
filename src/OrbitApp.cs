@@ -549,6 +549,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _room.Active = _vr.Connected && C.Room.Enabled;
         _data.Room = C.Room.Enabled ? _roomSnap : null;
         UpdatePhotos(now);                  // VRChat's photos for the latest photo widget (OrbitApp.Photos.cs)
+        UpdateSocial(now);                  // VRCX's friends online, the session and its recap (OrbitApp.Social.cs)
         // the weather: the place from the settings (else Hexpad's), fetched while a weather widget is on one of the pages
         _weather.SetLocation(C.Weather?.Location);
         _weather.Active = C.Wrist.Face == "custom" && WatchPages.Any(C.Wrist, "weather");
@@ -1901,6 +1902,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         foreach (var d in _desktops) d.Dispose();
         foreach (var w in _windowPanels) w.Dispose();
         _wrist?.Dispose(); _kb?.Dispose(); _settingsPanel?.Dispose(); _dockPanel?.Dispose(); _dockFaces?.Dispose(); _roomPanel?.Dispose(); _theater?.Dispose(); _theaterBar?.Dispose(); _whatsNewPanel?.Dispose();
+        SocialDispose();                    // a session still open ends here: its recap written (OrbitApp.Social.cs)
         _room.Dispose();
         _photos.Dispose();
         _weather.Dispose();
