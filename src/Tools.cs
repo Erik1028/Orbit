@@ -199,7 +199,7 @@ static partial class Tools
         void WhatsNewShots(string st, bool modern = false)
         {
             host.WhatsNewList = WhatsNew.Since("1.8.2");
-            host.WhatsNewSub = Lang.F("Updated to {0} from {1}", Updater.Current.ToString(3), "1.8.2");
+            host.WhatsNewSub = Lang.F("Updated to {0} from {1}", Updater.CurrentText, "1.8.2");
             Log.Info($"what's new since 1.8.2: {host.WhatsNewList.Count} versions, {WhatsNew.All.Count} in the file");
             int keep = view.Tab;
             view.Tab = SettingsView.TabGeneral;
@@ -278,6 +278,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "anim_cyber") return CyberAnimShot.Run(wrist, data, cfg, gpu, dir, kb, view, ui, surf, ptr, painter);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "cyberui") return CyberUiOnly(view, panelView, ui, surf, ptr, painter, gpu, cfg, wrist, data, kb, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "cyberperf") return CyberPerfOnly(view, ui, surf, ptr, painter, gpu, cfg, kb);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "perf") return PerfOnly(view, panelView, ui, surf, ptr, painter, gpu, cfg, kb, data, dir, mons, dev);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "extras") return ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "overlaps") { OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir); return 0; }
         if (only != null)
@@ -348,16 +349,12 @@ static partial class Tools
         {
             ui.Begin(ptr, 1.5f);
             painter.Begin(surf.Bitmap, 0x00000000, 1.5f);
-            var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
-            painter.PushRoundedClip(all, 22);
-            panelView.Draw(ui);
-            painter.PopRoundedClip();
-            painter.Stroke(System.Drawing.RectangleF.Inflate(all, -1, -1), 0x40FFFFFF, 2, 21);
+            SettingsPanel.DrawBody(painter, ui, panelView);       // as the VR panel draws it: rounded corners, the outline
             painter.End();
             ui.End();
         }
         surf.SavePng(gpu, Path.Combine(dir, "settings_panel.png"));
-        // cost of one in-VR settings frame, with and without the rounded mask (layer)
+        // cost of one in-VR settings frame, as the panel (its rounded corners and outline) and the page alone
         foreach (bool rounded in new[] { true, false, true, false })
         {
             var swb = System.Diagnostics.Stopwatch.StartNew();
@@ -365,10 +362,8 @@ static partial class Tools
             {
                 ui.Begin(ptr, 1.5f);
                 painter.Begin(surf.Bitmap, 0x00000000, 1.5f);
-                var all = new System.Drawing.RectangleF(0, 0, SettingsView.W, SettingsView.H);
-                if (rounded) painter.PushRoundedClip(all, 22);
-                panelView.Draw(ui);
-                if (rounded) painter.PopRoundedClip();
+                if (rounded) SettingsPanel.DrawBody(painter, ui, panelView);
+                else panelView.Draw(ui);
                 painter.End();
                 ui.End();
             }
@@ -1328,7 +1323,7 @@ static partial class Tools
                 surf.SavePng(gpu, Path.Combine(fdir, $"settings{t}.png"));
             }
             host.WhatsNewList = WhatsNew.Since("1.8.2");
-            host.WhatsNewSub = Lang.F("Updated to {0} from {1}", Updater.Current.ToString(3), "1.8.2");
+            host.WhatsNewSub = Lang.F("Updated to {0} from {1}", Updater.CurrentText, "1.8.2");
             view.Tab = SettingsView.TabGeneral;
             ui.ResetAnimations();
             Spy("settings_whatsnew", Frame);

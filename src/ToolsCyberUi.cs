@@ -362,7 +362,7 @@ static partial class Tools
         wcfg.Face = f0;
         wcfg.Widgets = null;
         host.WhatsNewList = WhatsNew.Since("1.8.2");
-        host.WhatsNewSub = $"Updated to {Updater.Current.ToString(3)} from 1.8.2";
+        host.WhatsNewSub = $"Updated to {Updater.CurrentText} from 1.8.2";
         view.Tab = SettingsView.TabGeneral;
         ui.ResetAnimations();
         Spy("settings_whatsnew", frame);
