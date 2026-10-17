@@ -46,7 +46,7 @@ public sealed class SettingsWindow : Form
     // which drags the window; Modern and Cyber their header, with their own minimise / close ----
     bool _classic;      // the style the window is laid out for
     bool _cyber;
-    bool StyleChanged => _classic != Theme.Classic || _cyber != (Theme.Cyber && !Theme.Classic);
+    new bool StyleChanged => _classic != Theme.Classic || _cyber != (Theme.Cyber && !Theme.Classic);
     int _k = 1;         // whole-pixel enlargement of the 750 x 480 sheet
 
     int Scale95()

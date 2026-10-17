@@ -501,8 +501,8 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
                 awake && _vr.HeadsetWorn && _data.VrSince is { } since && (DateTime.Now - since).TotalSeconds > 3);
             Perf(4, ref t);
             _screens.Clear();
-            _screens.AddRange(_desktops);
-            _screens.AddRange(_windowPanels);
+            foreach (var d in _desktops) _screens.Add(d);           // (AddRange of another element type boxed an enumerator each time)
+            foreach (var w in _windowPanels) _screens.Add(w);
             bool theaterWas = _theater.On;
             _theater.Update(_vr, dt, C.Theater.Dim, _screens);
             if (theaterWas && !_theater.On) StopTheater(glide: false);      // its screen went away
@@ -1051,12 +1051,26 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         _theaterBar.Update(_vr, now, dt, _theater, _theaterChoices, pointed, lower, onBar);
     }
 
-    // the big screen goes in front of the middle of your monitors, whichever one plays (same pick as Recenter)
+    readonly List<DesktopPanel> _anchorPlaced = new();
+
+    // the big screen goes in front of the middle of your monitors, whichever one plays (same pick as Recenter) - no LINQ: the bar asks
+    // once a second
     ITheaterScreen TheaterAnchor()
     {
-        var placed = _desktops.Where(d => d.Cfg.Enabled && Placement.IsWorld(d.Cfg.Place) && d.Cfg.Place.M != null).ToList();
+        var placed = _anchorPlaced;
+        placed.Clear();
+        DesktopPanel primary = null;
+        foreach (var d in _desktops)
+        {
+            if (!(d.Cfg.Enabled && Placement.IsWorld(d.Cfg.Place) && d.Cfg.Place.M != null)) continue;
+            if (primary == null && d.Mon.Primary) primary = d;
+            // left to right, as OrderBy put them (stable: an equal X stays after the one before it)
+            int at = placed.Count;
+            while (at > 0 && placed[at - 1].Mon.X > d.Mon.X) at--;
+            placed.Insert(at, d);
+        }
         if (placed.Count == 0) return null;
-        var anchor = placed.FirstOrDefault(d => d.Mon.Primary) ?? placed.OrderBy(d => d.Mon.X).ElementAt(placed.Count / 2);
+        var anchor = primary ?? placed[placed.Count / 2];
         if (anchor.Cfg.Group != null)
         {
             var row = _layout.Members(anchor.Cfg.Group);
@@ -1533,7 +1547,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
     // the first start of a new version: a card in VR and a line under the version in the settings
     void NoteVersion()
     {
-        string now = Updater.Current.ToString(3), last = Program.UpdatedFrom ?? C.General.LastVersion;
+        string now = Updater.CurrentText, last = Program.UpdatedFrom ?? C.General.LastVersion;
         // a version that stopped before it saved (1.10.0) left the config on an older one: the older of the two, so
         // "What's new" also lists what that version brought
         if (Version.TryParse(C.General.LastVersion, out var saved) && Version.TryParse(last, out var given) && saved < given)
@@ -1590,7 +1604,7 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         }
     }
 
-    public string WhatsNewSub => C.General.WhatsNewFrom == null ? "" : Lang.F("Updated to {0} from {1}", Updater.Current.ToString(3), C.General.WhatsNewFrom);
+    public string WhatsNewSub => C.General.WhatsNewFrom == null ? "" : Lang.F("Updated to {0} from {1}", Updater.CurrentText, C.General.WhatsNewFrom);
 
     public void DismissWhatsNew()
     {
@@ -1705,25 +1719,32 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
         bool kb = !allOff && _kb.Ov?.Visible == true;
         // monitors and mirrored windows only: Orbit's own settings panel is not "an overlay open" for
         // avatar add-ons (DXOverlay started its effect when you only opened the settings)
-        int desks = allOff ? 0 : _desktops.Count(d => d.Ov?.Visible == true) + _windowPanels.Count(w => w.Ov?.Visible == true);
-        bool wrist = !allOff && _wrist.Ov?.Visible == true && _wrist.Alpha > 0.5f;
-        var v = _data.Vr;
-        var list = new List<(string, object)>
-        {
-            ("isOverlayOpen", desks > 0 || kb),
-            ("isKeyboardOpen", kb),
-            ("isWristVisible", wrist),
-            ("openOverlayCount", desks + (kb ? 1 : 0)),
-        };
+        int desks = 0;
         if (!allOff)
         {
-            if (v.LeftBattery >= 0) list.Add(("leftControllerBattery", v.LeftBattery));
-            if (v.RightBattery >= 0) list.Add(("rightControllerBattery", v.RightBattery));
-            var hands = new[] { v.LeftBattery, v.RightBattery }.Where(b => b >= 0).ToArray();
-            if (hands.Length > 0) list.Add(("averageControllerBattery", hands.Average()));
-            if (v.TrackerAverage >= 0) list.Add(("averageTrackerBattery", v.TrackerAverage));
+            foreach (var d in _desktops) if (d.Ov?.Visible == true) desks++;
+            foreach (var w in _windowPanels) if (w.Ov?.Visible == true) desks++;
         }
-        _osc.Send(now, C.General.OscPort, list, force: allOff);
+        bool wrist = !allOff && _wrist.Ov?.Visible == true && _wrist.Alpha > 0.5f;
+        var v = _data.Vr;
+        // 10 times a second: each value goes out when it changed, all of them every 5 s (OscSender) - no list, nothing boxed
+        _osc.Begin(now, C.General.OscPort, force: allOff);
+        _osc.Param("isOverlayOpen", desks > 0 || kb);
+        _osc.Param("isKeyboardOpen", kb);
+        _osc.Param("isWristVisible", wrist);
+        _osc.Param("openOverlayCount", desks + (kb ? 1 : 0));
+        if (!allOff)
+        {
+            if (v.LeftBattery >= 0) _osc.Param("leftControllerBattery", v.LeftBattery);
+            if (v.RightBattery >= 0) _osc.Param("rightControllerBattery", v.RightBattery);
+            // the average as Enumerable.Average took it: a double sum, then a float
+            double hsum = 0;
+            int hn = 0;
+            if (v.LeftBattery >= 0) { hsum += v.LeftBattery; hn++; }
+            if (v.RightBattery >= 0) { hsum += v.RightBattery; hn++; }
+            if (hn > 0) _osc.Param("averageControllerBattery", (float)(hsum / hn));
+            if (v.TrackerAverage >= 0) _osc.Param("averageTrackerBattery", v.TrackerAverage);
+        }
     }
 
     public void OpenConfigFolder()
@@ -1803,25 +1824,28 @@ public sealed partial class OrbitApp : IOrbitHost, IDisposable
             _roomSnap = _room.Get();
             if (C.Room.Enabled) _data.Room = _roomSnap;
         }
-        var r = C.Room;
         while (_room.Events.TryDequeue(out var ev))
-        {
-            if (!r.Enabled) continue;
-            bool Known(RoomWatcher.Person p) => (r.NotifyFriends && p.Friend) || (r.NotifyStarred && r.Starred.Contains(p.Key));
-            string world = ev.World.Length > 60 ? ev.World[..59] + "\u2026" : ev.World;
-            if (ev.Kind == RoomWatcher.Kind.Arrived)
-            {
-                var who = Array.FindAll(ev.People, Known);
-                if (who.Length == 0) continue;
-                string names = string.Join(", ", Array.ConvertAll(who.Length > 4 ? who[..4] : who, p => p.Name)) + (who.Length > 4 ? $" +{who.Length - 4}" : "");
-                RoomCard(who.Length == 1 ? Lang.F("{0} is here", who[0].Name) : Lang.F("{0} people you know are here", who.Length), names + (world.Length > 0 ? " · " + world : ""));
-                continue;
-            }
-            var p = ev.People[0];
-            if (!(r.NotifyEveryone || Known(p))) continue;
-            RoomCard(ev.Kind == RoomWatcher.Kind.Joined ? Lang.F("{0} joined", p.Name) : string.Format(Lang.C("room", "{0} left"), p.Name), world);
-        }
+            if (C.Room.Enabled) RoomEventCard(ev);
         _roomPanel.Update(_vr, now, dt, _roomSnap);
+    }
+
+    // (a method of its own: the lambda below holds the config, and that holder was made on every call of UpdateRoom - every frame)
+    void RoomEventCard(RoomWatcher.RoomEvent ev)
+    {
+        var r = C.Room;
+        bool Known(RoomWatcher.Person p) => (r.NotifyFriends && p.Friend) || (r.NotifyStarred && r.Starred.Contains(p.Key));
+        string world = ev.World.Length > 60 ? ev.World[..59] + "\u2026" : ev.World;
+        if (ev.Kind == RoomWatcher.Kind.Arrived)
+        {
+            var who = Array.FindAll(ev.People, Known);
+            if (who.Length == 0) return;
+            string names = string.Join(", ", Array.ConvertAll(who.Length > 4 ? who[..4] : who, p => p.Name)) + (who.Length > 4 ? $" +{who.Length - 4}" : "");
+            RoomCard(who.Length == 1 ? Lang.F("{0} is here", who[0].Name) : Lang.F("{0} people you know are here", who.Length), names + (world.Length > 0 ? " · " + world : ""));
+            return;
+        }
+        var p = ev.People[0];
+        if (!(r.NotifyEveryone || Known(p))) return;
+        RoomCard(ev.Kind == RoomWatcher.Kind.Joined ? Lang.F("{0} joined", p.Name) : string.Format(Lang.C("room", "{0} left"), p.Name), world);
     }
 
     void RoomCard(string title, string content) =>

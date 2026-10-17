@@ -43,7 +43,7 @@ public sealed partial class WristPanel
 
         float y = wy + 22;
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        string hm = now.ToString(h24 ? "H:mm" : "h:mm", CultureInfo.CurrentCulture);
+        string hm = Clk(now, h24 ? "H:mm" : "h:mm", CultureInfo.CurrentCulture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
 
         // the clock in its white well (the batteries beside it on the full face)
@@ -60,7 +60,7 @@ public sealed partial class WristPanel
             float rad = MathF.Floor((well.Height - 8) / 2);
             DialMac(now, well.X + 6 + rad, MathF.Floor(well.Y + well.Height / 2), rad);
             float tx = well.X + 14 + 2 * rad, tw = well.Right - 6 - tx;
-            string hms = now.ToString(h24 ? "H:mm:ss" : "h:mm:ss", CultureInfo.CurrentCulture);
+            string hms = Clk(now, h24 ? "H:mm:ss" : "h:mm:ss", CultureInfo.CurrentCulture);
             float sz = _ui.Width95(hms, false, 26) + (ampm != null ? _ui.Width95(ampm, true) + 4 : 0) <= tw ? 26 : 13;
             BigTimeMac(hms, ampm, new RectangleF(tx, well.Y + 9, tw, 26), sz, false);
             _ui.Text95(FitDate95(now, tw), new RectangleF(tx, well.Y + 40, tw, 13), MacBlack);
@@ -404,7 +404,7 @@ public sealed partial class WristPanel
             well = RectangleF.Inflate(well, -2, -2);
         }
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        string hm = now.ToString(h24 ? "H:mm" : "h:mm", CultureInfo.CurrentCulture);
+        string hm = Clk(now, h24 ? "H:mm" : "h:mm", CultureInfo.CurrentCulture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         bool withDate = tall && well.Height >= 50;
         float aw = ampm == null ? 0 : _ui.Width95(ampm, true) + 4;
@@ -430,14 +430,14 @@ public sealed partial class WristPanel
         _p.Fill(li, MacWhite);
         var head = new RectangleF(li.X, li.Y, li.Width, 11);
         _p.Fill(head, Theme.W95Navy);
-        string mon = now.ToString("MMM", culture).TrimEnd('.').ToUpper(culture);
+        string mon = Clk(now, "MMM", culture).TrimEnd('.').ToUpper(culture);
         _ui.Text95(Fit(mon, head.Width), new RectangleF(head.X, head.Y - 1, head.Width, 12), MacWhite, false, TextAlignment.Center);
         _ui.Text95(now.Day.ToString(culture), new RectangleF(li.X, head.Bottom, li.Width, li.Bottom - head.Bottom), MacBlack, true, TextAlignment.Center);
         float tx = leaf.Right + 7, tw = c.Right - 4 - tx;
-        string wd = now.ToString("dddd", culture);
+        string wd = Clk(now, "dddd", culture);
         wd = char.ToUpper(wd[0], culture) + wd[1..];
-        string rest = w.W >= 4 ? now.ToString(culture.DateTimeFormat.LongDatePattern, culture) : now.ToString("yyyy", culture);
-        if (w.W >= 4 && _ui.Width95(rest) > tw) rest = now.ToString(culture.DateTimeFormat.MonthDayPattern + ", yyyy", culture);
+        string rest = w.W >= 4 ? Clk(now, culture.DateTimeFormat.LongDatePattern, culture) : Clk(now, "yyyy", culture);
+        if (w.W >= 4 && _ui.Width95(rest) > tw) rest = Clk(now, culture.DateTimeFormat.MonthDayPattern + ", yyyy", culture);
         float my = MathF.Floor(c.Y + c.Height / 2);
         _ui.Text95(Fit(wd, tw, Ui.F95, true), new RectangleF(tx, my - 14, tw, 14), MacBlack, true);
         _ui.Text95(Fit(rest, tw), new RectangleF(tx, my, tw, 13), Gry95);
@@ -560,7 +560,7 @@ public sealed partial class WristPanel
         _ui.Group95(right, "Time");
         float rad = MathF.Floor(MathF.Min(right.Width - 24, right.Height - 60) / 2);
         DialMac(now, MathF.Floor(right.X + right.Width / 2), MathF.Floor(right.Y + 20 + rad), rad);
-        string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
+        string time = Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
         _ui.Edit95(new RectangleF(right.X + 10, right.Bottom - 30, right.Width - 20, 21), time);
     }
 

@@ -215,7 +215,7 @@ public sealed partial class Ui
         uint fg = enabled ? CyberHud.White : CyberHud.Faint;
         P.Text(label, new RectangleF(r.X + 10, r.Y, r.Width / 2, r.Height - 22), fg, 15);
         uint vc = !enabled ? CyberHud.Faint : held ? CyberHud.Cyan : Theme.Mix(CyberHud.Grey, CyberHud.White, MathF.Min(1, h));
-        P.Text(fmt(value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), vc, 13.5f, FontWeight.SemiBold,
+        P.Text(ValueText(id, fmt, value), new RectangleF(r.X + r.Width / 2, r.Y, r.Width / 2 - 10, r.Height - 22), vc, 13.5f, FontWeight.SemiBold,
             TextAlignment.Trailing, ParagraphAlignment.Center, CyberHud.Mono);
         float t = max > min ? Math.Clamp((value - min) / (max - min), 0, 1) : 0;
         float shown = Anim(K(id, "#v"), t, held ? 60 : 14);           // the segments fill block by block after a jump

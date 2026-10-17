@@ -38,7 +38,7 @@ public sealed partial class SettingsView
         var close = OnClose ?? OnClose95;
 
         // the title line, the help and close boxes where the 95 caption has them
-        string title = Lang.F("ORBITOVERLAY SETUP UTILITY  v{0}", Updater.Current.ToString(3));
+        string title = Lang.F("ORBITOVERLAY SETUP UTILITY  v{0}", Updater.CurrentText);
         sk.Put(p, title, MathF.Floor((W95W - T.W(title, 1, true)) / 2), 7, T.INK, 1, true);
         T.Dashes(p, 9, W95W - 9, 23, T.FAINT);
         if (ui.CaptionHelp95("p95.help", W95W - 5 - 16 - 2 - 16, 5)) Tab = TabGeneral;   // "What's this?" -> About

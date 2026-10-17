@@ -74,7 +74,7 @@ public sealed partial class WristPanel
         _ui.Group95(g, "Time");
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string hm = now.ToString(h24 ? "H:mm" : "h:mm", culture), sec = now.ToString(":ss", culture);
+        string hm = Clk(now, h24 ? "H:mm" : "h:mm", culture), sec = Clk(now, ":ss", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         var inner = new RectangleF(g.X + 8, g.Y + 14, g.Width - 16, g.Height - 18);
         bool dial = face is "full" or "analog";
@@ -303,8 +303,8 @@ public sealed partial class WristPanel
         var now = DateTime.Now;
         switch (k.Id)
         {
-            case "time" when w.W == 1: ValueXp(c, now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm" : "h:mm", CultureInfo.CurrentCulture),
-                    _cfg.Data.Appearance.Clock24h ? now.ToString("ddd d", CultureInfo.CurrentCulture) : now.Hour < 12 ? "AM" : "PM", XpNavy); break;
+            case "time" when w.W == 1: ValueXp(c, Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm" : "h:mm", CultureInfo.CurrentCulture),
+                    _cfg.Data.Appearance.Clock24h ? Clk(now, "ddd d", CultureInfo.CurrentCulture) : now.Hour < 12 ? "AM" : "PM", XpNavy); break;
             case "time": TimeWidgetXp(c, now, w.H >= 2); break;
             case "date" when w.W == 1: Calendar95(c, w, now); break;
             case "date": DateWidgetXp(c, now, w); break;
@@ -380,7 +380,7 @@ public sealed partial class WristPanel
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string hm = now.ToString(h24 ? "H:mm" : "h:mm", culture), sec = now.ToString(":ss", culture);
+        string hm = Clk(now, h24 ? "H:mm" : "h:mm", culture), sec = Clk(now, ":ss", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         bool withDate = tall && c.Height >= 44;
         var tr = withDate ? new RectangleF(c.X, c.Y, c.Width, c.Height - 15) : c;
@@ -393,8 +393,8 @@ public sealed partial class WristPanel
     void DateWidgetXp(RectangleF c, DateTime now, WatchWidget w)
     {
         var culture = CultureInfo.CurrentCulture;
-        string wd = now.ToString("dddd", culture);
-        string day = now.ToString(culture.DateTimeFormat.MonthDayPattern, culture);
+        string wd = Clk(now, "dddd", culture);
+        string day = Clk(now, culture.DateTimeFormat.MonthDayPattern, culture);
         if (c.Height < 30 || w.W >= 4)
         {
             // one line: "Thursday, October 15"

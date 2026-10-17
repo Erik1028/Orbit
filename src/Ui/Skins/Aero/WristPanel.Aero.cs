@@ -54,9 +54,9 @@ public sealed partial class WristPanel
 
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string hm = now.ToString(h24 ? "H:mm" : "h:mm", culture), sec = now.ToString(":ss", culture);
+        string hm = Clk(now, h24 ? "H:mm" : "h:mm", culture), sec = Clk(now, ":ss", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
-        string date = now.ToString(culture.DateTimeFormat.LongDatePattern, culture);
+        string date = Clk(now, culture.DateTimeFormat.LongDatePattern, culture);
         float y0 = cl.Y;
         switch (face)
         {
@@ -367,8 +367,8 @@ public sealed partial class WristPanel
         {
             switch (k.Id)
             {
-                case "time" when w.W == 1: ValueAero(c, now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm" : "h:mm", CultureInfo.CurrentCulture),
-                    _cfg.Data.Appearance.Clock24h ? now.ToString("ddd d", CultureInfo.CurrentCulture) : now.Hour < 12 ? "AM" : "PM", 0xFFFFFFFF); break;
+                case "time" when w.W == 1: ValueAero(c, Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm" : "h:mm", CultureInfo.CurrentCulture),
+                    _cfg.Data.Appearance.Clock24h ? Clk(now, "ddd d", CultureInfo.CurrentCulture) : now.Hour < 12 ? "AM" : "PM", 0xFFFFFFFF); break;
                 case "time": TimeTileAero(c, now, w.H >= 2); break;
                 case "date":
                     string ds = FitDate95(now, c.Width - 6);
@@ -440,7 +440,7 @@ public sealed partial class WristPanel
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string time = now.ToString(h24 ? "H:mm" : "h:mm", culture);
+        string time = Clk(now, h24 ? "H:mm" : "h:mm", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         bool withDate = tall && c.Height >= 44;
         const string L = AeroSkin.LightFont;
@@ -474,7 +474,7 @@ public sealed partial class WristPanel
         if (redW < i.Width)
             _p.GradientRaw(new RectangleF(red.Right, i.Y, i.Width - redW, i.Height), 0xFFFFFFFF, 0xFFF1F4F8);
         _p.PopRoundedClip();
-        string wd = now.ToString("ddd", culture).ToUpper(culture).TrimEnd('.');
+        string wd = Clk(now, "ddd", culture).ToUpper(culture).TrimEnd('.');
         float ds = MathF.Min(26, MathF.Floor(red.Height * 0.48f));
         float blockH = 13 + ds * 1.05f, y = MathF.Floor(red.Y + (red.Height - blockH) / 2);
         _p.Text(wd, new RectangleF(red.X, y - 2, red.Width, 16), 0xFFFFE3DF, 11, FontWeight.Normal, TextAlignment.Center, ParagraphAlignment.Center, Ae.Font);
@@ -482,7 +482,7 @@ public sealed partial class WristPanel
             ParagraphAlignment.Center, Ae.Font);
         if (redW >= i.Width) return;
         var page = new RectangleF(red.Right + 6, i.Y, i.Right - red.Right - 10, i.Height);
-        string month = now.ToString("MMMM", culture);
+        string month = Clk(now, "MMMM", culture);
         float ms = WAero(month, 16) <= page.Width ? 16 : 13;
         float py = MathF.Floor(page.Y + (page.Height - 34) / 2);
         _p.Text(Fit(month, page.Width, ms), new RectangleF(page.X, py - 2, page.Width + 4, 24), AeroSkin.HeadBlue, ms, FontWeight.Normal,
@@ -504,7 +504,7 @@ public sealed partial class WristPanel
         var band = new RectangleF(i.X, i.Y, i.Width, 18);
         _p.GradientRaw(band, 0xFFE8574B, 0xFFC4342A);
         _p.PopRoundedClip();
-        _p.Text(Capital(now.ToString("MMMM yyyy", culture)), band, 0xFFFFFFFF, 11, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, Ae.Font);
+        _p.Text(Capital(Clk(now, "MMMM yyyy", culture)), band, 0xFFFFFFFF, 11, FontWeight.Bold, TextAlignment.Center, ParagraphAlignment.Center, Ae.Font);
         var g = new RectangleF(i.X + 3, band.Bottom + 1, i.Width - 6, i.Bottom - band.Bottom - 3);
         int first = (int)culture.DateTimeFormat.FirstDayOfWeek;
         float cw = g.Width / 7, rh = MathF.Floor(g.Height / 7);
@@ -727,7 +727,7 @@ public sealed partial class WristPanel
                 _ui.Group95(right, "Time");
                 float rad = MathF.Floor(MathF.Min(right.Width - 24, right.Height - 58) / 2);
                 AeroSkin.Clock7(_p, MathF.Floor(right.X + right.Width / 2), MathF.Floor(right.Y + 20 + rad), rad, now);
-                string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
+                string time = Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
                 _ui.Edit95(new RectangleF(right.X + 10, right.Bottom - 30, right.Width - 20, 21), time);
                 break;
             }

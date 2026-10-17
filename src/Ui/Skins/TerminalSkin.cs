@@ -349,8 +349,9 @@ public sealed partial class TerminalSkin : Win95Skin
         if (key < 0 || !enabled || MapColor(c) != INK) return;
         float full = TextWidth(p, t, bold, Ui.F95);
         float x = al == TextAlignment.Center ? r.X + MathF.Floor((r.Width - full) / 2) : al == TextAlignment.Trailing ? r.Right - full : r.X;
-        x = MathF.Round(x + TextWidth(p, t[..key], bold, Ui.F95));
-        Text(p, t.Substring(key, 1), new RectangleF(x, r.Y, 8, r.Height), HOT, bold, TextAlignment.Leading, true, false, Ui.F95);
+        var (pre, ch) = Ui.AmpParts(t, key);
+        x = MathF.Round(x + TextWidth(p, pre, bold, Ui.F95));
+        Text(p, ch, new RectangleF(x, r.Y, 8, r.Height), HOT, bold, TextAlignment.Leading, true, false, Ui.F95);
     }
 
     public override void DisabledText(Painter p, string s, RectangleF r, float size, FontWeight w, TextAlignment h, ParagraphAlignment v) =>
@@ -450,8 +451,9 @@ public sealed partial class TerminalSkin : Win95Skin
         if (key >= 0 && enabled && !lit && key < t.Length && !t.EndsWith("..."))
         {
             float full = TextWidth(p, t, false, Ui.F95);
-            float x = MathF.Round(r.X + 1 + MathF.Floor((r.Width - 2 - full) / 2) + TextWidth(p, t[..key], false, Ui.F95));
-            Text(p, t.Substring(key, 1), new RectangleF(x, r.Y, 8, r.Height), HOT, false, TextAlignment.Leading, true, false, Ui.F95);
+            var (pre, ch) = Ui.AmpParts(t, key);
+            float x = MathF.Round(r.X + 1 + MathF.Floor((r.Width - 2 - full) / 2) + TextWidth(p, pre, false, Ui.F95));
+            Text(p, ch, new RectangleF(x, r.Y, 8, r.Height), HOT, false, TextAlignment.Leading, true, false, Ui.F95);
         }
     }
 

@@ -132,7 +132,7 @@ public sealed partial class WristPanel
         float x0 = 11, x1 = TW95 - 11, y = wy + 7;
 
         // the banner and the command that drew this
-        TCaps($"ORBIT/OS v{Updater.Current.ToString(3)}", x0, y, T.DIM);
+        TCaps($"ORBIT/OS v{Updater.CurrentText}", x0, y, T.DIM);
         float bx = TW95 - 8 - 16;
         if (TKey("w95.x", new RectangleF(bx, y - 3, 16, 13), "X")) { _dismissReq = true; TOff(); }
         if (TKey("w95.min", new RectangleF(bx - 18, y - 3, 16, 13), "_")) { _dismissReq = true; TOff(); }
@@ -142,9 +142,9 @@ public sealed partial class WristPanel
 
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string time = now.ToString(h24 ? "H:mm:ss" : "h:mm:ss", culture);
+        string time = Clk(now, h24 ? "H:mm:ss" : "h:mm:ss", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
-        string date = T.Up(now.ToString("ddd", culture)) + " " + now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        string date = T.Up(Clk(now, "ddd", culture)) + " " + now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         float aw = ampm == null ? 0 : 16;
         if (big)
         {
@@ -152,7 +152,7 @@ public sealed partial class WristPanel
             float tw = T.W(time, n) + aw, tx = MathF.Floor((TW95 - tw) / 2), top = y + 2;
             TBig(time, tx, top, n);
             if (ampm != null) TCaps(ampm, tx + T.W(time, n) + 4, top + 7 * n - 7, T.MID);
-            string longDate = T.Up(now.ToString(culture.DateTimeFormat.LongDatePattern, culture));
+            string longDate = T.Up(Clk(now, culture.DateTimeFormat.LongDatePattern, culture));
             string ds = T.W(longDate) <= x1 - x0 ? longDate : date;
             TCapsC(ds, new RectangleF(0, 0, TW95, 0), top + 7 * n + 8, T.MID);
         }
@@ -529,12 +529,12 @@ public sealed partial class WristPanel
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
         var culture = CultureInfo.CurrentCulture;
-        string time = now.ToString(h24 ? "H:mm:ss" : "h:mm:ss", culture);
+        string time = Clk(now, h24 ? "H:mm:ss" : "h:mm:ss", culture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         bool withDate = tall && c.Height >= 44;
         float aw = ampm != null ? 16 : 0;
         int n = TScale(time, c.Width - 6 - aw, c.Height - (withDate ? 16 : 4), 6);
-        if (n == 1 && T.W(time) + aw > c.Width - 4) { time = now.ToString(h24 ? "H:mm" : "h:mm", culture); n = TScale(time, c.Width - 6 - aw, c.Height - 4, 6); }
+        if (n == 1 && T.W(time) + aw > c.Width - 4) { time = Clk(now, h24 ? "H:mm" : "h:mm", culture); n = TScale(time, c.Width - 6 - aw, c.Height - 4, 6); }
         float vh = 7 * n, total = vh + (withDate ? 9 + 7 : 0);
         float top = MathF.Floor(c.Y + (c.Height - total) / 2);
         float tw = T.W(time, n) + aw, x = c.X + MathF.Floor((c.Width - tw) / 2);
@@ -562,11 +562,11 @@ public sealed partial class WristPanel
         var culture = CultureInfo.CurrentCulture;
         if (w.W == 1)
         {
-            TValue(c, now.Day.ToString(culture), T.Up(now.ToString("ddd", culture)), T.INK);
+            TValue(c, now.Day.ToString(culture), T.Up(Clk(now, "ddd", culture)), T.INK);
             return;
         }
         string iso = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        string sub = Lang.F("{0} \u00B7 WEEK {1}", T.Up(now.ToString(w.W >= 3 ? "dddd" : "ddd", culture)), ISOWeek.GetWeekOfYear(now));
+        string sub = Lang.F("{0} \u00B7 WEEK {1}", T.Up(Clk(now, w.W >= 3 ? "dddd" : "ddd", culture)), ISOWeek.GetWeekOfYear(now));
         int n = TScale(iso, c.Width - 6, c.Height - 13, 3);
         float vh = 7 * n, top = MathF.Floor(c.Y + (c.Height - vh - 12) / 2);
         TCapsC(iso, c, top, T.INK, n);
@@ -579,8 +579,8 @@ public sealed partial class WristPanel
         var culture = CultureInfo.CurrentCulture;
         if (w.H < 2)
         {
-            if (w.W >= 2) TValue(c, T.Up(now.ToString(culture.DateTimeFormat.MonthDayPattern, culture)), T.Up(now.ToString("dddd", culture)), T.INK);
-            else TValue(c, now.Day.ToString(culture), T.Up(now.ToString("MMM", culture)), T.INK);
+            if (w.W >= 2) TValue(c, T.Up(Clk(now, culture.DateTimeFormat.MonthDayPattern, culture)), T.Up(Clk(now, "dddd", culture)), T.INK);
+            else TValue(c, now.Day.ToString(culture), T.Up(Clk(now, "MMM", culture)), T.INK);
             return;
         }
         TMonth(c, new DateTime(now.Year, now.Month, 1), now, false);
@@ -879,7 +879,7 @@ public sealed partial class WristPanel
                 _ui.Group95(right, "Time");
                 float rad = MathF.Floor(MathF.Min(right.Width - 20, right.Height - 50) / 2);
                 TDial(now, MathF.Floor(right.X + right.Width / 2), MathF.Floor(right.Y + 16 + rad), rad);
-                string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
+                string time = Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
                 TCapsC(time, right, right.Bottom - 16, T.INK);
                 break;
             case "notifications": TNotesDetail(c, d); break;

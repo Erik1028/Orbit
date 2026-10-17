@@ -248,7 +248,7 @@ public sealed class HexpadLink : IDisposable
         _api = 1;
         lock (_lock) { _s.Api = 1; _s.Caps = Array.Empty<string>(); _s.Values = new(); _s.HiFaces = new Face[Keys]; _s.Version++; }
         // api 2 and "hi": 2 ask for sliders and the faces at 2x; an api 1 Hexpad ignores both
-        Write(pipe, $"{{\"t\":\"hello\",\"client\":\"OrbitOverlay\",\"ver\":\"{Updater.Current.ToString(3)}\",\"api\":2,\"hi\":2}}");
+        Write(pipe, $"{{\"t\":\"hello\",\"client\":\"OrbitOverlay\",\"ver\":\"{Updater.CurrentText}\",\"api\":2,\"hi\":2}}");
         Log.Info("hexpad link: connected");
         var buf = new byte[64 * 1024];
         var line = new MemoryStream();

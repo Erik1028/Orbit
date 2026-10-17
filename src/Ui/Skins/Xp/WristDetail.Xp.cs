@@ -56,7 +56,7 @@ public sealed partial class WristPanel
         _ui.Group95(right, "Time");
         float rad = MathF.Floor(MathF.Min(right.Width - 20, right.Height - 56) / 2);
         DialXp(now, MathF.Floor(right.X + right.Width / 2) + 0.5f, MathF.Floor(right.Y + 18 + rad) + 0.5f, rad);
-        string time = now.ToString(_cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
+        string time = Clk(now, _cfg.Data.Appearance.Clock24h ? "H:mm:ss" : "h:mm:ss tt", CultureInfo.CurrentCulture);
         _ui.Edit95(new RectangleF(right.X + 10, right.Bottom - 30, right.Width - 20, 21), time);
     }
 

@@ -488,7 +488,15 @@ public static class W95Icons
         return b;
     }
 
-    public static int Size(Id id) => Map(id).Length;
+    // (read from a table filled once: Map builds the picture's rows anew on every call - every icon of every frame did)
+    static readonly int[] _sizes = new int[(int)Id.Hourglass + 1];
+    public static int Size(Id id)
+    {
+        int i = (int)id;
+        if ((uint)i >= (uint)_sizes.Length) return Map(id).Length;
+        if (_sizes[i] == 0) _sizes[i] = Map(id).Length;
+        return _sizes[i];
+    }
 
     // at its own size (or a whole multiple), top-left at x, y
     public static void Draw(Painter p, Id id, float x, float y, int scale = 1)

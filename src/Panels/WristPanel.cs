@@ -233,13 +233,13 @@ public sealed partial class WristPanel : IPointerTarget, IDisposable
     {
         var culture = CultureInfo.CurrentCulture;
         if (Lang.Has("date|long")) return now.ToString(Lang.T("date|long"), culture);       // the language's own order (Magyar: "péntek, okt. 16.")
-        return now.ToString(culture.DateTimeFormat.MonthDayPattern, culture) + ", " + now.ToString("dddd", culture);
+        return Clk(now, culture.DateTimeFormat.MonthDayPattern, culture) + ", " + Clk(now, "dddd", culture);
     }
 
     void BigTime(DateTime now, RectangleF r, float size, TextAlignment align)
     {
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        string time = now.ToString(h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture);
+        string time = Clk(now, h24 ? "HH:mm" : "h:mm", CultureInfo.CurrentCulture);
         _p.Text(time, r, Theme.Text, size, FontWeight.SemiBold, align, ParagraphAlignment.Center, Theme.Display);
         if (!h24)
         {

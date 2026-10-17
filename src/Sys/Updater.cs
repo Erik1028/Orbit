@@ -30,16 +30,33 @@ public sealed class Updater
     string _latestName, _assetUrl, _sha256, _pageUrl;
     long _assetSize;
 
-    public static Version Current => typeof(Updater).Assembly.GetName().Version is { } v ? new Version(v.Major, v.Minor, Math.Max(0, v.Build)) : new Version(1, 0, 0);
+    // read once (the settings' Version row asks every frame: the assembly's name and a Version were made each time)
+    public static Version Current { get; } = typeof(Updater).Assembly.GetName().Version is { } v ? new Version(v.Major, v.Minor, Math.Max(0, v.Build)) : new Version(1, 0, 0);
+    public static string CurrentText { get; } = Current.ToString(3);      // "1.14.1"
+
+    // the message filled in and the latest version written out once, not in every frame that shows them
+    string _shown, _latestText;
+    int _shownLang = -1;
+    System.Globalization.CultureInfo _shownCulture;
 
     public (State state, string message, float progress, string latest) Snapshot()
     {
-        lock (_lock) return (_state, _args == null ? _message : Lang.F(_message, _args), _progress, _latest?.ToString(3));
+        lock (_lock)
+        {
+            var c = System.Globalization.CultureInfo.CurrentCulture;
+            if (_args != null && (_shown == null || _shownLang != Lang.Version || !ReferenceEquals(c, _shownCulture)))
+            {
+                _shown = Lang.F(_message, _args);
+                _shownLang = Lang.Version;
+                _shownCulture = c;
+            }
+            return (_state, _args == null ? _message : _shown, _progress, _latestText);
+        }
     }
 
     void Set(State s, string msg, float progress = 0, params object[] args)
     {
-        lock (_lock) { _state = s; _message = msg; _progress = progress; _args = args is { Length: > 0 } ? args : null; }
+        lock (_lock) { _state = s; _message = msg; _progress = progress; _args = args is { Length: > 0 } ? args : null; _shown = null; }
     }
 
     public bool Busy { get { lock (_lock) return _state is State.Checking or State.Downloading or State.Starting; } }
@@ -50,7 +67,7 @@ public sealed class Updater
     static HttpClient Client()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd($"OrbitOverlay/{Current.ToString(3)} (+https://github.com/{Repo})");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd($"OrbitOverlay/{CurrentText} (+https://github.com/{Repo})");
         return c;
     }
 
@@ -88,10 +105,10 @@ public sealed class Updater
                     if (a.TryGetProperty("digest", out var dg) && dg.GetString() is { } d && d.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
                         sha = d[7..].ToLowerInvariant();
                 }
-                lock (_lock) { _latest = v; _latestName = name; _assetUrl = url; _sha256 = sha; _assetSize = size; _pageUrl = page; }
+                lock (_lock) { _latest = v; _latestText = v?.ToString(3); _latestName = name; _assetUrl = url; _sha256 = sha; _assetSize = size; _pageUrl = page; }
                 if (v > Current) Set(State.Available, "{0} is out", 0, name);
-                else Set(State.UpToDate, "up to date ({0} is the latest)", 0, Current.ToString(3));
-                Log.Info($"update check: latest {tag}, running {Current.ToString(3)}, asset {(url != null ? "found" : "missing")}, digest {(sha != null ? "yes" : "no")}");
+                else Set(State.UpToDate, "up to date ({0} is the latest)", 0, CurrentText);
+                Log.Info($"update check: latest {tag}, running {CurrentText}, asset {(url != null ? "found" : "missing")}, digest {(sha != null ? "yes" : "no")}");
             }
             catch (Exception e)
             {
@@ -197,7 +214,7 @@ public sealed class Updater
         u.Check();
         while (u.Busy) Thread.Sleep(100);
         var (st, msg, _, latest) = u.Snapshot();
-        Log.Info($"updatetest: {st} - {msg} (latest {latest ?? "-"}, running {Current.ToString(3)}, installed copy: {Installer.InstalledCopyDir() ?? "no"})");
+        Log.Info($"updatetest: {st} - {msg} (latest {latest ?? "-"}, running {CurrentText}, installed copy: {Installer.InstalledCopyDir() ?? "no"})");
         if (latest == null || u._assetUrl == null) return st == State.Failed ? 1 : 0;
         try
         {

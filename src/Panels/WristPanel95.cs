@@ -68,10 +68,10 @@ public sealed partial class WristPanel
         // the clock part: like the reference Date/Time window
         float ty = wy + 22;
         bool h24 = _cfg.Data.Appearance.Clock24h;
-        string time = now.ToString(h24 ? "H:mm:ss" : "h:mm:ss", CultureInfo.CurrentCulture);
+        string time = Clk(now, h24 ? "H:mm:ss" : "h:mm:ss", CultureInfo.CurrentCulture);
         string ampm = h24 ? null : now.Hour < 12 ? "AM" : "PM";
         var culture = CultureInfo.CurrentCulture;
-        string date = now.ToString(culture.DateTimeFormat.LongDatePattern, culture);
+        string date = Clk(now, culture.DateTimeFormat.LongDatePattern, culture);
         if (face == "analog")
         {
             Dial95(now, 50, ty + 37, 32);
@@ -209,12 +209,11 @@ public sealed partial class WristPanel
             _ui.Text95(Fit(artist ?? "", tw), new RectangleF(tx, r.Y + 14, tw, 13));
         }
         else _ui.Text95("Nothing playing", new RectangleF(tx, r.Y, tw, 14), Gry95);
-        string[] ids = { "media.prev", "media.play", "media.next" };
-        string[][] glyphs = { PrevGlyph, playing ? PauseGlyph : PlayGlyph, NextGlyph };
+        var glyphs = MediaGlyphs(playing);
         for (int i = 0; i < 3; i++)
         {
             var b = new RectangleF(tx + i * 30, r.Y + 30, 28, 18);
-            if (_ui.GlyphButton95(Ui.Id("wm", i), b, glyphs[i], has)) OnAction?.Invoke(ids[i]);
+            if (_ui.GlyphButton95(Ui.Id("wm", i), b, glyphs[i], has)) OnAction?.Invoke(MediaIds[i]);
         }
     }
 
@@ -236,14 +235,24 @@ public sealed partial class WristPanel
     }
 
     // keyboard, monitors, recenter, layout profile (its name), night mode, settings
+    static readonly string[] ToolbarIds = { "keyboard", "desktops", "recenter", "layout", "night", "settings" };
+    readonly W95Icons.Id?[] _toolbarIcons = { W95Icons.Id.Keyboard, null, W95Icons.Id.Center, null, W95Icons.Id.Moon, W95Icons.Id.Gear };
+    readonly string[][] _mediaGlyphs = new string[3][];
+
+    // |<<  > (or ||)  >>| - the array kept, its middle set for this frame
+    string[][] MediaGlyphs(bool playing)
+    {
+        _mediaGlyphs[0] = PrevGlyph;
+        _mediaGlyphs[1] = playing ? PauseGlyph : PlayGlyph;
+        _mediaGlyphs[2] = NextGlyph;
+        return _mediaGlyphs;
+    }
+
     void Toolbar95(PanelData d, float y)
     {
-        string[] ids = { "keyboard", "desktops", "recenter", "layout", "night", "settings" };
-        W95Icons.Id?[] icons =
-        {
-            W95Icons.Id.Keyboard, d.DesktopsVisible ? W95Icons.Id.Computer : W95Icons.Id.ComputerOff, W95Icons.Id.Center,
-            null, W95Icons.Id.Moon, W95Icons.Id.Gear,
-        };
+        var ids = ToolbarIds;
+        var icons = _toolbarIcons;
+        icons[1] = d.DesktopsVisible ? W95Icons.Id.Computer : W95Icons.Id.ComputerOff;
         const int n = 6;
         float bw = MathF.Floor((TW95 - 16 - (n - 1) * 2) / (float)n);
         float x0 = MathF.Floor((TW95 - (n * bw + (n - 1) * 2)) / 2);
