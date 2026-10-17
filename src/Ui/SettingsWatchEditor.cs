@@ -19,6 +19,9 @@ public sealed partial class SettingsView
     int _wgrabX, _wgrabY, _wgrabW, _wgrabH;
     string _wmsg;
     int _wpal, _wpreset;
+    public int PaletteCat;              // the palette's category (WatchWidgets.Categories); the 95 family's list: -1 = all
+    int _wpal95Cat = -1;
+    string _wsearch = "";               // typed in the desktop window while the editor is open (TypeKey)
     bool _wadd;                         // the "new page" choices are open (modern)
     int _waddPreset, _waddGrid;         // their preset (PagePresets) and grid (0: 6x4, the default; 1: 4x3)
     double _wremoveArmed = -10;         // "Remove page" clicked once: a second click within 4 s removes it
@@ -351,10 +354,12 @@ public sealed partial class SettingsView
         if (sel?.Type == "buttons") GroupPicker(ui, sel, 222, PaletteY - 20);
         else
         {
+            // over the palette: its categories, and the search (typed in the desktop window); what went wrong in their place
             if (_wmsg != null) ui.Label(new RectangleF(222, PaletteY - 20, 486, 18), _wmsg, Theme.Warn, 13);
-            else ui.Label(new RectangleF(222, PaletteY - 20, 486, 18), _wcell.x >= 0 ? "Add a widget to the marked cell" : "Add a widget");
-            var pal = WatchWidgets.PaletteAbc();
-            for (int i = 0; i < pal.Length; i++)
+            else PaletteBar(ui);
+            var pal = WatchWidgets.PaletteFor(PaletteCat, _wsearch);
+            if (pal.Length == 0) ui.Label(new RectangleF(222, PaletteY + 4, 486, 20), "No widget by that name", Theme.Dim, 12);
+            for (int i = 0; i < Math.Min(pal.Length, 36); i++)
             {
                 var k = pal[i];
                 var r = new RectangleF(222 + i % 6 * 81, PaletteY + i / 6 * PalettePitch, 77, PalettePitch - 3);
@@ -421,6 +426,52 @@ public sealed partial class SettingsView
     // the presets "start over" offers: the faces of before pages (6 x 4), then the page presets (on the page's own grid)
     static readonly string[] _startPresets = WatchWidgets.Presets.Concat(new[] { "everyday", "vrchat", "performance" }).ToArray();
     static string[] StartPresets() => _startPresets;
+
+    // The palette's bar: a chip per category (none lit while a search shows), and the search box - in the desktop window letters
+    // typed while the editor is open go into it (TypeKey); in VR, where nothing can be typed here, the hint where the widget goes
+    void PaletteBar(Ui ui)
+    {
+        var p = ui.P;
+        const float y = PaletteY - 23, h = 21, cw = 62, gap = 4;
+        bool searching = _wsearch.Length > 0;
+        for (int i = 0; i < WatchWidgets.Categories.Length; i++)
+        {
+            var r = new RectangleF(222 + i * (cw + gap), y, cw, h);
+            if (ui.Button(Ui.Id("wcat", i), r, WatchWidgets.Categories[i], null, !searching && i == PaletteCat, true, 10.5f))
+            {
+                PaletteCat = i;
+                _wsearch = "";
+            }
+        }
+        float sx = 222 + 6 * (cw + gap), sw = 708 - sx;
+        var box = new RectangleF(sx, y, sw, h);
+        if (InVr)
+        {
+            ui.Label(box, _wcell.x >= 0 ? "To the marked cell" : "Add a widget", Theme.Dim, 11);
+            return;
+        }
+        p.Fill(box, Theme.WithAlpha(0xFFFFFFFF, 0.06f), 6);
+        p.Stroke(RectangleF.Inflate(box, -0.5f, -0.5f), searching ? Theme.Accent : Theme.Border, 1, 6);
+        p.Icon("\uE721", new RectangleF(box.X + 4, box.Y, 16, h), Theme.Dim, 11);
+        if (searching)
+        {
+            p.Text(_wsearch + (Clock.Now % 1 < 0.5 ? "|" : ""), new RectangleF(box.X + 20, box.Y, box.Width - 40, h), Theme.Text, 11.5f);
+            if (ui.Button("wsearchx", new RectangleF(box.Right - 20, box.Y + 1, 19, h - 2), null, "\uE711", false, true, 8)) _wsearch = "";
+            ui.Animating = true;                    // the caret blinks
+        }
+        else p.Text("Type to search", new RectangleF(box.X + 20, box.Y, box.Width - 22, h), Theme.Faint, 11);
+    }
+
+    // a key typed in the desktop window: while the editor is open, into the palette's search (Esc clears it, Backspace takes one off)
+    public bool TypeKey(char c)
+    {
+        if (!EditingWatch || InVr) return false;
+        if (c == '\b') { if (_wsearch.Length > 0) _wsearch = _wsearch[..^1]; return true; }
+        if (c == (char)27) { if (_wsearch.Length == 0) return false; _wsearch = ""; return true; }
+        if (char.IsControl(c) || _wsearch.Length >= 24) return false;
+        _wsearch += c;
+        return true;
+    }
 
     // The pages as tabs over the watch (the one edited is the one the watch shows), the share button and "Add page" at the end - only
     // its + once the tabs would get narrow for their names (3 pages and more)
@@ -672,8 +723,16 @@ public sealed partial class SettingsView
         if (ui.Combo95("we95.grid", new RectangleF(84, 406, 144, RowH), new[] { "6 x 4", "4 x 3" }, ref gi) && gi != gi0) ChangeGrid(ui, gi == 1 ? "4x3" : "6x4");
 
         ui.Group95(new RectangleF(376, 56, 358, 218), "Widgets");
-        var pal = WatchWidgets.PaletteAbc();
-        int hit = ui.List95("we95.pal", new RectangleF(388, 76, 214, 188), pal.Length, _wpal, (i, r, on) =>
+        // which ones: all, or a category (the list grew long)
+        var cats95 = new string[WatchWidgets.Categories.Length + 1];
+        cats95[0] = "All";
+        for (int c = 0; c < WatchWidgets.Categories.Length; c++) cats95[c + 1] = WatchWidgets.Categories[c];
+        int ci = _wpal95Cat + 1;
+        bool cb = ui.Changed;
+        if (ui.Combo95("we95.cat", new RectangleF(388, 74, 214, RowH), cats95, ref ci) && ci - 1 != _wpal95Cat) { _wpal95Cat = ci - 1; _wpal = 0; }
+        ui.Changed = cb;                        // looking at another category is not a change
+        var pal = WatchWidgets.PaletteFor(_wpal95Cat, null);
+        int hit = ui.List95("we95.pal", new RectangleF(388, 100, 214, 164), pal.Length, _wpal, (i, r, on) =>
         {
             var k = pal[i];
             W95Icons.Draw(p, k.Icon95, r.X + 1, r.Y);
