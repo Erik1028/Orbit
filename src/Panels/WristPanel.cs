@@ -24,6 +24,8 @@ public sealed class PanelData
     public RoomWatcher.Snapshot Room;    // who is in the VRChat instance (null = not followed)
     public NotificationHistory Notes;    // the last notifications shown (the notifications widget)
     public PhotoWatcher.Snapshot Photos; // VRChat's newest photos (the latest photo widget; null = not followed)
+    public PhotoWatcher.Snapshot Memories;   // this day's photos of earlier years (On this day; null = not looked for)
+    public TempReport Temps;             // the temperatures (the Temperatures widget, the hot alert; null = not read)
     public WeatherReport Weather;        // the weather widget's report (Sys/Weather.cs; null = none asked for)
     public FriendsWatcher.Snapshot Friends;  // VRCX's friends online (the friends widget; null = not followed)
     public SessionRecap Recap;           // the last session's recap (the recap widget; null = none yet)

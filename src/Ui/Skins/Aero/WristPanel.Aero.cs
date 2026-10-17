@@ -329,6 +329,7 @@ public sealed partial class WristPanel
         {
             case "media": MediaTileAero(r, d, w, id); return;
             case "photo": PhotoTileAero(r, w, d, id); return;          // the Slide Show gadget (WristPhoto.Aero.cs)
+            case "memory": PhotoTileAero(r, w, d, id); return;
             case "weather": WeatherTileAero(r, d, w); return;          // the weather gadget (WristWeather.Aero.cs)
             case "analog":
                 AeroSkin.Tile(_p, r, 0xFF68ABEC, 0xFF3C7FCC);
@@ -395,6 +396,7 @@ public sealed partial class WristPanel
                 case "recap": Recap95(c, w, d); break;
                 case "light": Light95(r, c, w, d, id); break;
                 case "rgb": Rgb95(r, c, w, d, id); break;
+                case "temps": Temps95(c, d, w, true); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);
@@ -689,7 +691,7 @@ public sealed partial class WristPanel
         if (kind == "room") Room95Detail(win, d);           // their 95 windows, in 7's skin
         else if (kind == "dock") DockDetailAero(win, d);
         else if (kind == "mines") MinesDetailAero(win);
-        else if (kind == "photo") PhotoDetailAero(win, d);       // Windows Photo Viewer (WristPhoto.Aero.cs)
+        else if (kind is "photo" or "memory") PhotoDetailAero(win, d);       // Windows Photo Viewer (WristPhoto.Aero.cs)
         else if (kind == "weather") WeatherFlyoutAero(win, d);
         else WindowAero(d, k, kind, win);
         if (fx)
@@ -758,6 +760,7 @@ public sealed partial class WristPanel
             case "recap": Recap95Detail(c, d); break;
             case "light": Light95Detail(c, d); break;
             case "rgb": Rgb95Detail(c, d); break;
+            case "temps": Temps95Detail(c, d); break;
         }
     }
 

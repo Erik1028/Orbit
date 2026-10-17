@@ -113,6 +113,8 @@ static partial class Tools
         data.Friends = SocialViewTools.Friends();       // made-up friends online and a made-up evening's recap: never VRCX's (SocialViewTest.cs)
         data.Recap = SocialViewTools.Recap();
         LightsViewTools.Fake(data);                     // a made-up light and RGB: never Lumos, Prisma or a device (LightsViewTest.cs)
+        data.Memories = OnThisDayTempsTools.Memories(); // made-up photos of this day in earlier years, made-up temperatures (OnThisDayTempsTest.cs)
+        data.Temps = OnThisDayTempsTools.Temps();
         var frng = new Random(3);
         for (int i = 0; i < VrStats.FrameHistory; i++)
         {
@@ -132,6 +134,7 @@ static partial class Tools
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "folder") return FolderOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "social") return SocialOnly(wrist, data, cfg, painter, gpu, dir);
         if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "lights") return LightsOnly(wrist, data, cfg, painter, gpu, dir);
+        if (Environment.GetEnvironmentVariable("ORBIT_SNAP_ONLY") == "onthisday") return OnThisDayTempsTools.Only(wrist, data, cfg, gpu, dir);
         if (everything)
         {
             var sw0 = System.Diagnostics.Stopwatch.StartNew();
@@ -597,6 +600,8 @@ static partial class Tools
             SocialViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the friends and the recap, widgets and opened, on made-up data
             if (tag == "") LightsViewTools.DataChecks(wrist, data, dir);     // the Lumos / Prisma links on a made-up Lumos and a pipe of the tool's own
             LightsViewTools.Run(wrist, data, cfg, gpu, dir, tag);             // the light and RGB widgets and opened, on made-up states
+            if (tag == "") OnThisDayTempsTools.DataChecks(dir);               // on this day's picking, the temperatures' parsing, the hot alert
+            OnThisDayTempsTools.Run(wrist, data, cfg, gpu, dir, tag);         // both widgets and opened, on made-up photos and readings
             // gallery 0's media widget (cells 0-2, row 2): a tap on its card, away from its button
             wcfg.Widgets = Gallery(0);
             wrist.Settle();
@@ -796,6 +801,7 @@ static partial class Tools
         FolderViewTools.Sheet(dir);                        // folder_preview.png: every style's folder closed and open
         FolderViewTools.EditorChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // into a folder and out of it in the editor
         SocialViewTools.Sheets(dir);                       // social_preview.png: every style's friends and recap side by side
+        OnThisDayTempsTools.PreviewSheet(dir);             // onthisday_temps_preview.png: both widgets in every style
         WeatherViewTools.SettingsChecks(view, ui, surf, ptr, painter, gpu, cfg, wrist, data, dir);     // its place and units in the settings
         ExtrasRun(wrist, kb, view, panelView, ui, surf, ptr, painter, gpu, cfg, data, host, dir);     // 1.14: alerts, B / Y twice, per game, share (ToolsExtras.cs)
         OverlapRun(wrist, kb, view, ui, surf, ptr, painter, cfg, data, gpu, dir);       // controls crossing each other, every tab in every style (ToolsOverlap.cs)

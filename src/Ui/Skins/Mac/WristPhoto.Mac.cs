@@ -12,12 +12,14 @@ public sealed partial class WristPanel
 {
     void PhotoWidgetMac(RectangleF r, WatchWidget w, PanelData d, int id)
     {
-        var c = Mac.WidgetFrame(_p, r, w.H >= 2 ? "Scrapbook" : null);
+        using var set = UseSet(w.Type);
+        var c = Mac.WidgetFrame(_p, r, w.H >= 2 ? _set.TitleMac : null);
         Photo95(r, c, w, d, id);
     }
 
     void PhotoMacDetail(RectangleF win, PanelData d)
     {
+        using var set = UseSet(_open?.Type);
         PhotoFrame(d);
         var m = Mac;
         var p = PhotoShown();

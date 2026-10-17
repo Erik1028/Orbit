@@ -90,6 +90,11 @@ public static class WatchWidgets
         // brightness and quick choices; opened, all of it
         new("light", "Light", "Light", "\uEA80", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2) }, 1),
         new("rgb", "RGB lighting", "RGB Lighting", "\uE790", W95Icons.Id.Palette, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        // a VRChat photo of this day a year ago (or two, or more; the nearest day within 3 when that one has none), filling its card; a tap
+        // opens it big, the stick steps through that day's photos and the other years (Sys/PhotoMemories.cs, WristMemory.cs)
+        new("memory", "On this day", "On This Day", WristPanel.MemoryKindIcon, W95Icons.Id.Palette, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        // the PC's temperatures: the GPU, the CPU, the GPU's hotspot and fan; a tap opens the last 10 minutes (Sys/Temps.cs, WristTemps.cs)
+        new("temps", "Temperatures", "System Monitor", WristPanel.TempsKindIcon, W95Icons.Id.Computer, new[] { (1, 1), (2, 1), (2, 2) }, 1),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -409,6 +414,7 @@ public static class WatchWidgets
         ["folder"] = new[] { S, M, L },
         ["friends"] = new[] { M, S, L }, ["recap"] = new[] { M, S, L },
         ["light"] = new[] { M, S, L }, ["rgb"] = new[] { M, S, L },
+        ["memory"] = new[] { M, S, L }, ["temps"] = new[] { M, S, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 

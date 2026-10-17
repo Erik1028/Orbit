@@ -39,17 +39,24 @@ public sealed partial class SettingsView
 
     // ================= General > Notifications: the alerts =================
 
-    static readonly string[] BatteryPct95 = { "10%", "15%", "25%" }, FpsPct95 = { "70%", "80%", "90%" };
+    static readonly string[] BatteryPct95 = { "10%", "15%", "25%" }, FpsPct95 = { "70%", "80%", "90%" }, HotC95 = { "80°C", "85°C", "90°C" };
 
-    // under Height in the Notifications box: a line saying what an alert is, then low battery and low frame rate, each with its
-    // threshold; the drop-downs line up after the longer label (the styles' fonts differ in width)
+    // under Height in the Notifications box: GPU / CPU hot, low battery and low frame rate, each with its threshold; the drop-downs line
+    // up after the longest label (the styles' fonts differ in width). (1.15: the hot row took the place of the line that said what an
+    // alert is - the box has no more room; low battery and low frame rate kept their places)
     void Alerts95(Ui ui)
     {
         var a = AlertsNow;
-        const string lb = "Low &battery, under", lf = "Low frame &rate, under";
-        ui.Text95("Alerts - a card and a buzz in the controller:", new RectangleF(388, 364, 334, 13), K95);
-        float cx = MathF.Ceiling(388 + 19 + MathF.Max(ui.LabelWidth95(lb), ui.LabelWidth95(lf)) + 8);
-        bool b = a.Battery;
+        const string lb = "Low &battery, under", lf = "Low frame &rate, under", lh = "GPU / CPU hot, from";
+        float cx = MathF.Ceiling(388 + 19 + MathF.Max(ui.LabelWidth95(lh), MathF.Max(ui.LabelWidth95(lb), ui.LabelWidth95(lf))) + 8);
+        bool b = a.Hot;
+        ui.Check95("g95.ahot", 388, 362, lh, ref b);
+        if (b != a.Hot) SetAlert(4, b ? 1 : 0);
+        int hi = Nearest(HotCs, a.HotLimit), hi0 = hi;
+        if (ui.Combo95("g95.ahotc", new RectangleF(cx, 360, 58, RowH), HotC95, ref hi, a.Hot) && hi != hi0)
+            SetAlert(5, HotCs[hi]);
+        ui.Text95(Fit95(ui, "for 30 s", 722 - (cx + 64)), new RectangleF(cx + 64, 364, 722 - (cx + 64), 13), K95, false, TextAlignment.Leading, a.Hot);
+        b = a.Battery;
         ui.Check95("g95.abat", 388, 383, lb, ref b);
         if (b != a.Battery) SetAlert(0, b ? 1 : 0);
         int bi = Nearest(BatteryPcts, a.BatteryPct), bi0 = bi;

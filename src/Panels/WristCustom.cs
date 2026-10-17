@@ -659,6 +659,8 @@ public sealed partial class WristPanel
             case "recap": RecapOrbit(r, w, d, id); break;             // the last session (WristRecap.cs)
             case "light": LightOrbit(r, w, d, id); break;
             case "rgb": RgbOrbit(r, w, d, id); break;
+            case "memory": PhotoOrbit(r, w, d, id); break;          // On this day: the latest photo's card on its own photos (WristMemory.cs)
+            case "temps": TempsOrbit(r, w, d, id); break;           // (WristTemps.cs; Cyber through the same helpers)
             case "perf":
                 // four small readings side by side, each with its own caption
                 float qw = r.Width / 4;
@@ -2369,6 +2371,8 @@ public sealed partial class WristPanel
                 case "recap": Recap95(c, w, d); break;
                 case "light": Light95(r, c, w, d, id); break;          // (WristLights95.cs)
                 case "rgb": Rgb95(r, c, w, d, id); break;
+                case "memory": Photo95(r, c, w, d, id); break;
+                case "temps": Temps95(c, d, w); break;
                 case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
                 case "session":
                     string sv = SessionText(d);

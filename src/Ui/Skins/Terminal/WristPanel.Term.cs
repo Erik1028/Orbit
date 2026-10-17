@@ -380,7 +380,7 @@ public sealed partial class WristPanel
         "fps" => "FPS", "reproj" => "REPR", "gpu" => "GPU", "vram" => "VRAM", "cpu" => "CPU", "ram" => "RAM", "room" => "ROOM",
         "dock" => "HEXPAD", "minesweeper" => "MINES", "mic" => "MIC", "notifications" => "NOTIFY", "buttons" => "BUTTONS",
         "photo" => "PHOTO", "weather" => "WTHR", "friends" => "WHO", "recap" => "LAST",
-        "light" => "LIGHT", "rgb" => "RGB",
+        "light" => "LIGHT", "rgb" => "RGB", "memory" => "MEMORY", "temps" => "SENSORS",
         _ => T.Up(id),
     };
 
@@ -461,6 +461,8 @@ public sealed partial class WristPanel
             case "buttons": TGroup(c, w, d, id); break;
             case "mixer": Mixer95(r, c, w, id); break;
             case "photo": TPhotoWidget(r, c, w, d, id); break;     // the photo in coloured characters (WristPhoto.Term.cs)
+            case "memory": TPhotoWidget(r, c, w, d, id); break;
+            case "temps": TTemps(c, d, w); break;                  // `sensors` (WristTemps.cs)
             case "weather": TWeather(c, d, w); break;            // wttr.in's (WristWeather.Term.cs)
             case "friends": TFriends(r, c, w, d); break;         // who (WristSocial.Term.cs)
             case "recap": TRecap(c, w, d); break;                // the session's log (WristSocial.Term.cs)

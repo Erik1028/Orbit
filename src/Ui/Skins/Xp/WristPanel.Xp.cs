@@ -298,7 +298,7 @@ public sealed partial class WristPanel
     {
         done = true;
         if (k.Button) { ButtonWidgetXp(id, w, k, r, d); return; }
-        if (k.Id == "photo") { PhotoWidgetXp(r, w, d, id); return; }      // My Pictures' thumbnail (WristPhoto.Xp.cs)
+        if (k.Id is "photo" or "memory") { PhotoWidgetXp(r, w, d, id); return; }      // My Pictures' thumbnail (WristPhoto.Xp.cs)
         string title = w.H >= 2 || TitleOneRow(k.Id, w.W) ? XpTitle(k, w.W) : null;
         var c = Theme.RetroSkin.WidgetFrame(_p, r, title);
         var now = DateTime.Now;
@@ -332,6 +332,7 @@ public sealed partial class WristPanel
             case "recap": Recap95(c, w, d); break;
             case "light": Light95(r, c, w, d, id); break;
             case "rgb": Rgb95(r, c, w, d, id); break;
+            case "temps": Temps95(c, d, w); break;
             case "perf": Status95(d, new RectangleF(c.X, MathF.Floor(c.Y + (c.Height - 24) / 2), c.Width, 24)); break;
             case "session":
                 string sv = SessionText(d);

@@ -42,6 +42,8 @@
     <EmbeddedResource Include="orbit.vrmanifest" LogicalName="files/orbit.vrmanifest" />
     <EmbeddedResource Include="docs\CHANGELOG.md" LogicalName="whatsnew/CHANGELOG.md" />
     <EmbeddedResource Include="docs\OrbitOverlay Quick Start.txt" LogicalName="files/OrbitOverlay Quick Start.txt" />
+    <!-- the PawnIO module that reads an AMD Ryzen's temperature (Sys/Temps.cs; LGPL 2.1, third_party/pawnio/README.txt) -->
+    <EmbeddedResource Include="third_party\pawnio\AMDFamily17.bin" LogicalName="pawnio/AMDFamily17.bin" />
   </ItemGroup>
 
   <!-- Smaller installer: a self-contained publish copies the WHOLE Windows Desktop runtime, WPF included, although

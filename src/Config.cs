@@ -231,8 +231,16 @@ public sealed class AlertsConfig
     public int BatteryPct { get; set; } = 15;
     public bool Fps { get; set; }                     // the game under FpsPct % of the headset's rate for 10 s (then 2 min quiet)
     public int FpsPct { get; set; } = 80;
+    // the GPU or the CPU at or over HotC °C for 30 s (written only once set: an Alerts block from before saves as it did)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Hot { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? HotC { get; set; }                    // null = 85
 
-    public bool IsDefault => Battery && BatteryPct == 15 && !Fps && FpsPct == 80;
+    public const int HotDefault = 85;
+    [JsonIgnore] public int HotLimit => HotC ?? HotDefault;
+
+    public bool IsDefault => Battery && BatteryPct == 15 && !Fps && FpsPct == 80 && !Hot && HotLimit == HotDefault;
 }
 
 // Layouts > Per game (Sys/GameRules.cs): when this SteamVR app starts, switch to that layout and / or watch page

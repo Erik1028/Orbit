@@ -25,8 +25,9 @@ public sealed partial class WristPanel
 
     void PhotoWidgetXp(RectangleF r, WatchWidget w, PanelData d, int id)
     {
+        using var set = UseSet(w.Type);
         PhotoFrame(d);
-        var c = Theme.RetroSkin.WidgetFrame(_p, r, w.H >= 2 ? "My Pictures" : null);
+        var c = Theme.RetroSkin.WidgetFrame(_p, r, w.H >= 2 ? _set.TitleXp : null);
         _p.Fill(c, 0xFFFFFFFF);
         var p = Newest;
         var bmp = PhotoBitmap(p);
@@ -55,7 +56,7 @@ public sealed partial class WristPanel
             var box = new RectangleF(c.X + 2, c.Y + 2, MathF.Min(MathF.Floor((c.Height - 4) * 4 / 3), MathF.Floor(c.Width * 0.45f)), c.Height - 4);
             ThumbXp(box, p, bmp);
             float tx = box.Right + 5, tw = c.Right - 2 - tx, ty = MathF.Floor(c.Y + (c.Height - 28) / 2);
-            string ago = _ui.Width95(words.Ago) <= tw ? words.Ago : Age(p.Taken, DateTime.Now);      // "3 min ago", narrow "3 m"
+            string ago = _ui.Width95(words.Ago) <= tw ? words.Ago : p.Years > 0 ? words.AgoShort : Age(p.Taken, DateTime.Now);      // "3 min ago", narrow "3 m"
             _ui.Text95(PhotoCut(ago, tw, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(tx, ty, tw, 13), 0xFF000000);
             _ui.Text95(PhotoCut(p.World ?? words.When, tw, Ui.F95, FontWeight.Normal, null, 1), new RectangleF(tx, ty + 14, tw, 13), XpGrey);
             return;
