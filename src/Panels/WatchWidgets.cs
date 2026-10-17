@@ -79,6 +79,10 @@ public static class WatchWidgets
         new("mixer", "Volume mixer", "Volume Mixer", WristPanel.MixKindIcon, W95Icons.Id.Note, new[] { (2, 1), (2, 2), (3, 2) }, 1),
         // the weather now and the next hours / days from Open-Meteo (Sys/Weather.cs, WristWeather.cs); a tap opens the forecast
         new("weather", "Weather", "Weather", "\uE706", W95Icons.Id.Moon, new[] { (1, 1), (2, 1), (2, 2), (4, 1) }, 1),
+        // VRChat friends online and where, from VRCX's database (Sys/Friends.cs, WristFriends.cs); a tap opens the whole list
+        new("friends", "Friends online", "Friends", "\uE8FA", W95Icons.Id.People, new[] { (1, 1), (2, 1), (2, 2) }, 1),
+        // the last VR session's recap: how long, photos, worlds, people, the longest stay (Sys/SessionRecap.cs, WristRecap.cs)
+        new("recap", "Session recap", "Summary", "\uE81C", W95Icons.Id.Hourglass, new[] { (1, 1), (2, 1), (2, 2) }, 1),
     };
 
     // what the editor offers: the dock only when Hexpad is there (set by the app)
@@ -388,6 +392,7 @@ public static class WatchWidgets
         ["mic"] = new[] { S, M }, ["notifications"] = new[] { M, L }, ["buttons"] = new[] { M, L },
         ["mixer"] = new[] { L, M },
         ["weather"] = new[] { M, S, L, Wd },
+        ["friends"] = new[] { M, S, L }, ["recap"] = new[] { M, S, L },
     };
     static readonly Dictionary<string, (int W, int H)[]> _derived43 = new();
 

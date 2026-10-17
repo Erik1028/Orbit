@@ -386,6 +386,7 @@ public sealed class RoomWatcher : IDisposable
 
 // VRCX's database through Windows' built-in SQLite (System32\winsqlite3.dll): read-only and "immutable", so it never
 // takes a lock VRCX could trip over. The friend list is the one usr<hex>_friend_log_current table (hex = your id).
+// (The friends widget reads its feed the same way: Open / Query / Close, Sys/Friends.cs.)
 static class Vrcx
 {
     const string Dll = "winsqlite3.dll";
@@ -401,7 +402,21 @@ static class Vrcx
 
     static byte[] Z(string s) { var b = Encoding.UTF8.GetBytes(s + "\0"); return b; }
 
-    static List<string[]> Query(IntPtr db, string sql, int cols)
+    // the database read-only and immutable (a file: URI, so the flag is SQLite's own); Close when done
+    internal static IntPtr Open(string path)
+    {
+        string uri = new Uri(path).AbsoluteUri + "?immutable=1";
+        if (sqlite3_open_v2(Z(uri), out var db, OpenReadOnly | OpenUri, IntPtr.Zero) != 0)
+        {
+            if (db != IntPtr.Zero) sqlite3_close_v2(db);
+            throw new IOException("sqlite open failed");
+        }
+        return db;
+    }
+
+    internal static void Close(IntPtr db) => sqlite3_close_v2(db);
+
+    internal static List<string[]> Query(IntPtr db, string sql, int cols)
     {
         var rows = new List<string[]>();
         if (sqlite3_prepare_v2(db, Z(sql), -1, out var st, IntPtr.Zero) != 0) throw new IOException("sqlite prepare failed");
@@ -424,12 +439,7 @@ static class Vrcx
 
     public static (string me, HashSet<string> friends) Friends(string path)
     {
-        string uri = new Uri(path).AbsoluteUri + "?immutable=1";
-        if (sqlite3_open_v2(Z(uri), out var db, OpenReadOnly | OpenUri, IntPtr.Zero) != 0)
-        {
-            if (db != IntPtr.Zero) sqlite3_close_v2(db);
-            throw new IOException("sqlite open failed");
-        }
+        var db = Open(path);
         try
         {
             var tables = Query(db, "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'usr%\\_friend\\_log\\_current' ESCAPE '\\'", 1);

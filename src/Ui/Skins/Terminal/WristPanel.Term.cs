@@ -379,7 +379,7 @@ public sealed partial class WristPanel
         "session" => "IN VR", "battery" => "BATT", "media" => "PLAYBACK", "volume" => "VOL", "perf" => "PERF", "graph" => "FRAME TIME",
         "fps" => "FPS", "reproj" => "REPR", "gpu" => "GPU", "vram" => "VRAM", "cpu" => "CPU", "ram" => "RAM", "room" => "ROOM",
         "dock" => "HEXPAD", "minesweeper" => "MINES", "mic" => "MIC", "notifications" => "NOTIFY", "buttons" => "BUTTONS",
-        "photo" => "PHOTO", "weather" => "WTHR",
+        "photo" => "PHOTO", "weather" => "WTHR", "friends" => "WHO", "recap" => "LAST",
         _ => T.Up(id),
     };
 
@@ -461,6 +461,8 @@ public sealed partial class WristPanel
             case "mixer": Mixer95(r, c, w, id); break;
             case "photo": TPhotoWidget(r, c, w, d, id); break;     // the photo in coloured characters (WristPhoto.Term.cs)
             case "weather": TWeather(c, d, w); break;            // wttr.in's (WristWeather.Term.cs)
+            case "friends": TFriends(r, c, w, d); break;         // who (WristSocial.Term.cs)
+            case "recap": TRecap(c, w, d); break;                // the session's log (WristSocial.Term.cs)
             case "perf":
                 if (c.Width >= 280) TStatus(d, c.X + 3, MathF.Floor(c.Y + (c.Height - 7) / 2), c.Width - 6, false);
                 else TPerfTwo(d, c);
@@ -858,6 +860,7 @@ public sealed partial class WristPanel
     {
         if (kind == "mines") { done = true; TMinesDetail(win); return; }
         if (kind == "weather") { done = true; TWeatherDetail(win, d); return; }
+        if (kind is "friends" or "recap") { done = true; TSocialDetail(win, d, kind); return; }      // who / the session's log (WristSocial.Term.cs)
         if (kind is not ("media" or "perf" or "system" or "clock" or "notifications")) return;      // the rest: the shared windows, in this skin
         done = true;
         _p.Fill(win, T.BG);
