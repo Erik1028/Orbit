@@ -109,8 +109,9 @@ public sealed partial class Theater : IDisposable
         _dim.SetSortOrder(1);
         _dim.SetFlag(Valve.VR.VROverlayFlags.IsPremultiplied, true);
         _dim.SetTexture(_black.Tex);
-        _gridOn = false;                    // (Cyber: its grid, TheaterCyber.cs)
+        _cityOn = false;                    // (Cyber: the night city, TheaterCyber.cs)
         _dim.SetCurvature(1f);
+        CreateCyber();
     }
 
     public void DestroyOverlay()
@@ -118,6 +119,8 @@ public sealed partial class Theater : IDisposable
         Stop(null, null);
         _dim?.Dispose();
         _dim = null;
+        _band?.Dispose();
+        _band = null;
     }
 
     public ITheaterScreen Screen => On ? _screen : null;
@@ -282,15 +285,17 @@ public sealed partial class Theater : IDisposable
         if (_dim != null)
         {
             float a = Math.Clamp(dim, 0, 0.95f) * Ease(_t);
-            if (a <= 0.004f || _screen == null) _dim.Hide();
+            if (a <= 0.004f || _screen == null) { _dim.Hide(); _band?.Hide(); }
             else
             {
                 const float Behind = 0.6f;
                 float r = Vector3.Distance(_view.World.Translation, _view.Head) + Behind;
-                _dim.SetAbsolute(Matrix4x4.CreateTranslation(0, 0, -Behind) * _view.World);
-                _dim.SetWidth(2 * MathF.PI * r);    // all the way round you at that radius (curvature 1)
+                var place = Matrix4x4.CreateTranslation(0, 0, -Behind) * _view.World;
+                float width = 2 * MathF.PI * r;     // all the way round you at that radius (curvature 1)
+                _dim.SetAbsolute(place);
+                _dim.SetWidth(width);
                 _dim.SetAlpha(a);
-                CyberWall();                // Cyber: a faint HUD grid (TheaterCyber.cs)
+                CyberWall(a, place, width);         // Cyber: the night city and its skyline (TheaterCyber.cs)
                 _dim.Show();
             }
         }

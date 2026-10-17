@@ -553,12 +553,11 @@ static partial class Tools
             }
             using (var th = new Theater(gpu, painter))
             {
-                foreach (float fl in new[] { 1f, 0.5f, 0f })
-                {
-                    var s = th.GridForTest(fl);
-                    SaveCrop(s, gpu, Path.Combine(qa, $"cyberui_wall_{fl * 100:000}.png"), new RectangleF(0, 0, s.W, s.H));
-                }
-                index.AppendLine("wall|the theater wall's grid: flashing as the screen comes in, then at rest|cyberui_wall_100.png,cyberui_wall_050.png,cyberui_wall_000.png");
+                var wall = th.GridForTest(0);
+                SaveCrop(wall, gpu, Path.Combine(qa, "cyberui_wall_000.png"), new RectangleF(0, 0, wall.W, wall.H), keepAlpha: true);
+                var sky = th.SkylineForTest();
+                SaveCrop(sky, gpu, Path.Combine(qa, "cyberui_skyline.png"), new RectangleF(0, 0, sky.W, sky.H), keepAlpha: true);
+                index.AppendLine("wall|the theater wall: the night city (sky, neon horizon, floor grid) and its skyline band|cyberui_wall_000.png,cyberui_skyline.png");
             }
             File.WriteAllText(Path.Combine(qa, "cyberui_index.txt"), index.ToString());
             Log.Info($"cyber ui: motion frames written to {qa}");

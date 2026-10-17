@@ -196,6 +196,21 @@ dotnet publish -c Release -o dist
   és a billentyűzetet számolja; az Orbit saját lebegő beállításpanelje nem (Erik: a DXOverlay
   elindult, amikor csak a beállításokat nyitotta meg).
 
+## 1.14.1 – Notifications nagy nézet, Cyber mozi-háttér, billentyűzet a kijelzők alá (2026-10-17)
+
+- **Notifications** kinyílik (`Panels/WristNotes.cs`, `ORBIT_SNAP_ONLY=notes`): az utolsó 20, Clear, stick-görgetés;
+  a retró stílusok közös postafiók-ablaka a skin-ekkel, a terminál `tail notify.log`.
+- **Cyber nagy óra** (`Panels/WristCyberDetail.cs`) + Cyber Now playing / frame rate / system nézet.
+- **Theater fal**: zárt henger (curvature 1, 2πr széles, `WallAspect` 2), `Theater.WallAlpha`: 55°-ig sötét, 80°-ra eltűnik;
+  a fekete textúra nyersen írva (premultiplied). Cyberben (Erik: „eléggé low effortnak néz ki”) éjszakai város
+  (`TheaterCyber.cs`): a falon ég + neon horizont + szintihullám-padló (a padló sugarai a hengeren függőleges vonalak,
+  a körei a horizont felé sűrűsödő sorok), külön, élesebb sáv-overlayen (`erik.orbit.theater.city`, 4096×512, sort 2) a
+  városkép körben + retró nap 120°-nál (nem a képernyő mögött). EGYSZER rajzolódik; belépéskor a fal pislákolva
+  „bekapcsol” (csak alpha), a város fényei utána (Full).
+- **Recenter**: `PlaceKeyboardUnder` – a szemtől a legalsó kijelző alja alá húzott vonalon, 0,9 m-re, feléd fordítva.
+- **cyber-polish**: a Painter szövegrenderelése képkockánként egyszer (~0,4 ms minden panelen), a Cyber billentyűzet és
+  beállítások nyugalomban textúrából (2,39 → 0,16 ms, 2,15 → 1,01 ms), új HUD-animációk; `ORBIT_SNAP_ONLY=cyberperf`.
+
 ## 1.14.0 – magyar nyelv, keverő, figyelmeztetések, Cyber HUD, saját ablakkeret (2026-10-16)
 
 Erik: „1 mehet, 2 később, 3 mehet, 4 is mehet” (nyelvválasztó, hangerő mindenhol + keverő, figyelmeztetések, B/Y kétszer,

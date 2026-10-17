@@ -3,6 +3,20 @@
 This file is built into the app: after an update, the "What's new" window shows every section newer than the
 version you came from. Format: "## <version> | <title>", then "- " points (an indented line continues a point).
 
+## 1.14.1 | Notifications opened, a night city for Cyber's theater
+- The Notifications widget opens into a big view like the others: the last notifications, newest first, with where
+  they came from and when; the stick scrolls, Clear empties the list. Every style draws it its own way (the retro ones
+  as an inbox window, the Terminal as a log).
+- Cyber: the opened clock is a real HUD (the yellow time card, the dial, the date, the day so far, time in VR, a timer),
+  and so are Now playing, the frame rate and the system views.
+- Theater mode: the dimming goes all the way round you and fades out softly above and below - no edge to see. In
+  Cyber it is a night city: a neon horizon, a synthwave floor, a lit skyline with a retro sun, powering up as the
+  screen comes in.
+- Recenter puts the keyboard in the middle under your monitors (also when it is hidden).
+- Cyber is a lot lighter: its keyboard draws about 15 times faster, its settings twice as fast, with livelier HUD
+  animations (key presses, buttons, switches, tab changes, the theater lock-on). Every panel saves a little time too.
+- Fixed in Magyar: the 12-hour clock's "du." and the time card's seconds label.
+
 ## 1.14.0 | Magyar, a volume mixer, alerts and a real Cyber HUD
 - Settings > General > Language: English or Magyar, in every style.
 - The Windows volume works in VR: with Virtual Desktop the apps follow the Windows slider, the volume keys and
